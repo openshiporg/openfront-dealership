@@ -12,16 +12,31 @@ generator client {
 }
 
 model User {
-  id                      String    @id @default(cuid())
-  name                    String    @default("")
-  email                   String    @unique @default("")
-  password                String
-  role                    Role?     @relation("User_role", fields: [roleId], references: [id])
-  roleId                  String?   @map("role")
-  tasks                   Todo[]    @relation("Todo_assignedTo")
-  passwordResetToken      String?
-  passwordResetIssuedAt   DateTime?
-  passwordResetRedeemedAt DateTime?
+  id                         String                @id @default(cuid())
+  name                       String                @default("")
+  email                      String                @unique @default("")
+  password                   String
+  role                       Role?                 @relation("User_role", fields: [roleId], references: [id])
+  roleId                     String?               @map("role")
+  phone                      String                @default("")
+  employeeId                 String                @unique @default("")
+  commissionRate             Float?                @default(0)
+  isSalesperson              Boolean               @default(false)
+  isServiceAdvisor           Boolean               @default(false)
+  isFinanceManager           Boolean               @default(false)
+  assignedLeads              Lead[]                @relation("Lead_assignedSalesperson")
+  deals                      Deal[]                @relation("Deal_salesperson")
+  customerAppointments       ServiceAppointment[]  @relation("ServiceAppointment_customer")
+  techAppointments           ServiceAppointment[]  @relation("ServiceAppointment_assignedTech")
+  priceChanges               PriceHistory[]        @relation("PriceHistory_changedBy")
+  interactions               CustomerInteraction[] @relation("CustomerInteraction_performedBy")
+  tasks                      Task[]                @relation("Task_assignedTo")
+  dealApprovals              DealApproval[]        @relation("DealApproval_approver")
+  passwordResetToken         String?
+  passwordResetIssuedAt      DateTime?
+  passwordResetRedeemedAt    DateTime?
+  from_TestDrive_salesperson TestDrive[]           @relation("TestDrive_salesperson")
+  from_TradeIn_appraisedBy   TradeIn[]             @relation("TradeIn_appraisedBy")
 
   @@index([roleId])
 }
@@ -29,52 +44,360 @@ model User {
 model Role {
   id                 String  @id @default(cuid())
   name               String  @default("")
-  canCreateTodos     Boolean @default(false)
-  canManageAllTodos  Boolean @default(false)
   canSeeOtherPeople  Boolean @default(false)
   canEditOtherPeople Boolean @default(false)
   canManagePeople    Boolean @default(false)
   canManageRoles     Boolean @default(false)
   canAccessDashboard Boolean @default(false)
+  canManageInventory Boolean @default(false)
+  canViewInventory   Boolean @default(true)
+  canManageLeads     Boolean @default(false)
+  canViewAllLeads    Boolean @default(false)
+  canManageDeals     Boolean @default(false)
+  canApproveDeals    Boolean @default(false)
+  canManageService   Boolean @default(false)
+  canViewReports     Boolean @default(false)
+  canManageFinancing Boolean @default(false)
+  canManageTradeIns  Boolean @default(false)
   assignedTo         User[]  @relation("User_role")
 }
 
-model Todo {
-  id                   String      @id @default(cuid())
-  label                String      @default("")
-  description          Json        @default("[{\"type\":\"paragraph\",\"children\":[{\"text\":\"\"}]}]")
-  isComplete           Boolean     @default(false)
-  status               String?     @default("todo")
-  priority             Int?        @default(1)
-  tags                 Json        @default("[]")
-  dueDate              DateTime?
-  weight               Float?      @default(1)
-  budget               Decimal?    @default("0.00") @postgresql.Decimal(10, 2)
-  isPrivate            Boolean     @default(false)
-  largeNumber          BigInt?
-  metadata             Json?
-  secretNote           String?
-  coverImage_id        String?
-  coverImage_filesize  Int?
-  coverImage_width     Int?
-  coverImage_height    Int?
-  coverImage_extension String?
-  todoImages           TodoImage[] @relation("Todo_todoImages")
-  assignedTo           User?       @relation("Todo_assignedTo", fields: [assignedToId], references: [id])
-  assignedToId         String?     @map("assignedTo")
-
-  @@index([assignedToId])
+model Make {
+  id             String  @id @default(cuid())
+  name           String  @unique @default("")
+  logo_id        String?
+  logo_filesize  Int?
+  logo_width     Int?
+  logo_height    Int?
+  logo_extension String?
+  models         Model[] @relation("Model_make")
 }
 
-model TodoImage {
-  id              String  @id @default(cuid())
+model Model {
+  id        String  @id @default(cuid())
+  name      String  @default("")
+  make      Make?   @relation("Model_make", fields: [makeId], references: [id])
+  makeId    String? @map("make")
+  bodyStyle String?
+  baseYear  Int?
+
+  @@index([makeId])
+}
+
+model Vehicle {
+  id               String                   @id @default(cuid())
+  vin              String                   @unique @default("")
+  stockNumber      String                   @unique @default("")
+  year             Int
+  make             String                   @default("")
+  model            String                   @default("")
+  trim             String                   @default("")
+  exteriorColor    String                   @default("")
+  interiorColor    String                   @default("")
+  mileage          Int?
+  purchasePrice    Float?
+  listPrice        Float?
+  price            Float?
+  condition        String?
+  status           String?                  @default("available")
+  description      String                   @default("")
+  features         Json?                    @default("[]")
+  metadata         Json?                    @default("{}")
+  images           VehicleImage[]           @relation("VehicleImage_vehicle")
+  deals            Deal[]                   @relation("Deal_vehicle")
+  leads            Lead[]                   @relation("Lead_interestedVehicle")
+  testDrives       TestDrive[]              @relation("TestDrive_vehicle")
+  conditionReports VehicleConditionReport[] @relation("VehicleConditionReport_vehicle")
+  history          VehicleHistory?          @relation("Vehicle_history", fields: [historyId], references: [id])
+  historyId        String?                  @unique @map("history")
+  priceHistory     PriceHistory[]           @relation("PriceHistory_vehicle")
+  createdAt        DateTime?                @default(now())
+}
+
+model VehicleImage {
+  id              String   @id @default(cuid())
+  vehicle         Vehicle? @relation("VehicleImage_vehicle", fields: [vehicleId], references: [id])
+  vehicleId       String?  @map("vehicle")
   image_id        String?
   image_filesize  Int?
   image_width     Int?
   image_height    Int?
   image_extension String?
-  imagePath       String  @default("")
-  altText         String  @default("")
-  todos           Todo[]  @relation("Todo_todoImages")
-  metadata        Json?
+  caption         String   @default("")
+  category        String?  @default("exterior")
+  sortOrder       Int?     @default(0)
+  isPrimary       Boolean  @default(false)
+
+  @@index([vehicleId])
+}
+
+model VehicleConditionReport {
+  id               String   @id @default(cuid())
+  vehicle          Vehicle? @relation("VehicleConditionReport_vehicle", fields: [vehicleId], references: [id])
+  vehicleId        String?  @map("vehicle")
+  reportDate       DateTime @default(now())
+  inspector        String   @default("")
+  overallCondition String?
+  mechanicalRating String?
+  bodyRating       String?
+  interiorRating   String?
+  issues           Json?    @default("[]")
+  estimatedRepairs Int?
+  notes            String   @default("")
+
+  @@index([vehicleId])
+}
+
+model VehicleHistory {
+  id                String    @id @default(cuid())
+  vehicle           Vehicle?  @relation("Vehicle_history")
+  acquisitionDate   DateTime?
+  acquisitionSource String    @default("")
+  previousOwners    Int?
+  hasAccidents      Boolean   @default(false)
+  accidentDetails   String    @default("")
+  serviceRecords    String    @default("")
+  titleStatus       String    @default("")
+  notes             String    @default("")
+}
+
+model PriceHistory {
+  id            String   @id @default(cuid())
+  vehicle       Vehicle? @relation("PriceHistory_vehicle", fields: [vehicleId], references: [id])
+  vehicleId     String?  @map("vehicle")
+  effectiveDate DateTime @default(now())
+  previousPrice Float?
+  newPrice      Float
+  changeReason  String   @default("")
+  changedBy     User?    @relation("PriceHistory_changedBy", fields: [changedById], references: [id])
+  changedById   String?  @map("changedBy")
+  notes         String   @default("")
+
+  @@index([vehicleId])
+  @@index([changedById])
+}
+
+model Lead {
+  id                    String                @id @default(cuid())
+  firstName             String                @default("")
+  lastName              String                @default("")
+  email                 String                @default("")
+  phone                 String                @default("")
+  source                String?
+  interestedVehicle     Vehicle?              @relation("Lead_interestedVehicle", fields: [interestedVehicleId], references: [id])
+  interestedVehicleId   String?               @map("interestedVehicle")
+  budgetRange           String?
+  tradeInVehicle        String                @default("")
+  timeframe             String?
+  status                String?               @default("new")
+  assignedSalesperson   User?                 @relation("Lead_assignedSalesperson", fields: [assignedSalespersonId], references: [id])
+  assignedSalespersonId String?               @map("assignedSalesperson")
+  notes                 String                @default("")
+  createdAt             DateTime?             @default(now())
+  lastContact           DateTime?
+  testDrives            TestDrive[]           @relation("TestDrive_lead")
+  deals                 Deal[]                @relation("Deal_lead")
+  interactions          CustomerInteraction[] @relation("CustomerInteraction_lead")
+  tasks                 Task[]                @relation("Task_lead")
+
+  @@index([interestedVehicleId])
+  @@index([assignedSalespersonId])
+}
+
+model CustomerInteraction {
+  id                String    @id @default(cuid())
+  lead              Lead?     @relation("CustomerInteraction_lead", fields: [leadId], references: [id])
+  leadId            String?   @map("lead")
+  interactionType   String
+  date              DateTime  @default(now())
+  duration          Int?
+  notes             String    @default("")
+  outcome           String?
+  followUpDate      DateTime?
+  followUpCompleted DateTime?
+  performedBy       User?     @relation("CustomerInteraction_performedBy", fields: [performedById], references: [id])
+  performedById     String?   @map("performedBy")
+
+  @@index([leadId])
+  @@index([performedById])
+}
+
+model Task {
+  id            String    @id @default(cuid())
+  title         String    @default("")
+  description   String    @default("")
+  assignedTo    User?     @relation("Task_assignedTo", fields: [assignedToId], references: [id])
+  assignedToId  String?   @map("assignedTo")
+  lead          Lead?     @relation("Task_lead", fields: [leadId], references: [id])
+  leadId        String?   @map("lead")
+  priority      String?   @default("medium")
+  completed     Boolean   @default(false)
+  dueDate       DateTime?
+  completedDate DateTime?
+  createdAt     DateTime? @default(now())
+
+  @@index([assignedToId])
+  @@index([leadId])
+}
+
+model TestDrive {
+  id                    String   @id @default(cuid())
+  lead                  Lead?    @relation("TestDrive_lead", fields: [leadId], references: [id])
+  leadId                String?  @map("lead")
+  vehicle               Vehicle? @relation("TestDrive_vehicle", fields: [vehicleId], references: [id])
+  vehicleId             String?  @map("vehicle")
+  salesperson           User?    @relation("TestDrive_salesperson", fields: [salespersonId], references: [id])
+  salespersonId         String?  @map("salesperson")
+  scheduledTime         DateTime
+  completed             Boolean  @default(false)
+  driverLicenseVerified Boolean  @default(false)
+  feedback              String   @default("")
+  interestedLevel       String?
+
+  @@index([leadId])
+  @@index([vehicleId])
+  @@index([salespersonId])
+}
+
+model Deal {
+  id               String         @id @default(cuid())
+  lead             Lead?          @relation("Deal_lead", fields: [leadId], references: [id])
+  leadId           String?        @map("lead")
+  vehicle          Vehicle?       @relation("Deal_vehicle", fields: [vehicleId], references: [id])
+  vehicleId        String?        @map("vehicle")
+  salesperson      User?          @relation("Deal_salesperson", fields: [salespersonId], references: [id])
+  salespersonId    String?        @map("salesperson")
+  vehiclePrice     Float?
+  tradeInValue     Float?
+  tradeInVehicle   TradeIn?       @relation("Deal_tradeInVehicle", fields: [tradeInVehicleId], references: [id])
+  tradeInVehicleId String?        @unique @map("tradeInVehicle")
+  tradeInDetails   Json?          @default("{}")
+  downPayment      Float?
+  financingAmount  Float?
+  monthlyPayment   Float?
+  loanTerm         Int?
+  apr              Float?
+  status           String?        @default("pencil")
+  taxAmount        Float?
+  fees             Json?          @default("[]")
+  approvals        DealApproval[] @relation("DealApproval_deal")
+  saleDate         DateTime?
+  createdAt        DateTime?      @default(now())
+  updatedAt        DateTime?      @updatedAt
+
+  @@index([leadId])
+  @@index([vehicleId])
+  @@index([salespersonId])
+}
+
+model DealApproval {
+  id           String    @id @default(cuid())
+  deal         Deal?     @relation("DealApproval_deal", fields: [dealId], references: [id])
+  dealId       String?   @map("deal")
+  approver     User?     @relation("DealApproval_approver", fields: [approverId], references: [id])
+  approverId   String?   @map("approver")
+  decision     String?   @default("pending")
+  notes        String    @default("")
+  approvalDate DateTime? @default(now())
+
+  @@index([dealId])
+  @@index([approverId])
+}
+
+model TradeIn {
+  id                  String  @id @default(cuid())
+  vin                 String  @default("")
+  year                String  @default("")
+  make                String  @default("")
+  model               String  @default("")
+  trim                String  @default("")
+  mileage             Int?
+  condition           String?
+  exteriorCondition   String  @default("")
+  interiorCondition   String  @default("")
+  mechanicalIssues    String  @default("")
+  kbbValue            Float?
+  offerAmount         Float?
+  mainPhoto_id        String?
+  mainPhoto_filesize  Int?
+  mainPhoto_width     Int?
+  mainPhoto_height    Int?
+  mainPhoto_extension String?
+  deal                Deal?   @relation("Deal_tradeInVehicle")
+  appraisedBy         User?   @relation("TradeIn_appraisedBy", fields: [appraisedById], references: [id])
+  appraisedById       String? @map("appraisedBy")
+
+  @@index([appraisedById])
+}
+
+model ServiceAppointment {
+  id                         String        @id @default(cuid())
+  customer                   User?         @relation("ServiceAppointment_customer", fields: [customerId], references: [id])
+  customerId                 String?       @map("customer")
+  customerVehicleDescription String        @default("")
+  appointmentDate            DateTime
+  serviceType                String?
+  description                String        @default("")
+  estimatedDuration          Int?
+  assignedTech               User?         @relation("ServiceAppointment_assignedTech", fields: [assignedTechId], references: [id])
+  assignedTechId             String?       @map("assignedTech")
+  status                     String?       @default("scheduled")
+  mileageIn                  Int?
+  advisorNotes               String        @default("")
+  serviceOrder               ServiceOrder? @relation("ServiceAppointment_serviceOrder", fields: [serviceOrderId], references: [id])
+  serviceOrderId             String?       @unique @map("serviceOrder")
+
+  @@index([customerId])
+  @@index([assignedTechId])
+}
+
+model ServiceOrder {
+  id              String                @id @default(cuid())
+  appointment     ServiceAppointment?   @relation("ServiceAppointment_serviceOrder")
+  diagnosis       String                @default("")
+  workPerformed   String                @default("")
+  recommendations String                @default("")
+  lineItems       RepairOrderLineItem[] @relation("RepairOrderLineItem_serviceOrder")
+  laborTotal      Float?
+  partsTotal      Float?
+  tax             Float?
+  grandTotal      Float?
+  status          String?               @default("estimate")
+  completedAt     DateTime?
+}
+
+model RepairOrderLineItem {
+  id             String        @id @default(cuid())
+  serviceOrder   ServiceOrder? @relation("RepairOrderLineItem_serviceOrder", fields: [serviceOrderId], references: [id])
+  serviceOrderId String?       @map("serviceOrder")
+  itemType       String
+  description    String        @default("")
+  partNumber     String        @default("")
+  quantity       Float         @default(1)
+  unitPrice      Float
+  price          Float
+  cost           Float?
+
+  @@index([serviceOrderId])
+}
+
+model ServicePackage {
+  id                String @id @default(cuid())
+  name              String @default("")
+  description       String @default("")
+  price             Float
+  estimatedDuration Int?
+  includedServices  Json?  @default("[]")
+}
+
+model PartsInventory {
+  id                 String @id @default(cuid())
+  partNumber         String @unique @default("")
+  description        String @default("")
+  quantity           Int    @default(0)
+  minimumQuantity    Int?
+  cost               Float?
+  price              Float
+  supplier           String @default("")
+  supplierPartNumber String @default("")
 }

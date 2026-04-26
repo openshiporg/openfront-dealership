@@ -5,6 +5,7 @@ import { models } from "./models";
 import { statelessSessions } from "@keystone-6/core/session";
 import { extendGraphqlSchema } from "./mutations";
 import { sendPasswordResetEmail } from "./lib/mail";
+import { permissions } from "./access";
 
 const databaseURL = process.env.DATABASE_URL || "file:./keystone.db";
 
@@ -32,13 +33,21 @@ const { withAuth } = createAuth({
       role: {
         create: {
           name: "Admin",
-          canCreateTodos: true,
-          canManageAllTodos: true,
           canSeeOtherPeople: true,
           canEditOtherPeople: true,
           canManagePeople: true,
           canManageRoles: true,
           canAccessDashboard: true,
+          canManageInventory: true,
+          canViewInventory: true,
+          canManageLeads: true,
+          canViewAllLeads: true,
+          canManageDeals: true,
+          canApproveDeals: true,
+          canManageService: true,
+          canViewReports: true,
+          canManageFinancing: true,
+          canManageTradeIns: true,
         },
       },
     },
@@ -55,13 +64,21 @@ const { withAuth } = createAuth({
     role {
       id
       name
-      canCreateTodos
-      canManageAllTodos
       canSeeOtherPeople
       canEditOtherPeople
       canManagePeople
       canManageRoles
       canAccessDashboard
+      canManageInventory
+      canViewInventory
+      canManageLeads
+      canViewAllLeads
+      canManageDeals
+      canApproveDeals
+      canManageService
+      canViewReports
+      canManageFinancing
+      canManageTradeIns
     }
   `,
 });
@@ -87,7 +104,7 @@ export default withAuth(
       },
     },
     ui: {
-      isAccessAllowed: ({ session }) => session?.data.role?.canAccessDashboard ?? false,
+      isAccessAllowed: ({ session }) => permissions.canAccessDashboard({ session }),
     },
     session: statelessSessions(sessionConfig),
     graphql: {

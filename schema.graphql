@@ -7,8 +7,28 @@ type User {
   email: String
   password: PasswordState
   role: Role
-  tasks(where: TodoWhereInput! = {}, orderBy: [TodoOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: TodoWhereUniqueInput): [Todo!]
-  tasksCount(where: TodoWhereInput! = {}): Int
+  phone: String
+  employeeId: String
+  commissionRate: Float
+  isSalesperson: Boolean
+  isServiceAdvisor: Boolean
+  isFinanceManager: Boolean
+  assignedLeads(where: LeadWhereInput! = {}, orderBy: [LeadOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: LeadWhereUniqueInput): [Lead!]
+  assignedLeadsCount(where: LeadWhereInput! = {}): Int
+  deals(where: DealWhereInput! = {}, orderBy: [DealOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: DealWhereUniqueInput): [Deal!]
+  dealsCount(where: DealWhereInput! = {}): Int
+  customerAppointments(where: ServiceAppointmentWhereInput! = {}, orderBy: [ServiceAppointmentOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: ServiceAppointmentWhereUniqueInput): [ServiceAppointment!]
+  customerAppointmentsCount(where: ServiceAppointmentWhereInput! = {}): Int
+  techAppointments(where: ServiceAppointmentWhereInput! = {}, orderBy: [ServiceAppointmentOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: ServiceAppointmentWhereUniqueInput): [ServiceAppointment!]
+  techAppointmentsCount(where: ServiceAppointmentWhereInput! = {}): Int
+  priceChanges(where: PriceHistoryWhereInput! = {}, orderBy: [PriceHistoryOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: PriceHistoryWhereUniqueInput): [PriceHistory!]
+  priceChangesCount(where: PriceHistoryWhereInput! = {}): Int
+  interactions(where: CustomerInteractionWhereInput! = {}, orderBy: [CustomerInteractionOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: CustomerInteractionWhereUniqueInput): [CustomerInteraction!]
+  interactionsCount(where: CustomerInteractionWhereInput! = {}): Int
+  tasks(where: TaskWhereInput! = {}, orderBy: [TaskOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: TaskWhereUniqueInput): [Task!]
+  tasksCount(where: TaskWhereInput! = {}): Int
+  dealApprovals(where: DealApprovalWhereInput! = {}, orderBy: [DealApprovalOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: DealApprovalWhereUniqueInput): [DealApproval!]
+  dealApprovalsCount(where: DealApprovalWhereInput! = {}): Int
   passwordResetToken: PasswordState
   passwordResetIssuedAt: DateTime
   passwordResetRedeemedAt: DateTime
@@ -22,6 +42,7 @@ scalar DateTime @specifiedBy(url: "https://datatracker.ietf.org/doc/html/rfc3339
 
 input UserWhereUniqueInput {
   id: ID
+  employeeId: String
 }
 
 input UserWhereInput {
@@ -31,7 +52,20 @@ input UserWhereInput {
   id: IDFilter
   name: StringFilter
   role: RoleWhereInput
-  tasks: TodoManyRelationFilter
+  phone: StringFilter
+  employeeId: StringFilter
+  commissionRate: FloatNullableFilter
+  isSalesperson: BooleanFilter
+  isServiceAdvisor: BooleanFilter
+  isFinanceManager: BooleanFilter
+  assignedLeads: LeadManyRelationFilter
+  deals: DealManyRelationFilter
+  customerAppointments: ServiceAppointmentManyRelationFilter
+  techAppointments: ServiceAppointmentManyRelationFilter
+  priceChanges: PriceHistoryManyRelationFilter
+  interactions: CustomerInteractionManyRelationFilter
+  tasks: TaskManyRelationFilter
+  dealApprovals: DealApprovalManyRelationFilter
   passwordResetToken: PasswordFilter
   passwordResetIssuedAt: DateTimeNullableFilter
   passwordResetRedeemedAt: DateTimeNullableFilter
@@ -82,10 +116,62 @@ input NestedStringFilter {
   not: NestedStringFilter
 }
 
-input TodoManyRelationFilter {
-  every: TodoWhereInput
-  some: TodoWhereInput
-  none: TodoWhereInput
+input FloatNullableFilter {
+  equals: Float
+  in: [Float!]
+  notIn: [Float!]
+  lt: Float
+  lte: Float
+  gt: Float
+  gte: Float
+  not: FloatNullableFilter
+}
+
+input BooleanFilter {
+  equals: Boolean
+  not: BooleanFilter
+}
+
+input LeadManyRelationFilter {
+  every: LeadWhereInput
+  some: LeadWhereInput
+  none: LeadWhereInput
+}
+
+input DealManyRelationFilter {
+  every: DealWhereInput
+  some: DealWhereInput
+  none: DealWhereInput
+}
+
+input ServiceAppointmentManyRelationFilter {
+  every: ServiceAppointmentWhereInput
+  some: ServiceAppointmentWhereInput
+  none: ServiceAppointmentWhereInput
+}
+
+input PriceHistoryManyRelationFilter {
+  every: PriceHistoryWhereInput
+  some: PriceHistoryWhereInput
+  none: PriceHistoryWhereInput
+}
+
+input CustomerInteractionManyRelationFilter {
+  every: CustomerInteractionWhereInput
+  some: CustomerInteractionWhereInput
+  none: CustomerInteractionWhereInput
+}
+
+input TaskManyRelationFilter {
+  every: TaskWhereInput
+  some: TaskWhereInput
+  none: TaskWhereInput
+}
+
+input DealApprovalManyRelationFilter {
+  every: DealApprovalWhereInput
+  some: DealApprovalWhereInput
+  none: DealApprovalWhereInput
 }
 
 input PasswordFilter {
@@ -106,6 +192,12 @@ input DateTimeNullableFilter {
 input UserOrderByInput {
   id: OrderDirection
   name: OrderDirection
+  phone: OrderDirection
+  employeeId: OrderDirection
+  commissionRate: OrderDirection
+  isSalesperson: OrderDirection
+  isServiceAdvisor: OrderDirection
+  isFinanceManager: OrderDirection
   passwordResetIssuedAt: OrderDirection
   passwordResetRedeemedAt: OrderDirection
 }
@@ -120,7 +212,20 @@ input UserUpdateInput {
   email: String
   password: String
   role: RoleRelateToOneForUpdateInput
-  tasks: TodoRelateToManyForUpdateInput
+  phone: String
+  employeeId: String
+  commissionRate: Float
+  isSalesperson: Boolean
+  isServiceAdvisor: Boolean
+  isFinanceManager: Boolean
+  assignedLeads: LeadRelateToManyForUpdateInput
+  deals: DealRelateToManyForUpdateInput
+  customerAppointments: ServiceAppointmentRelateToManyForUpdateInput
+  techAppointments: ServiceAppointmentRelateToManyForUpdateInput
+  priceChanges: PriceHistoryRelateToManyForUpdateInput
+  interactions: CustomerInteractionRelateToManyForUpdateInput
+  tasks: TaskRelateToManyForUpdateInput
+  dealApprovals: DealApprovalRelateToManyForUpdateInput
   passwordResetToken: String
   passwordResetIssuedAt: DateTime
   passwordResetRedeemedAt: DateTime
@@ -132,11 +237,53 @@ input RoleRelateToOneForUpdateInput {
   disconnect: Boolean
 }
 
-input TodoRelateToManyForUpdateInput {
-  disconnect: [TodoWhereUniqueInput!]
-  set: [TodoWhereUniqueInput!]
-  create: [TodoCreateInput!]
-  connect: [TodoWhereUniqueInput!]
+input LeadRelateToManyForUpdateInput {
+  disconnect: [LeadWhereUniqueInput!]
+  set: [LeadWhereUniqueInput!]
+  create: [LeadCreateInput!]
+  connect: [LeadWhereUniqueInput!]
+}
+
+input DealRelateToManyForUpdateInput {
+  disconnect: [DealWhereUniqueInput!]
+  set: [DealWhereUniqueInput!]
+  create: [DealCreateInput!]
+  connect: [DealWhereUniqueInput!]
+}
+
+input ServiceAppointmentRelateToManyForUpdateInput {
+  disconnect: [ServiceAppointmentWhereUniqueInput!]
+  set: [ServiceAppointmentWhereUniqueInput!]
+  create: [ServiceAppointmentCreateInput!]
+  connect: [ServiceAppointmentWhereUniqueInput!]
+}
+
+input PriceHistoryRelateToManyForUpdateInput {
+  disconnect: [PriceHistoryWhereUniqueInput!]
+  set: [PriceHistoryWhereUniqueInput!]
+  create: [PriceHistoryCreateInput!]
+  connect: [PriceHistoryWhereUniqueInput!]
+}
+
+input CustomerInteractionRelateToManyForUpdateInput {
+  disconnect: [CustomerInteractionWhereUniqueInput!]
+  set: [CustomerInteractionWhereUniqueInput!]
+  create: [CustomerInteractionCreateInput!]
+  connect: [CustomerInteractionWhereUniqueInput!]
+}
+
+input TaskRelateToManyForUpdateInput {
+  disconnect: [TaskWhereUniqueInput!]
+  set: [TaskWhereUniqueInput!]
+  create: [TaskCreateInput!]
+  connect: [TaskWhereUniqueInput!]
+}
+
+input DealApprovalRelateToManyForUpdateInput {
+  disconnect: [DealApprovalWhereUniqueInput!]
+  set: [DealApprovalWhereUniqueInput!]
+  create: [DealApprovalCreateInput!]
+  connect: [DealApprovalWhereUniqueInput!]
 }
 
 input UserUpdateArgs {
@@ -149,7 +296,20 @@ input UserCreateInput {
   email: String
   password: String
   role: RoleRelateToOneForCreateInput
-  tasks: TodoRelateToManyForCreateInput
+  phone: String
+  employeeId: String
+  commissionRate: Float
+  isSalesperson: Boolean
+  isServiceAdvisor: Boolean
+  isFinanceManager: Boolean
+  assignedLeads: LeadRelateToManyForCreateInput
+  deals: DealRelateToManyForCreateInput
+  customerAppointments: ServiceAppointmentRelateToManyForCreateInput
+  techAppointments: ServiceAppointmentRelateToManyForCreateInput
+  priceChanges: PriceHistoryRelateToManyForCreateInput
+  interactions: CustomerInteractionRelateToManyForCreateInput
+  tasks: TaskRelateToManyForCreateInput
+  dealApprovals: DealApprovalRelateToManyForCreateInput
   passwordResetToken: String
   passwordResetIssuedAt: DateTime
   passwordResetRedeemedAt: DateTime
@@ -160,21 +320,59 @@ input RoleRelateToOneForCreateInput {
   connect: RoleWhereUniqueInput
 }
 
-input TodoRelateToManyForCreateInput {
-  create: [TodoCreateInput!]
-  connect: [TodoWhereUniqueInput!]
+input LeadRelateToManyForCreateInput {
+  create: [LeadCreateInput!]
+  connect: [LeadWhereUniqueInput!]
+}
+
+input DealRelateToManyForCreateInput {
+  create: [DealCreateInput!]
+  connect: [DealWhereUniqueInput!]
+}
+
+input ServiceAppointmentRelateToManyForCreateInput {
+  create: [ServiceAppointmentCreateInput!]
+  connect: [ServiceAppointmentWhereUniqueInput!]
+}
+
+input PriceHistoryRelateToManyForCreateInput {
+  create: [PriceHistoryCreateInput!]
+  connect: [PriceHistoryWhereUniqueInput!]
+}
+
+input CustomerInteractionRelateToManyForCreateInput {
+  create: [CustomerInteractionCreateInput!]
+  connect: [CustomerInteractionWhereUniqueInput!]
+}
+
+input TaskRelateToManyForCreateInput {
+  create: [TaskCreateInput!]
+  connect: [TaskWhereUniqueInput!]
+}
+
+input DealApprovalRelateToManyForCreateInput {
+  create: [DealApprovalCreateInput!]
+  connect: [DealApprovalWhereUniqueInput!]
 }
 
 type Role {
   id: ID!
   name: String
-  canCreateTodos: Boolean
-  canManageAllTodos: Boolean
   canSeeOtherPeople: Boolean
   canEditOtherPeople: Boolean
   canManagePeople: Boolean
   canManageRoles: Boolean
   canAccessDashboard: Boolean
+  canManageInventory: Boolean
+  canViewInventory: Boolean
+  canManageLeads: Boolean
+  canViewAllLeads: Boolean
+  canManageDeals: Boolean
+  canApproveDeals: Boolean
+  canManageService: Boolean
+  canViewReports: Boolean
+  canManageFinancing: Boolean
+  canManageTradeIns: Boolean
   assignedTo(where: UserWhereInput! = {}, orderBy: [UserOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: UserWhereUniqueInput): [User!]
   assignedToCount(where: UserWhereInput! = {}): Int
 }
@@ -189,19 +387,22 @@ input RoleWhereInput {
   NOT: [RoleWhereInput!]
   id: IDFilter
   name: StringFilter
-  canCreateTodos: BooleanFilter
-  canManageAllTodos: BooleanFilter
   canSeeOtherPeople: BooleanFilter
   canEditOtherPeople: BooleanFilter
   canManagePeople: BooleanFilter
   canManageRoles: BooleanFilter
   canAccessDashboard: BooleanFilter
+  canManageInventory: BooleanFilter
+  canViewInventory: BooleanFilter
+  canManageLeads: BooleanFilter
+  canViewAllLeads: BooleanFilter
+  canManageDeals: BooleanFilter
+  canApproveDeals: BooleanFilter
+  canManageService: BooleanFilter
+  canViewReports: BooleanFilter
+  canManageFinancing: BooleanFilter
+  canManageTradeIns: BooleanFilter
   assignedTo: UserManyRelationFilter
-}
-
-input BooleanFilter {
-  equals: Boolean
-  not: BooleanFilter
 }
 
 input UserManyRelationFilter {
@@ -213,24 +414,40 @@ input UserManyRelationFilter {
 input RoleOrderByInput {
   id: OrderDirection
   name: OrderDirection
-  canCreateTodos: OrderDirection
-  canManageAllTodos: OrderDirection
   canSeeOtherPeople: OrderDirection
   canEditOtherPeople: OrderDirection
   canManagePeople: OrderDirection
   canManageRoles: OrderDirection
   canAccessDashboard: OrderDirection
+  canManageInventory: OrderDirection
+  canViewInventory: OrderDirection
+  canManageLeads: OrderDirection
+  canViewAllLeads: OrderDirection
+  canManageDeals: OrderDirection
+  canApproveDeals: OrderDirection
+  canManageService: OrderDirection
+  canViewReports: OrderDirection
+  canManageFinancing: OrderDirection
+  canManageTradeIns: OrderDirection
 }
 
 input RoleUpdateInput {
   name: String
-  canCreateTodos: Boolean
-  canManageAllTodos: Boolean
   canSeeOtherPeople: Boolean
   canEditOtherPeople: Boolean
   canManagePeople: Boolean
   canManageRoles: Boolean
   canAccessDashboard: Boolean
+  canManageInventory: Boolean
+  canViewInventory: Boolean
+  canManageLeads: Boolean
+  canViewAllLeads: Boolean
+  canManageDeals: Boolean
+  canApproveDeals: Boolean
+  canManageService: Boolean
+  canViewReports: Boolean
+  canManageFinancing: Boolean
+  canManageTradeIns: Boolean
   assignedTo: UserRelateToManyForUpdateInput
 }
 
@@ -248,13 +465,21 @@ input RoleUpdateArgs {
 
 input RoleCreateInput {
   name: String
-  canCreateTodos: Boolean
-  canManageAllTodos: Boolean
   canSeeOtherPeople: Boolean
   canEditOtherPeople: Boolean
   canManagePeople: Boolean
   canManageRoles: Boolean
   canAccessDashboard: Boolean
+  canManageInventory: Boolean
+  canViewInventory: Boolean
+  canManageLeads: Boolean
+  canViewAllLeads: Boolean
+  canManageDeals: Boolean
+  canApproveDeals: Boolean
+  canManageService: Boolean
+  canViewReports: Boolean
+  canManageFinancing: Boolean
+  canManageTradeIns: Boolean
   assignedTo: UserRelateToManyForCreateInput
 }
 
@@ -263,34 +488,13 @@ input UserRelateToManyForCreateInput {
   connect: [UserWhereUniqueInput!]
 }
 
-type Todo {
+type Make {
   id: ID!
-  label: String
-  description: Todo_description_Document
-  isComplete: Boolean
-  status: String
-  priority: Int
-  tags: [String!]
-  dueDate: DateTime
-  weight: Float
-  budget: Decimal
-  isPrivate: Boolean
-  largeNumber: BigInt
-  metadata: JSON
-  secretNote: PasswordState
-  coverImage: ImageFieldOutput
-  todoImages(where: TodoImageWhereInput! = {}, orderBy: [TodoImageOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: TodoImageWhereUniqueInput): [TodoImage!]
-  todoImagesCount(where: TodoImageWhereInput! = {}): Int
-  assignedTo: User
+  name: String
+  logo: ImageFieldOutput
+  models(where: ModelWhereInput! = {}, orderBy: [ModelOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: ModelWhereUniqueInput): [Model!]
+  modelsCount(where: ModelWhereInput! = {}): Int
 }
-
-type Todo_description_Document {
-  document(hydrateRelationships: Boolean! = false): JSON!
-}
-
-scalar Decimal
-
-scalar BigInt
 
 type ImageFieldOutput {
   id: ID!
@@ -308,27 +512,88 @@ enum ImageExtension {
   gif
 }
 
-input TodoWhereUniqueInput {
+input MakeWhereUniqueInput {
+  id: ID
+  name: String
+}
+
+input MakeWhereInput {
+  AND: [MakeWhereInput!]
+  OR: [MakeWhereInput!]
+  NOT: [MakeWhereInput!]
+  id: IDFilter
+  name: StringFilter
+  models: ModelManyRelationFilter
+}
+
+input ModelManyRelationFilter {
+  every: ModelWhereInput
+  some: ModelWhereInput
+  none: ModelWhereInput
+}
+
+input MakeOrderByInput {
+  id: OrderDirection
+  name: OrderDirection
+}
+
+input MakeUpdateInput {
+  name: String
+  logo: ImageFieldInput
+  models: ModelRelateToManyForUpdateInput
+}
+
+input ImageFieldInput {
+  upload: Upload!
+}
+
+"""The `Upload` scalar type represents a file upload."""
+scalar Upload
+
+input ModelRelateToManyForUpdateInput {
+  disconnect: [ModelWhereUniqueInput!]
+  set: [ModelWhereUniqueInput!]
+  create: [ModelCreateInput!]
+  connect: [ModelWhereUniqueInput!]
+}
+
+input MakeUpdateArgs {
+  where: MakeWhereUniqueInput!
+  data: MakeUpdateInput!
+}
+
+input MakeCreateInput {
+  name: String
+  logo: ImageFieldInput
+  models: ModelRelateToManyForCreateInput
+}
+
+input ModelRelateToManyForCreateInput {
+  create: [ModelCreateInput!]
+  connect: [ModelWhereUniqueInput!]
+}
+
+type Model {
+  id: ID!
+  name: String
+  make: Make
+  bodyStyle: String
+  baseYear: Int
+}
+
+input ModelWhereUniqueInput {
   id: ID
 }
 
-input TodoWhereInput {
-  AND: [TodoWhereInput!]
-  OR: [TodoWhereInput!]
-  NOT: [TodoWhereInput!]
+input ModelWhereInput {
+  AND: [ModelWhereInput!]
+  OR: [ModelWhereInput!]
+  NOT: [ModelWhereInput!]
   id: IDFilter
-  label: StringFilter
-  isComplete: BooleanFilter
-  status: StringNullableFilter
-  priority: IntNullableFilter
-  dueDate: DateTimeNullableFilter
-  weight: FloatNullableFilter
-  budget: DecimalNullableFilter
-  isPrivate: BooleanFilter
-  largeNumber: BigIntNullableFilter
-  secretNote: PasswordFilter
-  todoImages: TodoImageManyRelationFilter
-  assignedTo: UserWhereInput
+  name: StringFilter
+  make: MakeWhereInput
+  bodyStyle: StringNullableFilter
+  baseYear: IntNullableFilter
 }
 
 input StringNullableFilter {
@@ -357,7 +622,533 @@ input IntNullableFilter {
   not: IntNullableFilter
 }
 
-input FloatNullableFilter {
+input ModelOrderByInput {
+  id: OrderDirection
+  name: OrderDirection
+  bodyStyle: OrderDirection
+  baseYear: OrderDirection
+}
+
+input ModelUpdateInput {
+  name: String
+  make: MakeRelateToOneForUpdateInput
+  bodyStyle: String
+  baseYear: Int
+}
+
+input MakeRelateToOneForUpdateInput {
+  create: MakeCreateInput
+  connect: MakeWhereUniqueInput
+  disconnect: Boolean
+}
+
+input ModelUpdateArgs {
+  where: ModelWhereUniqueInput!
+  data: ModelUpdateInput!
+}
+
+input ModelCreateInput {
+  name: String
+  make: MakeRelateToOneForCreateInput
+  bodyStyle: String
+  baseYear: Int
+}
+
+input MakeRelateToOneForCreateInput {
+  create: MakeCreateInput
+  connect: MakeWhereUniqueInput
+}
+
+type Vehicle {
+  id: ID!
+  vin: String
+  stockNumber: String
+  year: Int
+  make: String
+  model: String
+  trim: String
+  exteriorColor: String
+  interiorColor: String
+  mileage: Int
+  purchasePrice: Float
+  listPrice: Float
+  price: Float
+  condition: String
+  status: String
+  description: String
+  features: JSON
+  metadata: JSON
+  images(where: VehicleImageWhereInput! = {}, orderBy: [VehicleImageOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: VehicleImageWhereUniqueInput): [VehicleImage!]
+  imagesCount(where: VehicleImageWhereInput! = {}): Int
+  deals(where: DealWhereInput! = {}, orderBy: [DealOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: DealWhereUniqueInput): [Deal!]
+  dealsCount(where: DealWhereInput! = {}): Int
+  leads(where: LeadWhereInput! = {}, orderBy: [LeadOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: LeadWhereUniqueInput): [Lead!]
+  leadsCount(where: LeadWhereInput! = {}): Int
+  testDrives(where: TestDriveWhereInput! = {}, orderBy: [TestDriveOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: TestDriveWhereUniqueInput): [TestDrive!]
+  testDrivesCount(where: TestDriveWhereInput! = {}): Int
+  conditionReports(where: VehicleConditionReportWhereInput! = {}, orderBy: [VehicleConditionReportOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: VehicleConditionReportWhereUniqueInput): [VehicleConditionReport!]
+  conditionReportsCount(where: VehicleConditionReportWhereInput! = {}): Int
+  history: VehicleHistory
+  priceHistory(where: PriceHistoryWhereInput! = {}, orderBy: [PriceHistoryOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: PriceHistoryWhereUniqueInput): [PriceHistory!]
+  priceHistoryCount(where: PriceHistoryWhereInput! = {}): Int
+  createdAt: DateTime
+}
+
+input VehicleWhereUniqueInput {
+  id: ID
+  vin: String
+  stockNumber: String
+  history: VehicleHistoryWhereUniqueInput
+}
+
+input VehicleWhereInput {
+  AND: [VehicleWhereInput!]
+  OR: [VehicleWhereInput!]
+  NOT: [VehicleWhereInput!]
+  id: IDFilter
+  vin: StringFilter
+  stockNumber: StringFilter
+  year: IntFilter
+  make: StringFilter
+  model: StringFilter
+  trim: StringFilter
+  exteriorColor: StringFilter
+  interiorColor: StringFilter
+  mileage: IntNullableFilter
+  purchasePrice: FloatNullableFilter
+  listPrice: FloatNullableFilter
+  price: FloatNullableFilter
+  condition: StringNullableFilter
+  status: StringNullableFilter
+  description: StringFilter
+  images: VehicleImageManyRelationFilter
+  deals: DealManyRelationFilter
+  leads: LeadManyRelationFilter
+  testDrives: TestDriveManyRelationFilter
+  conditionReports: VehicleConditionReportManyRelationFilter
+  history: VehicleHistoryWhereInput
+  priceHistory: PriceHistoryManyRelationFilter
+  createdAt: DateTimeNullableFilter
+}
+
+input IntFilter {
+  equals: Int
+  in: [Int!]
+  notIn: [Int!]
+  lt: Int
+  lte: Int
+  gt: Int
+  gte: Int
+  not: IntFilter
+}
+
+input VehicleImageManyRelationFilter {
+  every: VehicleImageWhereInput
+  some: VehicleImageWhereInput
+  none: VehicleImageWhereInput
+}
+
+input TestDriveManyRelationFilter {
+  every: TestDriveWhereInput
+  some: TestDriveWhereInput
+  none: TestDriveWhereInput
+}
+
+input VehicleConditionReportManyRelationFilter {
+  every: VehicleConditionReportWhereInput
+  some: VehicleConditionReportWhereInput
+  none: VehicleConditionReportWhereInput
+}
+
+input VehicleOrderByInput {
+  id: OrderDirection
+  vin: OrderDirection
+  stockNumber: OrderDirection
+  year: OrderDirection
+  make: OrderDirection
+  model: OrderDirection
+  trim: OrderDirection
+  exteriorColor: OrderDirection
+  interiorColor: OrderDirection
+  mileage: OrderDirection
+  purchasePrice: OrderDirection
+  listPrice: OrderDirection
+  price: OrderDirection
+  condition: OrderDirection
+  status: OrderDirection
+  description: OrderDirection
+  createdAt: OrderDirection
+}
+
+input VehicleUpdateInput {
+  vin: String
+  stockNumber: String
+  year: Int
+  make: String
+  model: String
+  trim: String
+  exteriorColor: String
+  interiorColor: String
+  mileage: Int
+  purchasePrice: Float
+  listPrice: Float
+  price: Float
+  condition: String
+  status: String
+  description: String
+  features: JSON
+  metadata: JSON
+  images: VehicleImageRelateToManyForUpdateInput
+  deals: DealRelateToManyForUpdateInput
+  leads: LeadRelateToManyForUpdateInput
+  testDrives: TestDriveRelateToManyForUpdateInput
+  conditionReports: VehicleConditionReportRelateToManyForUpdateInput
+  history: VehicleHistoryRelateToOneForUpdateInput
+  priceHistory: PriceHistoryRelateToManyForUpdateInput
+  createdAt: DateTime
+}
+
+input VehicleImageRelateToManyForUpdateInput {
+  disconnect: [VehicleImageWhereUniqueInput!]
+  set: [VehicleImageWhereUniqueInput!]
+  create: [VehicleImageCreateInput!]
+  connect: [VehicleImageWhereUniqueInput!]
+}
+
+input TestDriveRelateToManyForUpdateInput {
+  disconnect: [TestDriveWhereUniqueInput!]
+  set: [TestDriveWhereUniqueInput!]
+  create: [TestDriveCreateInput!]
+  connect: [TestDriveWhereUniqueInput!]
+}
+
+input VehicleConditionReportRelateToManyForUpdateInput {
+  disconnect: [VehicleConditionReportWhereUniqueInput!]
+  set: [VehicleConditionReportWhereUniqueInput!]
+  create: [VehicleConditionReportCreateInput!]
+  connect: [VehicleConditionReportWhereUniqueInput!]
+}
+
+input VehicleHistoryRelateToOneForUpdateInput {
+  create: VehicleHistoryCreateInput
+  connect: VehicleHistoryWhereUniqueInput
+  disconnect: Boolean
+}
+
+input VehicleUpdateArgs {
+  where: VehicleWhereUniqueInput!
+  data: VehicleUpdateInput!
+}
+
+input VehicleCreateInput {
+  vin: String
+  stockNumber: String
+  year: Int
+  make: String
+  model: String
+  trim: String
+  exteriorColor: String
+  interiorColor: String
+  mileage: Int
+  purchasePrice: Float
+  listPrice: Float
+  price: Float
+  condition: String
+  status: String
+  description: String
+  features: JSON
+  metadata: JSON
+  images: VehicleImageRelateToManyForCreateInput
+  deals: DealRelateToManyForCreateInput
+  leads: LeadRelateToManyForCreateInput
+  testDrives: TestDriveRelateToManyForCreateInput
+  conditionReports: VehicleConditionReportRelateToManyForCreateInput
+  history: VehicleHistoryRelateToOneForCreateInput
+  priceHistory: PriceHistoryRelateToManyForCreateInput
+  createdAt: DateTime
+}
+
+input VehicleImageRelateToManyForCreateInput {
+  create: [VehicleImageCreateInput!]
+  connect: [VehicleImageWhereUniqueInput!]
+}
+
+input TestDriveRelateToManyForCreateInput {
+  create: [TestDriveCreateInput!]
+  connect: [TestDriveWhereUniqueInput!]
+}
+
+input VehicleConditionReportRelateToManyForCreateInput {
+  create: [VehicleConditionReportCreateInput!]
+  connect: [VehicleConditionReportWhereUniqueInput!]
+}
+
+input VehicleHistoryRelateToOneForCreateInput {
+  create: VehicleHistoryCreateInput
+  connect: VehicleHistoryWhereUniqueInput
+}
+
+type VehicleImage {
+  id: ID!
+  vehicle: Vehicle
+  image: ImageFieldOutput
+  caption: String
+  category: String
+  sortOrder: Int
+  isPrimary: Boolean
+}
+
+input VehicleImageWhereUniqueInput {
+  id: ID
+}
+
+input VehicleImageWhereInput {
+  AND: [VehicleImageWhereInput!]
+  OR: [VehicleImageWhereInput!]
+  NOT: [VehicleImageWhereInput!]
+  id: IDFilter
+  vehicle: VehicleWhereInput
+  caption: StringFilter
+  category: StringNullableFilter
+  sortOrder: IntNullableFilter
+  isPrimary: BooleanFilter
+}
+
+input VehicleImageOrderByInput {
+  id: OrderDirection
+  caption: OrderDirection
+  category: OrderDirection
+  sortOrder: OrderDirection
+  isPrimary: OrderDirection
+}
+
+input VehicleImageUpdateInput {
+  vehicle: VehicleRelateToOneForUpdateInput
+  image: ImageFieldInput
+  caption: String
+  category: String
+  sortOrder: Int
+  isPrimary: Boolean
+}
+
+input VehicleRelateToOneForUpdateInput {
+  create: VehicleCreateInput
+  connect: VehicleWhereUniqueInput
+  disconnect: Boolean
+}
+
+input VehicleImageUpdateArgs {
+  where: VehicleImageWhereUniqueInput!
+  data: VehicleImageUpdateInput!
+}
+
+input VehicleImageCreateInput {
+  vehicle: VehicleRelateToOneForCreateInput
+  image: ImageFieldInput
+  caption: String
+  category: String
+  sortOrder: Int
+  isPrimary: Boolean
+}
+
+input VehicleRelateToOneForCreateInput {
+  create: VehicleCreateInput
+  connect: VehicleWhereUniqueInput
+}
+
+type VehicleConditionReport {
+  id: ID!
+  vehicle: Vehicle
+  reportDate: DateTime
+  inspector: String
+  overallCondition: String
+  mechanicalRating: String
+  bodyRating: String
+  interiorRating: String
+  issues: JSON
+  estimatedRepairs: Int
+  notes: String
+}
+
+input VehicleConditionReportWhereUniqueInput {
+  id: ID
+}
+
+input VehicleConditionReportWhereInput {
+  AND: [VehicleConditionReportWhereInput!]
+  OR: [VehicleConditionReportWhereInput!]
+  NOT: [VehicleConditionReportWhereInput!]
+  id: IDFilter
+  vehicle: VehicleWhereInput
+  reportDate: DateTimeFilter
+  inspector: StringFilter
+  overallCondition: StringNullableFilter
+  mechanicalRating: StringNullableFilter
+  bodyRating: StringNullableFilter
+  interiorRating: StringNullableFilter
+  estimatedRepairs: IntNullableFilter
+  notes: StringFilter
+}
+
+input DateTimeFilter {
+  equals: DateTime
+  in: [DateTime!]
+  notIn: [DateTime!]
+  lt: DateTime
+  lte: DateTime
+  gt: DateTime
+  gte: DateTime
+  not: DateTimeFilter
+}
+
+input VehicleConditionReportOrderByInput {
+  id: OrderDirection
+  reportDate: OrderDirection
+  inspector: OrderDirection
+  overallCondition: OrderDirection
+  mechanicalRating: OrderDirection
+  bodyRating: OrderDirection
+  interiorRating: OrderDirection
+  estimatedRepairs: OrderDirection
+  notes: OrderDirection
+}
+
+input VehicleConditionReportUpdateInput {
+  vehicle: VehicleRelateToOneForUpdateInput
+  reportDate: DateTime
+  inspector: String
+  overallCondition: String
+  mechanicalRating: String
+  bodyRating: String
+  interiorRating: String
+  issues: JSON
+  estimatedRepairs: Int
+  notes: String
+}
+
+input VehicleConditionReportUpdateArgs {
+  where: VehicleConditionReportWhereUniqueInput!
+  data: VehicleConditionReportUpdateInput!
+}
+
+input VehicleConditionReportCreateInput {
+  vehicle: VehicleRelateToOneForCreateInput
+  reportDate: DateTime
+  inspector: String
+  overallCondition: String
+  mechanicalRating: String
+  bodyRating: String
+  interiorRating: String
+  issues: JSON
+  estimatedRepairs: Int
+  notes: String
+}
+
+type VehicleHistory {
+  id: ID!
+  vehicle: Vehicle
+  acquisitionDate: DateTime
+  acquisitionSource: String
+  previousOwners: Int
+  hasAccidents: Boolean
+  accidentDetails: String
+  serviceRecords: String
+  titleStatus: String
+  notes: String
+}
+
+input VehicleHistoryWhereUniqueInput {
+  id: ID
+  vehicle: VehicleWhereUniqueInput
+}
+
+input VehicleHistoryWhereInput {
+  AND: [VehicleHistoryWhereInput!]
+  OR: [VehicleHistoryWhereInput!]
+  NOT: [VehicleHistoryWhereInput!]
+  id: IDFilter
+  vehicle: VehicleWhereInput
+  acquisitionDate: DateTimeNullableFilter
+  acquisitionSource: StringFilter
+  previousOwners: IntNullableFilter
+  hasAccidents: BooleanFilter
+  accidentDetails: StringFilter
+  serviceRecords: StringFilter
+  titleStatus: StringFilter
+  notes: StringFilter
+}
+
+input VehicleHistoryOrderByInput {
+  id: OrderDirection
+  acquisitionDate: OrderDirection
+  acquisitionSource: OrderDirection
+  previousOwners: OrderDirection
+  hasAccidents: OrderDirection
+  accidentDetails: OrderDirection
+  serviceRecords: OrderDirection
+  titleStatus: OrderDirection
+  notes: OrderDirection
+}
+
+input VehicleHistoryUpdateInput {
+  vehicle: VehicleRelateToOneForUpdateInput
+  acquisitionDate: DateTime
+  acquisitionSource: String
+  previousOwners: Int
+  hasAccidents: Boolean
+  accidentDetails: String
+  serviceRecords: String
+  titleStatus: String
+  notes: String
+}
+
+input VehicleHistoryUpdateArgs {
+  where: VehicleHistoryWhereUniqueInput!
+  data: VehicleHistoryUpdateInput!
+}
+
+input VehicleHistoryCreateInput {
+  vehicle: VehicleRelateToOneForCreateInput
+  acquisitionDate: DateTime
+  acquisitionSource: String
+  previousOwners: Int
+  hasAccidents: Boolean
+  accidentDetails: String
+  serviceRecords: String
+  titleStatus: String
+  notes: String
+}
+
+type PriceHistory {
+  id: ID!
+  vehicle: Vehicle
+  effectiveDate: DateTime
+  previousPrice: Float
+  newPrice: Float
+  changeReason: String
+  changedBy: User
+  notes: String
+}
+
+input PriceHistoryWhereUniqueInput {
+  id: ID
+}
+
+input PriceHistoryWhereInput {
+  AND: [PriceHistoryWhereInput!]
+  OR: [PriceHistoryWhereInput!]
+  NOT: [PriceHistoryWhereInput!]
+  id: IDFilter
+  vehicle: VehicleWhereInput
+  effectiveDate: DateTimeFilter
+  previousPrice: FloatNullableFilter
+  newPrice: FloatFilter
+  changeReason: StringFilter
+  changedBy: UserWhereInput
+  notes: StringFilter
+}
+
+input FloatFilter {
   equals: Float
   in: [Float!]
   notIn: [Float!]
@@ -365,81 +1156,26 @@ input FloatNullableFilter {
   lte: Float
   gt: Float
   gte: Float
-  not: FloatNullableFilter
+  not: FloatFilter
 }
 
-input DecimalNullableFilter {
-  equals: Decimal
-  in: [Decimal!]
-  notIn: [Decimal!]
-  lt: Decimal
-  lte: Decimal
-  gt: Decimal
-  gte: Decimal
-  not: DecimalNullableFilter
-}
-
-input BigIntNullableFilter {
-  equals: BigInt
-  in: [BigInt!]
-  notIn: [BigInt!]
-  lt: BigInt
-  lte: BigInt
-  gt: BigInt
-  gte: BigInt
-  not: BigIntNullableFilter
-}
-
-input TodoImageManyRelationFilter {
-  every: TodoImageWhereInput
-  some: TodoImageWhereInput
-  none: TodoImageWhereInput
-}
-
-input TodoOrderByInput {
+input PriceHistoryOrderByInput {
   id: OrderDirection
-  label: OrderDirection
-  isComplete: OrderDirection
-  status: OrderDirection
-  priority: OrderDirection
-  dueDate: OrderDirection
-  weight: OrderDirection
-  budget: OrderDirection
-  isPrivate: OrderDirection
-  largeNumber: OrderDirection
+  effectiveDate: OrderDirection
+  previousPrice: OrderDirection
+  newPrice: OrderDirection
+  changeReason: OrderDirection
+  notes: OrderDirection
 }
 
-input TodoUpdateInput {
-  label: String
-  description: JSON
-  isComplete: Boolean
-  status: String
-  priority: Int
-  tags: [String!]
-  dueDate: DateTime
-  weight: Float
-  budget: Decimal
-  isPrivate: Boolean
-  largeNumber: BigInt
-  metadata: JSON
-  secretNote: String
-  coverImage: ImageFieldInput
-  todoImages: TodoImageRelateToManyForUpdateInput
-  assignedTo: UserRelateToOneForUpdateInput
-}
-
-input ImageFieldInput {
-  upload: Upload!
-}
-
-"""The `Upload` scalar type represents a file upload."""
-scalar Upload
-
-input TodoImageRelateToManyForUpdateInput {
-  disconnect: [TodoImageWhereUniqueInput!]
-  set: [TodoImageWhereUniqueInput!]
-  create: [TodoImageCreateInput!]
-  connect: [TodoImageWhereUniqueInput!]
+input PriceHistoryUpdateInput {
+  vehicle: VehicleRelateToOneForUpdateInput
+  effectiveDate: DateTime
+  previousPrice: Float
+  newPrice: Float
+  changeReason: String
+  changedBy: UserRelateToOneForUpdateInput
+  notes: String
 }
 
 input UserRelateToOneForUpdateInput {
@@ -448,33 +1184,19 @@ input UserRelateToOneForUpdateInput {
   disconnect: Boolean
 }
 
-input TodoUpdateArgs {
-  where: TodoWhereUniqueInput!
-  data: TodoUpdateInput!
+input PriceHistoryUpdateArgs {
+  where: PriceHistoryWhereUniqueInput!
+  data: PriceHistoryUpdateInput!
 }
 
-input TodoCreateInput {
-  label: String
-  description: JSON
-  isComplete: Boolean
-  status: String
-  priority: Int
-  tags: [String!]
-  dueDate: DateTime
-  weight: Float
-  budget: Decimal
-  isPrivate: Boolean
-  largeNumber: BigInt
-  metadata: JSON
-  secretNote: String
-  coverImage: ImageFieldInput
-  todoImages: TodoImageRelateToManyForCreateInput
-  assignedTo: UserRelateToOneForCreateInput
-}
-
-input TodoImageRelateToManyForCreateInput {
-  create: [TodoImageCreateInput!]
-  connect: [TodoImageWhereUniqueInput!]
+input PriceHistoryCreateInput {
+  vehicle: VehicleRelateToOneForCreateInput
+  effectiveDate: DateTime
+  previousPrice: Float
+  newPrice: Float
+  changeReason: String
+  changedBy: UserRelateToOneForCreateInput
+  notes: String
 }
 
 input UserRelateToOneForCreateInput {
@@ -482,55 +1204,1045 @@ input UserRelateToOneForCreateInput {
   connect: UserWhereUniqueInput
 }
 
-type TodoImage {
+type Lead {
   id: ID!
-  image: ImageFieldOutput
-  imagePath: String
-  altText: String
-  todos(where: TodoWhereInput! = {}, orderBy: [TodoOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: TodoWhereUniqueInput): [Todo!]
-  todosCount(where: TodoWhereInput! = {}): Int
-  metadata: JSON
+  firstName: String
+  lastName: String
+  email: String
+  phone: String
+  source: String
+  interestedVehicle: Vehicle
+  budgetRange: String
+  tradeInVehicle: String
+  timeframe: String
+  status: String
+  assignedSalesperson: User
+  notes: String
+  createdAt: DateTime
+  lastContact: DateTime
+  testDrives(where: TestDriveWhereInput! = {}, orderBy: [TestDriveOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: TestDriveWhereUniqueInput): [TestDrive!]
+  testDrivesCount(where: TestDriveWhereInput! = {}): Int
+  deals(where: DealWhereInput! = {}, orderBy: [DealOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: DealWhereUniqueInput): [Deal!]
+  dealsCount(where: DealWhereInput! = {}): Int
+  interactions(where: CustomerInteractionWhereInput! = {}, orderBy: [CustomerInteractionOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: CustomerInteractionWhereUniqueInput): [CustomerInteraction!]
+  interactionsCount(where: CustomerInteractionWhereInput! = {}): Int
+  tasks(where: TaskWhereInput! = {}, orderBy: [TaskOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: TaskWhereUniqueInput): [Task!]
+  tasksCount(where: TaskWhereInput! = {}): Int
 }
 
-input TodoImageWhereUniqueInput {
+input LeadWhereUniqueInput {
   id: ID
 }
 
-input TodoImageWhereInput {
-  AND: [TodoImageWhereInput!]
-  OR: [TodoImageWhereInput!]
-  NOT: [TodoImageWhereInput!]
+input LeadWhereInput {
+  AND: [LeadWhereInput!]
+  OR: [LeadWhereInput!]
+  NOT: [LeadWhereInput!]
   id: IDFilter
-  imagePath: StringFilter
-  altText: StringFilter
-  todos: TodoManyRelationFilter
+  firstName: StringFilter
+  lastName: StringFilter
+  email: StringFilter
+  phone: StringFilter
+  source: StringNullableFilter
+  interestedVehicle: VehicleWhereInput
+  budgetRange: StringNullableFilter
+  tradeInVehicle: StringFilter
+  timeframe: StringNullableFilter
+  status: StringNullableFilter
+  assignedSalesperson: UserWhereInput
+  notes: StringFilter
+  createdAt: DateTimeNullableFilter
+  lastContact: DateTimeNullableFilter
+  testDrives: TestDriveManyRelationFilter
+  deals: DealManyRelationFilter
+  interactions: CustomerInteractionManyRelationFilter
+  tasks: TaskManyRelationFilter
 }
 
-input TodoImageOrderByInput {
+input LeadOrderByInput {
   id: OrderDirection
-  imagePath: OrderDirection
-  altText: OrderDirection
+  firstName: OrderDirection
+  lastName: OrderDirection
+  email: OrderDirection
+  phone: OrderDirection
+  source: OrderDirection
+  budgetRange: OrderDirection
+  tradeInVehicle: OrderDirection
+  timeframe: OrderDirection
+  status: OrderDirection
+  notes: OrderDirection
+  createdAt: OrderDirection
+  lastContact: OrderDirection
 }
 
-input TodoImageUpdateInput {
-  image: ImageFieldInput
-  imagePath: String
-  altText: String
-  todos: TodoRelateToManyForUpdateInput
-  metadata: JSON
+input LeadUpdateInput {
+  firstName: String
+  lastName: String
+  email: String
+  phone: String
+  source: String
+  interestedVehicle: VehicleRelateToOneForUpdateInput
+  budgetRange: String
+  tradeInVehicle: String
+  timeframe: String
+  status: String
+  assignedSalesperson: UserRelateToOneForUpdateInput
+  notes: String
+  createdAt: DateTime
+  lastContact: DateTime
+  testDrives: TestDriveRelateToManyForUpdateInput
+  deals: DealRelateToManyForUpdateInput
+  interactions: CustomerInteractionRelateToManyForUpdateInput
+  tasks: TaskRelateToManyForUpdateInput
 }
 
-input TodoImageUpdateArgs {
-  where: TodoImageWhereUniqueInput!
-  data: TodoImageUpdateInput!
+input LeadUpdateArgs {
+  where: LeadWhereUniqueInput!
+  data: LeadUpdateInput!
 }
 
-input TodoImageCreateInput {
-  image: ImageFieldInput
-  imagePath: String
-  altText: String
-  todos: TodoRelateToManyForCreateInput
-  metadata: JSON
+input LeadCreateInput {
+  firstName: String
+  lastName: String
+  email: String
+  phone: String
+  source: String
+  interestedVehicle: VehicleRelateToOneForCreateInput
+  budgetRange: String
+  tradeInVehicle: String
+  timeframe: String
+  status: String
+  assignedSalesperson: UserRelateToOneForCreateInput
+  notes: String
+  createdAt: DateTime
+  lastContact: DateTime
+  testDrives: TestDriveRelateToManyForCreateInput
+  deals: DealRelateToManyForCreateInput
+  interactions: CustomerInteractionRelateToManyForCreateInput
+  tasks: TaskRelateToManyForCreateInput
+}
+
+type CustomerInteraction {
+  id: ID!
+  lead: Lead
+  interactionType: String
+  date: DateTime
+  duration: Int
+  notes: String
+  outcome: String
+  followUpDate: DateTime
+  followUpCompleted: DateTime
+  performedBy: User
+}
+
+input CustomerInteractionWhereUniqueInput {
+  id: ID
+}
+
+input CustomerInteractionWhereInput {
+  AND: [CustomerInteractionWhereInput!]
+  OR: [CustomerInteractionWhereInput!]
+  NOT: [CustomerInteractionWhereInput!]
+  id: IDFilter
+  lead: LeadWhereInput
+  interactionType: StringFilter
+  date: DateTimeFilter
+  duration: IntNullableFilter
+  notes: StringFilter
+  outcome: StringNullableFilter
+  followUpDate: DateTimeNullableFilter
+  followUpCompleted: DateTimeNullableFilter
+  performedBy: UserWhereInput
+}
+
+input CustomerInteractionOrderByInput {
+  id: OrderDirection
+  interactionType: OrderDirection
+  date: OrderDirection
+  duration: OrderDirection
+  notes: OrderDirection
+  outcome: OrderDirection
+  followUpDate: OrderDirection
+  followUpCompleted: OrderDirection
+}
+
+input CustomerInteractionUpdateInput {
+  lead: LeadRelateToOneForUpdateInput
+  interactionType: String
+  date: DateTime
+  duration: Int
+  notes: String
+  outcome: String
+  followUpDate: DateTime
+  followUpCompleted: DateTime
+  performedBy: UserRelateToOneForUpdateInput
+}
+
+input LeadRelateToOneForUpdateInput {
+  create: LeadCreateInput
+  connect: LeadWhereUniqueInput
+  disconnect: Boolean
+}
+
+input CustomerInteractionUpdateArgs {
+  where: CustomerInteractionWhereUniqueInput!
+  data: CustomerInteractionUpdateInput!
+}
+
+input CustomerInteractionCreateInput {
+  lead: LeadRelateToOneForCreateInput
+  interactionType: String
+  date: DateTime
+  duration: Int
+  notes: String
+  outcome: String
+  followUpDate: DateTime
+  followUpCompleted: DateTime
+  performedBy: UserRelateToOneForCreateInput
+}
+
+input LeadRelateToOneForCreateInput {
+  create: LeadCreateInput
+  connect: LeadWhereUniqueInput
+}
+
+type Task {
+  id: ID!
+  title: String
+  description: String
+  assignedTo: User
+  lead: Lead
+  priority: String
+  completed: Boolean
+  dueDate: DateTime
+  completedDate: DateTime
+  createdAt: DateTime
+}
+
+input TaskWhereUniqueInput {
+  id: ID
+}
+
+input TaskWhereInput {
+  AND: [TaskWhereInput!]
+  OR: [TaskWhereInput!]
+  NOT: [TaskWhereInput!]
+  id: IDFilter
+  title: StringFilter
+  description: StringFilter
+  assignedTo: UserWhereInput
+  lead: LeadWhereInput
+  priority: StringNullableFilter
+  completed: BooleanFilter
+  dueDate: DateTimeNullableFilter
+  completedDate: DateTimeNullableFilter
+  createdAt: DateTimeNullableFilter
+}
+
+input TaskOrderByInput {
+  id: OrderDirection
+  title: OrderDirection
+  description: OrderDirection
+  priority: OrderDirection
+  completed: OrderDirection
+  dueDate: OrderDirection
+  completedDate: OrderDirection
+  createdAt: OrderDirection
+}
+
+input TaskUpdateInput {
+  title: String
+  description: String
+  assignedTo: UserRelateToOneForUpdateInput
+  lead: LeadRelateToOneForUpdateInput
+  priority: String
+  completed: Boolean
+  dueDate: DateTime
+  completedDate: DateTime
+  createdAt: DateTime
+}
+
+input TaskUpdateArgs {
+  where: TaskWhereUniqueInput!
+  data: TaskUpdateInput!
+}
+
+input TaskCreateInput {
+  title: String
+  description: String
+  assignedTo: UserRelateToOneForCreateInput
+  lead: LeadRelateToOneForCreateInput
+  priority: String
+  completed: Boolean
+  dueDate: DateTime
+  completedDate: DateTime
+  createdAt: DateTime
+}
+
+type TestDrive {
+  id: ID!
+  lead: Lead
+  vehicle: Vehicle
+  salesperson: User
+  scheduledTime: DateTime
+  completed: Boolean
+  driverLicenseVerified: Boolean
+  feedback: String
+  interestedLevel: String
+}
+
+input TestDriveWhereUniqueInput {
+  id: ID
+}
+
+input TestDriveWhereInput {
+  AND: [TestDriveWhereInput!]
+  OR: [TestDriveWhereInput!]
+  NOT: [TestDriveWhereInput!]
+  id: IDFilter
+  lead: LeadWhereInput
+  vehicle: VehicleWhereInput
+  salesperson: UserWhereInput
+  scheduledTime: DateTimeFilter
+  completed: BooleanFilter
+  driverLicenseVerified: BooleanFilter
+  feedback: StringFilter
+  interestedLevel: StringNullableFilter
+}
+
+input TestDriveOrderByInput {
+  id: OrderDirection
+  scheduledTime: OrderDirection
+  completed: OrderDirection
+  driverLicenseVerified: OrderDirection
+  feedback: OrderDirection
+  interestedLevel: OrderDirection
+}
+
+input TestDriveUpdateInput {
+  lead: LeadRelateToOneForUpdateInput
+  vehicle: VehicleRelateToOneForUpdateInput
+  salesperson: UserRelateToOneForUpdateInput
+  scheduledTime: DateTime
+  completed: Boolean
+  driverLicenseVerified: Boolean
+  feedback: String
+  interestedLevel: String
+}
+
+input TestDriveUpdateArgs {
+  where: TestDriveWhereUniqueInput!
+  data: TestDriveUpdateInput!
+}
+
+input TestDriveCreateInput {
+  lead: LeadRelateToOneForCreateInput
+  vehicle: VehicleRelateToOneForCreateInput
+  salesperson: UserRelateToOneForCreateInput
+  scheduledTime: DateTime
+  completed: Boolean
+  driverLicenseVerified: Boolean
+  feedback: String
+  interestedLevel: String
+}
+
+type Deal {
+  id: ID!
+  lead: Lead
+  vehicle: Vehicle
+  salesperson: User
+  vehiclePrice: Float
+  tradeInValue: Float
+  tradeInVehicle: TradeIn
+  tradeInDetails: JSON
+  downPayment: Float
+  financingAmount: Float
+  monthlyPayment: Float
+  loanTerm: Int
+  apr: Float
+  status: String
+  taxAmount: Float
+  fees: JSON
+  approvals(where: DealApprovalWhereInput! = {}, orderBy: [DealApprovalOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: DealApprovalWhereUniqueInput): [DealApproval!]
+  approvalsCount(where: DealApprovalWhereInput! = {}): Int
+  saleDate: DateTime
+  createdAt: DateTime
+  updatedAt: DateTime
+  totalPrice: Float
+  profit: Float
+}
+
+input DealWhereUniqueInput {
+  id: ID
+  tradeInVehicle: TradeInWhereUniqueInput
+}
+
+input DealWhereInput {
+  AND: [DealWhereInput!]
+  OR: [DealWhereInput!]
+  NOT: [DealWhereInput!]
+  id: IDFilter
+  lead: LeadWhereInput
+  vehicle: VehicleWhereInput
+  salesperson: UserWhereInput
+  vehiclePrice: FloatNullableFilter
+  tradeInValue: FloatNullableFilter
+  tradeInVehicle: TradeInWhereInput
+  downPayment: FloatNullableFilter
+  financingAmount: FloatNullableFilter
+  monthlyPayment: FloatNullableFilter
+  loanTerm: IntNullableFilter
+  apr: FloatNullableFilter
+  status: StringNullableFilter
+  taxAmount: FloatNullableFilter
+  approvals: DealApprovalManyRelationFilter
+  saleDate: DateTimeNullableFilter
+  createdAt: DateTimeNullableFilter
+  updatedAt: DateTimeNullableFilter
+}
+
+input DealOrderByInput {
+  id: OrderDirection
+  vehiclePrice: OrderDirection
+  tradeInValue: OrderDirection
+  downPayment: OrderDirection
+  financingAmount: OrderDirection
+  monthlyPayment: OrderDirection
+  loanTerm: OrderDirection
+  apr: OrderDirection
+  status: OrderDirection
+  taxAmount: OrderDirection
+  saleDate: OrderDirection
+  createdAt: OrderDirection
+  updatedAt: OrderDirection
+}
+
+input DealUpdateInput {
+  lead: LeadRelateToOneForUpdateInput
+  vehicle: VehicleRelateToOneForUpdateInput
+  salesperson: UserRelateToOneForUpdateInput
+  vehiclePrice: Float
+  tradeInValue: Float
+  tradeInVehicle: TradeInRelateToOneForUpdateInput
+  tradeInDetails: JSON
+  downPayment: Float
+  financingAmount: Float
+  monthlyPayment: Float
+  loanTerm: Int
+  apr: Float
+  status: String
+  taxAmount: Float
+  fees: JSON
+  approvals: DealApprovalRelateToManyForUpdateInput
+  saleDate: DateTime
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input TradeInRelateToOneForUpdateInput {
+  create: TradeInCreateInput
+  connect: TradeInWhereUniqueInput
+  disconnect: Boolean
+}
+
+input DealUpdateArgs {
+  where: DealWhereUniqueInput!
+  data: DealUpdateInput!
+}
+
+input DealCreateInput {
+  lead: LeadRelateToOneForCreateInput
+  vehicle: VehicleRelateToOneForCreateInput
+  salesperson: UserRelateToOneForCreateInput
+  vehiclePrice: Float
+  tradeInValue: Float
+  tradeInVehicle: TradeInRelateToOneForCreateInput
+  tradeInDetails: JSON
+  downPayment: Float
+  financingAmount: Float
+  monthlyPayment: Float
+  loanTerm: Int
+  apr: Float
+  status: String
+  taxAmount: Float
+  fees: JSON
+  approvals: DealApprovalRelateToManyForCreateInput
+  saleDate: DateTime
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input TradeInRelateToOneForCreateInput {
+  create: TradeInCreateInput
+  connect: TradeInWhereUniqueInput
+}
+
+type DealApproval {
+  id: ID!
+  deal: Deal
+  approver: User
+  decision: String
+  notes: String
+  approvalDate: DateTime
+}
+
+input DealApprovalWhereUniqueInput {
+  id: ID
+}
+
+input DealApprovalWhereInput {
+  AND: [DealApprovalWhereInput!]
+  OR: [DealApprovalWhereInput!]
+  NOT: [DealApprovalWhereInput!]
+  id: IDFilter
+  deal: DealWhereInput
+  approver: UserWhereInput
+  decision: StringNullableFilter
+  notes: StringFilter
+  approvalDate: DateTimeNullableFilter
+}
+
+input DealApprovalOrderByInput {
+  id: OrderDirection
+  decision: OrderDirection
+  notes: OrderDirection
+  approvalDate: OrderDirection
+}
+
+input DealApprovalUpdateInput {
+  deal: DealRelateToOneForUpdateInput
+  approver: UserRelateToOneForUpdateInput
+  decision: String
+  notes: String
+  approvalDate: DateTime
+}
+
+input DealRelateToOneForUpdateInput {
+  create: DealCreateInput
+  connect: DealWhereUniqueInput
+  disconnect: Boolean
+}
+
+input DealApprovalUpdateArgs {
+  where: DealApprovalWhereUniqueInput!
+  data: DealApprovalUpdateInput!
+}
+
+input DealApprovalCreateInput {
+  deal: DealRelateToOneForCreateInput
+  approver: UserRelateToOneForCreateInput
+  decision: String
+  notes: String
+  approvalDate: DateTime
+}
+
+input DealRelateToOneForCreateInput {
+  create: DealCreateInput
+  connect: DealWhereUniqueInput
+}
+
+type TradeIn {
+  id: ID!
+  vin: String
+  year: String
+  make: String
+  model: String
+  trim: String
+  mileage: Int
+  condition: String
+  exteriorCondition: String
+  interiorCondition: String
+  mechanicalIssues: String
+  kbbValue: Float
+  offerAmount: Float
+  mainPhoto: ImageFieldOutput
+  deal: Deal
+  appraisedBy: User
+}
+
+input TradeInWhereUniqueInput {
+  id: ID
+  deal: DealWhereUniqueInput
+}
+
+input TradeInWhereInput {
+  AND: [TradeInWhereInput!]
+  OR: [TradeInWhereInput!]
+  NOT: [TradeInWhereInput!]
+  id: IDFilter
+  vin: StringFilter
+  year: StringFilter
+  make: StringFilter
+  model: StringFilter
+  trim: StringFilter
+  mileage: IntNullableFilter
+  condition: StringNullableFilter
+  exteriorCondition: StringFilter
+  interiorCondition: StringFilter
+  mechanicalIssues: StringFilter
+  kbbValue: FloatNullableFilter
+  offerAmount: FloatNullableFilter
+  deal: DealWhereInput
+  appraisedBy: UserWhereInput
+}
+
+input TradeInOrderByInput {
+  id: OrderDirection
+  vin: OrderDirection
+  year: OrderDirection
+  make: OrderDirection
+  model: OrderDirection
+  trim: OrderDirection
+  mileage: OrderDirection
+  condition: OrderDirection
+  exteriorCondition: OrderDirection
+  interiorCondition: OrderDirection
+  mechanicalIssues: OrderDirection
+  kbbValue: OrderDirection
+  offerAmount: OrderDirection
+}
+
+input TradeInUpdateInput {
+  vin: String
+  year: String
+  make: String
+  model: String
+  trim: String
+  mileage: Int
+  condition: String
+  exteriorCondition: String
+  interiorCondition: String
+  mechanicalIssues: String
+  kbbValue: Float
+  offerAmount: Float
+  mainPhoto: ImageFieldInput
+  deal: DealRelateToOneForUpdateInput
+  appraisedBy: UserRelateToOneForUpdateInput
+}
+
+input TradeInUpdateArgs {
+  where: TradeInWhereUniqueInput!
+  data: TradeInUpdateInput!
+}
+
+input TradeInCreateInput {
+  vin: String
+  year: String
+  make: String
+  model: String
+  trim: String
+  mileage: Int
+  condition: String
+  exteriorCondition: String
+  interiorCondition: String
+  mechanicalIssues: String
+  kbbValue: Float
+  offerAmount: Float
+  mainPhoto: ImageFieldInput
+  deal: DealRelateToOneForCreateInput
+  appraisedBy: UserRelateToOneForCreateInput
+}
+
+type ServiceAppointment {
+  id: ID!
+  customer: User
+  customerVehicleDescription: String
+  appointmentDate: DateTime
+  serviceType: String
+  description: String
+  estimatedDuration: Int
+  assignedTech: User
+  status: String
+  mileageIn: Int
+  advisorNotes: String
+  serviceOrder: ServiceOrder
+}
+
+input ServiceAppointmentWhereUniqueInput {
+  id: ID
+  serviceOrder: ServiceOrderWhereUniqueInput
+}
+
+input ServiceAppointmentWhereInput {
+  AND: [ServiceAppointmentWhereInput!]
+  OR: [ServiceAppointmentWhereInput!]
+  NOT: [ServiceAppointmentWhereInput!]
+  id: IDFilter
+  customer: UserWhereInput
+  customerVehicleDescription: StringFilter
+  appointmentDate: DateTimeFilter
+  serviceType: StringNullableFilter
+  description: StringFilter
+  estimatedDuration: IntNullableFilter
+  assignedTech: UserWhereInput
+  status: StringNullableFilter
+  mileageIn: IntNullableFilter
+  advisorNotes: StringFilter
+  serviceOrder: ServiceOrderWhereInput
+}
+
+input ServiceAppointmentOrderByInput {
+  id: OrderDirection
+  customerVehicleDescription: OrderDirection
+  appointmentDate: OrderDirection
+  serviceType: OrderDirection
+  description: OrderDirection
+  estimatedDuration: OrderDirection
+  status: OrderDirection
+  mileageIn: OrderDirection
+  advisorNotes: OrderDirection
+}
+
+input ServiceAppointmentUpdateInput {
+  customer: UserRelateToOneForUpdateInput
+  customerVehicleDescription: String
+  appointmentDate: DateTime
+  serviceType: String
+  description: String
+  estimatedDuration: Int
+  assignedTech: UserRelateToOneForUpdateInput
+  status: String
+  mileageIn: Int
+  advisorNotes: String
+  serviceOrder: ServiceOrderRelateToOneForUpdateInput
+}
+
+input ServiceOrderRelateToOneForUpdateInput {
+  create: ServiceOrderCreateInput
+  connect: ServiceOrderWhereUniqueInput
+  disconnect: Boolean
+}
+
+input ServiceAppointmentUpdateArgs {
+  where: ServiceAppointmentWhereUniqueInput!
+  data: ServiceAppointmentUpdateInput!
+}
+
+input ServiceAppointmentCreateInput {
+  customer: UserRelateToOneForCreateInput
+  customerVehicleDescription: String
+  appointmentDate: DateTime
+  serviceType: String
+  description: String
+  estimatedDuration: Int
+  assignedTech: UserRelateToOneForCreateInput
+  status: String
+  mileageIn: Int
+  advisorNotes: String
+  serviceOrder: ServiceOrderRelateToOneForCreateInput
+}
+
+input ServiceOrderRelateToOneForCreateInput {
+  create: ServiceOrderCreateInput
+  connect: ServiceOrderWhereUniqueInput
+}
+
+type ServiceOrder {
+  id: ID!
+  appointment: ServiceAppointment
+  diagnosis: String
+  workPerformed: String
+  recommendations: String
+  lineItems(where: RepairOrderLineItemWhereInput! = {}, orderBy: [RepairOrderLineItemOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: RepairOrderLineItemWhereUniqueInput): [RepairOrderLineItem!]
+  lineItemsCount(where: RepairOrderLineItemWhereInput! = {}): Int
+  laborTotal: Float
+  partsTotal: Float
+  subtotal: Float
+  tax: Float
+  grandTotal: Float
+  status: String
+  completedAt: DateTime
+}
+
+input ServiceOrderWhereUniqueInput {
+  id: ID
+  appointment: ServiceAppointmentWhereUniqueInput
+}
+
+input ServiceOrderWhereInput {
+  AND: [ServiceOrderWhereInput!]
+  OR: [ServiceOrderWhereInput!]
+  NOT: [ServiceOrderWhereInput!]
+  id: IDFilter
+  appointment: ServiceAppointmentWhereInput
+  diagnosis: StringFilter
+  workPerformed: StringFilter
+  recommendations: StringFilter
+  lineItems: RepairOrderLineItemManyRelationFilter
+  laborTotal: FloatNullableFilter
+  partsTotal: FloatNullableFilter
+  tax: FloatNullableFilter
+  grandTotal: FloatNullableFilter
+  status: StringNullableFilter
+  completedAt: DateTimeNullableFilter
+}
+
+input RepairOrderLineItemManyRelationFilter {
+  every: RepairOrderLineItemWhereInput
+  some: RepairOrderLineItemWhereInput
+  none: RepairOrderLineItemWhereInput
+}
+
+input ServiceOrderOrderByInput {
+  id: OrderDirection
+  diagnosis: OrderDirection
+  workPerformed: OrderDirection
+  recommendations: OrderDirection
+  laborTotal: OrderDirection
+  partsTotal: OrderDirection
+  tax: OrderDirection
+  grandTotal: OrderDirection
+  status: OrderDirection
+  completedAt: OrderDirection
+}
+
+input ServiceOrderUpdateInput {
+  appointment: ServiceAppointmentRelateToOneForUpdateInput
+  diagnosis: String
+  workPerformed: String
+  recommendations: String
+  lineItems: RepairOrderLineItemRelateToManyForUpdateInput
+  laborTotal: Float
+  partsTotal: Float
+  tax: Float
+  grandTotal: Float
+  status: String
+  completedAt: DateTime
+}
+
+input ServiceAppointmentRelateToOneForUpdateInput {
+  create: ServiceAppointmentCreateInput
+  connect: ServiceAppointmentWhereUniqueInput
+  disconnect: Boolean
+}
+
+input RepairOrderLineItemRelateToManyForUpdateInput {
+  disconnect: [RepairOrderLineItemWhereUniqueInput!]
+  set: [RepairOrderLineItemWhereUniqueInput!]
+  create: [RepairOrderLineItemCreateInput!]
+  connect: [RepairOrderLineItemWhereUniqueInput!]
+}
+
+input ServiceOrderUpdateArgs {
+  where: ServiceOrderWhereUniqueInput!
+  data: ServiceOrderUpdateInput!
+}
+
+input ServiceOrderCreateInput {
+  appointment: ServiceAppointmentRelateToOneForCreateInput
+  diagnosis: String
+  workPerformed: String
+  recommendations: String
+  lineItems: RepairOrderLineItemRelateToManyForCreateInput
+  laborTotal: Float
+  partsTotal: Float
+  tax: Float
+  grandTotal: Float
+  status: String
+  completedAt: DateTime
+}
+
+input ServiceAppointmentRelateToOneForCreateInput {
+  create: ServiceAppointmentCreateInput
+  connect: ServiceAppointmentWhereUniqueInput
+}
+
+input RepairOrderLineItemRelateToManyForCreateInput {
+  create: [RepairOrderLineItemCreateInput!]
+  connect: [RepairOrderLineItemWhereUniqueInput!]
+}
+
+type RepairOrderLineItem {
+  id: ID!
+  serviceOrder: ServiceOrder
+  itemType: String
+  description: String
+  partNumber: String
+  quantity: Float
+  unitPrice: Float
+  price: Float
+  cost: Float
+}
+
+input RepairOrderLineItemWhereUniqueInput {
+  id: ID
+}
+
+input RepairOrderLineItemWhereInput {
+  AND: [RepairOrderLineItemWhereInput!]
+  OR: [RepairOrderLineItemWhereInput!]
+  NOT: [RepairOrderLineItemWhereInput!]
+  id: IDFilter
+  serviceOrder: ServiceOrderWhereInput
+  itemType: StringFilter
+  description: StringFilter
+  partNumber: StringFilter
+  quantity: FloatFilter
+  unitPrice: FloatFilter
+  price: FloatFilter
+  cost: FloatNullableFilter
+}
+
+input RepairOrderLineItemOrderByInput {
+  id: OrderDirection
+  itemType: OrderDirection
+  description: OrderDirection
+  partNumber: OrderDirection
+  quantity: OrderDirection
+  unitPrice: OrderDirection
+  price: OrderDirection
+  cost: OrderDirection
+}
+
+input RepairOrderLineItemUpdateInput {
+  serviceOrder: ServiceOrderRelateToOneForUpdateInput
+  itemType: String
+  description: String
+  partNumber: String
+  quantity: Float
+  unitPrice: Float
+  price: Float
+  cost: Float
+}
+
+input RepairOrderLineItemUpdateArgs {
+  where: RepairOrderLineItemWhereUniqueInput!
+  data: RepairOrderLineItemUpdateInput!
+}
+
+input RepairOrderLineItemCreateInput {
+  serviceOrder: ServiceOrderRelateToOneForCreateInput
+  itemType: String
+  description: String
+  partNumber: String
+  quantity: Float
+  unitPrice: Float
+  price: Float
+  cost: Float
+}
+
+type ServicePackage {
+  id: ID!
+  name: String
+  description: String
+  price: Float
+  estimatedDuration: Int
+  includedServices: JSON
+}
+
+input ServicePackageWhereUniqueInput {
+  id: ID
+}
+
+input ServicePackageWhereInput {
+  AND: [ServicePackageWhereInput!]
+  OR: [ServicePackageWhereInput!]
+  NOT: [ServicePackageWhereInput!]
+  id: IDFilter
+  name: StringFilter
+  description: StringFilter
+  price: FloatFilter
+  estimatedDuration: IntNullableFilter
+}
+
+input ServicePackageOrderByInput {
+  id: OrderDirection
+  name: OrderDirection
+  description: OrderDirection
+  price: OrderDirection
+  estimatedDuration: OrderDirection
+}
+
+input ServicePackageUpdateInput {
+  name: String
+  description: String
+  price: Float
+  estimatedDuration: Int
+  includedServices: JSON
+}
+
+input ServicePackageUpdateArgs {
+  where: ServicePackageWhereUniqueInput!
+  data: ServicePackageUpdateInput!
+}
+
+input ServicePackageCreateInput {
+  name: String
+  description: String
+  price: Float
+  estimatedDuration: Int
+  includedServices: JSON
+}
+
+type PartsInventory {
+  id: ID!
+  partNumber: String
+  description: String
+  quantity: Int
+  minimumQuantity: Int
+  cost: Float
+  price: Float
+  supplier: String
+  supplierPartNumber: String
+}
+
+input PartsInventoryWhereUniqueInput {
+  id: ID
+  partNumber: String
+}
+
+input PartsInventoryWhereInput {
+  AND: [PartsInventoryWhereInput!]
+  OR: [PartsInventoryWhereInput!]
+  NOT: [PartsInventoryWhereInput!]
+  id: IDFilter
+  partNumber: StringFilter
+  description: StringFilter
+  quantity: IntFilter
+  minimumQuantity: IntNullableFilter
+  cost: FloatNullableFilter
+  price: FloatFilter
+  supplier: StringFilter
+  supplierPartNumber: StringFilter
+}
+
+input PartsInventoryOrderByInput {
+  id: OrderDirection
+  partNumber: OrderDirection
+  description: OrderDirection
+  quantity: OrderDirection
+  minimumQuantity: OrderDirection
+  cost: OrderDirection
+  price: OrderDirection
+  supplier: OrderDirection
+  supplierPartNumber: OrderDirection
+}
+
+input PartsInventoryUpdateInput {
+  partNumber: String
+  description: String
+  quantity: Int
+  minimumQuantity: Int
+  cost: Float
+  price: Float
+  supplier: String
+  supplierPartNumber: String
+}
+
+input PartsInventoryUpdateArgs {
+  where: PartsInventoryWhereUniqueInput!
+  data: PartsInventoryUpdateInput!
+}
+
+input PartsInventoryCreateInput {
+  partNumber: String
+  description: String
+  quantity: Int
+  minimumQuantity: Int
+  cost: Float
+  price: Float
+  supplier: String
+  supplierPartNumber: String
 }
 
 """
@@ -551,18 +2263,120 @@ type Mutation {
   updateRoles(data: [RoleUpdateArgs!]!): [Role]
   deleteRole(where: RoleWhereUniqueInput!): Role
   deleteRoles(where: [RoleWhereUniqueInput!]!): [Role]
-  createTodo(data: TodoCreateInput!): Todo
-  createTodos(data: [TodoCreateInput!]!): [Todo]
-  updateTodo(where: TodoWhereUniqueInput!, data: TodoUpdateInput!): Todo
-  updateTodos(data: [TodoUpdateArgs!]!): [Todo]
-  deleteTodo(where: TodoWhereUniqueInput!): Todo
-  deleteTodos(where: [TodoWhereUniqueInput!]!): [Todo]
-  createTodoImage(data: TodoImageCreateInput!): TodoImage
-  createTodoImages(data: [TodoImageCreateInput!]!): [TodoImage]
-  updateTodoImage(where: TodoImageWhereUniqueInput!, data: TodoImageUpdateInput!): TodoImage
-  updateTodoImages(data: [TodoImageUpdateArgs!]!): [TodoImage]
-  deleteTodoImage(where: TodoImageWhereUniqueInput!): TodoImage
-  deleteTodoImages(where: [TodoImageWhereUniqueInput!]!): [TodoImage]
+  createMake(data: MakeCreateInput!): Make
+  createMakes(data: [MakeCreateInput!]!): [Make]
+  updateMake(where: MakeWhereUniqueInput!, data: MakeUpdateInput!): Make
+  updateMakes(data: [MakeUpdateArgs!]!): [Make]
+  deleteMake(where: MakeWhereUniqueInput!): Make
+  deleteMakes(where: [MakeWhereUniqueInput!]!): [Make]
+  createModel(data: ModelCreateInput!): Model
+  createModels(data: [ModelCreateInput!]!): [Model]
+  updateModel(where: ModelWhereUniqueInput!, data: ModelUpdateInput!): Model
+  updateModels(data: [ModelUpdateArgs!]!): [Model]
+  deleteModel(where: ModelWhereUniqueInput!): Model
+  deleteModels(where: [ModelWhereUniqueInput!]!): [Model]
+  createVehicle(data: VehicleCreateInput!): Vehicle
+  createVehicles(data: [VehicleCreateInput!]!): [Vehicle]
+  updateVehicle(where: VehicleWhereUniqueInput!, data: VehicleUpdateInput!): Vehicle
+  updateVehicles(data: [VehicleUpdateArgs!]!): [Vehicle]
+  deleteVehicle(where: VehicleWhereUniqueInput!): Vehicle
+  deleteVehicles(where: [VehicleWhereUniqueInput!]!): [Vehicle]
+  createVehicleImage(data: VehicleImageCreateInput!): VehicleImage
+  createVehicleImages(data: [VehicleImageCreateInput!]!): [VehicleImage]
+  updateVehicleImage(where: VehicleImageWhereUniqueInput!, data: VehicleImageUpdateInput!): VehicleImage
+  updateVehicleImages(data: [VehicleImageUpdateArgs!]!): [VehicleImage]
+  deleteVehicleImage(where: VehicleImageWhereUniqueInput!): VehicleImage
+  deleteVehicleImages(where: [VehicleImageWhereUniqueInput!]!): [VehicleImage]
+  createVehicleConditionReport(data: VehicleConditionReportCreateInput!): VehicleConditionReport
+  createVehicleConditionReports(data: [VehicleConditionReportCreateInput!]!): [VehicleConditionReport]
+  updateVehicleConditionReport(where: VehicleConditionReportWhereUniqueInput!, data: VehicleConditionReportUpdateInput!): VehicleConditionReport
+  updateVehicleConditionReports(data: [VehicleConditionReportUpdateArgs!]!): [VehicleConditionReport]
+  deleteVehicleConditionReport(where: VehicleConditionReportWhereUniqueInput!): VehicleConditionReport
+  deleteVehicleConditionReports(where: [VehicleConditionReportWhereUniqueInput!]!): [VehicleConditionReport]
+  createVehicleHistory(data: VehicleHistoryCreateInput!): VehicleHistory
+  createVehicleHistories(data: [VehicleHistoryCreateInput!]!): [VehicleHistory]
+  updateVehicleHistory(where: VehicleHistoryWhereUniqueInput!, data: VehicleHistoryUpdateInput!): VehicleHistory
+  updateVehicleHistories(data: [VehicleHistoryUpdateArgs!]!): [VehicleHistory]
+  deleteVehicleHistory(where: VehicleHistoryWhereUniqueInput!): VehicleHistory
+  deleteVehicleHistories(where: [VehicleHistoryWhereUniqueInput!]!): [VehicleHistory]
+  createPriceHistory(data: PriceHistoryCreateInput!): PriceHistory
+  createPriceHistories(data: [PriceHistoryCreateInput!]!): [PriceHistory]
+  updatePriceHistory(where: PriceHistoryWhereUniqueInput!, data: PriceHistoryUpdateInput!): PriceHistory
+  updatePriceHistories(data: [PriceHistoryUpdateArgs!]!): [PriceHistory]
+  deletePriceHistory(where: PriceHistoryWhereUniqueInput!): PriceHistory
+  deletePriceHistories(where: [PriceHistoryWhereUniqueInput!]!): [PriceHistory]
+  createLead(data: LeadCreateInput!): Lead
+  createLeads(data: [LeadCreateInput!]!): [Lead]
+  updateLead(where: LeadWhereUniqueInput!, data: LeadUpdateInput!): Lead
+  updateLeads(data: [LeadUpdateArgs!]!): [Lead]
+  deleteLead(where: LeadWhereUniqueInput!): Lead
+  deleteLeads(where: [LeadWhereUniqueInput!]!): [Lead]
+  createCustomerInteraction(data: CustomerInteractionCreateInput!): CustomerInteraction
+  createCustomerInteractions(data: [CustomerInteractionCreateInput!]!): [CustomerInteraction]
+  updateCustomerInteraction(where: CustomerInteractionWhereUniqueInput!, data: CustomerInteractionUpdateInput!): CustomerInteraction
+  updateCustomerInteractions(data: [CustomerInteractionUpdateArgs!]!): [CustomerInteraction]
+  deleteCustomerInteraction(where: CustomerInteractionWhereUniqueInput!): CustomerInteraction
+  deleteCustomerInteractions(where: [CustomerInteractionWhereUniqueInput!]!): [CustomerInteraction]
+  createTask(data: TaskCreateInput!): Task
+  createTasks(data: [TaskCreateInput!]!): [Task]
+  updateTask(where: TaskWhereUniqueInput!, data: TaskUpdateInput!): Task
+  updateTasks(data: [TaskUpdateArgs!]!): [Task]
+  deleteTask(where: TaskWhereUniqueInput!): Task
+  deleteTasks(where: [TaskWhereUniqueInput!]!): [Task]
+  createTestDrive(data: TestDriveCreateInput!): TestDrive
+  createTestDrives(data: [TestDriveCreateInput!]!): [TestDrive]
+  updateTestDrive(where: TestDriveWhereUniqueInput!, data: TestDriveUpdateInput!): TestDrive
+  updateTestDrives(data: [TestDriveUpdateArgs!]!): [TestDrive]
+  deleteTestDrive(where: TestDriveWhereUniqueInput!): TestDrive
+  deleteTestDrives(where: [TestDriveWhereUniqueInput!]!): [TestDrive]
+  createDeal(data: DealCreateInput!): Deal
+  createDeals(data: [DealCreateInput!]!): [Deal]
+  updateDeal(where: DealWhereUniqueInput!, data: DealUpdateInput!): Deal
+  updateDeals(data: [DealUpdateArgs!]!): [Deal]
+  deleteDeal(where: DealWhereUniqueInput!): Deal
+  deleteDeals(where: [DealWhereUniqueInput!]!): [Deal]
+  createDealApproval(data: DealApprovalCreateInput!): DealApproval
+  createDealApprovals(data: [DealApprovalCreateInput!]!): [DealApproval]
+  updateDealApproval(where: DealApprovalWhereUniqueInput!, data: DealApprovalUpdateInput!): DealApproval
+  updateDealApprovals(data: [DealApprovalUpdateArgs!]!): [DealApproval]
+  deleteDealApproval(where: DealApprovalWhereUniqueInput!): DealApproval
+  deleteDealApprovals(where: [DealApprovalWhereUniqueInput!]!): [DealApproval]
+  createTradeIn(data: TradeInCreateInput!): TradeIn
+  createTradeIns(data: [TradeInCreateInput!]!): [TradeIn]
+  updateTradeIn(where: TradeInWhereUniqueInput!, data: TradeInUpdateInput!): TradeIn
+  updateTradeIns(data: [TradeInUpdateArgs!]!): [TradeIn]
+  deleteTradeIn(where: TradeInWhereUniqueInput!): TradeIn
+  deleteTradeIns(where: [TradeInWhereUniqueInput!]!): [TradeIn]
+  createServiceAppointment(data: ServiceAppointmentCreateInput!): ServiceAppointment
+  createServiceAppointments(data: [ServiceAppointmentCreateInput!]!): [ServiceAppointment]
+  updateServiceAppointment(where: ServiceAppointmentWhereUniqueInput!, data: ServiceAppointmentUpdateInput!): ServiceAppointment
+  updateServiceAppointments(data: [ServiceAppointmentUpdateArgs!]!): [ServiceAppointment]
+  deleteServiceAppointment(where: ServiceAppointmentWhereUniqueInput!): ServiceAppointment
+  deleteServiceAppointments(where: [ServiceAppointmentWhereUniqueInput!]!): [ServiceAppointment]
+  createServiceOrder(data: ServiceOrderCreateInput!): ServiceOrder
+  createServiceOrders(data: [ServiceOrderCreateInput!]!): [ServiceOrder]
+  updateServiceOrder(where: ServiceOrderWhereUniqueInput!, data: ServiceOrderUpdateInput!): ServiceOrder
+  updateServiceOrders(data: [ServiceOrderUpdateArgs!]!): [ServiceOrder]
+  deleteServiceOrder(where: ServiceOrderWhereUniqueInput!): ServiceOrder
+  deleteServiceOrders(where: [ServiceOrderWhereUniqueInput!]!): [ServiceOrder]
+  createRepairOrderLineItem(data: RepairOrderLineItemCreateInput!): RepairOrderLineItem
+  createRepairOrderLineItems(data: [RepairOrderLineItemCreateInput!]!): [RepairOrderLineItem]
+  updateRepairOrderLineItem(where: RepairOrderLineItemWhereUniqueInput!, data: RepairOrderLineItemUpdateInput!): RepairOrderLineItem
+  updateRepairOrderLineItems(data: [RepairOrderLineItemUpdateArgs!]!): [RepairOrderLineItem]
+  deleteRepairOrderLineItem(where: RepairOrderLineItemWhereUniqueInput!): RepairOrderLineItem
+  deleteRepairOrderLineItems(where: [RepairOrderLineItemWhereUniqueInput!]!): [RepairOrderLineItem]
+  createServicePackage(data: ServicePackageCreateInput!): ServicePackage
+  createServicePackages(data: [ServicePackageCreateInput!]!): [ServicePackage]
+  updateServicePackage(where: ServicePackageWhereUniqueInput!, data: ServicePackageUpdateInput!): ServicePackage
+  updateServicePackages(data: [ServicePackageUpdateArgs!]!): [ServicePackage]
+  deleteServicePackage(where: ServicePackageWhereUniqueInput!): ServicePackage
+  deleteServicePackages(where: [ServicePackageWhereUniqueInput!]!): [ServicePackage]
+  createPartsInventory(data: PartsInventoryCreateInput!): PartsInventory
+  createPartsInventories(data: [PartsInventoryCreateInput!]!): [PartsInventory]
+  updatePartsInventory(where: PartsInventoryWhereUniqueInput!, data: PartsInventoryUpdateInput!): PartsInventory
+  updatePartsInventories(data: [PartsInventoryUpdateArgs!]!): [PartsInventory]
+  deletePartsInventory(where: PartsInventoryWhereUniqueInput!): PartsInventory
+  deletePartsInventories(where: [PartsInventoryWhereUniqueInput!]!): [PartsInventory]
   endSession: Boolean!
   authenticateUserWithPassword(email: String!, password: String!): UserAuthenticationWithPasswordResult
   createInitialUser(data: CreateInitialUserInput!): UserAuthenticationWithPasswordSuccess!
@@ -605,12 +2419,63 @@ type Query {
   role(where: RoleWhereUniqueInput!): Role
   roles(where: RoleWhereInput! = {}, orderBy: [RoleOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: RoleWhereUniqueInput): [Role!]
   rolesCount(where: RoleWhereInput! = {}): Int
-  todo(where: TodoWhereUniqueInput!): Todo
-  todos(where: TodoWhereInput! = {}, orderBy: [TodoOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: TodoWhereUniqueInput): [Todo!]
-  todosCount(where: TodoWhereInput! = {}): Int
-  todoImage(where: TodoImageWhereUniqueInput!): TodoImage
-  todoImages(where: TodoImageWhereInput! = {}, orderBy: [TodoImageOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: TodoImageWhereUniqueInput): [TodoImage!]
-  todoImagesCount(where: TodoImageWhereInput! = {}): Int
+  make(where: MakeWhereUniqueInput!): Make
+  makes(where: MakeWhereInput! = {}, orderBy: [MakeOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: MakeWhereUniqueInput): [Make!]
+  makesCount(where: MakeWhereInput! = {}): Int
+  model(where: ModelWhereUniqueInput!): Model
+  models(where: ModelWhereInput! = {}, orderBy: [ModelOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: ModelWhereUniqueInput): [Model!]
+  modelsCount(where: ModelWhereInput! = {}): Int
+  vehicle(where: VehicleWhereUniqueInput!): Vehicle
+  vehicles(where: VehicleWhereInput! = {}, orderBy: [VehicleOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: VehicleWhereUniqueInput): [Vehicle!]
+  vehiclesCount(where: VehicleWhereInput! = {}): Int
+  vehicleImage(where: VehicleImageWhereUniqueInput!): VehicleImage
+  vehicleImages(where: VehicleImageWhereInput! = {}, orderBy: [VehicleImageOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: VehicleImageWhereUniqueInput): [VehicleImage!]
+  vehicleImagesCount(where: VehicleImageWhereInput! = {}): Int
+  vehicleConditionReport(where: VehicleConditionReportWhereUniqueInput!): VehicleConditionReport
+  vehicleConditionReports(where: VehicleConditionReportWhereInput! = {}, orderBy: [VehicleConditionReportOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: VehicleConditionReportWhereUniqueInput): [VehicleConditionReport!]
+  vehicleConditionReportsCount(where: VehicleConditionReportWhereInput! = {}): Int
+  vehicleHistory(where: VehicleHistoryWhereUniqueInput!): VehicleHistory
+  vehicleHistories(where: VehicleHistoryWhereInput! = {}, orderBy: [VehicleHistoryOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: VehicleHistoryWhereUniqueInput): [VehicleHistory!]
+  vehicleHistoriesCount(where: VehicleHistoryWhereInput! = {}): Int
+  priceHistory(where: PriceHistoryWhereUniqueInput!): PriceHistory
+  priceHistories(where: PriceHistoryWhereInput! = {}, orderBy: [PriceHistoryOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: PriceHistoryWhereUniqueInput): [PriceHistory!]
+  priceHistoriesCount(where: PriceHistoryWhereInput! = {}): Int
+  lead(where: LeadWhereUniqueInput!): Lead
+  leads(where: LeadWhereInput! = {}, orderBy: [LeadOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: LeadWhereUniqueInput): [Lead!]
+  leadsCount(where: LeadWhereInput! = {}): Int
+  customerInteraction(where: CustomerInteractionWhereUniqueInput!): CustomerInteraction
+  customerInteractions(where: CustomerInteractionWhereInput! = {}, orderBy: [CustomerInteractionOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: CustomerInteractionWhereUniqueInput): [CustomerInteraction!]
+  customerInteractionsCount(where: CustomerInteractionWhereInput! = {}): Int
+  task(where: TaskWhereUniqueInput!): Task
+  tasks(where: TaskWhereInput! = {}, orderBy: [TaskOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: TaskWhereUniqueInput): [Task!]
+  tasksCount(where: TaskWhereInput! = {}): Int
+  testDrive(where: TestDriveWhereUniqueInput!): TestDrive
+  testDrives(where: TestDriveWhereInput! = {}, orderBy: [TestDriveOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: TestDriveWhereUniqueInput): [TestDrive!]
+  testDrivesCount(where: TestDriveWhereInput! = {}): Int
+  deal(where: DealWhereUniqueInput!): Deal
+  deals(where: DealWhereInput! = {}, orderBy: [DealOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: DealWhereUniqueInput): [Deal!]
+  dealsCount(where: DealWhereInput! = {}): Int
+  dealApproval(where: DealApprovalWhereUniqueInput!): DealApproval
+  dealApprovals(where: DealApprovalWhereInput! = {}, orderBy: [DealApprovalOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: DealApprovalWhereUniqueInput): [DealApproval!]
+  dealApprovalsCount(where: DealApprovalWhereInput! = {}): Int
+  tradeIn(where: TradeInWhereUniqueInput!): TradeIn
+  tradeIns(where: TradeInWhereInput! = {}, orderBy: [TradeInOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: TradeInWhereUniqueInput): [TradeIn!]
+  tradeInsCount(where: TradeInWhereInput! = {}): Int
+  serviceAppointment(where: ServiceAppointmentWhereUniqueInput!): ServiceAppointment
+  serviceAppointments(where: ServiceAppointmentWhereInput! = {}, orderBy: [ServiceAppointmentOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: ServiceAppointmentWhereUniqueInput): [ServiceAppointment!]
+  serviceAppointmentsCount(where: ServiceAppointmentWhereInput! = {}): Int
+  serviceOrder(where: ServiceOrderWhereUniqueInput!): ServiceOrder
+  serviceOrders(where: ServiceOrderWhereInput! = {}, orderBy: [ServiceOrderOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: ServiceOrderWhereUniqueInput): [ServiceOrder!]
+  serviceOrdersCount(where: ServiceOrderWhereInput! = {}): Int
+  repairOrderLineItem(where: RepairOrderLineItemWhereUniqueInput!): RepairOrderLineItem
+  repairOrderLineItems(where: RepairOrderLineItemWhereInput! = {}, orderBy: [RepairOrderLineItemOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: RepairOrderLineItemWhereUniqueInput): [RepairOrderLineItem!]
+  repairOrderLineItemsCount(where: RepairOrderLineItemWhereInput! = {}): Int
+  servicePackage(where: ServicePackageWhereUniqueInput!): ServicePackage
+  servicePackages(where: ServicePackageWhereInput! = {}, orderBy: [ServicePackageOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: ServicePackageWhereUniqueInput): [ServicePackage!]
+  servicePackagesCount(where: ServicePackageWhereInput! = {}): Int
+  partsInventory(where: PartsInventoryWhereUniqueInput!): PartsInventory
+  partsInventories(where: PartsInventoryWhereInput! = {}, orderBy: [PartsInventoryOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: PartsInventoryWhereUniqueInput): [PartsInventory!]
+  partsInventoriesCount(where: PartsInventoryWhereInput! = {}): Int
   keystone: KeystoneMeta!
   authenticatedItem: AuthenticatedItem
   validateUserPasswordResetToken(email: String!, token: String!): ValidateUserPasswordResetTokenResult

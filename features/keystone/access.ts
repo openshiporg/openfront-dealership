@@ -30,6 +30,7 @@ export const permissions = {
   canManageAllTodos: ({ session }: AccessArgs) => session?.data.role?.canManageAllTodos ?? false,
   canManagePeople: ({ session }: AccessArgs) => session?.data.role?.canManagePeople ?? false,
   canManageRoles: ({ session }: AccessArgs) => session?.data.role?.canManageRoles ?? false,
+  canAccessDashboard: ({ session }: AccessArgs) => session?.data.role?.canAccessDashboard ?? false,
 }
 
 export const rules = {

@@ -1,0 +1,204 @@
+{
+  "dealership": {
+    "name": "Elite Auto Dealership",
+    "defaultCurrencyCode": "usd",
+    "homepageTitle": "Premium Vehicle Sales & Service",
+    "homepageDescription": "Your trusted partner for quality vehicles and automotive services.",
+    "logoIcon": "<svg fill=\"none\" height=\"100%\" viewBox=\"0 0 44 48\" width=\"100%\" xmlns=\"http://www.w3.org/2000/svg\"><path clip-rule=\"evenodd\" d=\"m17.6264 6.5h14.8017l11.4661 18.6661-15.7786 15.9489-22.68835-4.0459-5.157719-19.2098zm.5273 4.9692-6.816 15.105 6.4504 5.3411 8.8246-3.7975zm12.3276 15.3 9.2139-2.7073-7.1983-11.7184zm-.6163-17.2692h-9.3468l7.3309 14.4284zm6.9795 18.5263-6.779 1.9919-.5448 5.4109zm-10.5005 9.008.5824-5.7856-6.0573 2.6067zm-6.8394-.5022-10.91261-1.9459 1.64741-5.0264 6.438 5.3308zm-11.69782-9.1824-2.7037-3.0571 1.66868 6.215zm-3.53432-8.5248 4.81433 5.4437 5.50351-12.1963z\" fill=\"#155eef\" fill-rule=\"evenodd\"/></svg>",
+    "logoColor": "0"
+  },
+  "regions": [
+    {
+      "code": "na",
+      "name": "North America",
+      "currencyCode": "usd",
+      "currencySymbol": "$",
+      "currencyName": "US Dollar",
+      "taxRate": 8.5,
+      "countries": [
+        {
+          "iso2": "us",
+          "iso3": "usa",
+          "name": "United States",
+          "displayName": "United States"
+        },
+        {
+          "iso2": "ca",
+          "iso3": "can",
+          "name": "Canada",
+          "displayName": "Canada"
+        }
+      ],
+      "paymentProviders": {
+        "connect": [
+          { "code": "pp_stripe_stripe" },
+          { "code": "pp_system_default" }
+        ]
+      },
+      "fulfillmentProviders": {
+        "connect": [{ "code": "fp_manual" }]
+      }
+    },
+    {
+      "code": "eu",
+      "name": "Europe",
+      "currencyCode": "eur",
+      "currencySymbol": "€",
+      "currencyName": "Euro",
+      "taxRate": 20.0,
+      "countries": [
+        {
+          "iso2": "de",
+          "iso3": "deu",
+          "name": "Germany",
+          "displayName": "Germany"
+        },
+        {
+          "iso2": "fr",
+          "iso3": "fra",
+          "name": "France",
+          "displayName": "France"
+        }
+      ],
+      "paymentProviders": {
+        "connect": [
+          { "code": "pp_stripe_stripe" },
+          { "code": "pp_system_default" }
+        ]
+      },
+      "fulfillmentProviders": {
+        "connect": [{ "code": "fp_manual" }]
+      }
+    },
+    {
+      "code": "uk",
+      "name": "United Kingdom",
+      "currencyCode": "gbp",
+      "currencySymbol": "£",
+      "currencyName": "British Pound",
+      "taxRate": 20.0,
+      "countries": [
+        {
+          "iso2": "gb",
+          "iso3": "gbr",
+          "name": "United Kingdom",
+          "displayName": "United Kingdom"
+        }
+      ],
+      "paymentProviders": {
+        "connect": [
+          { "code": "pp_stripe_stripe" },
+          { "code": "pp_system_default" }
+        ]
+      },
+      "fulfillmentProviders": {
+        "connect": [{ "code": "fp_manual" }]
+      }
+    }
+  ],
+  "paymentProviders": [
+    {
+      "code": "pp_stripe_stripe",
+      "name": "Credit/Debit Card",
+      "isInstalled": true
+    },
+    {
+      "code": "pp_financing_dealer",
+      "name": "Dealer Financing",
+      "isInstalled": true
+    },
+    {
+      "code": "pp_system_default",
+      "name": "Cash/Check",
+      "isInstalled": true
+    }
+  ],
+  "shipping_options": [
+    {
+      "name": "Dealership Pickup",
+      "priceType": "flat_rate",
+      "amount": 0,
+      "isReturn": false
+    },
+    {
+      "name": "Vehicle Delivery",
+      "priceType": "flat_rate",
+      "amount": 50000,
+      "isReturn": false
+    },
+    {
+      "name": "Transfer Service",
+      "priceType": "flat_rate",
+      "amount": 25000,
+      "isReturn": false
+    }
+  ],
+  "vehicleMakes": [
+    { "name": "Ford", "code": "ford", "isActive": true },
+    { "name": "Chevrolet", "code": "chevrolet", "isActive": true },
+    { "name": "Toyota", "code": "toyota", "isActive": true },
+    { "name": "Honda", "code": "honda", "isActive": true },
+    { "name": "BMW", "code": "bmw", "isActive": true },
+    { "name": "Mercedes-Benz", "code": "mercedes-benz", "isActive": true }
+  ],
+  "vehicleTypes": [
+    { "name": "Sedan", "code": "sedan", "isActive": true },
+    { "name": "SUV", "code": "suv", "isActive": true },
+    { "name": "Truck", "code": "truck", "isActive": true },
+    { "name": "Coupe", "code": "coupe", "isActive": true },
+    { "name": "Van", "code": "van", "isActive": true },
+    { "name": "Electric", "code": "electric", "isActive": true }
+  ],
+  "services": [
+    {
+      "name": "Oil Change",
+      "code": "oil-change",
+      "description": "Regular oil change service",
+      "price": 5000,
+      "duration": 30
+    },
+    {
+      "name": "Tire Rotation",
+      "code": "tire-rotation",
+      "description": "Professional tire rotation service",
+      "price": 4000,
+      "duration": 45
+    },
+    {
+      "name": "Brake Service",
+      "code": "brake-service",
+      "description": "Complete brake inspection and service",
+      "price": 15000,
+      "duration": 90
+    },
+    {
+      "name": "Vehicle Inspection",
+      "code": "vehicle-inspection",
+      "description": "Comprehensive vehicle safety inspection",
+      "price": 7500,
+      "duration": 60
+    },
+    {
+      "name": "Detailing",
+      "code": "detailing",
+      "description": "Professional interior and exterior detailing",
+      "price": 20000,
+      "duration": 120
+    },
+    {
+      "name": "Parts Sales",
+      "code": "parts-sales",
+      "description": "Genuine OEM parts sales",
+      "price": 0,
+      "duration": 0
+    }
+  ],
+  "staff": [
+    { "role": "Sales Manager", "code": "sales-manager" },
+    { "role": "Sales Associate", "code": "sales-associate" },
+    { "role": "Finance Manager", "code": "finance-manager" },
+    { "role": "Service Manager", "code": "service-manager" },
+    { "role": "Technician", "code": "technician" },
+    { "role": "Parts Specialist", "code": "parts-specialist" }
+  ]
+}

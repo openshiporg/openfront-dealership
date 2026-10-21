@@ -1,0 +1,15 @@
+-- AlterTable
+ALTER TABLE "Deal" ADD COLUMN     "acceptedAt" TIMESTAMP(3),
+ADD COLUMN     "acceptedSnapshot" JSONB DEFAULT '{}',
+ADD COLUMN     "grossCents" INTEGER,
+ADD COLUMN     "moneyFactorBasisPoints" INTEGER,
+ADD COLUMN     "presentedAt" TIMESTAMP(3),
+ADD COLUMN     "presentedSnapshot" JSONB DEFAULT '{}',
+ADD COLUMN     "products" JSONB DEFAULT '[]',
+ADD COLUMN     "rebates" JSONB DEFAULT '[]',
+ADD COLUMN     "residualValueCents" INTEGER,
+ADD COLUMN     "structureType" TEXT NOT NULL DEFAULT 'cash',
+ADD COLUMN     "taxLines" JSONB DEFAULT '[]',
+ADD COLUMN     "worksheetVersion" INTEGER NOT NULL DEFAULT 0,
+ADD CONSTRAINT "Deal_structureType_check" CHECK ("structureType" IN ('cash', 'finance', 'lease')),
+ADD CONSTRAINT "Deal_worksheetVersion_check" CHECK ("worksheetVersion" >= 0);

@@ -1,8 +1,9 @@
 // Export components
+export { OnboardingCards } from './components/OnboardingCards';
 export { default as OnboardingDialog } from './components/OnboardingDialog';
 
 // Export actions
-export {
+export { 
   updateOnboardingStatus,
   dismissOnboarding,
   startOnboarding,

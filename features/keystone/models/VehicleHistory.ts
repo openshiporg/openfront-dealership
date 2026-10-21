@@ -1,16 +1,27 @@
 import { list } from '@keystone-6/core'
 import { relationship, text, integer, timestamp, checkbox } from '@keystone-6/core/fields'
 
-import { isSignedIn } from '../access'
+import { permissions } from '../access'
+import { canCreateRooftopRecord, rooftopField, validateRooftopRecord, withRooftopScope } from '../tenantRecords'
+import { trackingFields } from './trackingFields'
 
 export const VehicleHistory = list({
   access: {
     operation: {
-      query: isSignedIn,
-      create: isSignedIn,
-      update: isSignedIn,
-      delete: isSignedIn,
+      query: permissions.canViewInventory,
+      create: permissions.canManageInventory,
+      update: permissions.canManageInventory,
+      delete: permissions.canManageInventory,
     },
+    filter: {
+      query: ({ session }) => withRooftopScope(true, session as any, ['canViewInventory', 'canManageInventory']),
+      update: ({ session }) => withRooftopScope(true, session as any, 'canManageInventory'),
+      delete: ({ session }) => withRooftopScope(true, session as any, 'canManageInventory'),
+    },
+    item: { create: canCreateRooftopRecord('canManageInventory') },
+  },
+  hooks: {
+    validate: (args: any) => validateRooftopRecord(args, [{ field: 'vehicle', listKey: 'Vehicle' }]),
   },
   ui: {
     listView: {
@@ -18,6 +29,8 @@ export const VehicleHistory = list({
     },
   },
   fields: {
+    ...trackingFields,
+    rooftop: rooftopField(),
     // Vehicle relationship
     vehicle: relationship({
       ref: 'Vehicle.history',

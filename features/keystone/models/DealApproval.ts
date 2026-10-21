@@ -1,23 +1,38 @@
 import { list } from '@keystone-6/core'
 import { relationship, text, select, timestamp } from '@keystone-6/core/fields'
 
-import { isSignedIn } from '../access'
+import { permissions, rules } from '../access'
+import { rooftopField, validateRooftopRecord } from '../tenantRecords'
+import { trackingFields } from './trackingFields'
 
 export const DealApproval = list({
   access: {
     operation: {
-      query: isSignedIn,
-      create: isSignedIn,
-      update: isSignedIn,
-      delete: isSignedIn,
+      query: permissions.canAccessDeals,
+      create: () => false,
+      update: () => false,
+      delete: () => false,
+    },
+    filter: {
+      query: rules.canReadDealApprovals,
     },
   },
+  hooks: {
+    validate: (args: any) => validateRooftopRecord(args, [
+      { field: 'deal', listKey: 'Deal' },
+      { field: 'approver', listKey: 'User', kind: 'user' },
+    ]),
+  },
   ui: {
+    hideCreate: true,
+    hideDelete: true,
     listView: {
       initialColumns: ['deal', 'approver', 'decision', 'approvalDate'],
     },
   },
   fields: {
+    ...trackingFields,
+    rooftop: rooftopField(),
     // Deal relationship
     deal: relationship({
       ref: 'Deal.approvals',

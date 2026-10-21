@@ -1,16 +1,17 @@
 import { list } from '@keystone-6/core'
-import { allOperations } from '@keystone-6/core/access'
+import { allOperations, denyAll } from '@keystone-6/core/access'
 import { relationship, text, image } from '@keystone-6/core/fields'
 
-import { isSignedIn } from '../access'
+import { permissions } from '../access'
+import { trackingFields } from './trackingFields'
 
 export const Make = list({
   access: {
     operation: {
       query: () => true, // Allow public access
-      create: isSignedIn,
-      update: isSignedIn,
-      delete: isSignedIn,
+      create: permissions.canManageInventory,
+      update: permissions.canManageInventory,
+      delete: permissions.canManageInventory,
     },
   },
   ui: {
@@ -19,6 +20,7 @@ export const Make = list({
     },
   },
   fields: {
+    ...trackingFields,
     name: text({
       validation: { isRequired: true },
       isIndexed: 'unique',
@@ -38,6 +40,7 @@ export const Make = list({
     models: relationship({
       ref: 'Model.make',
       many: true,
+      access: { update: denyAll },
       ui: {
         displayMode: 'cards',
         cardFields: ['name', 'bodyStyle'],

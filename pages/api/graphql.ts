@@ -17,8 +17,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   return createYoga({
-    renderGraphiQL: () => {
-      return `
+    renderGraphiQL: process.env.NODE_ENV !== "production"
+      ? () => {
+          return `
         <!DOCTYPE html>
         <html lang="en">
           <body style="margin: 0; overflow-x: hidden; overflow-y: hidden">
@@ -39,7 +40,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           </script>
           </body>
         </html>`;
-    },
+        }
+      : undefined,
     graphqlEndpoint: "/api/graphql",
     schema: keystoneContext.graphql.schema,
     context: ({ req, res }: { req: any; res: any }) => {

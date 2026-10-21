@@ -1,167 +1,122 @@
-import { Building2, Package, CircleCheck } from 'lucide-react';
+import { Building2, Package, CircleCheck } from 'lucide-react'
+import seedData from '../lib/seed.json'
 
-export interface DealershipTemplate {
-  name: string;
-  description: string;
-  icon: React.ReactNode;
-  regions: string[];
-  paymentProviders: string[];
-  shipping: string[];
-  vehicleMakes: string[];
-  vehicleTypes: string[];
-  services: string[];
-  staff: string[];
-  displayNames: {
-    dealership: string[];
-    regions: string[];
-    paymentProviders: string[];
-    shipping: string[];
-    vehicleMakes: string[];
-    vehicleTypes: string[];
-    services: string[];
-    staff: string[];
-  };
+export type TemplateKey = 'full' | 'minimal' | 'custom'
+
+export const SECTION_TYPES = [
+  'dealership',
+  'vehicleMakes',
+  'vehicleModels',
+  'vehicles',
+  'services',
+  'parts',
+  'financeProducts',
+  'leadRoutingRules',
+  'accountingMappings',
+  'paymentProviders',
+  'staff',
+] as const
+
+export type SectionType = (typeof SECTION_TYPES)[number]
+
+// One display label per seed record; the same label tracks its progress.
+export function seedItemLabel(type: SectionType, item: any): string {
+  switch (type) {
+    case 'dealership':
+      return item?.name || 'Dealership'
+    case 'vehicleModels':
+      return `${item.make || ''} ${item.name || ''}`.trim() || 'Model'
+    case 'vehicles':
+      return `${item.year || ''} ${item.make || ''} ${item.model || item.vin || ''}`.trim() || 'Vehicle'
+    case 'parts':
+      return item.description || item.partNumber || 'Part'
+    case 'accountingMappings':
+      return `${item.sourceType || ''} / ${item.sourceCode || ''}`
+    case 'staff':
+      return item.role || 'Role'
+    default:
+      return item.name || 'Record'
+  }
 }
 
-export const DEALERSHIP_TEMPLATES: Record<'full' | 'minimal' | 'custom', DealershipTemplate> = {
+type DisplayNames = Record<SectionType, string[]>
+
+function labels(type: SectionType, filter: (item: any) => boolean = () => true): string[] {
+  if (type === 'dealership') return [seedItemLabel('dealership', seedData.dealership)]
+  return ((seedData as any)[type] as any[]).filter(filter).map(item => seedItemLabel(type, item))
+}
+
+const basicMakes = ['Toyota', 'Honda', 'Ford']
+const basicVehicleModels = ['Camry', 'Highlander', 'CR-V', 'Mustang Mach-E']
+
+const fullDisplayNames = Object.fromEntries(SECTION_TYPES.map(type => [type, labels(type)])) as DisplayNames
+
+const basicDisplayNames: DisplayNames = {
+  dealership: labels('dealership'),
+  vehicleMakes: labels('vehicleMakes', item => basicMakes.includes(item.name)),
+  vehicleModels: labels('vehicleModels', item => basicVehicleModels.includes(item.name)),
+  vehicles: labels('vehicles', item => basicVehicleModels.includes(item.model)),
+  services: labels('services', item => ['Synthetic Oil Change', 'Tire Rotation & Balance', 'Multi-Point Inspection'].includes(item.name)),
+  parts: labels('parts', item => ['90915-YZZD1', '15400-PLM-A02', '0W20-SYN-5QT'].includes(item.partNumber)),
+  financeProducts: labels('financeProducts', item => ['VSC-60-75', 'GAP-PLUS'].includes(item.code)),
+  leadRoutingRules: labels('leadRoutingRules', item => ['website', 'phone'].includes(item.source)),
+  accountingMappings: labels('accountingMappings'),
+  paymentProviders: labels('paymentProviders', item => item.code === 'pp_system_default'),
+  staff: labels('staff', item => ['sales-manager', 'sales-associate', 'service-manager'].includes(item.code)),
+}
+
+export interface DealershipTemplate {
+  name: string
+  description: string
+  icon: React.ReactNode
+  displayNames: DisplayNames
+}
+
+export const DEALERSHIP_TEMPLATES: Record<TemplateKey, DealershipTemplate> = {
   full: {
     name: 'Complete Setup',
-    description:
-      'Start with a fully configured dealership including multiple regions, payment methods, vehicle inventory, and service offerings.',
+    description: 'Set up your dealership profile, full inventory, service, parts, financing, accounting and staff roles.',
     icon: <Building2 className="h-5 w-5" />,
-    regions: ['na', 'eu', 'uk'],
-    paymentProviders: [
-      'pp_stripe_stripe',
-      'pp_financing_dealer',
-      'pp_system_default',
-    ],
-    shipping: ['Dealership Pickup', 'Vehicle Delivery', 'Transfer Service'],
-    vehicleMakes: ['Ford', 'Chevrolet', 'Toyota', 'Honda', 'BMW', 'Mercedes-Benz'],
-    vehicleTypes: ['Sedan', 'SUV', 'Truck', 'Coupe', 'Van', 'Electric'],
-    services: ['Oil Change', 'Tire Rotation', 'Brake Service', 'Vehicle Inspection', 'Detailing', 'Parts Sales'],
-    staff: ['Sales Manager', 'Sales Associate', 'Finance Manager', 'Service Manager', 'Technician', 'Parts Specialist'],
-    displayNames: {
-      dealership: ['Elite Auto Dealership'],
-      regions: ['North America (USD)', 'Europe (EUR)', 'United Kingdom (GBP)'],
-      paymentProviders: ['Credit/Debit Card', 'Dealer Financing', 'Cash/Check'],
-      shipping: ['Dealership Pickup', 'Vehicle Delivery', 'Transfer Service'],
-      vehicleMakes: ['Ford', 'Chevrolet', 'Toyota', 'Honda', 'BMW', 'Mercedes-Benz'],
-      vehicleTypes: ['Sedan', 'SUV', 'Truck', 'Coupe', 'Van', 'Electric'],
-      services: ['Oil Change', 'Tire Rotation', 'Brake Service', 'Vehicle Inspection', 'Detailing', 'Parts Sales'],
-      staff: ['Sales Manager', 'Sales Associate', 'Finance Manager', 'Service Manager', 'Technician', 'Parts Specialist'],
-    },
+    displayNames: fullDisplayNames,
   },
   minimal: {
     name: 'Basic Setup',
-    description:
-      'Start with just the essentials - one region, basic payment methods, and core vehicle types.',
+    description: 'A few vehicles, services and staff roles to get started.',
     icon: <Package className="h-5 w-5" />,
-    regions: ['na'],
-    paymentProviders: ['pp_system_default'],
-    shipping: ['Dealership Pickup'],
-    vehicleMakes: ['Ford', 'Toyota'],
-    vehicleTypes: ['Sedan', 'SUV'],
-    services: ['Oil Change', 'Tire Rotation'],
-    staff: ['Sales Manager', 'Service Manager'],
-    displayNames: {
-      dealership: ['Elite Auto Dealership'],
-      regions: ['North America (USD)'],
-      paymentProviders: ['Cash/Check'],
-      shipping: ['Dealership Pickup'],
-      vehicleMakes: ['Ford', 'Toyota'],
-      vehicleTypes: ['Sedan', 'SUV'],
-      services: ['Oil Change', 'Tire Rotation'],
-      staff: ['Sales Manager', 'Service Manager'],
-    },
+    displayNames: basicDisplayNames,
   },
   custom: {
     name: 'Custom Setup',
-    description:
-      'Customize your setup with your own JSON templates for each section.',
+    description: 'Use your own JSON configuration.',
     icon: <CircleCheck className="h-5 w-5" />,
-    regions: ['na'],
-    paymentProviders: ['pp_system_default'],
-    shipping: ['Dealership Pickup'],
-    vehicleMakes: ['Ford'],
-    vehicleTypes: ['Sedan'],
-    services: ['Oil Change'],
-    staff: ['Sales Manager'],
-    displayNames: {
-      dealership: ['Elite Auto Dealership'],
-      regions: ['North America (USD)'],
-      paymentProviders: ['Cash/Check'],
-      shipping: ['Dealership Pickup'],
-      vehicleMakes: ['Ford'],
-      vehicleTypes: ['Sedan'],
-      services: ['Oil Change'],
-      staff: ['Sales Manager'],
-    },
+    displayNames: basicDisplayNames,
   },
-};
-
-export interface SectionDefinition {
-  id: number;
-  type: string;
-  label: string;
-  getItemsFn: (template: 'full' | 'minimal' | 'custom') => string[];
-  jsonKey: 'regions' | 'paymentProviders' | 'shipping_options' | 'vehicleMakes' | 'vehicleTypes' | 'services' | 'staff';
 }
 
-export const SECTION_DEFINITIONS: SectionDefinition[] = [
-  {
-    id: 1,
-    type: 'dealership',
-    label: 'Dealership Information',
-    getItemsFn: () => ['Elite Auto Dealership'],
-    jsonKey: 'dealership' as const,
-  },
-  {
-    id: 2,
-    type: 'regions',
-    label: 'Regions & Countries',
-    getItemsFn: (template) => DEALERSHIP_TEMPLATES[template].displayNames.regions,
-    jsonKey: 'regions' as const,
-  },
-  {
-    id: 3,
-    type: 'paymentProviders',
-    label: 'Payment Providers',
-    getItemsFn: (template) => DEALERSHIP_TEMPLATES[template].displayNames.paymentProviders,
-    jsonKey: 'paymentProviders' as const,
-  },
-  {
-    id: 4,
-    type: 'shipping',
-    label: 'Delivery Options',
-    getItemsFn: (template) => DEALERSHIP_TEMPLATES[template].displayNames.shipping,
-    jsonKey: 'shipping_options' as const,
-  },
-  {
-    id: 5,
-    type: 'vehicleMakes',
-    label: 'Vehicle Makes',
-    getItemsFn: (template) => DEALERSHIP_TEMPLATES[template].displayNames.vehicleMakes,
-    jsonKey: 'vehicleMakes' as const,
-  },
-  {
-    id: 6,
-    type: 'vehicleTypes',
-    label: 'Vehicle Types',
-    getItemsFn: (template) => DEALERSHIP_TEMPLATES[template].displayNames.vehicleTypes,
-    jsonKey: 'vehicleTypes' as const,
-  },
-  {
-    id: 7,
-    type: 'services',
-    label: 'Service Offerings',
-    getItemsFn: (template) => DEALERSHIP_TEMPLATES[template].displayNames.services,
-    jsonKey: 'services' as const,
-  },
-  {
-    id: 8,
-    type: 'staff',
-    label: 'Staff Roles',
-    getItemsFn: (template) => DEALERSHIP_TEMPLATES[template].displayNames.staff,
-    jsonKey: 'staff' as const,
-  },
-];
+export interface SectionDefinition {
+  id: number
+  type: SectionType
+  label: string
+  getItemsFn: (template: TemplateKey) => string[]
+}
+
+const SECTION_LABELS: Record<SectionType, string> = {
+  dealership: 'Dealership Information',
+  vehicleMakes: 'Vehicle Makes',
+  vehicleModels: 'Vehicle Models',
+  vehicles: 'Vehicle Inventory',
+  services: 'Service Packages',
+  parts: 'Parts Inventory',
+  financeProducts: 'Finance Products',
+  leadRoutingRules: 'Lead Routing',
+  accountingMappings: 'Accounting Mappings',
+  paymentProviders: 'Payment Providers',
+  staff: 'Staff Roles',
+}
+
+export const SECTION_DEFINITIONS: SectionDefinition[] = SECTION_TYPES.map((type, index) => ({
+  id: index + 1,
+  type,
+  label: SECTION_LABELS[type],
+  getItemsFn: template => DEALERSHIP_TEMPLATES[template].displayNames[type],
+}))

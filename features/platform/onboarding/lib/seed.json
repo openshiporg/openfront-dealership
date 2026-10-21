@@ -1,204 +1,826 @@
 {
   "dealership": {
-    "name": "Elite Auto Dealership",
-    "defaultCurrencyCode": "usd",
+    "name": "Sam’s Motor Company",
+    "shortName": "Sam’s Motor Company",
+    "groupSlug": "sams-motor-company",
+    "rooftopSlug": "main",
+    "rooftopCode": "SAM-MAIN",
+    "salesEmail": "sales@samsmotorcompany.com",
+    "serviceEmail": "service@samsmotorcompany.com",
+    "phone": "(202) 555-0147",
+    "addressLine1": "100 Motor Way",
+    "addressLine2": "",
+    "city": "Springfield",
+    "state": "VA",
+    "postalCode": "22150",
+    "hoursMonFri": "8:00 AM–7:00 PM",
+    "hoursSaturday": "9:00 AM–6:00 PM",
+    "hoursSunday": "Closed",
+    "websiteUrl": "https://samsmotorcompany.com",
+    "currencyCode": "USD",
     "homepageTitle": "Premium Vehicle Sales & Service",
-    "homepageDescription": "Your trusted partner for quality vehicles and automotive services.",
-    "logoIcon": "<svg fill=\"none\" height=\"100%\" viewBox=\"0 0 44 48\" width=\"100%\" xmlns=\"http://www.w3.org/2000/svg\"><path clip-rule=\"evenodd\" d=\"m17.6264 6.5h14.8017l11.4661 18.6661-15.7786 15.9489-22.68835-4.0459-5.157719-19.2098zm.5273 4.9692-6.816 15.105 6.4504 5.3411 8.8246-3.7975zm12.3276 15.3 9.2139-2.7073-7.1983-11.7184zm-.6163-17.2692h-9.3468l7.3309 14.4284zm6.9795 18.5263-6.779 1.9919-.5448 5.4109zm-10.5005 9.008.5824-5.7856-6.0573 2.6067zm-6.8394-.5022-10.91261-1.9459 1.64741-5.0264 6.438 5.3308zm-11.69782-9.1824-2.7037-3.0571 1.66868 6.215zm-3.53432-8.5248 4.81433 5.4437 5.50351-12.1963z\" fill=\"#155eef\" fill-rule=\"evenodd\"/></svg>",
-    "logoColor": "0"
+    "homepageDescription": "New and pre-owned vehicles, financing and factory-trained service in Springfield."
   },
-  "regions": [
+  "vehicleMakes": [
     {
-      "code": "na",
-      "name": "North America",
-      "currencyCode": "usd",
-      "currencySymbol": "$",
-      "currencyName": "US Dollar",
-      "taxRate": 8.5,
-      "countries": [
-        {
-          "iso2": "us",
-          "iso3": "usa",
-          "name": "United States",
-          "displayName": "United States"
-        },
-        {
-          "iso2": "ca",
-          "iso3": "can",
-          "name": "Canada",
-          "displayName": "Canada"
-        }
-      ],
-      "paymentProviders": {
-        "connect": [
-          { "code": "pp_stripe_stripe" },
-          { "code": "pp_system_default" }
-        ]
-      },
-      "fulfillmentProviders": {
-        "connect": [{ "code": "fp_manual" }]
-      }
+      "name": "Toyota"
     },
     {
-      "code": "eu",
-      "name": "Europe",
-      "currencyCode": "eur",
-      "currencySymbol": "€",
-      "currencyName": "Euro",
-      "taxRate": 20.0,
-      "countries": [
-        {
-          "iso2": "de",
-          "iso3": "deu",
-          "name": "Germany",
-          "displayName": "Germany"
-        },
-        {
-          "iso2": "fr",
-          "iso3": "fra",
-          "name": "France",
-          "displayName": "France"
-        }
-      ],
-      "paymentProviders": {
-        "connect": [
-          { "code": "pp_stripe_stripe" },
-          { "code": "pp_system_default" }
-        ]
-      },
-      "fulfillmentProviders": {
-        "connect": [{ "code": "fp_manual" }]
-      }
+      "name": "Honda"
     },
     {
-      "code": "uk",
-      "name": "United Kingdom",
-      "currencyCode": "gbp",
-      "currencySymbol": "£",
-      "currencyName": "British Pound",
-      "taxRate": 20.0,
-      "countries": [
-        {
-          "iso2": "gb",
-          "iso3": "gbr",
-          "name": "United Kingdom",
-          "displayName": "United Kingdom"
-        }
+      "name": "Ford"
+    },
+    {
+      "name": "Chevrolet"
+    },
+    {
+      "name": "BMW"
+    },
+    {
+      "name": "Mercedes-Benz"
+    },
+    {
+      "name": "Hyundai"
+    },
+    {
+      "name": "Subaru"
+    }
+  ],
+  "vehicleModels": [
+    {
+      "name": "530i",
+      "make": "BMW",
+      "bodyStyle": "sedan",
+      "baseYear": 2017
+    },
+    {
+      "name": "Highlander",
+      "make": "Toyota",
+      "bodyStyle": "suv",
+      "baseYear": 2001
+    },
+    {
+      "name": "Mustang Mach-E",
+      "make": "Ford",
+      "bodyStyle": "suv",
+      "baseYear": 2021
+    },
+    {
+      "name": "Camry",
+      "make": "Toyota",
+      "bodyStyle": "sedan",
+      "baseYear": 1983
+    },
+    {
+      "name": "CR-V",
+      "make": "Honda",
+      "bodyStyle": "suv",
+      "baseYear": 1997
+    },
+    {
+      "name": "Accord",
+      "make": "Honda",
+      "bodyStyle": "sedan",
+      "baseYear": 1976
+    },
+    {
+      "name": "Tahoe",
+      "make": "Chevrolet",
+      "bodyStyle": "suv",
+      "baseYear": 1995
+    },
+    {
+      "name": "Equinox EV",
+      "make": "Chevrolet",
+      "bodyStyle": "suv",
+      "baseYear": 2024
+    },
+    {
+      "name": "C 300",
+      "make": "Mercedes-Benz",
+      "bodyStyle": "sedan",
+      "baseYear": 2015
+    },
+    {
+      "name": "GLE 350",
+      "make": "Mercedes-Benz",
+      "bodyStyle": "suv",
+      "baseYear": 2016
+    },
+    {
+      "name": "Ioniq 5",
+      "make": "Hyundai",
+      "bodyStyle": "suv",
+      "baseYear": 2022
+    },
+    {
+      "name": "Mustang",
+      "make": "Ford",
+      "bodyStyle": "coupe",
+      "baseYear": 1965
+    },
+    {
+      "name": "Outback",
+      "make": "Subaru",
+      "bodyStyle": "wagon",
+      "baseYear": 1995
+    }
+  ],
+  "vehicles": [
+    {
+      "vin": "WBA43FJ05R7903417",
+      "stockNumber": "SMC-2401",
+      "acquisitionSource": "auction",
+      "locationCode": "FRONTLINE",
+      "locationLabel": "Front line",
+      "year": 2024,
+      "make": "BMW",
+      "model": "530i",
+      "trim": "M Sport",
+      "exteriorColor": "Carbon Black",
+      "interiorColor": "Cognac",
+      "mileage": 8420,
+      "purchasePriceCents": 4200000,
+      "listPriceCents": 4890000,
+      "priceCents": 4890000,
+      "condition": "certified",
+      "status": "available",
+      "description": "Certified luxury sedan with the M Sport package, driver assistance and a clean ownership history.",
+      "features": [
+        "Driver Assistance Pro",
+        "Harman Kardon audio",
+        "Heated front seats",
+        "Navigation"
       ],
-      "paymentProviders": {
-        "connect": [
-          { "code": "pp_stripe_stripe" },
-          { "code": "pp_system_default" }
-        ]
-      },
-      "fulfillmentProviders": {
-        "connect": [{ "code": "fp_manual" }]
-      }
+      "imagePath": "/images/luxury-sedan.jpg"
+    },
+    {
+      "vin": "5TDKDRAHXPS904628",
+      "stockNumber": "SMC-2402",
+      "acquisitionSource": "auction",
+      "locationCode": "FRONTLINE",
+      "locationLabel": "Front line",
+      "year": 2023,
+      "make": "Toyota",
+      "model": "Highlander",
+      "trim": "Limited AWD",
+      "exteriorColor": "Magnetic Gray",
+      "interiorColor": "Graphite",
+      "mileage": 18350,
+      "purchasePriceCents": 3380000,
+      "listPriceCents": 3890000,
+      "priceCents": 3890000,
+      "condition": "used",
+      "status": "available",
+      "description": "Three-row family SUV with all-wheel drive, Toyota Safety Sense and a power liftgate.",
+      "features": [
+        "AWD",
+        "Third-row seating",
+        "Adaptive cruise control",
+        "Power liftgate"
+      ],
+      "imagePath": "/images/family-suv.jpg"
+    },
+    {
+      "vin": "3FMTK3R77SM905739",
+      "stockNumber": "SMC-2403",
+      "acquisitionSource": "oem-distributor",
+      "locationCode": "FRONTLINE",
+      "locationLabel": "Front line",
+      "year": 2025,
+      "make": "Ford",
+      "model": "Mustang Mach-E",
+      "trim": "Premium AWD",
+      "exteriorColor": "Vapor Blue",
+      "interiorColor": "Black Onyx",
+      "mileage": 12,
+      "purchasePriceCents": 4760000,
+      "listPriceCents": 5290000,
+      "priceCents": 5290000,
+      "condition": "new",
+      "status": "available",
+      "description": "All-electric crossover with extended-range battery, DC fast charging and BlueCruise hands-free driving.",
+      "features": [
+        "Extended-range battery",
+        "DC fast charging",
+        "Panoramic glass roof",
+        "BlueCruise"
+      ],
+      "imagePath": "/images/electric-coupe.jpg"
+    },
+    {
+      "vin": "4T1K61AK2RU210384",
+      "stockNumber": "SMC-2404",
+      "acquisitionSource": "auction",
+      "locationCode": "FRONTLINE",
+      "locationLabel": "Front line",
+      "year": 2024,
+      "make": "Toyota",
+      "model": "Camry",
+      "trim": "XSE",
+      "exteriorColor": "Wind Chill Pearl",
+      "interiorColor": "Black",
+      "mileage": 11200,
+      "purchasePriceCents": 2730000,
+      "listPriceCents": 3140000,
+      "priceCents": 3140000,
+      "condition": "used",
+      "status": "available",
+      "description": "Sporty midsize sedan with a sport-tuned suspension, wireless charging and a JBL sound system.",
+      "features": [
+        "JBL audio",
+        "Wireless charging",
+        "Blind spot monitor",
+        "Sport suspension"
+      ],
+      "imagePath": "/images/luxury-sedan.jpg"
+    },
+    {
+      "vin": "7FARS6H82SE016752",
+      "stockNumber": "SMC-2405",
+      "acquisitionSource": "oem-distributor",
+      "locationCode": "FRONTLINE",
+      "locationLabel": "Front line",
+      "year": 2025,
+      "make": "Honda",
+      "model": "CR-V",
+      "trim": "Sport-L Hybrid AWD",
+      "exteriorColor": "Canyon River Blue",
+      "interiorColor": "Black",
+      "mileage": 8,
+      "purchasePriceCents": 3590000,
+      "listPriceCents": 3865000,
+      "priceCents": 3865000,
+      "condition": "new",
+      "status": "available",
+      "description": "Efficient hybrid compact SUV with all-wheel drive, leather seating and Honda Sensing.",
+      "features": [
+        "Hybrid powertrain",
+        "AWD",
+        "Leather seats",
+        "Honda Sensing"
+      ],
+      "imagePath": "/images/family-suv.jpg"
+    },
+    {
+      "vin": "1HGCY1F37PA051243",
+      "stockNumber": "SMC-2406",
+      "acquisitionSource": "auction",
+      "locationCode": "FRONTLINE",
+      "locationLabel": "Front line",
+      "year": 2023,
+      "make": "Honda",
+      "model": "Accord",
+      "trim": "Sport",
+      "exteriorColor": "Platinum White Pearl",
+      "interiorColor": "Black",
+      "mileage": 21480,
+      "purchasePriceCents": 2420000,
+      "listPriceCents": 2790000,
+      "priceCents": 2790000,
+      "condition": "used",
+      "status": "available",
+      "description": "One-owner Accord Sport with a 9-inch touchscreen, Apple CarPlay and Android Auto.",
+      "features": [
+        "Apple CarPlay",
+        "Android Auto",
+        "Lane keeping assist",
+        "LED headlights"
+      ],
+      "imagePath": "/images/luxury-sedan.jpg"
+    },
+    {
+      "vin": "1GNSKNKD5RR184302",
+      "stockNumber": "SMC-2407",
+      "acquisitionSource": "auction",
+      "locationCode": "FRONTLINE",
+      "locationLabel": "Front line",
+      "year": 2024,
+      "make": "Chevrolet",
+      "model": "Tahoe",
+      "trim": "LT 4WD",
+      "exteriorColor": "Black",
+      "interiorColor": "Jet Black",
+      "mileage": 15900,
+      "purchasePriceCents": 5520000,
+      "listPriceCents": 6150000,
+      "priceCents": 6150000,
+      "condition": "used",
+      "status": "available",
+      "description": "Full-size 4WD SUV with seating for eight, a trailering package and a 10.2-inch touchscreen.",
+      "features": [
+        "4WD",
+        "Max Trailering Package",
+        "Third-row seating",
+        "Heated seats"
+      ],
+      "imagePath": "/images/family-suv.jpg"
+    },
+    {
+      "vin": "3GN7DNRP4SS103876",
+      "stockNumber": "SMC-2408",
+      "acquisitionSource": "oem-distributor",
+      "locationCode": "FRONTLINE",
+      "locationLabel": "Front line",
+      "year": 2025,
+      "make": "Chevrolet",
+      "model": "Equinox EV",
+      "trim": "2LT AWD",
+      "exteriorColor": "Riptide Blue",
+      "interiorColor": "Black",
+      "mileage": 5,
+      "purchasePriceCents": 4010000,
+      "listPriceCents": 4329500,
+      "priceCents": 4329500,
+      "condition": "new",
+      "status": "available",
+      "description": "All-electric compact SUV with all-wheel drive, Super Cruise compatibility and a 17.7-inch display.",
+      "features": [
+        "Electric AWD",
+        "Fast charging",
+        "17.7-inch display",
+        "Heated steering wheel"
+      ],
+      "imagePath": "/images/family-suv.jpg"
+    },
+    {
+      "vin": "W1KAF4HB8NR021497",
+      "stockNumber": "SMC-2409",
+      "acquisitionSource": "auction",
+      "locationCode": "FRONTLINE",
+      "locationLabel": "Front line",
+      "year": 2022,
+      "make": "Mercedes-Benz",
+      "model": "C 300",
+      "trim": "4MATIC",
+      "exteriorColor": "Polar White",
+      "interiorColor": "Black MB-Tex",
+      "mileage": 28700,
+      "purchasePriceCents": 3210000,
+      "listPriceCents": 3680000,
+      "priceCents": 3680000,
+      "condition": "used",
+      "status": "available",
+      "description": "Compact luxury sedan with 4MATIC all-wheel drive, MBUX infotainment and ambient lighting.",
+      "features": [
+        "4MATIC AWD",
+        "MBUX",
+        "Ambient lighting",
+        "Heated seats"
+      ],
+      "imagePath": "/images/luxury-sedan.jpg"
+    },
+    {
+      "vin": "4JGFB4FB1RA987214",
+      "stockNumber": "SMC-2410",
+      "acquisitionSource": "auction",
+      "locationCode": "FRONTLINE",
+      "locationLabel": "Front line",
+      "year": 2024,
+      "make": "Mercedes-Benz",
+      "model": "GLE 350",
+      "trim": "4MATIC",
+      "exteriorColor": "Selenite Grey",
+      "interiorColor": "Macchiato Beige",
+      "mileage": 9800,
+      "purchasePriceCents": 5870000,
+      "listPriceCents": 6490000,
+      "priceCents": 6490000,
+      "condition": "used",
+      "status": "available",
+      "description": "Midsize luxury SUV with 4MATIC, the Premium package and a Burmester surround sound system.",
+      "features": [
+        "4MATIC AWD",
+        "Burmester audio",
+        "Panoramic roof",
+        "Driver assistance package"
+      ],
+      "imagePath": "/images/family-suv.jpg"
+    },
+    {
+      "vin": "KM8KNDDF5SU312658",
+      "stockNumber": "SMC-2411",
+      "acquisitionSource": "oem-distributor",
+      "locationCode": "FRONTLINE",
+      "locationLabel": "Front line",
+      "year": 2025,
+      "make": "Hyundai",
+      "model": "Ioniq 5",
+      "trim": "SEL AWD",
+      "exteriorColor": "Gravity Gold Matte",
+      "interiorColor": "Dark Teal",
+      "mileage": 10,
+      "purchasePriceCents": 4320000,
+      "listPriceCents": 4655000,
+      "priceCents": 4655000,
+      "condition": "new",
+      "status": "available",
+      "description": "All-electric crossover with 800-volt ultra-fast charging, dual-motor AWD and a heat pump.",
+      "features": [
+        "800V fast charging",
+        "Dual-motor AWD",
+        "Heat pump",
+        "Highway Driving Assist"
+      ],
+      "imagePath": "/images/electric-coupe.jpg"
+    },
+    {
+      "vin": "1FA6P8CF0R5402917",
+      "stockNumber": "SMC-2412",
+      "acquisitionSource": "auction",
+      "locationCode": "FRONTLINE",
+      "locationLabel": "Front line",
+      "year": 2024,
+      "make": "Ford",
+      "model": "Mustang",
+      "trim": "GT Premium",
+      "exteriorColor": "Race Red",
+      "interiorColor": "Black",
+      "mileage": 6300,
+      "purchasePriceCents": 4250000,
+      "listPriceCents": 4790000,
+      "priceCents": 4790000,
+      "condition": "used",
+      "status": "available",
+      "description": "5.0L V8 Mustang GT Premium with the Performance Package and active exhaust.",
+      "features": [
+        "5.0L V8",
+        "Performance Package",
+        "Active valve exhaust",
+        "B&O audio"
+      ],
+      "imagePath": "/images/electric-coupe.jpg"
+    },
+    {
+      "vin": "4S4BTGND3P3184529",
+      "stockNumber": "SMC-2413",
+      "acquisitionSource": "auction",
+      "locationCode": "FRONTLINE",
+      "locationLabel": "Front line",
+      "year": 2023,
+      "make": "Subaru",
+      "model": "Outback",
+      "trim": "Limited",
+      "exteriorColor": "Autumn Green Metallic",
+      "interiorColor": "Java Brown",
+      "mileage": 24100,
+      "purchasePriceCents": 2860000,
+      "listPriceCents": 3250000,
+      "priceCents": 3250000,
+      "condition": "used",
+      "status": "available",
+      "description": "Symmetrical AWD wagon with EyeSight driver assist, roof rails and heated front and rear seats.",
+      "features": [
+        "Symmetrical AWD",
+        "EyeSight",
+        "Heated rear seats",
+        "Roof rails"
+      ],
+      "imagePath": "/images/family-suv.jpg"
+    }
+  ],
+  "services": [
+    {
+      "name": "Synthetic Oil Change",
+      "description": "Full synthetic oil and filter change with a multi-point inspection.",
+      "priceCents": 8995,
+      "estimatedDuration": 30
+    },
+    {
+      "name": "Tire Rotation & Balance",
+      "description": "Rotate and balance all four tires and set tire pressures.",
+      "priceCents": 5995,
+      "estimatedDuration": 45
+    },
+    {
+      "name": "Front Brake Pad Replacement",
+      "description": "Replace front brake pads, resurface or inspect rotors and road test.",
+      "priceCents": 24995,
+      "estimatedDuration": 120
+    },
+    {
+      "name": "Multi-Point Inspection",
+      "description": "Inspection of brakes, tires, fluids, belts, hoses, battery and lights.",
+      "priceCents": 4995,
+      "estimatedDuration": 45
+    },
+    {
+      "name": "Four-Wheel Alignment",
+      "description": "Computerized four-wheel alignment to manufacturer specifications.",
+      "priceCents": 12995,
+      "estimatedDuration": 60
+    },
+    {
+      "name": "Battery Test & Replacement",
+      "description": "Test the charging system and install a new 12V battery.",
+      "priceCents": 21995,
+      "estimatedDuration": 45
+    },
+    {
+      "name": "Cabin & Engine Air Filters",
+      "description": "Replace the cabin and engine air filters.",
+      "priceCents": 7995,
+      "estimatedDuration": 30
+    },
+    {
+      "name": "Full Detail",
+      "description": "Hand wash, clay bar, wax, interior shampoo and leather conditioning.",
+      "priceCents": 24900,
+      "estimatedDuration": 180
+    }
+  ],
+  "parts": [
+    {
+      "partNumber": "90915-YZZD1",
+      "description": "Toyota oil filter",
+      "binLocation": "A1-01",
+      "minimumQuantity": 20,
+      "costCents": 510,
+      "priceCents": 999,
+      "supplier": "Toyota Parts Center",
+      "quantity": 48
+    },
+    {
+      "partNumber": "15400-PLM-A02",
+      "description": "Honda oil filter",
+      "binLocation": "A1-02",
+      "minimumQuantity": 20,
+      "costCents": 480,
+      "priceCents": 949,
+      "supplier": "Honda Parts Direct",
+      "quantity": 40
+    },
+    {
+      "partNumber": "0W20-SYN-5QT",
+      "description": "Full synthetic 0W-20 motor oil, 5 qt",
+      "binLocation": "A2-01",
+      "minimumQuantity": 24,
+      "costCents": 2150,
+      "priceCents": 3899,
+      "supplier": "Valvoline",
+      "quantity": 60
+    },
+    {
+      "partNumber": "BP-CER-F1024",
+      "description": "Ceramic front brake pad set",
+      "binLocation": "B3-04",
+      "minimumQuantity": 6,
+      "costCents": 3800,
+      "priceCents": 8999,
+      "supplier": "Akebono",
+      "quantity": 12
+    },
+    {
+      "partNumber": "CAF-87139-YZZ08",
+      "description": "Cabin air filter",
+      "binLocation": "C1-03",
+      "minimumQuantity": 10,
+      "costCents": 920,
+      "priceCents": 2499,
+      "supplier": "Toyota Parts Center",
+      "quantity": 24
+    },
+    {
+      "partNumber": "EAF-17220-5PA",
+      "description": "Engine air filter",
+      "binLocation": "C1-04",
+      "minimumQuantity": 10,
+      "costCents": 1150,
+      "priceCents": 2899,
+      "supplier": "Honda Parts Direct",
+      "quantity": 20
+    },
+    {
+      "partNumber": "BAT-H6-AGM",
+      "description": "H6 AGM 12V battery",
+      "binLocation": "D1-01",
+      "minimumQuantity": 4,
+      "costCents": 13500,
+      "priceCents": 22999,
+      "supplier": "Interstate Batteries",
+      "quantity": 8
+    },
+    {
+      "partNumber": "WB-22-HYB",
+      "description": "22-inch hybrid wiper blade",
+      "binLocation": "C2-01",
+      "minimumQuantity": 12,
+      "costCents": 850,
+      "priceCents": 2199,
+      "supplier": "Bosch",
+      "quantity": 30
+    }
+  ],
+  "financeProducts": [
+    {
+      "code": "VSC-60-75",
+      "name": "Vehicle Service Contract, 60 months / 75,000 miles",
+      "category": "service-contract",
+      "retailPriceCents": 249500,
+      "costCents": 120000,
+      "providerKey": "operator-recorded"
+    },
+    {
+      "code": "GAP-PLUS",
+      "name": "GAP protection",
+      "category": "gap",
+      "retailPriceCents": 89500,
+      "costCents": 32500,
+      "providerKey": "operator-recorded"
+    },
+    {
+      "code": "PPM-3YR",
+      "name": "Prepaid maintenance, 3 years",
+      "category": "maintenance",
+      "retailPriceCents": 69500,
+      "costCents": 38000,
+      "providerKey": "operator-recorded"
+    },
+    {
+      "code": "TW-60",
+      "name": "Tire & wheel protection, 60 months",
+      "category": "tire-wheel",
+      "retailPriceCents": 79900,
+      "costCents": 30000,
+      "providerKey": "operator-recorded"
+    },
+    {
+      "code": "APPEAR-5",
+      "name": "Paint, fabric & leather protection, 5 years",
+      "category": "appearance",
+      "retailPriceCents": 59900,
+      "costCents": 18000,
+      "providerKey": "operator-recorded"
+    }
+  ],
+  "leadRoutingRules": [
+    {
+      "name": "Website leads",
+      "source": "website",
+      "priority": 10,
+      "firstResponseMinutes": 15
+    },
+    {
+      "name": "Phone leads",
+      "source": "phone",
+      "priority": 20,
+      "firstResponseMinutes": 10
+    },
+    {
+      "name": "Walk-in traffic",
+      "source": "walk-in",
+      "priority": 30,
+      "firstResponseMinutes": 5
+    },
+    {
+      "name": "Third-party leads",
+      "source": "third-party",
+      "priority": 40,
+      "firstResponseMinutes": 30
+    },
+    {
+      "name": "Referrals",
+      "source": "referral",
+      "priority": 50,
+      "firstResponseMinutes": 60
+    }
+  ],
+  "accountingMappings": [
+    {
+      "sourceType": "deal",
+      "sourceCode": "vehicle-sale",
+      "debitAccount": "1100 Contracts in Transit",
+      "creditAccount": "4000 Vehicle Sales",
+      "providerKey": "operator-recorded"
+    },
+    {
+      "sourceType": "deal",
+      "sourceCode": "sales-tax",
+      "debitAccount": "1100 Contracts in Transit",
+      "creditAccount": "2310 Sales Tax Payable",
+      "providerKey": "operator-recorded"
+    },
+    {
+      "sourceType": "deal",
+      "sourceCode": "fees",
+      "debitAccount": "1100 Contracts in Transit",
+      "creditAccount": "4900 Documentation Fees",
+      "providerKey": "operator-recorded"
+    },
+    {
+      "sourceType": "deal",
+      "sourceCode": "finance-products",
+      "debitAccount": "1100 Contracts in Transit",
+      "creditAccount": "4800 F&I Product Income",
+      "providerKey": "operator-recorded"
+    },
+    {
+      "sourceType": "deal",
+      "sourceCode": "rebates",
+      "debitAccount": "1250 Factory Receivables",
+      "creditAccount": "1100 Contracts in Transit",
+      "providerKey": "operator-recorded"
+    },
+    {
+      "sourceType": "deal",
+      "sourceCode": "trade-in",
+      "debitAccount": "2400 Used Vehicle Inventory",
+      "creditAccount": "1100 Contracts in Transit",
+      "providerKey": "operator-recorded"
+    },
+    {
+      "sourceType": "service",
+      "sourceCode": "labor",
+      "debitAccount": "1200 Service Receivables",
+      "creditAccount": "4600 Customer Labor Sales",
+      "providerKey": "operator-recorded"
+    },
+    {
+      "sourceType": "service",
+      "sourceCode": "parts",
+      "debitAccount": "1200 Service Receivables",
+      "creditAccount": "4700 Parts Sales",
+      "providerKey": "operator-recorded"
+    },
+    {
+      "sourceType": "service",
+      "sourceCode": "sales-tax",
+      "debitAccount": "1200 Service Receivables",
+      "creditAccount": "2310 Sales Tax Payable",
+      "providerKey": "operator-recorded"
+    },
+    {
+      "sourceType": "parts",
+      "sourceCode": "inventory-receipt",
+      "debitAccount": "1400 Parts Inventory",
+      "creditAccount": "2000 Accounts Payable",
+      "providerKey": "operator-recorded"
+    },
+    {
+      "sourceType": "payment",
+      "sourceCode": "payment-capture",
+      "debitAccount": "1010 Cash in Bank",
+      "creditAccount": "1200 Service Receivables",
+      "providerKey": "operator-recorded"
     }
   ],
   "paymentProviders": [
     {
-      "code": "pp_stripe_stripe",
-      "name": "Credit/Debit Card",
-      "isInstalled": true
-    },
-    {
-      "code": "pp_financing_dealer",
-      "name": "Dealer Financing",
-      "isInstalled": true
-    },
-    {
+      "name": "Manual",
       "code": "pp_system_default",
-      "name": "Cash/Check",
-      "isInstalled": true
-    }
-  ],
-  "shipping_options": [
-    {
-      "name": "Dealership Pickup",
-      "priceType": "flat_rate",
-      "amount": 0,
-      "isReturn": false
+      "isInstalled": true,
+      "createPaymentFunction": "manual",
+      "capturePaymentFunction": "manual",
+      "refundPaymentFunction": "manual",
+      "getPaymentStatusFunction": "manual",
+      "generatePaymentLinkFunction": "manual",
+      "handleWebhookFunction": "manual"
     },
     {
-      "name": "Vehicle Delivery",
-      "priceType": "flat_rate",
-      "amount": 50000,
-      "isReturn": false
-    },
-    {
-      "name": "Transfer Service",
-      "priceType": "flat_rate",
-      "amount": 25000,
-      "isReturn": false
-    }
-  ],
-  "vehicleMakes": [
-    { "name": "Ford", "code": "ford", "isActive": true },
-    { "name": "Chevrolet", "code": "chevrolet", "isActive": true },
-    { "name": "Toyota", "code": "toyota", "isActive": true },
-    { "name": "Honda", "code": "honda", "isActive": true },
-    { "name": "BMW", "code": "bmw", "isActive": true },
-    { "name": "Mercedes-Benz", "code": "mercedes-benz", "isActive": true }
-  ],
-  "vehicleTypes": [
-    { "name": "Sedan", "code": "sedan", "isActive": true },
-    { "name": "SUV", "code": "suv", "isActive": true },
-    { "name": "Truck", "code": "truck", "isActive": true },
-    { "name": "Coupe", "code": "coupe", "isActive": true },
-    { "name": "Van", "code": "van", "isActive": true },
-    { "name": "Electric", "code": "electric", "isActive": true }
-  ],
-  "services": [
-    {
-      "name": "Oil Change",
-      "code": "oil-change",
-      "description": "Regular oil change service",
-      "price": 5000,
-      "duration": 30
-    },
-    {
-      "name": "Tire Rotation",
-      "code": "tire-rotation",
-      "description": "Professional tire rotation service",
-      "price": 4000,
-      "duration": 45
-    },
-    {
-      "name": "Brake Service",
-      "code": "brake-service",
-      "description": "Complete brake inspection and service",
-      "price": 15000,
-      "duration": 90
-    },
-    {
-      "name": "Vehicle Inspection",
-      "code": "vehicle-inspection",
-      "description": "Comprehensive vehicle safety inspection",
-      "price": 7500,
-      "duration": 60
-    },
-    {
-      "name": "Detailing",
-      "code": "detailing",
-      "description": "Professional interior and exterior detailing",
-      "price": 20000,
-      "duration": 120
-    },
-    {
-      "name": "Parts Sales",
-      "code": "parts-sales",
-      "description": "Genuine OEM parts sales",
-      "price": 0,
-      "duration": 0
+      "name": "Stripe",
+      "code": "pp_stripe_stripe",
+      "isInstalled": true,
+      "createPaymentFunction": "stripe",
+      "capturePaymentFunction": "stripe",
+      "refundPaymentFunction": "stripe",
+      "getPaymentStatusFunction": "stripe",
+      "generatePaymentLinkFunction": "stripe",
+      "handleWebhookFunction": "stripe"
     }
   ],
   "staff": [
-    { "role": "Sales Manager", "code": "sales-manager" },
-    { "role": "Sales Associate", "code": "sales-associate" },
-    { "role": "Finance Manager", "code": "finance-manager" },
-    { "role": "Service Manager", "code": "service-manager" },
-    { "role": "Technician", "code": "technician" },
-    { "role": "Parts Specialist", "code": "parts-specialist" }
+    {
+      "role": "Sales Manager",
+      "code": "sales-manager"
+    },
+    {
+      "role": "Sales Associate",
+      "code": "sales-associate"
+    },
+    {
+      "role": "Finance Manager",
+      "code": "finance-manager"
+    },
+    {
+      "role": "Service Manager",
+      "code": "service-manager"
+    },
+    {
+      "role": "Service Advisor",
+      "code": "service-advisor"
+    },
+    {
+      "role": "Technician",
+      "code": "technician"
+    },
+    {
+      "role": "Parts Specialist",
+      "code": "parts-specialist"
+    },
+    {
+      "role": "Office Manager",
+      "code": "office-manager"
+    }
   ]
 }

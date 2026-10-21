@@ -12,72 +12,122 @@ generator client {
 }
 
 model User {
-  id                         String                @id @default(cuid())
-  name                       String                @default("")
-  email                      String                @unique @default("")
-  password                   String
-  role                       Role?                 @relation("User_role", fields: [roleId], references: [id])
-  roleId                     String?               @map("role")
-  phone                      String                @default("")
-  employeeId                 String                @unique @default("")
-  commissionRate             Float?                @default(0)
-  isSalesperson              Boolean               @default(false)
-  isServiceAdvisor           Boolean               @default(false)
-  isFinanceManager           Boolean               @default(false)
-  assignedLeads              Lead[]                @relation("Lead_assignedSalesperson")
-  deals                      Deal[]                @relation("Deal_salesperson")
-  customerAppointments       ServiceAppointment[]  @relation("ServiceAppointment_customer")
-  techAppointments           ServiceAppointment[]  @relation("ServiceAppointment_assignedTech")
-  priceChanges               PriceHistory[]        @relation("PriceHistory_changedBy")
-  interactions               CustomerInteraction[] @relation("CustomerInteraction_performedBy")
-  tasks                      Task[]                @relation("Task_assignedTo")
-  dealApprovals              DealApproval[]        @relation("DealApproval_approver")
-  passwordResetToken         String?
-  passwordResetIssuedAt      DateTime?
-  passwordResetRedeemedAt    DateTime?
-  from_TestDrive_salesperson TestDrive[]           @relation("TestDrive_salesperson")
-  from_TradeIn_appraisedBy   TradeIn[]             @relation("TradeIn_appraisedBy")
+  id                                             String                           @id @default(cuid())
+  createdAt                                      DateTime                         @default(now())
+  updatedAt                                      DateTime                         @default(now()) @updatedAt
+  name                                           String                           @default("")
+  email                                          String                           @unique @default("")
+  password                                       String
+  role                                           Role?                            @relation("User_role", fields: [roleId], references: [id])
+  roleId                                         String?                          @map("role")
+  dealerGroupMemberships                         DealerGroupMembership[]          @relation("DealerGroupMembership_user")
+  rooftopMemberships                             RooftopMembership[]              @relation("RooftopMembership_user")
+  membershipAuditEvents                          MembershipAuditEvent[]           @relation("MembershipAuditEvent_targetUser")
+  performedMembershipAuditEvents                 MembershipAuditEvent[]           @relation("MembershipAuditEvent_actor")
+  domainAuditEvents                              DomainAuditEvent[]               @relation("DomainAuditEvent_actor")
+  apiKeys                                        ApiKey[]                         @relation("ApiKey_user")
+  onboardingStatus                               String?                          @default("not_started")
+  phone                                          String                           @default("")
+  employeeId                                     String                           @default("")
+  commissionRate                                 Float?                           @default(0)
+  isSalesperson                                  Boolean                          @default(false)
+  isServiceAdvisor                               Boolean                          @default(false)
+  isFinanceManager                               Boolean                          @default(false)
+  assignedLeads                                  Lead[]                           @relation("Lead_assignedSalesperson")
+  deals                                          Deal[]                           @relation("Deal_salesperson")
+  customerAppointments                           ServiceAppointment[]             @relation("ServiceAppointment_customer")
+  techAppointments                               ServiceAppointment[]             @relation("ServiceAppointment_assignedTech")
+  priceChanges                                   PriceHistory[]                   @relation("PriceHistory_changedBy")
+  customerMergeEvents                            CustomerMergeEvent[]             @relation("CustomerMergeEvent_actor")
+  leadAssignmentsFrom                            LeadAssignmentEvent[]            @relation("LeadAssignmentEvent_fromUser")
+  leadAssignmentsTo                              LeadAssignmentEvent[]            @relation("LeadAssignmentEvent_toUser")
+  performedLeadAssignments                       LeadAssignmentEvent[]            @relation("LeadAssignmentEvent_actor")
+  leadRoutingRules                               LeadRoutingRule[]                @relation("LeadRoutingRule_assignee")
+  customerContactPreferenceEvents                CustomerContactPreferenceEvent[] @relation("CustomerContactPreferenceEvent_actor")
+  assignedSalesVisits                            SalesVisit[]                     @relation("SalesVisit_assignedSalesperson")
+  managedSalesVisits                             SalesVisit[]                     @relation("SalesVisit_manager")
+  interactions                                   CustomerInteraction[]            @relation("CustomerInteraction_performedBy")
+  tasks                                          Task[]                           @relation("Task_assignedTo")
+  dealApprovals                                  DealApproval[]                   @relation("DealApproval_approver")
+  passwordResetToken                             String?
+  passwordResetIssuedAt                          DateTime?
+  passwordResetRedeemedAt                        DateTime?
+  from_TestDrive_requestedBy                     TestDrive[]                      @relation("TestDrive_requestedBy")
+  from_TestDrive_salesperson                     TestDrive[]                      @relation("TestDrive_salesperson")
+  from_TradeIn_appraisedBy                       TradeIn[]                        @relation("TradeIn_appraisedBy")
+  from_ServiceAppointment_requestedBy            ServiceAppointment[]             @relation("ServiceAppointment_requestedBy")
+  from_LenderDecision_recordedBy                 LenderDecision[]                 @relation("LenderDecision_recordedBy")
+  from_DealerGroupMembership_invitedBy           DealerGroupMembership[]          @relation("DealerGroupMembership_invitedBy")
+  from_RooftopMembership_invitedBy               RooftopMembership[]              @relation("RooftopMembership_invitedBy")
+  from_InventoryAcquisition_requestedBy          InventoryAcquisition[]           @relation("InventoryAcquisition_requestedBy")
+  from_InventoryAcquisition_lastTransitionedBy   InventoryAcquisition[]           @relation("InventoryAcquisition_lastTransitionedBy")
+  from_InventoryAcquisitionEvent_actor           InventoryAcquisitionEvent[]      @relation("InventoryAcquisitionEvent_actor")
+  from_InventoryStockEvent_actor                 InventoryStockEvent[]            @relation("InventoryStockEvent_actor")
+  from_InventoryReconWorkItem_assignedTo         InventoryReconWorkItem[]         @relation("InventoryReconWorkItem_assignedTo")
+  from_InventoryMerchandisingVersion_submittedBy InventoryMerchandisingVersion[]  @relation("InventoryMerchandisingVersion_submittedBy")
+  from_InventoryMerchandisingVersion_decidedBy   InventoryMerchandisingVersion[]  @relation("InventoryMerchandisingVersion_decidedBy")
+  from_InventoryFeedRun_recordedBy               InventoryFeedRun[]               @relation("InventoryFeedRun_recordedBy")
+  from_WeOweItem_owner                           WeOweItem[]                      @relation("WeOweItem_owner")
+  from_ServiceLaborOperation_technician          ServiceLaborOperation[]          @relation("ServiceLaborOperation_technician")
+  from_SavedReport_owner                         SavedReport[]                    @relation("SavedReport_owner")
 
   @@index([roleId])
 }
 
 model Role {
-  id                 String  @id @default(cuid())
-  name               String  @default("")
-  canSeeOtherPeople  Boolean @default(false)
-  canEditOtherPeople Boolean @default(false)
-  canManagePeople    Boolean @default(false)
-  canManageRoles     Boolean @default(false)
-  canAccessDashboard Boolean @default(false)
-  canManageInventory Boolean @default(false)
-  canViewInventory   Boolean @default(true)
-  canManageLeads     Boolean @default(false)
-  canViewAllLeads    Boolean @default(false)
-  canManageDeals     Boolean @default(false)
-  canApproveDeals    Boolean @default(false)
-  canManageService   Boolean @default(false)
-  canViewReports     Boolean @default(false)
-  canManageFinancing Boolean @default(false)
-  canManageTradeIns  Boolean @default(false)
-  assignedTo         User[]  @relation("User_role")
+  id                     String                  @id @default(cuid())
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @default(now()) @updatedAt
+  name                   String                  @default("")
+  canAccessDashboard     Boolean                 @default(false)
+  canSeeOtherPeople      Boolean                 @default(false)
+  canEditOtherPeople     Boolean                 @default(false)
+  canManagePeople        Boolean                 @default(false)
+  canReadUsers           Boolean                 @default(false)
+  canManageUsers         Boolean                 @default(false)
+  canReadRoles           Boolean                 @default(false)
+  canManageRoles         Boolean                 @default(false)
+  canManageSettings      Boolean                 @default(false)
+  canManageOnboarding    Boolean                 @default(false)
+  canManageDealerships   Boolean                 @default(false)
+  canViewInventory       Boolean                 @default(false)
+  canManageInventory     Boolean                 @default(false)
+  canManageLeads         Boolean                 @default(false)
+  canViewAllLeads        Boolean                 @default(false)
+  canManageDeals         Boolean                 @default(false)
+  canApproveDeals        Boolean                 @default(false)
+  canManageTradeIns      Boolean                 @default(false)
+  canManageFinancing     Boolean                 @default(false)
+  canManageService       Boolean                 @default(false)
+  canViewReports         Boolean                 @default(false)
+  canReadPayments        Boolean                 @default(false)
+  canManagePayments      Boolean                 @default(false)
+  canManageKeys          Boolean                 @default(false)
+  assignedTo             User[]                  @relation("User_role")
+  dealerGroupMemberships DealerGroupMembership[] @relation("DealerGroupMembership_role")
+  rooftopMemberships     RooftopMembership[]     @relation("RooftopMembership_role")
 }
 
 model Make {
-  id             String  @id @default(cuid())
-  name           String  @unique @default("")
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
+  name           String   @unique @default("")
   logo_id        String?
   logo_filesize  Int?
   logo_width     Int?
   logo_height    Int?
   logo_extension String?
-  models         Model[] @relation("Model_make")
+  models         Model[]  @relation("Model_make")
 }
 
 model Model {
-  id        String  @id @default(cuid())
-  name      String  @default("")
-  make      Make?   @relation("Model_make", fields: [makeId], references: [id])
-  makeId    String? @map("make")
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  name      String   @default("")
+  make      Make?    @relation("Model_make", fields: [makeId], references: [id])
+  makeId    String?  @map("make")
   bodyStyle String?
   baseYear  Int?
 
@@ -85,37 +135,50 @@ model Model {
 }
 
 model Vehicle {
-  id               String                   @id @default(cuid())
-  vin              String                   @unique @default("")
-  stockNumber      String                   @unique @default("")
-  year             Int
-  make             String                   @default("")
-  model            String                   @default("")
-  trim             String                   @default("")
-  exteriorColor    String                   @default("")
-  interiorColor    String                   @default("")
-  mileage          Int?
-  purchasePrice    Float?
-  listPrice        Float?
-  price            Float?
-  condition        String?
-  status           String?                  @default("available")
-  description      String                   @default("")
-  features         Json?                    @default("[]")
-  metadata         Json?                    @default("{}")
-  images           VehicleImage[]           @relation("VehicleImage_vehicle")
-  deals            Deal[]                   @relation("Deal_vehicle")
-  leads            Lead[]                   @relation("Lead_interestedVehicle")
-  testDrives       TestDrive[]              @relation("TestDrive_vehicle")
-  conditionReports VehicleConditionReport[] @relation("VehicleConditionReport_vehicle")
-  history          VehicleHistory?          @relation("Vehicle_history", fields: [historyId], references: [id])
-  historyId        String?                  @unique @map("history")
-  priceHistory     PriceHistory[]           @relation("PriceHistory_vehicle")
-  createdAt        DateTime?                @default(now())
+  id                    String                   @id @default(cuid())
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @default(now()) @updatedAt
+  rooftop               Rooftop                  @relation("Vehicle_rooftop", fields: [rooftopId], references: [id])
+  rooftopId             String                   @map("rooftop")
+  vin                   String                   @unique @default("")
+  stockNumber           String                   @unique @default("")
+  year                  Int
+  make                  String                   @default("")
+  model                 String                   @default("")
+  trim                  String                   @default("")
+  exteriorColor         String                   @default("")
+  interiorColor         String                   @default("")
+  mileage               Int?
+  purchasePriceCents    Int?
+  listPriceCents        Int?
+  priceCents            Int?
+  condition             String?
+  status                String?                  @default("available")
+  description           String                   @default("")
+  features              Json?                    @default("[]")
+  metadata              Json?                    @default("{}")
+  images                VehicleImage[]           @relation("VehicleImage_vehicle")
+  deals                 Deal[]                   @relation("Deal_vehicle")
+  leads                 Lead[]                   @relation("Lead_interestedVehicle")
+  testDrives            TestDrive[]              @relation("TestDrive_vehicle")
+  conditionReports      VehicleConditionReport[] @relation("VehicleConditionReport_vehicle")
+  history               VehicleHistory?          @relation("Vehicle_history", fields: [historyId], references: [id])
+  historyId             String?                  @unique @map("history")
+  priceHistory          PriceHistory[]           @relation("PriceHistory_vehicle")
+  inventoryStock        InventoryStock?          @relation("InventoryStock_vehicle")
+  acquisition           InventoryAcquisition?    @relation("InventoryAcquisition_vehicle")
+  salesVisits           SalesVisit[]             @relation("SalesVisit_vehicle")
+  financingApplications FinancingApplication[]   @relation("FinancingApplication_vehicle")
+
+  @@index([rooftopId])
 }
 
 model VehicleImage {
   id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+  rooftop         Rooftop  @relation("VehicleImage_rooftop", fields: [rooftopId], references: [id])
+  rooftopId       String   @map("rooftop")
   vehicle         Vehicle? @relation("VehicleImage_vehicle", fields: [vehicleId], references: [id])
   vehicleId       String?  @map("vehicle")
   image_id        String?
@@ -123,16 +186,22 @@ model VehicleImage {
   image_width     Int?
   image_height    Int?
   image_extension String?
+  imagePath       String   @default("")
   caption         String   @default("")
   category        String?  @default("exterior")
   sortOrder       Int?     @default(0)
   isPrimary       Boolean  @default(false)
 
+  @@index([rooftopId])
   @@index([vehicleId])
 }
 
 model VehicleConditionReport {
   id               String   @id @default(cuid())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+  rooftop          Rooftop  @relation("VehicleConditionReport_rooftop", fields: [rooftopId], references: [id])
+  rooftopId        String   @map("rooftop")
   vehicle          Vehicle? @relation("VehicleConditionReport_vehicle", fields: [vehicleId], references: [id])
   vehicleId        String?  @map("vehicle")
   reportDate       DateTime @default(now())
@@ -145,11 +214,16 @@ model VehicleConditionReport {
   estimatedRepairs Int?
   notes            String   @default("")
 
+  @@index([rooftopId])
   @@index([vehicleId])
 }
 
 model VehicleHistory {
   id                String    @id @default(cuid())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now()) @updatedAt
+  rooftop           Rooftop   @relation("VehicleHistory_rooftop", fields: [rooftopId], references: [id])
+  rooftopId         String    @map("rooftop")
   vehicle           Vehicle?  @relation("Vehicle_history")
   acquisitionDate   DateTime?
   acquisitionSource String    @default("")
@@ -159,53 +233,86 @@ model VehicleHistory {
   serviceRecords    String    @default("")
   titleStatus       String    @default("")
   notes             String    @default("")
+
+  @@index([rooftopId])
 }
 
 model PriceHistory {
-  id            String   @id @default(cuid())
-  vehicle       Vehicle? @relation("PriceHistory_vehicle", fields: [vehicleId], references: [id])
-  vehicleId     String?  @map("vehicle")
-  effectiveDate DateTime @default(now())
-  previousPrice Float?
-  newPrice      Float
-  changeReason  String   @default("")
-  changedBy     User?    @relation("PriceHistory_changedBy", fields: [changedById], references: [id])
-  changedById   String?  @map("changedBy")
-  notes         String   @default("")
+  id                 String   @id @default(cuid())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now()) @updatedAt
+  rooftop            Rooftop  @relation("PriceHistory_rooftop", fields: [rooftopId], references: [id])
+  rooftopId          String   @map("rooftop")
+  vehicle            Vehicle? @relation("PriceHistory_vehicle", fields: [vehicleId], references: [id])
+  vehicleId          String?  @map("vehicle")
+  effectiveDate      DateTime @default(now())
+  previousPriceCents Int?
+  newPriceCents      Int
+  changeReason       String   @default("")
+  changedBy          User?    @relation("PriceHistory_changedBy", fields: [changedById], references: [id])
+  changedById        String?  @map("changedBy")
+  notes              String   @default("")
 
+  @@index([rooftopId])
   @@index([vehicleId])
   @@index([changedById])
 }
 
 model Lead {
-  id                    String                @id @default(cuid())
-  firstName             String                @default("")
-  lastName              String                @default("")
-  email                 String                @default("")
-  phone                 String                @default("")
+  id                    String                 @id @default(cuid())
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @default(now()) @updatedAt
+  rooftop               Rooftop                @relation("Lead_rooftop", fields: [rooftopId], references: [id])
+  rooftopId             String                 @map("rooftop")
+  customer              Customer               @relation("Lead_customer", fields: [customerId], references: [id])
+  customerId            String                 @map("customer")
+  firstName             String                 @default("")
+  lastName              String                 @default("")
+  email                 String                 @default("")
+  phone                 String                 @default("")
   source                String?
-  interestedVehicle     Vehicle?              @relation("Lead_interestedVehicle", fields: [interestedVehicleId], references: [id])
-  interestedVehicleId   String?               @map("interestedVehicle")
+  campaignKey           String                 @default("")
+  cadenceKey            String                 @default("")
+  cadenceStatus         String                 @default("none")
+  cadenceStep           String                 @default("")
+  cadenceDueAt          DateTime?
+  interestedVehicle     Vehicle?               @relation("Lead_interestedVehicle", fields: [interestedVehicleId], references: [id])
+  interestedVehicleId   String?                @map("interestedVehicle")
   budgetRange           String?
-  tradeInVehicle        String                @default("")
+  tradeInVehicle        String                 @default("")
   timeframe             String?
-  status                String?               @default("new")
-  assignedSalesperson   User?                 @relation("Lead_assignedSalesperson", fields: [assignedSalespersonId], references: [id])
-  assignedSalespersonId String?               @map("assignedSalesperson")
-  notes                 String                @default("")
-  createdAt             DateTime?             @default(now())
+  status                String?                @default("new")
+  assignedSalesperson   User?                  @relation("Lead_assignedSalesperson", fields: [assignedSalespersonId], references: [id])
+  assignedSalespersonId String?                @map("assignedSalesperson")
+  assignedAt            DateTime?
+  firstResponseDueAt    DateTime?
+  firstResponseAt       DateTime?
+  assignmentEvents      LeadAssignmentEvent[]  @relation("LeadAssignmentEvent_lead")
+  lostReasonCode        String?
+  lostReason            String                 @default("")
+  notes                 String                 @default("")
   lastContact           DateTime?
-  testDrives            TestDrive[]           @relation("TestDrive_lead")
-  deals                 Deal[]                @relation("Deal_lead")
-  interactions          CustomerInteraction[] @relation("CustomerInteraction_lead")
-  tasks                 Task[]                @relation("Task_lead")
+  testDrives            TestDrive[]            @relation("TestDrive_lead")
+  tradeIns              TradeIn[]              @relation("TradeIn_lead")
+  serviceAppointments   ServiceAppointment[]   @relation("ServiceAppointment_lead")
+  deals                 Deal[]                 @relation("Deal_lead")
+  interactions          CustomerInteraction[]  @relation("CustomerInteraction_lead")
+  tasks                 Task[]                 @relation("Task_lead")
+  salesVisits           SalesVisit[]           @relation("SalesVisit_lead")
+  financingApplications FinancingApplication[] @relation("FinancingApplication_lead")
 
+  @@index([rooftopId])
+  @@index([customerId])
   @@index([interestedVehicleId])
   @@index([assignedSalespersonId])
 }
 
 model CustomerInteraction {
   id                String    @id @default(cuid())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now()) @updatedAt
+  rooftop           Rooftop   @relation("CustomerInteraction_rooftop", fields: [rooftopId], references: [id])
+  rooftopId         String    @map("rooftop")
   lead              Lead?     @relation("CustomerInteraction_lead", fields: [leadId], references: [id])
   leadId            String?   @map("lead")
   interactionType   String
@@ -218,12 +325,17 @@ model CustomerInteraction {
   performedBy       User?     @relation("CustomerInteraction_performedBy", fields: [performedById], references: [id])
   performedById     String?   @map("performedBy")
 
+  @@index([rooftopId])
   @@index([leadId])
   @@index([performedById])
 }
 
 model Task {
   id            String    @id @default(cuid())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
+  rooftop       Rooftop   @relation("Task_rooftop", fields: [rooftopId], references: [id])
+  rooftopId     String    @map("rooftop")
   title         String    @default("")
   description   String    @default("")
   assignedTo    User?     @relation("Task_assignedTo", fields: [assignedToId], references: [id])
@@ -234,14 +346,20 @@ model Task {
   completed     Boolean   @default(false)
   dueDate       DateTime?
   completedDate DateTime?
-  createdAt     DateTime? @default(now())
 
+  @@index([rooftopId])
   @@index([assignedToId])
   @@index([leadId])
 }
 
 model TestDrive {
   id                    String   @id @default(cuid())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @default(now()) @updatedAt
+  rooftop               Rooftop  @relation("TestDrive_rooftop", fields: [rooftopId], references: [id])
+  rooftopId             String   @map("rooftop")
+  requestedBy           User?    @relation("TestDrive_requestedBy", fields: [requestedById], references: [id])
+  requestedById         String?  @map("requestedBy")
   lead                  Lead?    @relation("TestDrive_lead", fields: [leadId], references: [id])
   leadId                String?  @map("lead")
   vehicle               Vehicle? @relation("TestDrive_vehicle", fields: [vehicleId], references: [id])
@@ -254,44 +372,78 @@ model TestDrive {
   feedback              String   @default("")
   interestedLevel       String?
 
+  @@index([rooftopId])
+  @@index([requestedById])
   @@index([leadId])
   @@index([vehicleId])
   @@index([salespersonId])
 }
 
 model Deal {
-  id               String         @id @default(cuid())
-  lead             Lead?          @relation("Deal_lead", fields: [leadId], references: [id])
-  leadId           String?        @map("lead")
-  vehicle          Vehicle?       @relation("Deal_vehicle", fields: [vehicleId], references: [id])
-  vehicleId        String?        @map("vehicle")
-  salesperson      User?          @relation("Deal_salesperson", fields: [salespersonId], references: [id])
-  salespersonId    String?        @map("salesperson")
-  vehiclePrice     Float?
-  tradeInValue     Float?
-  tradeInVehicle   TradeIn?       @relation("Deal_tradeInVehicle", fields: [tradeInVehicleId], references: [id])
-  tradeInVehicleId String?        @unique @map("tradeInVehicle")
-  tradeInDetails   Json?          @default("{}")
-  downPayment      Float?
-  financingAmount  Float?
-  monthlyPayment   Float?
-  loanTerm         Int?
-  apr              Float?
-  status           String?        @default("pencil")
-  taxAmount        Float?
-  fees             Json?          @default("[]")
-  approvals        DealApproval[] @relation("DealApproval_deal")
-  saleDate         DateTime?
-  createdAt        DateTime?      @default(now())
-  updatedAt        DateTime?      @updatedAt
+  id                          String                       @id @default(cuid())
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @default(now()) @updatedAt
+  rooftop                     Rooftop                      @relation("Deal_rooftop", fields: [rooftopId], references: [id])
+  rooftopId                   String                       @map("rooftop")
+  lead                        Lead?                        @relation("Deal_lead", fields: [leadId], references: [id])
+  leadId                      String?                      @map("lead")
+  vehicle                     Vehicle?                     @relation("Deal_vehicle", fields: [vehicleId], references: [id])
+  vehicleId                   String?                      @map("vehicle")
+  salesperson                 User?                        @relation("Deal_salesperson", fields: [salespersonId], references: [id])
+  salespersonId               String?                      @map("salesperson")
+  vehiclePriceCents           Int?
+  tradeInValueCents           Int?
+  tradeInVehicle              TradeIn?                     @relation("Deal_tradeInVehicle", fields: [tradeInVehicleId], references: [id])
+  tradeInVehicleId            String?                      @unique @map("tradeInVehicle")
+  tradeInDetails              Json?                        @default("{}")
+  downPaymentCents            Int?
+  financingAmountCents        Int?
+  monthlyPaymentCents         Int?
+  loanTerm                    Int?
+  apr                         Float?
+  status                      String?                      @default("pencil")
+  taxAmountCents              Int?
+  fees                        Json?                        @default("[]")
+  rebates                     Json?                        @default("[]")
+  products                    Json?                        @default("[]")
+  taxLines                    Json?                        @default("[]")
+  structureType               String                       @default("cash")
+  residualValueCents          Int?
+  moneyFactorBasisPoints      Int?
+  worksheetVersion            Int                          @default(0)
+  grossCents                  Int?
+  presentedSnapshot           Json?                        @default("{}")
+  presentedAt                 DateTime?
+  acceptedSnapshot            Json?                        @default("{}")
+  acceptedAt                  DateTime?
+  selectedLenderDecision      LenderDecision?              @relation("Deal_selectedLenderDecision", fields: [selectedLenderDecisionId], references: [id])
+  selectedLenderDecisionId    String?                      @map("selectedLenderDecision")
+  deliveryCases               DeliveryCase[]               @relation("DeliveryCase_deal")
+  financeProductQuotes        FinanceProductQuote[]        @relation("FinanceProductQuote_deal")
+  financeProductCancellations FinanceProductCancellation[] @relation("FinanceProductCancellation_deal")
+  financeMenuVersions         FinanceMenuVersion[]         @relation("FinanceMenuVersion_deal")
+  financeComplianceChecks     FinanceComplianceCheck[]     @relation("FinanceComplianceCheck_deal")
+  financeContractPackages     FinanceContractPackage[]     @relation("FinanceContractPackage_deal")
+  financeFundingCases         FinanceFundingCase[]         @relation("FinanceFundingCase_deal")
+  paymentTransactions         PaymentTransaction[]         @relation("PaymentTransaction_deal")
+  approvals                   DealApproval[]               @relation("DealApproval_deal")
+  saleDate                    DateTime?
+  lockedAt                    DateTime?
+  evidenceSnapshot            Json?                        @default("{}")
 
+  @@index([rooftopId])
   @@index([leadId])
   @@index([vehicleId])
   @@index([salespersonId])
+  @@index([selectedLenderDecisionId])
 }
 
 model DealApproval {
   id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @updatedAt
+  rooftop      Rooftop   @relation("DealApproval_rooftop", fields: [rooftopId], references: [id])
+  rooftopId    String    @map("rooftop")
   deal         Deal?     @relation("DealApproval_deal", fields: [dealId], references: [id])
   dealId       String?   @map("deal")
   approver     User?     @relation("DealApproval_approver", fields: [approverId], references: [id])
@@ -300,40 +452,60 @@ model DealApproval {
   notes        String    @default("")
   approvalDate DateTime? @default(now())
 
+  @@index([rooftopId])
   @@index([dealId])
   @@index([approverId])
 }
 
 model TradeIn {
-  id                  String  @id @default(cuid())
-  vin                 String  @default("")
-  year                String  @default("")
-  make                String  @default("")
-  model               String  @default("")
-  trim                String  @default("")
+  id                  String   @id @default(cuid())
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @default(now()) @updatedAt
+  rooftop             Rooftop  @relation("TradeIn_rooftop", fields: [rooftopId], references: [id])
+  rooftopId           String   @map("rooftop")
+  vin                 String   @default("")
+  year                String   @default("")
+  make                String   @default("")
+  model               String   @default("")
+  trim                String   @default("")
   mileage             Int?
   condition           String?
-  exteriorCondition   String  @default("")
-  interiorCondition   String  @default("")
-  mechanicalIssues    String  @default("")
-  kbbValue            Float?
-  offerAmount         Float?
+  exteriorCondition   String   @default("")
+  interiorCondition   String   @default("")
+  mechanicalIssues    String   @default("")
+  kbbValueCents       Int?
+  offerAmountCents    Int?
   mainPhoto_id        String?
   mainPhoto_filesize  Int?
   mainPhoto_width     Int?
   mainPhoto_height    Int?
   mainPhoto_extension String?
-  deal                Deal?   @relation("Deal_tradeInVehicle")
-  appraisedBy         User?   @relation("TradeIn_appraisedBy", fields: [appraisedById], references: [id])
-  appraisedById       String? @map("appraisedBy")
+  lead                Lead?    @relation("TradeIn_lead", fields: [leadId], references: [id])
+  leadId              String?  @map("lead")
+  deal                Deal?    @relation("Deal_tradeInVehicle")
+  appraisedBy         User?    @relation("TradeIn_appraisedBy", fields: [appraisedById], references: [id])
+  appraisedById       String?  @map("appraisedBy")
 
+  @@index([rooftopId])
+  @@index([leadId])
   @@index([appraisedById])
 }
 
 model ServiceAppointment {
   id                         String        @id @default(cuid())
+  createdAt                  DateTime      @default(now())
+  updatedAt                  DateTime      @default(now()) @updatedAt
+  rooftop                    Rooftop       @relation("ServiceAppointment_rooftop", fields: [rooftopId], references: [id])
+  rooftopId                  String        @map("rooftop")
+  requestedBy                User?         @relation("ServiceAppointment_requestedBy", fields: [requestedById], references: [id])
+  requestedById              String?       @map("requestedBy")
+  lead                       Lead?         @relation("ServiceAppointment_lead", fields: [leadId], references: [id])
+  leadId                     String?       @map("lead")
   customer                   User?         @relation("ServiceAppointment_customer", fields: [customerId], references: [id])
   customerId                 String?       @map("customer")
+  vehicleVin                 String        @default("")
+  transportationNeed         String?       @default("none")
+  capacitySlot               String        @default("")
   customerVehicleDescription String        @default("")
   appointmentDate            DateTime
   serviceType                String?
@@ -347,57 +519,1347 @@ model ServiceAppointment {
   serviceOrder               ServiceOrder? @relation("ServiceAppointment_serviceOrder", fields: [serviceOrderId], references: [id])
   serviceOrderId             String?       @unique @map("serviceOrder")
 
+  @@index([rooftopId])
+  @@index([requestedById])
+  @@index([leadId])
   @@index([customerId])
   @@index([assignedTechId])
 }
 
 model ServiceOrder {
-  id              String                @id @default(cuid())
-  appointment     ServiceAppointment?   @relation("ServiceAppointment_serviceOrder")
-  diagnosis       String                @default("")
-  workPerformed   String                @default("")
-  recommendations String                @default("")
-  lineItems       RepairOrderLineItem[] @relation("RepairOrderLineItem_serviceOrder")
-  laborTotal      Float?
-  partsTotal      Float?
-  tax             Float?
-  grandTotal      Float?
-  status          String?               @default("estimate")
-  completedAt     DateTime?
+  id                    String                  @id @default(cuid())
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @default(now()) @updatedAt
+  rooftop               Rooftop                 @relation("ServiceOrder_rooftop", fields: [rooftopId], references: [id])
+  rooftopId             String                  @map("rooftop")
+  appointment           ServiceAppointment?     @relation("ServiceAppointment_serviceOrder")
+  concern               String                  @default("")
+  cause                 String                  @default("")
+  correction            String                  @default("")
+  payType               String?                 @default("customer")
+  authorizationStatus   String?                 @default("pending")
+  authorizationEvidence Json?                   @default("{}")
+  inspectionEvidence    Json?                   @default("[]")
+  declinedWork          Json?                   @default("[]")
+  invoiceNumber         String                  @default("")
+  diagnosis             String                  @default("")
+  workPerformed         String                  @default("")
+  recommendations       String                  @default("")
+  laborOperations       ServiceLaborOperation[] @relation("ServiceLaborOperation_serviceOrder")
+  partsMovements        PartsMovement[]         @relation("PartsMovement_serviceOrder")
+  paymentTransactions   PaymentTransaction[]    @relation("PaymentTransaction_serviceOrder")
+  lineItems             RepairOrderLineItem[]   @relation("RepairOrderLineItem_serviceOrder")
+  laborTotalCents       Int?
+  partsTotalCents       Int?
+  taxCents              Int?
+  grandTotalCents       Int?
+  status                String?                 @default("estimate")
+  completedAt           DateTime?
+  lockedAt              DateTime?
+  settledAt             DateTime?
+  evidenceSnapshot      Json?                   @default("{}")
+
+  @@index([rooftopId])
 }
 
 model RepairOrderLineItem {
   id             String        @id @default(cuid())
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @default(now()) @updatedAt
+  rooftop        Rooftop       @relation("RepairOrderLineItem_rooftop", fields: [rooftopId], references: [id])
+  rooftopId      String        @map("rooftop")
   serviceOrder   ServiceOrder? @relation("RepairOrderLineItem_serviceOrder", fields: [serviceOrderId], references: [id])
   serviceOrderId String?       @map("serviceOrder")
   itemType       String
   description    String        @default("")
   partNumber     String        @default("")
   quantity       Float         @default(1)
-  unitPrice      Float
-  price          Float
-  cost           Float?
+  unitPriceCents Int
+  priceCents     Int
+  costCents      Int?
 
+  @@index([rooftopId])
   @@index([serviceOrderId])
 }
 
 model ServicePackage {
-  id                String @id @default(cuid())
-  name              String @default("")
-  description       String @default("")
-  price             Float
+  id                String   @id @default(cuid())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now()) @updatedAt
+  rooftop           Rooftop  @relation("ServicePackage_rooftop", fields: [rooftopId], references: [id])
+  rooftopId         String   @map("rooftop")
+  name              String   @default("")
+  description       String   @default("")
+  priceCents        Int
   estimatedDuration Int?
-  includedServices  Json?  @default("[]")
+  includedServices  Json?    @default("[]")
+
+  @@index([rooftopId])
 }
 
 model PartsInventory {
-  id                 String @id @default(cuid())
-  partNumber         String @unique @default("")
-  description        String @default("")
-  quantity           Int    @default(0)
+  id                 String          @id @default(cuid())
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @default(now()) @updatedAt
+  rooftop            Rooftop         @relation("PartsInventory_rooftop", fields: [rooftopId], references: [id])
+  rooftopId          String          @map("rooftop")
+  partNumber         String          @default("")
+  description        String          @default("")
+  binLocation        String          @default("")
+  committedQuantity  Int             @default(0)
+  onOrderQuantity    Int             @default(0)
+  movements          PartsMovement[] @relation("PartsMovement_part")
+  quantity           Int             @default(0)
   minimumQuantity    Int?
-  cost               Float?
-  price              Float
-  supplier           String @default("")
-  supplierPartNumber String @default("")
+  costCents          Int?
+  priceCents         Int
+  supplier           String          @default("")
+  supplierPartNumber String          @default("")
+
+  @@unique([rooftopId, partNumber], map: "PartsInventory_rooftop_partNumber_key")
+  @@index([rooftopId])
+}
+
+model DealershipProfile {
+  id                  Int      @id
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @default(now()) @updatedAt
+  name                String   @default("")
+  shortName           String   @default("")
+  salesEmail          String   @default("")
+  serviceEmail        String   @default("")
+  phone               String   @default("")
+  addressLine1        String   @default("")
+  addressLine2        String   @default("")
+  city                String   @default("")
+  state               String   @default("")
+  postalCode          String   @default("")
+  hoursMonFri         String   @default("")
+  hoursSaturday       String   @default("")
+  hoursSunday         String   @default("")
+  websiteUrl          String   @default("")
+  currencyCode        String   @default("USD")
+  homepageTitle       String   @default("")
+  homepageDescription String   @default("")
+  logoIcon            String   @default("")
+  logoColor           String   @default("0")
+}
+
+model FinancingApplication {
+  id                         String             @id @default(cuid())
+  createdAt                  DateTime           @default(now())
+  updatedAt                  DateTime           @default(now()) @updatedAt
+  rooftop                    Rooftop            @relation("FinancingApplication_rooftop", fields: [rooftopId], references: [id])
+  rooftopId                  String             @map("rooftop")
+  reference                  String             @unique @default("")
+  idempotencyKey             String             @unique @default("")
+  status                     String             @default("submitted")
+  lead                       Lead?              @relation("FinancingApplication_lead", fields: [leadId], references: [id])
+  leadId                     String?            @map("lead")
+  vehicle                    Vehicle?           @relation("FinancingApplication_vehicle", fields: [vehicleId], references: [id])
+  vehicleId                  String?            @map("vehicle")
+  applicantName              String             @default("")
+  applicantEmail             String             @default("")
+  applicantPhone             String             @default("")
+  employmentStatus           String             @default("")
+  annualIncomeCents          Int
+  selfReportedCreditTier     String             @default("")
+  requestedAmountCents       Int?
+  plannedMonthlyPaymentCents Int?
+  plannedDownPaymentCents    Int?
+  tradeInValueCents          Int?
+  aprBasisPoints             Int?
+  loanTermMonths             Int?
+  consentAt                  DateTime
+  submittedAt                DateTime
+  lockedAt                   DateTime
+  immutableSnapshot          Json?              @default("{}")
+  submissions                LenderSubmission[] @relation("LenderSubmission_application")
+  decisions                  LenderDecision[]   @relation("LenderDecision_application")
+
+  @@index([rooftopId])
+  @@index([leadId])
+  @@index([vehicleId])
+}
+
+model LenderSubmission {
+  id                             String                @id @default(cuid())
+  createdAt                      DateTime              @default(now())
+  updatedAt                      DateTime              @default(now()) @updatedAt
+  rooftop                        Rooftop               @relation("LenderSubmission_rooftop", fields: [rooftopId], references: [id])
+  rooftopId                      String                @map("rooftop")
+  application                    FinancingApplication? @relation("LenderSubmission_application", fields: [applicationId], references: [id])
+  applicationId                  String?               @map("application")
+  providerKey                    String                @default("")
+  idempotencyKey                 String                @unique @default("")
+  status                         String                @default("queued")
+  externalReference              String?
+  requestSnapshot                Json?                 @default("{}")
+  responseSummary                Json?                 @default("{}")
+  errorCode                      String?
+  queuedAt                       DateTime
+  submittedAt                    DateTime?
+  from_LenderDecision_submission LenderDecision[]      @relation("LenderDecision_submission")
+
+  @@index([rooftopId])
+  @@index([applicationId])
+}
+
+model LenderDecision {
+  id                  String                @id @default(cuid())
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @default(now()) @updatedAt
+  rooftop             Rooftop               @relation("LenderDecision_rooftop", fields: [rooftopId], references: [id])
+  rooftopId           String                @map("rooftop")
+  application         FinancingApplication? @relation("LenderDecision_application", fields: [applicationId], references: [id])
+  applicationId       String?               @map("application")
+  submission          LenderSubmission?     @relation("LenderDecision_submission", fields: [submissionId], references: [id])
+  submissionId        String?               @map("submission")
+  idempotencyKey      String                @unique @default("")
+  providerKey         String                @default("")
+  externalReference   String?
+  decision            String
+  approvedAmountCents Int?
+  aprBasisPoints      Int?
+  termMonths          Int?
+  monthlyPaymentCents Int?
+  reasonCodes         Json?                 @default("[]")
+  immutableSnapshot   Json?                 @default("{}")
+  decidedAt           DateTime
+  recordedBy          User?                 @relation("LenderDecision_recordedBy", fields: [recordedById], references: [id])
+  recordedById        String?               @map("recordedBy")
+  selectedForDeals    Deal[]                @relation("Deal_selectedLenderDecision")
+
+  @@index([rooftopId])
+  @@index([applicationId])
+  @@index([submissionId])
+  @@index([recordedById])
+}
+
+model DealerGroup {
+  id                    String                  @id @default(cuid())
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @default(now()) @updatedAt
+  name                  String                  @default("")
+  slug                  String                  @unique @default("")
+  legalName             String                  @default("")
+  status                String                  @default("active")
+  rooftops              Rooftop[]               @relation("Rooftop_dealerGroup")
+  memberships           DealerGroupMembership[] @relation("DealerGroupMembership_dealerGroup")
+  membershipAuditEvents MembershipAuditEvent[]  @relation("MembershipAuditEvent_dealerGroup")
+}
+
+model Rooftop {
+  id                                          String                           @id @default(cuid())
+  createdAt                                   DateTime                         @default(now())
+  updatedAt                                   DateTime                         @default(now()) @updatedAt
+  rooftopKey                                  String                           @unique @default("")
+  code                                        String                           @default("")
+  name                                        String                           @default("")
+  publicSlug                                  String                           @unique @default("")
+  status                                      String                           @default("active")
+  timezone                                    String                           @default("America/New_York")
+  currencyCode                                String                           @default("USD")
+  dealerGroup                                 DealerGroup?                     @relation("Rooftop_dealerGroup", fields: [dealerGroupId], references: [id])
+  dealerGroupId                               String?                          @map("dealerGroup")
+  memberships                                 RooftopMembership[]              @relation("RooftopMembership_rooftop")
+  membershipAuditEvents                       MembershipAuditEvent[]           @relation("MembershipAuditEvent_rooftop")
+  from_Vehicle_rooftop                        Vehicle[]                        @relation("Vehicle_rooftop")
+  from_VehicleImage_rooftop                   VehicleImage[]                   @relation("VehicleImage_rooftop")
+  from_VehicleConditionReport_rooftop         VehicleConditionReport[]         @relation("VehicleConditionReport_rooftop")
+  from_VehicleHistory_rooftop                 VehicleHistory[]                 @relation("VehicleHistory_rooftop")
+  from_PriceHistory_rooftop                   PriceHistory[]                   @relation("PriceHistory_rooftop")
+  from_Lead_rooftop                           Lead[]                           @relation("Lead_rooftop")
+  from_CustomerInteraction_rooftop            CustomerInteraction[]            @relation("CustomerInteraction_rooftop")
+  from_Task_rooftop                           Task[]                           @relation("Task_rooftop")
+  from_TestDrive_rooftop                      TestDrive[]                      @relation("TestDrive_rooftop")
+  from_Deal_rooftop                           Deal[]                           @relation("Deal_rooftop")
+  from_DealApproval_rooftop                   DealApproval[]                   @relation("DealApproval_rooftop")
+  from_TradeIn_rooftop                        TradeIn[]                        @relation("TradeIn_rooftop")
+  from_ServiceAppointment_rooftop             ServiceAppointment[]             @relation("ServiceAppointment_rooftop")
+  from_ServiceOrder_rooftop                   ServiceOrder[]                   @relation("ServiceOrder_rooftop")
+  from_RepairOrderLineItem_rooftop            RepairOrderLineItem[]            @relation("RepairOrderLineItem_rooftop")
+  from_ServicePackage_rooftop                 ServicePackage[]                 @relation("ServicePackage_rooftop")
+  from_PartsInventory_rooftop                 PartsInventory[]                 @relation("PartsInventory_rooftop")
+  from_FinancingApplication_rooftop           FinancingApplication[]           @relation("FinancingApplication_rooftop")
+  from_LenderSubmission_rooftop               LenderSubmission[]               @relation("LenderSubmission_rooftop")
+  from_LenderDecision_rooftop                 LenderDecision[]                 @relation("LenderDecision_rooftop")
+  from_InventoryAcquisition_rooftop           InventoryAcquisition[]           @relation("InventoryAcquisition_rooftop")
+  from_InventoryAcquisitionEvent_rooftop      InventoryAcquisitionEvent[]      @relation("InventoryAcquisitionEvent_rooftop")
+  from_DomainAuditEvent_rooftop               DomainAuditEvent[]               @relation("DomainAuditEvent_rooftop")
+  from_DomainOutboxEvent_rooftop              DomainOutboxEvent[]              @relation("DomainOutboxEvent_rooftop")
+  from_InventoryStock_rooftop                 InventoryStock[]                 @relation("InventoryStock_rooftop")
+  from_InventoryStockEvent_rooftop            InventoryStockEvent[]            @relation("InventoryStockEvent_rooftop")
+  from_InventoryReconWorkItem_rooftop         InventoryReconWorkItem[]         @relation("InventoryReconWorkItem_rooftop")
+  from_InventoryMerchandisingVersion_rooftop  InventoryMerchandisingVersion[]  @relation("InventoryMerchandisingVersion_rooftop")
+  from_InventoryFeedRun_rooftop               InventoryFeedRun[]               @relation("InventoryFeedRun_rooftop")
+  from_InventoryFeedError_rooftop             InventoryFeedError[]             @relation("InventoryFeedError_rooftop")
+  from_Customer_rooftop                       Customer[]                       @relation("Customer_rooftop")
+  from_CustomerMergeEvent_rooftop             CustomerMergeEvent[]             @relation("CustomerMergeEvent_rooftop")
+  from_LeadAssignmentEvent_rooftop            LeadAssignmentEvent[]            @relation("LeadAssignmentEvent_rooftop")
+  from_LeadRoutingRule_rooftop                LeadRoutingRule[]                @relation("LeadRoutingRule_rooftop")
+  from_CustomerContactPreferenceEvent_rooftop CustomerContactPreferenceEvent[] @relation("CustomerContactPreferenceEvent_rooftop")
+  from_CustomerHousehold_rooftop              CustomerHousehold[]              @relation("CustomerHousehold_rooftop")
+  from_SalesVisit_rooftop                     SalesVisit[]                     @relation("SalesVisit_rooftop")
+  from_FinanceProduct_rooftop                 FinanceProduct[]                 @relation("FinanceProduct_rooftop")
+  from_FinanceMenuVersion_rooftop             FinanceMenuVersion[]             @relation("FinanceMenuVersion_rooftop")
+  from_FinanceComplianceCheck_rooftop         FinanceComplianceCheck[]         @relation("FinanceComplianceCheck_rooftop")
+  from_FinanceContractPackage_rooftop         FinanceContractPackage[]         @relation("FinanceContractPackage_rooftop")
+  from_FinanceFundingCase_rooftop             FinanceFundingCase[]             @relation("FinanceFundingCase_rooftop")
+  from_FinanceProductQuote_rooftop            FinanceProductQuote[]            @relation("FinanceProductQuote_rooftop")
+  from_FinanceProductCancellation_rooftop     FinanceProductCancellation[]     @relation("FinanceProductCancellation_rooftop")
+  from_DeliveryCase_rooftop                   DeliveryCase[]                   @relation("DeliveryCase_rooftop")
+  from_WeOweItem_rooftop                      WeOweItem[]                      @relation("WeOweItem_rooftop")
+  from_ServiceLaborOperation_rooftop          ServiceLaborOperation[]          @relation("ServiceLaborOperation_rooftop")
+  from_PartsMovement_rooftop                  PartsMovement[]                  @relation("PartsMovement_rooftop")
+  from_PartsPurchaseOrder_rooftop             PartsPurchaseOrder[]             @relation("PartsPurchaseOrder_rooftop")
+  from_AccountingMapping_rooftop              AccountingMapping[]              @relation("AccountingMapping_rooftop")
+  from_AccountingBatch_rooftop                AccountingBatch[]                @relation("AccountingBatch_rooftop")
+  from_AccountingProviderResponse_rooftop     AccountingProviderResponse[]     @relation("AccountingProviderResponse_rooftop")
+  from_PaymentTransaction_rooftop             PaymentTransaction[]             @relation("PaymentTransaction_rooftop")
+  from_PaymentRefund_rooftop                  PaymentRefund[]                  @relation("PaymentRefund_rooftop")
+  from_PaymentProviderEvent_rooftop           PaymentProviderEvent[]           @relation("PaymentProviderEvent_rooftop")
+  from_SavedReport_rooftop                    SavedReport[]                    @relation("SavedReport_rooftop")
+  from_ReportRun_rooftop                      ReportRun[]                      @relation("ReportRun_rooftop")
+  from_RetentionPolicy_rooftop                RetentionPolicy[]                @relation("RetentionPolicy_rooftop")
+
+  @@index([dealerGroupId])
+}
+
+model DealerGroupMembership {
+  id                String       @id @default(cuid())
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @default(now()) @updatedAt
+  membershipKey     String       @unique @default("")
+  user              User?        @relation("DealerGroupMembership_user", fields: [userId], references: [id])
+  userId            String?      @map("user")
+  dealerGroup       DealerGroup? @relation("DealerGroupMembership_dealerGroup", fields: [dealerGroupId], references: [id])
+  dealerGroupId     String?      @map("dealerGroup")
+  role              Role?        @relation("DealerGroupMembership_role", fields: [roleId], references: [id])
+  roleId            String?      @map("role")
+  status            String       @default("invited")
+  accessAllRooftops Boolean      @default(false)
+  invitedBy         User?        @relation("DealerGroupMembership_invitedBy", fields: [invitedById], references: [id])
+  invitedById       String?      @map("invitedBy")
+  joinedAt          DateTime?
+
+  @@index([userId])
+  @@index([dealerGroupId])
+  @@index([roleId])
+  @@index([invitedById])
+}
+
+model RooftopMembership {
+  id            String    @id @default(cuid())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
+  membershipKey String    @unique @default("")
+  user          User?     @relation("RooftopMembership_user", fields: [userId], references: [id])
+  userId        String?   @map("user")
+  rooftop       Rooftop?  @relation("RooftopMembership_rooftop", fields: [rooftopId], references: [id])
+  rooftopId     String?   @map("rooftop")
+  role          Role?     @relation("RooftopMembership_role", fields: [roleId], references: [id])
+  roleId        String?   @map("role")
+  status        String    @default("invited")
+  invitedBy     User?     @relation("RooftopMembership_invitedBy", fields: [invitedById], references: [id])
+  invitedById   String?   @map("invitedBy")
+  joinedAt      DateTime?
+
+  @@index([userId])
+  @@index([rooftopId])
+  @@index([roleId])
+  @@index([invitedById])
+}
+
+model MembershipAuditEvent {
+  id               String       @id @default(cuid())
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @default(now()) @updatedAt
+  scopeType        String
+  action           String
+  dealerGroup      DealerGroup? @relation("MembershipAuditEvent_dealerGroup", fields: [dealerGroupId], references: [id])
+  dealerGroupId    String?      @map("dealerGroup")
+  rooftop          Rooftop?     @relation("MembershipAuditEvent_rooftop", fields: [rooftopId], references: [id])
+  rooftopId        String?      @map("rooftop")
+  targetUser       User?        @relation("MembershipAuditEvent_targetUser", fields: [targetUserId], references: [id])
+  targetUserId     String?      @map("targetUser")
+  actor            User?        @relation("MembershipAuditEvent_actor", fields: [actorId], references: [id])
+  actorId          String?      @map("actor")
+  membershipId     String       @default("")
+  previousSnapshot Json?
+  nextSnapshot     Json?        @default("{}")
+  reason           String       @default("")
+  occurredAt       DateTime     @default(now())
+
+  @@index([dealerGroupId])
+  @@index([rooftopId])
+  @@index([targetUserId])
+  @@index([actorId])
+}
+
+model InventoryAcquisition {
+  id                        String                      @id @default(cuid())
+  createdAt                 DateTime                    @default(now())
+  updatedAt                 DateTime                    @default(now()) @updatedAt
+  rooftop                   Rooftop                     @relation("InventoryAcquisition_rooftop", fields: [rooftopId], references: [id])
+  rooftopId                 String                      @map("rooftop")
+  reference                 String                      @unique @default("")
+  idempotencyKey            String                      @unique @default("")
+  status                    String                      @default("appraised")
+  acquisitionSource         String
+  sourceReference           String                      @default("")
+  vin                       String                      @default("")
+  year                      Int
+  make                      String                      @default("")
+  model                     String                      @default("")
+  odometer                  Int?
+  appraisalCents            Int
+  purchaseCents             Int?
+  reconEstimateCents        Int?
+  vehicle                   Vehicle?                    @relation("InventoryAcquisition_vehicle", fields: [vehicleId], references: [id])
+  vehicleId                 String?                     @unique @map("vehicle")
+  immutablePurchaseSnapshot Json?
+  purchasedAt               DateTime?
+  arrivedAt                 DateTime?
+  frontlineAt               DateTime?
+  requestedBy               User?                       @relation("InventoryAcquisition_requestedBy", fields: [requestedById], references: [id])
+  requestedById             String?                     @map("requestedBy")
+  lastTransitionedBy        User?                       @relation("InventoryAcquisition_lastTransitionedBy", fields: [lastTransitionedById], references: [id])
+  lastTransitionedById      String?                     @map("lastTransitionedBy")
+  stock                     InventoryStock?             @relation("InventoryAcquisition_stock", fields: [stockId], references: [id])
+  stockId                   String?                     @unique @map("stock")
+  events                    InventoryAcquisitionEvent[] @relation("InventoryAcquisitionEvent_acquisition")
+
+  @@index([rooftopId])
+  @@index([requestedById])
+  @@index([lastTransitionedById])
+}
+
+model InventoryAcquisitionEvent {
+  id            String               @id @default(cuid())
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @default(now()) @updatedAt
+  rooftop       Rooftop              @relation("InventoryAcquisitionEvent_rooftop", fields: [rooftopId], references: [id])
+  rooftopId     String               @map("rooftop")
+  acquisition   InventoryAcquisition @relation("InventoryAcquisitionEvent_acquisition", fields: [acquisitionId], references: [id])
+  acquisitionId String               @map("acquisition")
+  fromStatus    String               @default("")
+  toStatus      String               @default("")
+  reason        String               @default("")
+  evidence      Json?                @default("{}")
+  actor         User?                @relation("InventoryAcquisitionEvent_actor", fields: [actorId], references: [id])
+  actorId       String?              @map("actor")
+  occurredAt    DateTime             @default(now())
+
+  @@index([rooftopId])
+  @@index([acquisitionId])
+  @@index([actorId])
+}
+
+model DomainAuditEvent {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
+  rooftop        Rooftop  @relation("DomainAuditEvent_rooftop", fields: [rooftopId], references: [id])
+  rooftopId      String   @map("rooftop")
+  eventKey       String   @unique @default("")
+  requestHash    String   @default("")
+  aggregateType  String   @default("")
+  aggregateId    String   @default("")
+  action         String   @default("")
+  beforeSnapshot Json?
+  afterSnapshot  Json?
+  metadata       Json?    @default("{}")
+  actor          User?    @relation("DomainAuditEvent_actor", fields: [actorId], references: [id])
+  actorId        String?  @map("actor")
+  occurredAt     DateTime @default(now())
+
+  @@index([rooftopId])
+  @@index([aggregateType])
+  @@index([aggregateId])
+  @@index([actorId])
+  @@index([occurredAt])
+}
+
+model DomainOutboxEvent {
+  id            String    @id @default(cuid())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
+  rooftop       Rooftop   @relation("DomainOutboxEvent_rooftop", fields: [rooftopId], references: [id])
+  rooftopId     String    @map("rooftop")
+  deliveryKey   String    @unique @default("")
+  topic         String    @default("")
+  aggregateType String    @default("")
+  aggregateId   String    @default("")
+  payload       Json?     @default("{}")
+  status        String    @default("pending")
+  attemptCount  Int       @default(0)
+  availableAt   DateTime  @default(now())
+  processedAt   DateTime?
+  lastError     String?
+
+  @@index([rooftopId])
+  @@index([topic])
+  @@index([aggregateType])
+  @@index([status])
+  @@index([availableAt])
+}
+
+model InventoryStock {
+  id                            String                          @id @default(cuid())
+  createdAt                     DateTime                        @default(now())
+  updatedAt                     DateTime                        @default(now()) @updatedAt
+  rooftop                       Rooftop                         @relation("InventoryStock_rooftop", fields: [rooftopId], references: [id])
+  rooftopId                     String                          @map("rooftop")
+  vehicle                       Vehicle                         @relation("InventoryStock_vehicle", fields: [vehicleId], references: [id])
+  vehicleId                     String                          @unique @map("vehicle")
+  acquisition                   InventoryAcquisition?           @relation("InventoryAcquisition_stock")
+  stockNumber                   String                          @default("")
+  stockKey                      String                          @unique @default("")
+  locationCode                  String                          @default("")
+  locationLabel                 String                          @default("")
+  stockedAt                     DateTime
+  frontlineAt                   DateTime?
+  purchaseCostCents             Int?
+  reconCostCents                Int?                            @default(0)
+  otherCostCents                Int?                            @default(0)
+  totalCostCents                Int?                            @default(0)
+  reconStatus                   String?                         @default("not-started")
+  merchandisingStatus           String?                         @default("draft")
+  approvedRevisionHash          String                          @default("")
+  feedStatus                    String?                         @default("not-published")
+  events                        InventoryStockEvent[]           @relation("InventoryStockEvent_stock")
+  reconWorkItems                InventoryReconWorkItem[]        @relation("InventoryReconWorkItem_stock")
+  merchandisingVersions         InventoryMerchandisingVersion[] @relation("InventoryMerchandisingVersion_stock")
+  from_InventoryFeedError_stock InventoryFeedError[]            @relation("InventoryFeedError_stock")
+
+  @@index([rooftopId])
+}
+
+model InventoryStockEvent {
+  id          String         @id @default(cuid())
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @default(now()) @updatedAt
+  rooftop     Rooftop        @relation("InventoryStockEvent_rooftop", fields: [rooftopId], references: [id])
+  rooftopId   String         @map("rooftop")
+  stock       InventoryStock @relation("InventoryStockEvent_stock", fields: [stockId], references: [id])
+  stockId     String         @map("stock")
+  eventKey    String         @unique @default("")
+  eventType   String         @default("")
+  reason      String         @default("")
+  amountCents Int?
+  evidence    Json?          @default("{}")
+  actor       User?          @relation("InventoryStockEvent_actor", fields: [actorId], references: [id])
+  actorId     String?        @map("actor")
+  occurredAt  DateTime       @default(now())
+
+  @@index([rooftopId])
+  @@index([stockId])
+  @@index([eventType])
+  @@index([actorId])
+  @@index([occurredAt])
+}
+
+model InventoryReconWorkItem {
+  id                 String         @id @default(cuid())
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @default(now()) @updatedAt
+  rooftop            Rooftop        @relation("InventoryReconWorkItem_rooftop", fields: [rooftopId], references: [id])
+  rooftopId          String         @map("rooftop")
+  stock              InventoryStock @relation("InventoryReconWorkItem_stock", fields: [stockId], references: [id])
+  stockId            String         @map("stock")
+  title              String         @default("")
+  category           String
+  status             String?        @default("open")
+  estimatedCostCents Int?
+  actualCostCents    Int?
+  vendorName         String         @default("")
+  assignedTo         User?          @relation("InventoryReconWorkItem_assignedTo", fields: [assignedToId], references: [id])
+  assignedToId       String?        @map("assignedTo")
+  dueAt              DateTime?
+  completedAt        DateTime?
+
+  @@index([rooftopId])
+  @@index([stockId])
+  @@index([assignedToId])
+}
+
+model InventoryMerchandisingVersion {
+  id             String         @id @default(cuid())
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @default(now()) @updatedAt
+  rooftop        Rooftop        @relation("InventoryMerchandisingVersion_rooftop", fields: [rooftopId], references: [id])
+  rooftopId      String         @map("rooftop")
+  stock          InventoryStock @relation("InventoryMerchandisingVersion_stock", fields: [stockId], references: [id])
+  stockId        String         @map("stock")
+  version        Int
+  versionKey     String         @unique @default("")
+  status         String?        @default("submitted")
+  snapshot       Json?          @default("{}")
+  submittedBy    User?          @relation("InventoryMerchandisingVersion_submittedBy", fields: [submittedById], references: [id])
+  submittedById  String?        @map("submittedBy")
+  submittedAt    DateTime       @default(now())
+  decidedBy      User?          @relation("InventoryMerchandisingVersion_decidedBy", fields: [decidedById], references: [id])
+  decidedById    String?        @map("decidedBy")
+  decidedAt      DateTime?
+  decisionReason String         @default("")
+
+  @@index([rooftopId])
+  @@index([stockId])
+  @@index([submittedById])
+  @@index([decidedById])
+}
+
+model InventoryFeedRun {
+  id              String               @id @default(cuid())
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @default(now()) @updatedAt
+  rooftop         Rooftop              @relation("InventoryFeedRun_rooftop", fields: [rooftopId], references: [id])
+  rooftopId       String               @map("rooftop")
+  runKey          String               @unique @default("")
+  channelKey      String               @default("")
+  status          String
+  attemptedCount  Int
+  succeededCount  Int
+  failedCount     Int
+  requestSnapshot Json?                @default("{}")
+  responseSummary Json?                @default("{}")
+  startedAt       DateTime
+  completedAt     DateTime
+  recordedBy      User?                @relation("InventoryFeedRun_recordedBy", fields: [recordedById], references: [id])
+  recordedById    String?              @map("recordedBy")
+  errors          InventoryFeedError[] @relation("InventoryFeedError_run")
+
+  @@index([rooftopId])
+  @@index([channelKey])
+  @@index([recordedById])
+}
+
+model InventoryFeedError {
+  id           String           @id @default(cuid())
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @default(now()) @updatedAt
+  rooftop      Rooftop          @relation("InventoryFeedError_rooftop", fields: [rooftopId], references: [id])
+  rooftopId    String           @map("rooftop")
+  run          InventoryFeedRun @relation("InventoryFeedError_run", fields: [runId], references: [id])
+  runId        String           @map("run")
+  stock        InventoryStock?  @relation("InventoryFeedError_stock", fields: [stockId], references: [id])
+  stockId      String?          @map("stock")
+  errorCode    String           @default("")
+  message      String           @default("")
+  rowReference String           @default("")
+  evidence     Json?            @default("{}")
+
+  @@index([rooftopId])
+  @@index([runId])
+  @@index([stockId])
+}
+
+model Customer {
+  id                         String                           @id @default(cuid())
+  createdAt                  DateTime                         @default(now())
+  updatedAt                  DateTime                         @default(now()) @updatedAt
+  rooftop                    Rooftop                          @relation("Customer_rooftop", fields: [rooftopId], references: [id])
+  rooftopId                  String                           @map("rooftop")
+  firstName                  String                           @default("")
+  lastName                   String                           @default("")
+  primaryEmail               String                           @default("")
+  primaryPhone               String                           @default("")
+  normalizedEmail            String                           @default("")
+  normalizedPhone            String                           @default("")
+  identityKey                String                           @unique @default("")
+  status                     String                           @default("active")
+  emailConsent               Boolean                          @default(false)
+  smsConsent                 Boolean                          @default(false)
+  phoneConsent               Boolean                          @default(false)
+  emailSuppressed            Boolean                          @default(false)
+  smsSuppressed              Boolean                          @default(false)
+  phoneSuppressed            Boolean                          @default(false)
+  preferredChannel           String                           @default("none")
+  contactPreferenceUpdatedAt DateTime?
+  suppressionReason          String                           @default("")
+  suppressionSource          String                           @default("")
+  household                  CustomerHousehold?               @relation("Customer_household", fields: [householdId], references: [id])
+  householdId                String?                          @map("household")
+  contactPreferenceEvents    CustomerContactPreferenceEvent[] @relation("CustomerContactPreferenceEvent_customer")
+  salesVisits                SalesVisit[]                     @relation("SalesVisit_customer")
+  mergedAt                   DateTime?
+  mergedInto                 Customer?                        @relation("Customer_mergedInto", fields: [mergedIntoId], references: [id])
+  mergedIntoId               String?                          @map("mergedInto")
+  mergedCustomers            Customer[]                       @relation("Customer_mergedInto")
+  leads                      Lead[]                           @relation("Lead_customer")
+  mergeEventsAsSurvivor      CustomerMergeEvent[]             @relation("CustomerMergeEvent_survivor")
+  mergeEventsAsDuplicate     CustomerMergeEvent[]             @relation("CustomerMergeEvent_duplicate")
+
+  @@index([rooftopId])
+  @@index([normalizedEmail])
+  @@index([normalizedPhone])
+  @@index([householdId])
+  @@index([mergedIntoId])
+}
+
+model CustomerMergeEvent {
+  id               String   @id @default(cuid())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+  rooftop          Rooftop  @relation("CustomerMergeEvent_rooftop", fields: [rooftopId], references: [id])
+  rooftopId        String   @map("rooftop")
+  survivor         Customer @relation("CustomerMergeEvent_survivor", fields: [survivorId], references: [id])
+  survivorId       String   @map("survivor")
+  duplicate        Customer @relation("CustomerMergeEvent_duplicate", fields: [duplicateId], references: [id])
+  duplicateId      String   @map("duplicate")
+  actor            User     @relation("CustomerMergeEvent_actor", fields: [actorId], references: [id])
+  actorId          String   @map("actor")
+  reason           String   @default("")
+  mergedAt         DateTime @default(now())
+  movedLeadIds     Json?    @default("[]")
+  evidenceSnapshot Json?    @default("{}")
+
+  @@index([rooftopId])
+  @@index([survivorId])
+  @@index([duplicateId])
+  @@index([actorId])
+}
+
+model LeadAssignmentEvent {
+  id                 String    @id @default(cuid())
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @default(now()) @updatedAt
+  rooftop            Rooftop   @relation("LeadAssignmentEvent_rooftop", fields: [rooftopId], references: [id])
+  rooftopId          String    @map("rooftop")
+  lead               Lead      @relation("LeadAssignmentEvent_lead", fields: [leadId], references: [id])
+  leadId             String    @map("lead")
+  fromUser           User?     @relation("LeadAssignmentEvent_fromUser", fields: [fromUserId], references: [id])
+  fromUserId         String?   @map("fromUser")
+  toUser             User      @relation("LeadAssignmentEvent_toUser", fields: [toUserId], references: [id])
+  toUserId           String    @map("toUser")
+  actor              User      @relation("LeadAssignmentEvent_actor", fields: [actorId], references: [id])
+  actorId            String    @map("actor")
+  reason             String    @default("")
+  routeKey           String    @default("")
+  assignedAt         DateTime  @default(now())
+  firstResponseDueAt DateTime?
+
+  @@index([rooftopId])
+  @@index([leadId])
+  @@index([fromUserId])
+  @@index([toUserId])
+  @@index([actorId])
+}
+
+model LeadRoutingRule {
+  id                   String   @id @default(cuid())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @default(now()) @updatedAt
+  rooftop              Rooftop  @relation("LeadRoutingRule_rooftop", fields: [rooftopId], references: [id])
+  rooftopId            String   @map("rooftop")
+  name                 String   @default("")
+  routeKey             String   @unique @default("")
+  active               Boolean  @default(true)
+  priority             Int      @default(100)
+  source               String   @default("any")
+  assignee             User     @relation("LeadRoutingRule_assignee", fields: [assigneeId], references: [id])
+  assigneeId           String   @map("assignee")
+  firstResponseMinutes Int      @default(30)
+
+  @@index([rooftopId])
+  @@index([assigneeId])
+}
+
+model CustomerContactPreferenceEvent {
+  id                 String   @id @default(cuid())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now()) @updatedAt
+  rooftop            Rooftop  @relation("CustomerContactPreferenceEvent_rooftop", fields: [rooftopId], references: [id])
+  rooftopId          String   @map("rooftop")
+  customer           Customer @relation("CustomerContactPreferenceEvent_customer", fields: [customerId], references: [id])
+  customerId         String   @map("customer")
+  actor              User     @relation("CustomerContactPreferenceEvent_actor", fields: [actorId], references: [id])
+  actorId            String   @map("actor")
+  source             String   @default("")
+  reason             String   @default("")
+  occurredAt         DateTime
+  preferenceSnapshot Json?    @default("{}")
+
+  @@index([rooftopId])
+  @@index([customerId])
+  @@index([actorId])
+}
+
+model CustomerHousehold {
+  id           String     @id @default(cuid())
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @default(now()) @updatedAt
+  rooftop      Rooftop    @relation("CustomerHousehold_rooftop", fields: [rooftopId], references: [id])
+  rooftopId    String     @map("rooftop")
+  householdKey String     @unique @default("")
+  displayName  String     @default("")
+  members      Customer[] @relation("Customer_household")
+
+  @@index([rooftopId])
+}
+
+model SalesVisit {
+  id                    String    @id @default(cuid())
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @default(now()) @updatedAt
+  rooftop               Rooftop   @relation("SalesVisit_rooftop", fields: [rooftopId], references: [id])
+  rooftopId             String    @map("rooftop")
+  lead                  Lead      @relation("SalesVisit_lead", fields: [leadId], references: [id])
+  leadId                String    @map("lead")
+  customer              Customer  @relation("SalesVisit_customer", fields: [customerId], references: [id])
+  customerId            String    @map("customer")
+  vehicle               Vehicle?  @relation("SalesVisit_vehicle", fields: [vehicleId], references: [id])
+  vehicleId             String?   @map("vehicle")
+  assignedSalesperson   User      @relation("SalesVisit_assignedSalesperson", fields: [assignedSalespersonId], references: [id])
+  assignedSalespersonId String    @map("assignedSalesperson")
+  manager               User?     @relation("SalesVisit_manager", fields: [managerId], references: [id])
+  managerId             String?   @map("manager")
+  kind                  String
+  status                String
+  scheduledAt           DateTime?
+  arrivedAt             DateTime?
+  managerTurnAt         DateTime?
+  completedAt           DateTime?
+  outcome               String    @default("")
+  notes                 String    @default("")
+
+  @@index([rooftopId])
+  @@index([leadId])
+  @@index([customerId])
+  @@index([vehicleId])
+  @@index([assignedSalespersonId])
+  @@index([managerId])
+}
+
+model FinanceProduct {
+  id               String                @id @default(cuid())
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @default(now()) @updatedAt
+  rooftop          Rooftop               @relation("FinanceProduct_rooftop", fields: [rooftopId], references: [id])
+  rooftopId        String                @map("rooftop")
+  code             String                @default("")
+  name             String                @default("")
+  category         String
+  providerKey      String                @default("")
+  active           Boolean               @default(true)
+  quotes           FinanceProductQuote[] @relation("FinanceProductQuote_product")
+  retailPriceCents Int
+  costCents        Int
+
+  @@unique([rooftopId, code], map: "FinanceProduct_rooftop_code_key")
+  @@index([rooftopId])
+}
+
+model FinanceMenuVersion {
+  id                       String                       @id @default(cuid())
+  createdAt                DateTime                     @default(now())
+  updatedAt                DateTime                     @default(now()) @updatedAt
+  rooftop                  Rooftop                      @relation("FinanceMenuVersion_rooftop", fields: [rooftopId], references: [id])
+  rooftopId                String                       @map("rooftop")
+  deal                     Deal                         @relation("FinanceMenuVersion_deal", fields: [dealId], references: [id])
+  dealId                   String                       @map("deal")
+  version                  Int
+  status                   String
+  optionsSnapshot          Json?                        @default("[]")
+  selectedProductCodes     Json?                        @default("[]")
+  declinedProductCodes     Json?                        @default("[]")
+  disclosureAcknowledgment String                       @default("")
+  presentedAt              DateTime
+  decidedAt                DateTime?
+  cancellations            FinanceProductCancellation[] @relation("FinanceProductCancellation_menu")
+  idempotencyKey           String                       @unique @default("")
+
+  @@unique([dealId, version], map: "FinanceMenuVersion_deal_version_key")
+  @@index([rooftopId])
+  @@index([dealId])
+}
+
+model FinanceComplianceCheck {
+  id              String    @id @default(cuid())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+  rooftop         Rooftop   @relation("FinanceComplianceCheck_rooftop", fields: [rooftopId], references: [id])
+  rooftopId       String    @map("rooftop")
+  deal            Deal      @relation("FinanceComplianceCheck_deal", fields: [dealId], references: [id])
+  dealId          String    @map("deal")
+  checkType       String
+  providerKey     String    @default("")
+  status          String
+  resultCode      String    @default("")
+  requestSnapshot Json?     @default("{}")
+  resultSnapshot  Json?     @default("{}")
+  requestedAt     DateTime
+  completedAt     DateTime?
+  idempotencyKey  String    @unique @default("")
+
+  @@index([rooftopId])
+  @@index([dealId])
+}
+
+model FinanceContractPackage {
+  id                      String    @id @default(cuid())
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @default(now()) @updatedAt
+  rooftop                 Rooftop   @relation("FinanceContractPackage_rooftop", fields: [rooftopId], references: [id])
+  rooftopId               String    @map("rooftop")
+  deal                    Deal      @relation("FinanceContractPackage_deal", fields: [dealId], references: [id])
+  dealId                  String    @map("deal")
+  status                  String
+  providerKey             String    @default("")
+  envelopeReference       String    @default("")
+  requiredDocuments       Json?     @default("[]")
+  documentChecklist       Json?     @default("[]")
+  immutableStatusEvidence Json?     @default("{}")
+  sentAt                  DateTime?
+  signedAt                DateTime?
+  lastWebhookAt           DateTime?
+  idempotencyKey          String    @unique @default("")
+
+  @@unique([dealId], map: "FinanceContractPackage_deal_key")
+  @@index([rooftopId])
+  @@index([dealId])
+}
+
+model FinanceFundingCase {
+  id                String    @id @default(cuid())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now()) @updatedAt
+  rooftop           Rooftop   @relation("FinanceFundingCase_rooftop", fields: [rooftopId], references: [id])
+  rooftopId         String    @map("rooftop")
+  deal              Deal      @relation("FinanceFundingCase_deal", fields: [dealId], references: [id])
+  dealId            String    @map("deal")
+  status            String
+  checklist         Json?     @default("[]")
+  exceptions        Json?     @default("[]")
+  fundingReference  String    @default("")
+  fundedAt          DateTime?
+  immutableEvidence Json?     @default("{}")
+  idempotencyKey    String    @unique @default("")
+
+  @@unique([dealId], map: "FinanceFundingCase_deal_key")
+  @@index([rooftopId])
+  @@index([dealId])
+}
+
+model FinanceProductQuote {
+  id                String         @id @default(cuid())
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @default(now()) @updatedAt
+  rooftop           Rooftop        @relation("FinanceProductQuote_rooftop", fields: [rooftopId], references: [id])
+  rooftopId         String         @map("rooftop")
+  deal              Deal           @relation("FinanceProductQuote_deal", fields: [dealId], references: [id])
+  dealId            String         @map("deal")
+  product           FinanceProduct @relation("FinanceProductQuote_product", fields: [productId], references: [id])
+  productId         String         @map("product")
+  providerKey       String         @default("")
+  status            String
+  retailPriceCents  Int?
+  costCents         Int?
+  evidenceReference String         @default("")
+  requestSnapshot   Json?          @default("{}")
+  resultSnapshot    Json?          @default("{}")
+  requestedAt       DateTime
+  completedAt       DateTime?
+  idempotencyKey    String         @unique @default("")
+
+  @@index([rooftopId])
+  @@index([dealId])
+  @@index([productId])
+}
+
+model FinanceProductCancellation {
+  id             String             @id @default(cuid())
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @default(now()) @updatedAt
+  rooftop        Rooftop            @relation("FinanceProductCancellation_rooftop", fields: [rooftopId], references: [id])
+  rooftopId      String             @map("rooftop")
+  deal           Deal               @relation("FinanceProductCancellation_deal", fields: [dealId], references: [id])
+  dealId         String             @map("deal")
+  menu           FinanceMenuVersion @relation("FinanceProductCancellation_menu", fields: [menuId], references: [id])
+  menuId         String             @map("menu")
+  productCode    String             @default("")
+  status         String
+  reason         String             @default("")
+  refundCents    Int?
+  evidence       Json?              @default("{}")
+  requestedAt    DateTime
+  completedAt    DateTime?
+  idempotencyKey String             @unique @default("")
+
+  @@index([rooftopId])
+  @@index([dealId])
+  @@index([menuId])
+}
+
+model DeliveryCase {
+  id                     String      @id @default(cuid())
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @default(now()) @updatedAt
+  rooftop                Rooftop     @relation("DeliveryCase_rooftop", fields: [rooftopId], references: [id])
+  rooftopId              String      @map("rooftop")
+  deal                   Deal        @relation("DeliveryCase_deal", fields: [dealId], references: [id])
+  dealId                 String      @map("deal")
+  status                 String
+  appointmentAt          DateTime?
+  arrivedAt              DateTime?
+  checklist              Json?       @default("[]")
+  customerAcknowledgment String      @default("")
+  acknowledgedAt         DateTime?
+  deliverySnapshot       Json?       @default("{}")
+  idempotencyKey         String      @unique @default("")
+  weOweItems             WeOweItem[] @relation("WeOweItem_deliveryCase")
+
+  @@unique([dealId], map: "DeliveryCase_deal_key")
+  @@index([rooftopId])
+  @@index([dealId])
+}
+
+model WeOweItem {
+  id                     String       @id @default(cuid())
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @default(now()) @updatedAt
+  rooftop                Rooftop      @relation("WeOweItem_rooftop", fields: [rooftopId], references: [id])
+  rooftopId              String       @map("rooftop")
+  deliveryCase           DeliveryCase @relation("WeOweItem_deliveryCase", fields: [deliveryCaseId], references: [id])
+  deliveryCaseId         String       @map("deliveryCase")
+  description            String       @default("")
+  status                 String
+  promisedAt             DateTime
+  owner                  User         @relation("WeOweItem_owner", fields: [ownerId], references: [id])
+  ownerId                String       @map("owner")
+  estimatedCostCents     Int?
+  fulfillmentEvidence    String       @default("")
+  customerAcknowledgment String       @default("")
+  fulfilledAt            DateTime?
+  idempotencyKey         String       @unique @default("")
+
+  @@index([rooftopId])
+  @@index([deliveryCaseId])
+  @@index([ownerId])
+}
+
+model ServiceLaborOperation {
+  id             String       @id @default(cuid())
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @default(now()) @updatedAt
+  rooftop        Rooftop      @relation("ServiceLaborOperation_rooftop", fields: [rooftopId], references: [id])
+  rooftopId      String       @map("rooftop")
+  serviceOrder   ServiceOrder @relation("ServiceLaborOperation_serviceOrder", fields: [serviceOrderId], references: [id])
+  serviceOrderId String       @map("serviceOrder")
+  operationCode  String       @default("")
+  description    String       @default("")
+  status         String
+  technician     User?        @relation("ServiceLaborOperation_technician", fields: [technicianId], references: [id])
+  technicianId   String?      @map("technician")
+  soldHours      Float?
+  actualMinutes  Int?
+  timePunches    Json?        @default("[]")
+  startedAt      DateTime?
+  completedAt    DateTime?
+  idempotencyKey String       @unique @default("")
+
+  @@index([rooftopId])
+  @@index([serviceOrderId])
+  @@index([technicianId])
+}
+
+model PartsMovement {
+  id             String         @id @default(cuid())
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @default(now()) @updatedAt
+  rooftop        Rooftop        @relation("PartsMovement_rooftop", fields: [rooftopId], references: [id])
+  rooftopId      String         @map("rooftop")
+  part           PartsInventory @relation("PartsMovement_part", fields: [partId], references: [id])
+  partId         String         @map("part")
+  serviceOrder   ServiceOrder?  @relation("PartsMovement_serviceOrder", fields: [serviceOrderId], references: [id])
+  serviceOrderId String?        @map("serviceOrder")
+  movementType   String
+  quantityDelta  Int
+  onHandAfter    Int?
+  committedAfter Int?
+  onOrderAfter   Int?
+  reference      String         @default("")
+  reason         String         @default("")
+  evidence       Json?          @default("{}")
+  occurredAt     DateTime
+  idempotencyKey String         @unique @default("")
+
+  @@index([rooftopId])
+  @@index([partId])
+  @@index([serviceOrderId])
+}
+
+model PartsPurchaseOrder {
+  id             String    @id @default(cuid())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @default(now()) @updatedAt
+  rooftop        Rooftop   @relation("PartsPurchaseOrder_rooftop", fields: [rooftopId], references: [id])
+  rooftopId      String    @map("rooftop")
+  reference      String    @default("")
+  supplier       String    @default("")
+  status         String
+  lines          Json?     @default("[]")
+  orderedAt      DateTime?
+  receivedAt     DateTime?
+  idempotencyKey String    @unique @default("")
+
+  @@unique([rooftopId, reference], map: "PartsPurchaseOrder_rooftop_reference_key")
+  @@index([rooftopId])
+}
+
+model AccountingMapping {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+  rooftop       Rooftop  @relation("AccountingMapping_rooftop", fields: [rooftopId], references: [id])
+  rooftopId     String   @map("rooftop")
+  sourceType    String
+  sourceCode    String   @default("")
+  debitAccount  String   @default("")
+  creditAccount String   @default("")
+  providerKey   String   @default("operator-recorded")
+
+  @@unique([rooftopId, sourceType, sourceCode, providerKey], map: "AccountingMapping_rooftop_source_provider_key")
+  @@index([rooftopId])
+}
+
+model AccountingBatch {
+  id                                    String                       @id @default(cuid())
+  createdAt                             DateTime                     @default(now())
+  updatedAt                             DateTime                     @default(now()) @updatedAt
+  rooftop                               Rooftop                      @relation("AccountingBatch_rooftop", fields: [rooftopId], references: [id])
+  rooftopId                             String                       @map("rooftop")
+  sourceType                            String
+  sourceId                              String                       @default("")
+  status                                String
+  providerKey                           String                       @default("")
+  lines                                 Json?                        @default("[]")
+  totalDebitCents                       Int
+  totalCreditCents                      Int
+  attemptCount                          Int                          @default(0)
+  externalReference                     String                       @default("")
+  lastErrorCode                         String                       @default("")
+  postedAt                              DateTime?
+  reconciledAt                          DateTime?
+  lockedAt                              DateTime?
+  idempotencyKey                        String                       @unique @default("")
+  from_AccountingProviderResponse_batch AccountingProviderResponse[] @relation("AccountingProviderResponse_batch")
+
+  @@index([rooftopId])
+}
+
+model AccountingProviderResponse {
+  id                 String          @id @default(cuid())
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @default(now()) @updatedAt
+  rooftop            Rooftop         @relation("AccountingProviderResponse_rooftop", fields: [rooftopId], references: [id])
+  rooftopId          String          @map("rooftop")
+  batch              AccountingBatch @relation("AccountingProviderResponse_batch", fields: [batchId], references: [id])
+  batchId            String          @map("batch")
+  providerKey        String          @default("")
+  requestFingerprint String          @default("")
+  responseCode       String          @default("")
+  externalReference  String          @default("")
+  immutableResponse  Json?           @default("{}")
+  receivedAt         DateTime
+  idempotencyKey     String          @unique @default("")
+
+  @@index([rooftopId])
+  @@index([batchId])
+}
+
+model PaymentTransaction {
+  id                                    String                 @id @default(cuid())
+  createdAt                             DateTime               @default(now())
+  updatedAt                             DateTime               @default(now()) @updatedAt
+  rooftop                               Rooftop                @relation("PaymentTransaction_rooftop", fields: [rooftopId], references: [id])
+  rooftopId                             String                 @map("rooftop")
+  deal                                  Deal?                  @relation("PaymentTransaction_deal", fields: [dealId], references: [id])
+  dealId                                String?                @map("deal")
+  serviceOrder                          ServiceOrder?          @relation("PaymentTransaction_serviceOrder", fields: [serviceOrderId], references: [id])
+  serviceOrderId                        String?                @map("serviceOrder")
+  sourceType                            String
+  amountCents                           Int
+  currency                              String                 @default("usd")
+  providerKey                           String                 @default("")
+  paymentProvider                       PaymentProvider?       @relation("PaymentTransaction_paymentProvider", fields: [paymentProviderId], references: [id])
+  paymentProviderId                     String?                @map("paymentProvider")
+  providerTransactionId                 String                 @default("")
+  providerSessionId                     String                 @default("")
+  checkoutUrl                           String                 @default("")
+  status                                String
+  capturedCents                         Int                    @default(0)
+  refundedCents                         Int                    @default(0)
+  failureCode                           String                 @default("")
+  reconciliationReference               String                 @default("")
+  reconciledAt                          DateTime?
+  version                               Int                    @default(1)
+  idempotencyKey                        String                 @unique @default("")
+  from_PaymentRefund_transaction        PaymentRefund[]        @relation("PaymentRefund_transaction")
+  from_PaymentProviderEvent_transaction PaymentProviderEvent[] @relation("PaymentProviderEvent_transaction")
+
+  @@index([rooftopId])
+  @@index([dealId])
+  @@index([serviceOrderId])
+  @@index([paymentProviderId])
+}
+
+model PaymentRefund {
+  id                               String                 @id @default(cuid())
+  createdAt                        DateTime               @default(now())
+  updatedAt                        DateTime               @default(now()) @updatedAt
+  rooftop                          Rooftop                @relation("PaymentRefund_rooftop", fields: [rooftopId], references: [id])
+  rooftopId                        String                 @map("rooftop")
+  transaction                      PaymentTransaction     @relation("PaymentRefund_transaction", fields: [transactionId], references: [id])
+  transactionId                    String                 @map("transaction")
+  amountCents                      Int
+  reason                           String                 @default("")
+  status                           String
+  providerRefundId                 String                 @default("")
+  failureCode                      String                 @default("")
+  idempotencyKey                   String                 @unique @default("")
+  from_PaymentProviderEvent_refund PaymentProviderEvent[] @relation("PaymentProviderEvent_refund")
+
+  @@index([rooftopId])
+  @@index([transactionId])
+}
+
+model PaymentProviderEvent {
+  id                 String             @id @default(cuid())
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @default(now()) @updatedAt
+  rooftop            Rooftop            @relation("PaymentProviderEvent_rooftop", fields: [rooftopId], references: [id])
+  rooftopId          String             @map("rooftop")
+  transaction        PaymentTransaction @relation("PaymentProviderEvent_transaction", fields: [transactionId], references: [id])
+  transactionId      String             @map("transaction")
+  refund             PaymentRefund?     @relation("PaymentProviderEvent_refund", fields: [refundId], references: [id])
+  refundId           String?            @map("refund")
+  providerKey        String             @default("")
+  providerEventId    String             @unique @default("")
+  eventType          String             @default("")
+  payloadDigest      String             @default("")
+  signatureTimestamp DateTime
+  receivedAt         DateTime
+
+  @@index([rooftopId])
+  @@index([transactionId])
+  @@index([refundId])
+}
+
+model PaymentProvider {
+  id                          String               @id @default(cuid())
+  name                        String               @default("")
+  code                        String               @unique @default("")
+  isInstalled                 Boolean              @default(true)
+  credentials                 Json?                @default("{}")
+  metadata                    Json?                @default("{}")
+  createPaymentFunction       String               @default("")
+  capturePaymentFunction      String               @default("")
+  refundPaymentFunction       String               @default("")
+  getPaymentStatusFunction    String               @default("")
+  generatePaymentLinkFunction String               @default("")
+  handleWebhookFunction       String               @default("")
+  transactions                PaymentTransaction[] @relation("PaymentTransaction_paymentProvider")
+  createdAt                   DateTime             @default(now())
+  updatedAt                   DateTime             @default(now()) @updatedAt
+}
+
+model SavedReport {
+  id                         String      @id @default(cuid())
+  createdAt                  DateTime    @default(now())
+  updatedAt                  DateTime    @default(now()) @updatedAt
+  rooftop                    Rooftop     @relation("SavedReport_rooftop", fields: [rooftopId], references: [id])
+  rooftopId                  String      @map("rooftop")
+  owner                      User        @relation("SavedReport_owner", fields: [ownerId], references: [id])
+  ownerId                    String      @map("owner")
+  name                       String      @default("")
+  reportType                 String
+  filters                    Json?       @default("{}")
+  exportFormat               String
+  schedule                   String
+  active                     Boolean     @default(true)
+  nextRunAt                  DateTime?
+  idempotencyKey             String      @unique @default("")
+  from_ReportRun_savedReport ReportRun[] @relation("ReportRun_savedReport")
+
+  @@index([rooftopId])
+  @@index([ownerId])
+}
+
+model ReportRun {
+  id             String      @id @default(cuid())
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @default(now()) @updatedAt
+  rooftop        Rooftop     @relation("ReportRun_rooftop", fields: [rooftopId], references: [id])
+  rooftopId      String      @map("rooftop")
+  savedReport    SavedReport @relation("ReportRun_savedReport", fields: [savedReportId], references: [id])
+  savedReportId  String      @map("savedReport")
+  status         String
+  exportFormat   String
+  resultSnapshot Json?       @default("{}")
+  resultDigest   String      @default("")
+  errorCode      String      @default("")
+  completedAt    DateTime?
+  expiresAt      DateTime?
+  idempotencyKey String      @unique @default("")
+
+  @@index([rooftopId])
+  @@index([savedReportId])
+}
+
+model RetentionPolicy {
+  id             String    @id @default(cuid())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @default(now()) @updatedAt
+  rooftop        Rooftop   @relation("RetentionPolicy_rooftop", fields: [rooftopId], references: [id])
+  rooftopId      String    @map("rooftop")
+  category       String
+  retentionDays  Int
+  legalHold      Boolean   @default(false)
+  rationale      String    @default("")
+  lastSweptAt    DateTime?
+  idempotencyKey String    @unique @default("")
+
+  @@unique([rooftopId, category], map: "RetentionPolicy_rooftop_category_key")
+  @@index([rooftopId])
+}
+
+model AuthenticationThrottle {
+  id              String    @id @default(cuid())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+  keyHash         String    @unique @default("")
+  purpose         String    @default("")
+  failureCount    Int       @default(0)
+  windowStartedAt DateTime
+  blockedUntil    DateTime?
+
+  @@index([updatedAt])
+  @@index([blockedUntil])
+}
+
+model ApiKey {
+  id              String            @id @default(cuid())
+  name            String            @default("")
+  tokenSecret     String
+  tokenPreview    String            @default("")
+  scopes          Json?             @default("[]")
+  status          ApiKeyStatusType? @default(active)
+  expiresAt       DateTime?
+  lastUsedAt      DateTime?
+  usageCount      Json?             @default("{\"total\":0,\"daily\":{}}")
+  restrictedToIPs Json?             @default("[]")
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @default(now()) @updatedAt
+  user            User?             @relation("ApiKey_user", fields: [userId], references: [id])
+  userId          String?           @map("user")
+
+  @@index([userId])
+}
+
+enum ApiKeyStatusType {
+  active
+  inactive
+  revoked
 }

@@ -1,24 +1,45 @@
 import { list } from '@keystone-6/core'
-import { allOperations } from '@keystone-6/core/access'
+import { denyAll } from '@keystone-6/core/access'
 import { relationship, text, select, checkbox, timestamp } from '@keystone-6/core/fields'
 
-import { isSignedIn } from '../access'
+import { permissions, rules } from '../access'
+import { rooftopField, validateRooftopRecord } from '../tenantRecords'
+import { trackingFields } from './trackingFields'
 
 export const TestDrive = list({
   access: {
     operation: {
-      query: isSignedIn,
-      create: () => true, // Allow public test drive scheduling from storefront
-      update: isSignedIn,
-      delete: isSignedIn,
+      query: permissions.canAccessLeads,
+      create: denyAll,
+      update: denyAll,
+      delete: denyAll,
     },
+    filter: {
+      query: rules.canReadLeadChildren,
+      update: rules.canReadLeadChildren,
+      delete: rules.canReadLeadChildren,
+    },
+    item: { create: denyAll },
+  },
+  hooks: {
+    validate: (args: any) => validateRooftopRecord(args, [
+      { field: 'lead', listKey: 'Lead' },
+      { field: 'vehicle', listKey: 'Vehicle' },
+      { field: 'salesperson', listKey: 'User', kind: 'user' },
+    ]),
   },
   ui: {
+    hideCreate: true,
+    hideDelete: true,
+    itemView: { defaultFieldMode: 'read' },
     listView: {
       initialColumns: ['lead', 'vehicle', 'scheduledTime', 'salesperson', 'completed'],
     },
   },
   fields: {
+    ...trackingFields,
+    rooftop: rooftopField(),
+    requestedBy: relationship({ ref: 'User', access: { read: denyAll, create: denyAll, update: denyAll } }),
     // Relationships
     lead: relationship({
       ref: 'Lead.testDrives',
@@ -52,10 +73,12 @@ export const TestDrive = list({
 
     // Status
     completed: checkbox({
+      access: { update: () => false },
       defaultValue: false,
       label: 'Completed',
     }),
     driverLicenseVerified: checkbox({
+      access: { update: () => false },
       defaultValue: false,
       label: 'Driver License Verified',
       ui: {
@@ -65,6 +88,7 @@ export const TestDrive = list({
 
     // Feedback
     feedback: text({
+      access: { update: () => false },
       ui: {
         displayMode: 'textarea',
         description: 'Customer feedback after the test drive',
@@ -72,6 +96,7 @@ export const TestDrive = list({
       label: 'Feedback',
     }),
     interestedLevel: select({
+      access: { update: () => false },
       type: 'string',
       options: [
         { label: 'Not Interested', value: 'not-interested' },

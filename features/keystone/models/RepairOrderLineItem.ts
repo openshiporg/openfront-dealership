@@ -1,24 +1,57 @@
 import { list } from '@keystone-6/core'
-import { relationship, text, select, float, integer } from '@keystone-6/core/fields'
+import { relationship, text, select, float, integer, virtual } from '@keystone-6/core/fields'
+import { graphql } from '@graphql-ts/schema'
 
-import { isSignedIn } from '../access'
+import { permissions } from '../access'
+import { isServiceOrderEvidenceLocked } from '../lifecycle/serviceOrderLifecycle'
+import { assertAccessibleRelationship, assertRelationshipUnchanged, connectedId } from '../lifecycle/relationshipGuards'
+import { rooftopField, validateRooftopRecord, withRooftopScope } from '../tenantRecords'
+import { trackingFields } from './trackingFields'
 
 export const RepairOrderLineItem = list({
   access: {
     operation: {
-      query: isSignedIn,
-      create: isSignedIn,
-      update: isSignedIn,
-      delete: isSignedIn,
+      query: permissions.canManageService,
+      create: () => false,
+      update: () => false,
+      delete: () => false,
     },
+    filter: {
+      query: ({ session }) => withRooftopScope(true, session as any, 'canManageService'),
+      update: ({ session }) => withRooftopScope(true, session as any, 'canManageService'),
+      delete: ({ session }) => withRooftopScope(true, session as any, 'canManageService'),
+    },
+    item: { create: () => false },
   },
   ui: {
+    hideCreate: true,
+    hideDelete: true,
+    itemView: { defaultFieldMode: 'read' },
     listView: {
       initialColumns: ['serviceOrder', 'itemType', 'description', 'quantity', 'price'],
     },
     labelField: 'description',
   },
+  hooks: {
+    validate: async (args: any) => {
+      const { operation, resolvedData, item, context } = args
+      await validateRooftopRecord(args, [{ field: 'serviceOrder', listKey: 'ServiceOrder' }])
+      const serviceOrderId = operation === 'create'
+        ? connectedId(resolvedData.serviceOrder)
+        : String(item.serviceOrderId || '')
+      if (!serviceOrderId) throw new Error('Repair order line item requires a service order')
+      if (operation === 'update') {
+        assertRelationshipUnchanged('serviceOrder', resolvedData, item.serviceOrderId)
+      }
+      const order = await assertAccessibleRelationship(context, 'ServiceOrder', serviceOrderId, 'id status')
+      if (isServiceOrderEvidenceLocked(order?.status)) {
+        throw new Error('Line items are immutable after service completion')
+      }
+    },
+  },
   fields: {
+    ...trackingFields,
+    rooftop: rooftopField(),
     // Service Order relationship
     serviceOrder: relationship({
       ref: 'ServiceOrder.lineItems',
@@ -34,6 +67,7 @@ export const RepairOrderLineItem = list({
       options: [
         { label: 'Labor', value: 'labor' },
         { label: 'Part', value: 'part' },
+        { label: 'Sublet', value: 'sublet' },
       ],
       validation: { isRequired: true },
       label: 'Item Type',
@@ -61,27 +95,20 @@ export const RepairOrderLineItem = list({
         description: 'Quantity or hours',
       },
     }),
-    unitPrice: float({
-      validation: { isRequired: true },
-      label: 'Unit Price',
-      ui: {
-        description: 'Price per unit or hourly rate',
-      },
+    unitPriceCents: integer({ validation: { isRequired: true }, label: 'Unit Price (cents)', ui: { description: 'Price per unit or hourly rate in integer USD cents' } }),
+    priceCents: integer({ validation: { isRequired: true }, label: 'Total Price (cents)', ui: { description: 'Quantity × unit price in integer USD cents' } }),
+    costCents: integer({ access: { read: permissions.canViewDealerCost }, label: 'Cost (cents)', ui: { description: 'Dealer cost in integer USD cents' } }),
+    unitPrice: virtual({
+      field: graphql.field({ type: graphql.Float, resolve(item: any) { return item.unitPriceCents / 100 } }),
+      ui: { itemView: { fieldMode: 'read' } },
     }),
-    price: float({
-      validation: { isRequired: true },
-      label: 'Total Price',
-      ui: {
-        description: 'Quantity × Unit Price',
-      },
+    price: virtual({
+      field: graphql.field({ type: graphql.Float, resolve(item: any) { return item.priceCents / 100 } }),
+      ui: { itemView: { fieldMode: 'read' } },
     }),
-
-    // Cost tracking
-    cost: float({
-      label: 'Cost',
-      ui: {
-        description: 'Dealer cost for part (not shown to customer)',
-      },
+    cost: virtual({
+      field: graphql.field({ type: graphql.Float, resolve(item: any) { return item.costCents == null ? null : item.costCents / 100 } }),
+      ui: { itemView: { fieldMode: 'read' } },
     }),
   },
 })

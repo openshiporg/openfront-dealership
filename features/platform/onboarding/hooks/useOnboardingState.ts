@@ -1,312 +1,120 @@
-import { useState, useEffect } from 'react';
-import { DEALERSHIP_TEMPLATES } from '../config/templates';
-import { getSeedForTemplate, getItemsFromJsonData } from '../utils/dataUtils';
-import seedData from '../lib/seed.json';
+import { useEffect, useState } from 'react'
+import seedData from '../lib/seed.json'
+import { SECTION_TYPES } from '../config/templates'
+import { emptySectionItems, getItemsFromJsonData, getSeedForTemplate } from '../utils/dataUtils'
 
-export type OnboardingStep = 'template' | 'progress' | 'done';
-export type TemplateType = 'full' | 'minimal' | 'custom';
+export type OnboardingStep = 'template' | 'progress' | 'done'
+export type TemplateType = 'full' | 'minimal' | 'custom'
+
+type ItemState = Record<string, string[]>
 
 export interface OnboardingState {
-  step: OnboardingStep;
-  selectedTemplate: TemplateType;
-  currentJsonData: any;
-  customJsonApplied: boolean;
-  progressMessage: string;
-  loadingItems: Record<string, string[]>;
-  completedItems: Record<string, string[]>;
-  error: string | null;
-  itemErrors: Record<string, Record<string, string>>;
-  isLoading: boolean;
+  step: OnboardingStep
+  selectedTemplate: TemplateType
+  currentJsonData: any
+  customJsonApplied: boolean
+  progressMessage: string
+  loadingItems: ItemState
+  completedItems: ItemState
+  error: string | null
+  itemErrors: Record<string, Record<string, string>>
+  isLoading: boolean
 }
 
-const initialItemsState = {
-  dealership: [],
-  regions: [],
-  paymentProviders: [],
-  shipping: [],
-  vehicleMakes: [],
-  vehicleTypes: [],
-  services: [],
-  staff: [],
-};
+const emptyItems = (): ItemState => emptySectionItems()
 
 export function useOnboardingState() {
   const [state, setState] = useState<OnboardingState>({
     step: 'template',
-    selectedTemplate: 'minimal',
+    selectedTemplate: 'full',
     currentJsonData: null,
     customJsonApplied: false,
     progressMessage: '',
-    loadingItems: { ...initialItemsState },
-    completedItems: { ...initialItemsState },
+    loadingItems: emptyItems(),
+    completedItems: emptyItems(),
     error: null,
     itemErrors: {},
     isLoading: false,
-  });
+  })
 
-  // Load JSON data when template changes
   useEffect(() => {
-    if (state.selectedTemplate !== 'custom') {
-      const templateData = getSeedForTemplate(state.selectedTemplate, seedData);
-      setState(prev => ({
-        ...prev,
-        currentJsonData: templateData,
-        customJsonApplied: false,
-      }));
-    } else {
-      // For custom, start with basic template
-      const basicData = getSeedForTemplate('minimal', seedData);
-      setState(prev => ({
-        ...prev,
-        currentJsonData: basicData,
-        customJsonApplied: false,
-      }));
-    }
-  }, [state.selectedTemplate]);
+    const template = state.selectedTemplate === 'custom' ? 'minimal' : state.selectedTemplate
+    setState(previous => ({
+      ...previous,
+      currentJsonData: getSeedForTemplate(template, seedData),
+      customJsonApplied: false,
+    }))
+  }, [state.selectedTemplate])
 
-  const setStep = (step: OnboardingStep) => {
-    setState(prev => ({ ...prev, step }));
-  };
+  const update = (patch: Partial<OnboardingState>) => setState(previous => ({ ...previous, ...patch }))
+  const setStep = (step: OnboardingStep) => update({ step })
+  const setSelectedTemplate = (selectedTemplate: TemplateType) => update({ selectedTemplate })
+  const setCurrentJsonData = (currentJsonData: any) => update({ currentJsonData })
+  const setCustomJsonApplied = (customJsonApplied: boolean) => update({ customJsonApplied })
+  const setIsLoading = (isLoading: boolean) => update({ isLoading })
+  const setError = (error: string | null) => update({ error })
+  const setProgress = (progressMessage: string) => update({ progressMessage })
+  const setLoadingItems = (loadingItems: ItemState) => update({ loadingItems })
+  const setCompletedItems = (completedItems: ItemState) => update({ completedItems })
+  const setItemErrors = (itemErrors: Record<string, Record<string, string>>) => update({ itemErrors })
 
-  const setSelectedTemplate = (template: TemplateType) => {
-    setState(prev => ({ ...prev, selectedTemplate: template }));
-  };
+  const getDisplayNamesFromData = (data: any) =>
+    Object.fromEntries(SECTION_TYPES.map(type => [type, getItemsFromJsonData(data, type)]))
 
-  const setCurrentJsonData = (data: any) => {
-    setState(prev => ({ ...prev, currentJsonData: data }));
-  };
-
-  const setCustomJsonApplied = (applied: boolean) => {
-    setState(prev => ({ ...prev, customJsonApplied: applied }));
-  };
-
-  const setIsLoading = (loading: boolean) => {
-    setState(prev => ({ ...prev, isLoading: loading }));
-  };
-
-  const setError = (error: string | null) => {
-    setState(prev => ({ ...prev, error }));
-  };
-
-  const setProgressMessage = (message: string) => {
-    setState(prev => ({ ...prev, progressMessage: message }));
-  };
-
-  const setLoadingItems = (items: Record<string, string[]>) => {
-    setState(prev => ({ ...prev, loadingItems: items }));
-  };
-
-  const setCompletedItems = (items: Record<string, string[]>) => {
-    setState(prev => ({ ...prev, completedItems: items }));
-  };
-
-  const setItemErrors = (errors: Record<string, Record<string, string>>) => {
-    setState(prev => ({ ...prev, itemErrors: errors }));
-  };
-
-  // Helper function to get display names from current data
-  const getDisplayNamesFromData = (data: any) => {
-    return {
-      dealership: getItemsFromJsonData(data, 'dealership'),
-      regions: getItemsFromJsonData(data, 'regions'),
-      paymentProviders: getItemsFromJsonData(data, 'paymentProviders'),
-      shipping: getItemsFromJsonData(data, 'shipping'),
-      vehicleMakes: getItemsFromJsonData(data, 'vehicleMakes'),
-      vehicleTypes: getItemsFromJsonData(data, 'vehicleTypes'),
-      services: getItemsFromJsonData(data, 'services'),
-      staff: getItemsFromJsonData(data, 'staff'),
-    };
-  };
-
-  // Helper function to update UI based on progress
-  const setProgress = (message: string) => {
-    setProgressMessage(message);
-
-    // Get the current display names (either from template or from actual data)
-    const displayNames = state.currentJsonData
-      ? getDisplayNamesFromData(state.currentJsonData)
-      : DEALERSHIP_TEMPLATES[state.selectedTemplate].displayNames;
-
-    // Process based on current step
-    if (
-      message.includes('currencies') ||
-      message.includes('countries') ||
-      message.includes('regions')
-    ) {
-      // Mark previous steps as completed - no previous steps for regions
-    } else if (message.includes('payment provider')) {
-      setState(prev => ({
-        ...prev,
-        completedItems: {
-          ...prev.completedItems,
-          regions: [...displayNames.regions],
-        },
-        loadingItems: {
-          ...prev.loadingItems,
-          regions: [],
-        }
-      }));
-    } else if (message.includes('shipping') || message.includes('delivery')) {
-      setState(prev => ({
-        ...prev,
-        completedItems: {
-          ...prev.completedItems,
-          regions: [...displayNames.regions],
-          paymentProviders: [...displayNames.paymentProviders],
-        },
-        loadingItems: {
-          ...prev.loadingItems,
-          paymentProviders: [],
-        }
-      }));
-    } else if (message.includes('vehicle makes')) {
-      setState(prev => ({
-        ...prev,
-        completedItems: {
-          ...prev.completedItems,
-          regions: [...displayNames.regions],
-          paymentProviders: [...displayNames.paymentProviders],
-          shipping: [...displayNames.shipping],
-        },
-        loadingItems: {
-          ...prev.loadingItems,
-          shipping: [],
-        }
-      }));
-    } else if (message.includes('vehicle types')) {
-      setState(prev => ({
-        ...prev,
-        completedItems: {
-          ...prev.completedItems,
-          regions: [...displayNames.regions],
-          paymentProviders: [...displayNames.paymentProviders],
-          shipping: [...displayNames.shipping],
-          vehicleMakes: [...displayNames.vehicleMakes],
-        },
-        loadingItems: {
-          ...prev.loadingItems,
-          vehicleMakes: [],
-        }
-      }));
-    } else if (message.includes('services')) {
-      setState(prev => ({
-        ...prev,
-        completedItems: {
-          ...prev.completedItems,
-          regions: [...displayNames.regions],
-          paymentProviders: [...displayNames.paymentProviders],
-          shipping: [...displayNames.shipping],
-          vehicleMakes: [...displayNames.vehicleMakes],
-          vehicleTypes: [...displayNames.vehicleTypes],
-        },
-        loadingItems: {
-          ...prev.loadingItems,
-          vehicleTypes: [],
-        }
-      }));
-    } else if (message.includes('staff')) {
-      setState(prev => ({
-        ...prev,
-        completedItems: {
-          ...prev.completedItems,
-          regions: [...displayNames.regions],
-          paymentProviders: [...displayNames.paymentProviders],
-          shipping: [...displayNames.shipping],
-          vehicleMakes: [...displayNames.vehicleMakes],
-          vehicleTypes: [...displayNames.vehicleTypes],
-          services: [...displayNames.services],
-        },
-        loadingItems: {
-          ...prev.loadingItems,
-          services: [],
-        }
-      }));
-    } else if (message.includes('complete')) {
-      setState(prev => ({
-        ...prev,
-        loadingItems: {
-          ...prev.loadingItems,
-          staff: [],
-        },
-        completedItems: {
-          dealership: [...displayNames.dealership],
-          regions: [...displayNames.regions],
-          paymentProviders: [...displayNames.paymentProviders],
-          shipping: [...displayNames.shipping],
-          vehicleMakes: [...displayNames.vehicleMakes],
-          vehicleTypes: [...displayNames.vehicleTypes],
-          services: [...displayNames.services],
-          staff: [...displayNames.staff],
-        }
-      }));
-    }
-  };
-
-  // Helper functions to update individual item states
   const setItemLoading = (type: string, item: string) => {
-    setState(prev => ({
-      ...prev,
-      loadingItems: {
-        ...prev.loadingItems,
-        [type]: [...prev.loadingItems[type], item],
-      },
-      itemErrors: {
-        ...prev.itemErrors,
-        [type]: prev.itemErrors[type] ? {
-          ...prev.itemErrors[type],
-          [item]: undefined
-        } : {}
+    setState(previous => {
+      const nextErrors = { ...(previous.itemErrors[type] || {}) }
+      delete nextErrors[item]
+      return {
+        ...previous,
+        loadingItems: {
+          ...previous.loadingItems,
+          [type]: [...new Set([...(previous.loadingItems[type] || []), item])],
+        },
+        itemErrors: { ...previous.itemErrors, [type]: nextErrors },
       }
-    }));
-  };
+    })
+  }
 
   const setItemCompleted = (type: string, item: string) => {
-    setState(prev => ({
-      ...prev,
-      loadingItems: {
-        ...prev.loadingItems,
-        [type]: prev.loadingItems[type].filter((i) => i !== item),
-      },
-      completedItems: {
-        ...prev.completedItems,
-        [type]: [...prev.completedItems[type], item],
-      },
-      itemErrors: {
-        ...prev.itemErrors,
-        [type]: prev.itemErrors[type] ? {
-          ...prev.itemErrors[type],
-          [item]: undefined
-        } : {}
+    setState(previous => {
+      const nextErrors = { ...(previous.itemErrors[type] || {}) }
+      delete nextErrors[item]
+      return {
+        ...previous,
+        loadingItems: {
+          ...previous.loadingItems,
+          [type]: (previous.loadingItems[type] || []).filter(value => value !== item),
+        },
+        completedItems: {
+          ...previous.completedItems,
+          [type]: [...new Set([...(previous.completedItems[type] || []), item])],
+        },
+        itemErrors: { ...previous.itemErrors, [type]: nextErrors },
       }
-    }));
-  };
+    })
+  }
 
   const setItemError = (type: string, item: string, errorMessage: string) => {
-    setState(prev => ({
-      ...prev,
+    setState(previous => ({
+      ...previous,
       loadingItems: {
-        ...prev.loadingItems,
-        [type]: prev.loadingItems[type].filter((i) => i !== item),
+        ...previous.loadingItems,
+        [type]: (previous.loadingItems[type] || []).filter(value => value !== item),
       },
       itemErrors: {
-        ...prev.itemErrors,
-        [type]: {
-          ...prev.itemErrors[type],
-          [item]: errorMessage,
-        }
-      }
-    }));
-  };
+        ...previous.itemErrors,
+        [type]: { ...(previous.itemErrors[type] || {}), [item]: errorMessage },
+      },
+    }))
+  }
 
-  const resetOnboardingState = () => {
-    setState(prev => ({
-      ...prev,
-      error: null,
-      itemErrors: {},
-      loadingItems: { ...initialItemsState },
-      completedItems: { ...initialItemsState },
-    }));
-  };
+  const resetOnboardingState = () => update({
+    error: null,
+    itemErrors: {},
+    loadingItems: emptyItems(),
+    completedItems: emptyItems(),
+  })
 
   return {
     ...state,
@@ -325,5 +133,5 @@ export function useOnboardingState() {
     setItemError,
     resetOnboardingState,
     getDisplayNamesFromData,
-  };
+  }
 }

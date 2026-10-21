@@ -3,12 +3,11 @@
 import React from 'react';
 import {
   AlertCircle,
-  AppWindowIcon as Apps,
-  Loader2,
-  Package,
-  Building2,
-  CircleCheck,
   ArrowUpRight,
+  Building2,
+  Car,
+  CircleCheck,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -29,11 +28,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge-button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CustomSetupSteps } from './CustomSetupSteps';
 import { SectionRenderer } from './SectionRenderer';
 import { useOnboardingState } from '../hooks/useOnboardingState';
 import { useOnboardingApi } from '../hooks/useOnboardingApi';
-import { DEALERSHIP_TEMPLATES, SECTION_DEFINITIONS } from '../config/templates';
+import { getItemsFromJsonData } from '../utils/dataUtils';
+import { DEALERSHIP_TEMPLATES, SECTION_DEFINITIONS, SECTION_TYPES } from '../config/templates';
 
 interface OnboardingDialogProps {
   isOpen: boolean;
@@ -85,22 +86,34 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
 
   if (!isOpen) return null;
 
+  const templateConfig = DEALERSHIP_TEMPLATES[selectedTemplate];
+  const displayNames: Record<string, string[]> = currentJsonData
+    ? Object.fromEntries(SECTION_TYPES.map((type) => [type, getItemsFromJsonData(currentJsonData, type)]))
+    : templateConfig.displayNames;
+  const savedCounts: Array<[number, string, string]> = [
+    [displayNames.vehicles.length, 'vehicle', 'vehicles'],
+    [displayNames.services.length, 'service package', 'service packages'],
+    [displayNames.parts.length, 'part', 'parts'],
+    [displayNames.financeProducts.length, 'finance product', 'finance products'],
+    [displayNames.staff.length, 'staff role', 'staff roles'],
+  ];
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="overflow-hidden p-0 sm:max-w-4xl gap-0 max-w-[95vw] max-h-[95vh]">
-        <DialogHeader className="border-b px-4 sm:px-6 py-4 mb-0">
-          <DialogTitle>Dealership Onboarding</DialogTitle>
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-[95vw] flex-col overflow-hidden p-0 gap-0 sm:max-w-4xl">
+        <DialogHeader className="border-b px-4 sm:px-6 py-4 mb-0 shrink-0">
+          <DialogTitle>Dealership Setup</DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-col lg:flex-row">
-          {/* Mobile-first layout: Dealership Setup header and Setup Type appear first */}
-          <div className="flex flex-col lg:w-80 lg:border-r order-1 lg:order-none lg:justify-between">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+          {/* Mobile-first layout: Store Setup header and Setup Type appear first */}
+          <div className="order-1 flex shrink-0 flex-col lg:order-none lg:w-80 lg:justify-between lg:border-r">
             <div className="flex-1">
               <div className="p-4 sm:p-6">
-                {/* Dealership Setup Header - Always visible first on mobile */}
+                {/* Store Setup Header - Always visible first on mobile */}
                 <div className="flex items-center space-x-3">
                   <div className="inline-flex shrink-0 items-center justify-center rounded-sm bg-muted p-3">
-                    <Apps
+                    <Car
                       className="size-5 text-foreground"
                       aria-hidden={true}
                     />
@@ -111,10 +124,8 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
                     </h3>
                     <p className="text-sm text-muted-foreground">
                       {step === 'done'
-                        ? 'Your dealership is ready'
-                        : selectedTemplate === 'custom'
-                        ? 'Copy JSON templates for custom setup'
-                        : 'Configure your new dealership'}
+                        ? 'Your dealership is set up'
+                        : 'Set up inventory, service and staff'}
                     </p>
                   </div>
                 </div>
@@ -123,58 +134,21 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
                 {step === 'done' ? (
                   <>
                     <h4 className="text-sm font-medium text-foreground mb-2">
-                      Setup Complete
+                      Setup complete
                     </h4>
                     <p className="text-sm text-muted-foreground mb-4">
-                      Your
-                      {selectedTemplate === 'minimal' ? ' Basic' : ' Complete'}
-                      dealership setup is ready to use.
+                      Your {selectedTemplate === 'minimal' ? 'basic' : 'complete'} dealership setup is saved.
                     </p>
-                    <div className="flex items-center space-x-2 text-sm text-emerald-600 dark:text-emerald-500 mb-4">
-                      <CircleCheck className="h-4 w-4 fill-emerald-500 text-background" />
-                      <span>Onboarding complete</span>
-                    </div>
 
                     <div className="space-y-3 text-sm">
-                      <div className="flex items-center space-x-2 text-muted-foreground">
-                        <CircleCheck className="h-4 w-4 fill-muted-foreground text-background" />
-                        <span className="font-medium">
-                          {selectedTemplate === 'minimal' ? '1' : '3'} region
-                          {selectedTemplate === 'minimal' ? '' : 's'} created
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-2 text-muted-foreground">
-                        <CircleCheck className="h-4 w-4 fill-muted-foreground text-background" />
-                        <span className="font-medium">
-                          {selectedTemplate === 'minimal' ? '1' : '3'} payment
-                          method{selectedTemplate === 'minimal' ? '' : 's'}
-                          created
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-2 text-muted-foreground">
-                        <CircleCheck className="h-4 w-4 fill-muted-foreground text-background" />
-                        <span className="font-medium">
-                          {selectedTemplate === 'minimal' ? '1' : '3'} delivery
-                          option{selectedTemplate === 'minimal' ? '' : 's'}
-                          created
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-2 text-muted-foreground">
-                        <CircleCheck className="h-4 w-4 fill-muted-foreground text-background" />
-                        <span className="font-medium">
-                          {selectedTemplate === 'minimal' ? '2' : '6'} vehicle
-                          make{selectedTemplate === 'minimal' ? 's' : 's'}
-                          created
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-2 text-muted-foreground">
-                        <CircleCheck className="h-4 w-4 fill-muted-foreground text-background" />
-                        <span className="font-medium">
-                          {selectedTemplate === 'minimal' ? '2' : '6'} vehicle
-                          type{selectedTemplate === 'minimal' ? 's' : 's'}
-                          created
-                        </span>
-                      </div>
+                      {savedCounts.map(([count, singular, plural]) => (
+                        <div key={plural} className="flex items-center space-x-2 text-muted-foreground">
+                          <CircleCheck className="h-4 w-4 fill-muted-foreground text-background" />
+                          <span className="font-medium">
+                            {count} {count === 1 ? singular : plural} saved
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </>
                 ) : !isLoading ? (
@@ -182,7 +156,7 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
                     <h4 className="text-sm font-medium text-foreground mb-4">
                       Setup Type
                     </h4>
-
+                    
                     {/* Mobile: Dropdown selector */}
                     <div className="block lg:hidden">
                       <Select
@@ -196,19 +170,19 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
                           <SelectItem value="minimal">
                             <div className="flex flex-col items-start text-left">
                               <span className="font-medium">Basic Setup</span>
-                              <span className="text-xs text-muted-foreground">One region, basic payment methods, essential vehicle types</span>
+                              <span className="text-xs text-muted-foreground">A few vehicles, services and staff roles to get started</span>
                             </div>
                           </SelectItem>
                           <SelectItem value="full">
                             <div className="flex flex-col items-start text-left">
                               <span className="font-medium">Complete Setup</span>
-                              <span className="text-xs text-muted-foreground">Multiple regions, payment methods, vehicle types, and services</span>
+                              <span className="text-xs text-muted-foreground">Full inventory, service, parts, financing and staff roles</span>
                             </div>
                           </SelectItem>
                           <SelectItem value="custom">
                             <div className="flex flex-col items-start text-left">
                               <span className="font-medium">Custom Setup</span>
-                              <span className="text-xs text-muted-foreground">Copy JSON templates to create your own setup</span>
+                              <span className="text-xs text-muted-foreground">Use your own JSON templates</span>
                             </div>
                           </SelectItem>
                         </SelectContent>
@@ -234,7 +208,7 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
                         >
                           <div className="flex gap-4">
                             <div className="flex-shrink-0 mt-[3px]">
-                              <Package
+                              <Car
                                 className={`h-5 w-5 ${
                                   selectedTemplate === 'minimal'
                                     ? 'text-blue-600 dark:text-blue-400'
@@ -256,7 +230,7 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
                                   Basic Setup
                                 </div>
                                 <div className="text-sm text-muted-foreground">
-                                  One region, basic payment methods, essential vehicle types
+                                  A few vehicles, services and staff roles to get started
                                 </div>
                               </Label>
                             </div>
@@ -294,7 +268,7 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
                                   Complete Setup
                                 </div>
                                 <div className="text-sm text-muted-foreground">
-                                  Multiple regions, payment methods, vehicle types, and services
+                                  Full inventory, service, parts, financing and staff roles
                                 </div>
                               </Label>
                             </div>
@@ -332,7 +306,7 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
                                   Custom Setup
                                 </div>
                                 <div className="text-sm text-muted-foreground">
-                                  Copy JSON templates to create your own setup
+                                  Use your own JSON templates
                                 </div>
                               </Label>
                             </div>
@@ -344,9 +318,7 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
                 ) : (
                   <>
                     <h4 className="text-sm font-medium text-foreground">
-                      Creating
-                      {selectedTemplate === 'minimal' ? ' Basic' : ' Complete'}
-                      Setup
+                      Creating {selectedTemplate === 'minimal' ? 'Basic' : 'Complete'} Setup
                     </h4>
                     <p className="mt-1 text-sm leading-6 text-muted-foreground">
                       {progressMessage}
@@ -365,8 +337,7 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
                 >
                   <AlertCircle className="size-4 sm:size-7" />
                   <span className="text-xs sm:text-sm">
-                    Error: Please ensure you're using a fresh installation
-                    without existing data.
+                    {error} Saved records are reused when you retry.
                   </span>
                 </Badge>
               )}
@@ -382,7 +353,7 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
                     </DialogClose>
                     <Button asChild className="w-full sm:w-auto">
                       <a href="/" target="_blank" rel="noopener noreferrer">
-                        View your dealership
+                        View your storefront
                         <ArrowUpRight className="ml-1.5 h-4 w-4" />
                       </a>
                     </Button>
@@ -406,7 +377,7 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
                       </Button>
                     ) : (
                       <Button onClick={runOnboarding} className="w-full sm:w-auto">
-                        Confirm
+                        {error ? 'Retry setup' : 'Confirm'}
                       </Button>
                     )}
                   </div>
@@ -415,8 +386,8 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
             </div>
           </div>
 
-          <div className="flex-1 max-h-[60vh] lg:max-h-[70vh] overflow-y-auto p-4 sm:p-6 order-2 lg:order-none">
-            {selectedTemplate === 'custom' && step === 'template' && !customJsonApplied ? (
+          <div className="order-2 min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:order-none">
+            {selectedTemplate === 'custom' && !customJsonApplied && step !== 'done' ? (
               /* Custom Setup Steps */
               <CustomSetupSteps
                 currentJson={currentJsonData}
@@ -444,7 +415,7 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
         </div>
 
         {/* Mobile buttons - attached to bottom */}
-        <div className="flex lg:hidden flex-col border-t">
+        <div className="flex shrink-0 flex-col border-t lg:hidden">
           {/* Mobile Error message above buttons */}
           {error && !isLoading && step !== 'done' && (
             <Badge
@@ -453,8 +424,7 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
             >
               <AlertCircle className="size-4 sm:size-7" />
               <span className="text-xs sm:text-sm">
-                Error: Please ensure you're using a fresh installation
-                without existing data.
+                {error} Saved records are reused when you retry.
               </span>
             </Badge>
           )}
@@ -470,7 +440,7 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
                 </DialogClose>
                 <Button asChild className="flex-1">
                   <a href="/" target="_blank" rel="noopener noreferrer">
-                    View your dealership
+                    View your storefront
                     <ArrowUpRight className="ml-1.5 h-4 w-4" />
                   </a>
                 </Button>
@@ -494,7 +464,7 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
                   </Button>
                 ) : (
                   <Button onClick={runOnboarding} className="flex-1">
-                    Confirm
+                    {error ? 'Retry setup' : 'Confirm'}
                   </Button>
                 )}
               </div>

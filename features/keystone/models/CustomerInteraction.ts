@@ -1,23 +1,42 @@
 import { list } from '@keystone-6/core'
 import { relationship, text, select, integer, timestamp } from '@keystone-6/core/fields'
 
-import { isSignedIn } from '../access'
+import { permissions, rules } from '../access'
+import { rooftopField, validateRooftopRecord } from '../tenantRecords'
+import { trackingFields } from './trackingFields'
 
 export const CustomerInteraction = list({
   access: {
     operation: {
-      query: isSignedIn,
-      create: isSignedIn,
-      update: isSignedIn,
-      delete: isSignedIn,
+      query: permissions.canAccessLeads,
+      create: () => false,
+      update: () => false,
+      delete: () => false,
     },
+    filter: {
+      query: rules.canReadLeadChildren,
+      update: rules.canReadLeadChildren,
+      delete: rules.canReadLeadChildren,
+    },
+    item: { create: () => false },
+  },
+  hooks: {
+    validate: (args: any) => validateRooftopRecord(args, [
+      { field: 'lead', listKey: 'Lead' },
+      { field: 'performedBy', listKey: 'User', kind: 'user' },
+    ]),
   },
   ui: {
+    hideCreate: true,
+    hideDelete: true,
+    itemView: { defaultFieldMode: 'read' },
     listView: {
       initialColumns: ['lead', 'interactionType', 'date', 'outcome', 'followUpDate'],
     },
   },
   fields: {
+    ...trackingFields,
+    rooftop: rooftopField(),
     // Lead relationship
     lead: relationship({
       ref: 'Lead.interactions',

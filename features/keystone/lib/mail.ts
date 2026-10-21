@@ -1,22 +1,22 @@
 'use server' 
 
 import { createTransport, getTestMessageUrl } from "nodemailer";
+import type { PasswordResetPath } from './passwordResetPath';
 
 // Utility function to get base URL for emails
 function getBaseUrlForEmails(): string {
   if (process.env.SMTP_STORE_LINK) {
     return process.env.SMTP_STORE_LINK;
   }
-  
+
   // Fallback warning - this should be set in production
   console.warn('SMTP_STORE_LINK not set. Please add SMTP_STORE_LINK to your environment variables for email links to work properly.');
   return '';
 }
 
 const transport = createTransport({
-  // @ts-ignore
   host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
+  port: Number(process.env.SMTP_PORT) || undefined,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASSWORD,
@@ -58,17 +58,17 @@ function passwordResetEmail({ url }: { url: string }): string {
   `;
 }
 
-export async function sendPasswordResetEmail(resetToken: string, to: string, baseUrl?: string): Promise<void> {
+export async function sendPasswordResetEmail(resetToken: string, to: string, baseUrl?: string, resetPath: PasswordResetPath = '/account/reset'): Promise<void> {
   // Use provided baseUrl or fall back to utility function
   const frontendUrl = baseUrl || getBaseUrlForEmails();
-  
+
   // email the user a token
   const info = await transport.sendMail({
     to,
     from: process.env.SMTP_FROM,
     subject: "Your password reset token!",
     html: passwordResetEmail({
-      url: `${frontendUrl}/dashboard/reset?token=${resetToken}`,
+      url: `${frontendUrl}${resetPath}?token=${encodeURIComponent(resetToken)}`,
     }),
   });
   if (process.env.MAIL_USER?.includes("ethereal.email")) {

@@ -610,7 +610,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
           
           const mutationString = `
             mutation Create${operation.charAt(0).toUpperCase() + operation.slice(1)} {
-              ${operation}(data: ${JSON.stringify(dataObject).replace(/\"([^\"]+)\":/g, '$1:')}) {
+              ${operation}(data: ${JSON.stringify(dataObject).replace(/"([^"]+)":/g, '$1:')}) {
                 ${fields}
               }
             }
@@ -649,7 +649,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
           
           const mutationString = `
             mutation Update${operation.charAt(0).toUpperCase() + operation.slice(1)} {
-              ${operation}(where: ${JSON.stringify(whereObject).replace(/\"([^\"]+)\":/g, '$1:')}, data: ${JSON.stringify(dataObject).replace(/\"([^\"]+)\":/g, '$1:')}) {
+              ${operation}(where: ${JSON.stringify(whereObject).replace(/"([^"]+)":/g, '$1:')}, data: ${JSON.stringify(dataObject).replace(/"([^"]+)":/g, '$1:')}) {
                 ${fields}
               }
             }
@@ -687,7 +687,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tra
           
           const mutationString = `
             mutation Delete${operation.charAt(0).toUpperCase() + operation.slice(1)} {
-              ${operation}(where: ${JSON.stringify(whereObject).replace(/\"([^\"]+)\":/g, '$1:')}) {
+              ${operation}(where: ${JSON.stringify(whereObject).replace(/"([^"]+)":/g, '$1:')}) {
                 ${fields}
               }
             }

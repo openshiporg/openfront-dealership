@@ -3,20 +3,85 @@ import { allOperations } from '@keystone-6/core/access'
 import { relationship, text, select, float, integer, timestamp, json, virtual } from '@keystone-6/core/fields'
 import { graphql } from '@graphql-ts/schema'
 
-import { isSignedIn } from '../access'
+import { permissions, rules } from '../access'
+import { isDealEvidenceLocked } from '../lifecycle/dealLifecycle'
+import { calculateDealPrice } from '../lifecycle/dealPricing'
+import { assertAccessibleRelationship, assertRelationshipUnchanged, connectedId } from '../lifecycle/relationshipGuards'
+import { rooftopField, validateRooftopRecord } from '../tenantRecords'
+import { trackingFields } from './trackingFields'
 
 export const Deal = list({
   access: {
     operation: {
-      query: () => true, create: isSignedIn, update: isSignedIn,
+      query: permissions.canAccessDeals,
+      create: () => false,
+      update: () => false,
+      delete: () => false,
     },
+    filter: {
+      query: rules.canReadDeals,
+      update: rules.canReadDeals,
+      delete: rules.canReadDeals,
+    },
+    item: { create: () => false },
   },
   ui: {
+    hideCreate: true,
     listView: {
       initialColumns: ['lead', 'vehicle', 'salesperson', 'vehiclePrice', 'status', 'saleDate'],
     },
   },
+  hooks: {
+    validate: async (args: any) => {
+      const { operation, resolvedData, item, context } = args
+      if (operation !== 'delete') {
+        await validateRooftopRecord(args, [
+          { field: 'lead', listKey: 'Lead' },
+          { field: 'vehicle', listKey: 'Vehicle' },
+          { field: 'salesperson', listKey: 'User', kind: 'user' },
+          { field: 'tradeInVehicle', listKey: 'TradeIn' },
+        ])
+      }
+      if (operation === 'delete') {
+        if (item.status !== 'pencil') throw new Error('Only pencil deals can be deleted')
+        return
+      }
+
+      if (operation === 'create') {
+        if (resolvedData.status && resolvedData.status !== 'pencil') {
+          throw new Error('Deals must be created as pencil drafts and submitted through transitionDeal')
+        }
+        const vehicle = await assertAccessibleRelationship(context, 'Vehicle', connectedId(resolvedData.vehicle), 'id status')
+        if (vehicle && vehicle.status !== 'available') throw new Error('Deal vehicle must be available')
+        const lead = await assertAccessibleRelationship(context, 'Lead', connectedId(resolvedData.lead), 'id assignedSalesperson { id }')
+        const salesperson = await assertAccessibleRelationship(context, 'User', connectedId(resolvedData.salesperson))
+        const tradeIn = await assertAccessibleRelationship(context, 'TradeIn', connectedId(resolvedData.tradeInVehicle), 'id lead { id } deal { id }')
+        if (tradeIn?.deal) throw new Error('Trade-in is already attached to another deal')
+        if (lead && tradeIn?.lead && tradeIn.lead.id !== lead.id) {
+          throw new Error('Deal and trade-in must belong to the same lead')
+        }
+        if (lead?.assignedSalesperson && salesperson && lead.assignedSalesperson.id !== salesperson.id) {
+          throw new Error('Deal salesperson must match the lead assignment')
+        }
+        return
+      }
+
+      assertRelationshipUnchanged('lead', resolvedData, item.leadId)
+      assertRelationshipUnchanged('vehicle', resolvedData, item.vehicleId)
+      assertRelationshipUnchanged('salesperson', resolvedData, item.salespersonId)
+      assertRelationshipUnchanged('tradeInVehicle', resolvedData, item.tradeInVehicleId)
+      if (resolvedData.status !== undefined) {
+        throw new Error('Deal status changes must use transitionDeal')
+      }
+      if (isDealEvidenceLocked(item.status) && Object.keys(resolvedData).length > 0) {
+        throw new Error('Submitted, settled, and cancelled deal evidence is immutable')
+      }
+    },
+  },
   fields: {
+    ...trackingFields,
+    rooftop: rooftopField(),
+
     // Core Relationships
     lead: relationship({
       ref: 'Lead.deals',
@@ -43,17 +108,15 @@ export const Deal = list({
     }),
 
     // Pricing
-    vehiclePrice: float({
-      label: 'Negotiated Price',
-      ui: {
-        description: 'Final negotiated vehicle price',
-      },
+    vehiclePriceCents: integer({ label: 'Negotiated Price (cents)', ui: { description: 'Final negotiated vehicle price in integer USD cents' } }),
+    tradeInValueCents: integer({ label: 'Trade-In Value (cents)', ui: { description: 'Trade-in credit in integer USD cents' } }),
+    vehiclePrice: virtual({
+      field: graphql.field({ type: graphql.Float, resolve(item: any) { return item.vehiclePriceCents == null ? null : item.vehiclePriceCents / 100 } }),
+      ui: { itemView: { fieldMode: 'read' } },
     }),
-    tradeInValue: float({
-      label: 'Trade-In Value',
-      ui: {
-        description: 'Value credited for trade-in vehicle',
-      },
+    tradeInValue: virtual({
+      field: graphql.field({ type: graphql.Float, resolve(item: any) { return item.tradeInValueCents == null ? null : item.tradeInValueCents / 100 } }),
+      ui: { itemView: { fieldMode: 'read' } },
     }),
     tradeInVehicle: relationship({
       ref: 'TradeIn.deal',
@@ -71,17 +134,20 @@ export const Deal = list({
     }),
 
     // Financing
-    downPayment: float({
-      label: 'Down Payment',
+    downPaymentCents: integer({ label: 'Planned Down Payment (cents)', ui: { description: 'Deal structure only, stored in integer USD cents; not proof of captured funds' } }),
+    financingAmountCents: integer({ label: 'Financing Amount (cents)', ui: { description: 'Amount financed in integer USD cents' } }),
+    monthlyPaymentCents: integer({ label: 'Monthly Payment (cents)' }),
+    downPayment: virtual({
+      field: graphql.field({ type: graphql.Float, resolve(item: any) { return item.downPaymentCents == null ? null : item.downPaymentCents / 100 } }),
+      ui: { itemView: { fieldMode: 'read' } },
     }),
-    financingAmount: float({
-      label: 'Financing Amount',
-      ui: {
-        description: 'Total amount being financed',
-      },
+    financingAmount: virtual({
+      field: graphql.field({ type: graphql.Float, resolve(item: any) { return item.financingAmountCents == null ? null : item.financingAmountCents / 100 } }),
+      ui: { itemView: { fieldMode: 'read' } },
     }),
-    monthlyPayment: float({
-      label: 'Monthly Payment',
+    monthlyPayment: virtual({
+      field: graphql.field({ type: graphql.Float, resolve(item: any) { return item.monthlyPaymentCents == null ? null : item.monthlyPaymentCents / 100 } }),
+      ui: { itemView: { fieldMode: 'read' } },
     }),
     loanTerm: integer({
       label: 'Loan Term (Months)',
@@ -112,21 +178,49 @@ export const Deal = list({
     }),
 
     // Taxes and Fees
-    taxAmount: float({
-      label: 'Tax Amount',
-      ui: {
-        description: 'Sales tax on the vehicle',
-      },
+    taxAmountCents: integer({ label: 'Tax Amount (cents)', ui: { description: 'Sales tax in integer USD cents' } }),
+    taxAmount: virtual({
+      field: graphql.field({ type: graphql.Float, resolve(item: any) { return item.taxAmountCents == null ? null : item.taxAmountCents / 100 } }),
+      ui: { itemView: { fieldMode: 'read' } },
     }),
-    fees: json({
-      defaultValue: [],
-      label: 'Fees',
-      ui: {
-        description: 'JSON array of fees [{name, amount, description}]',
-      },
+    fees: json({ defaultValue: [], label: 'Typed fee lines' }),
+    rebates: json({ defaultValue: [], label: 'Typed rebate lines' }),
+    products: json({ defaultValue: [], label: 'Typed product lines' }),
+    taxLines: json({ defaultValue: [], label: 'Typed tax lines' }),
+    structureType: select({
+      type: 'string',
+      options: [
+        { label: 'Cash', value: 'cash' },
+        { label: 'Finance', value: 'finance' },
+        { label: 'Lease', value: 'lease' },
+      ],
+      defaultValue: 'cash',
+      validation: { isRequired: true },
     }),
+    residualValueCents: integer({ label: 'Lease residual (cents)' }),
+    moneyFactorBasisPoints: integer({ label: 'Lease money factor (basis points)' }),
+    worksheetVersion: integer({ defaultValue: 0, validation: { isRequired: true } }),
+    grossCents: integer({ access: { create: () => false, update: () => false }, label: 'Front gross estimate excluding fees, product margin and recon (cents)' }),
+    presentedSnapshot: json({ access: { create: () => false, update: () => false }, defaultValue: {} }),
+    presentedAt: timestamp({ access: { create: () => false, update: () => false } }),
+    acceptedSnapshot: json({ access: { create: () => false, update: () => false }, defaultValue: {} }),
+    acceptedAt: timestamp({ access: { create: () => false, update: () => false } }),
 
     // Approvals
+    selectedLenderDecision: relationship({
+      ref: 'LenderDecision.selectedForDeals',
+      access: { read: permissions.canManageFinancing, create: () => false, update: () => false },
+      ui: { itemView: { fieldMode: 'read' } },
+      label: 'Selected lender offer',
+    }),
+    deliveryCases: relationship({ ref: 'DeliveryCase.deal', many: true }),
+    financeProductQuotes: relationship({ ref: 'FinanceProductQuote.deal', many: true, access: { read: permissions.canManageFinancing, create: () => false, update: () => false } }),
+    financeProductCancellations: relationship({ ref: 'FinanceProductCancellation.deal', many: true, access: { read: permissions.canManageFinancing, create: () => false, update: () => false } }),
+    financeMenuVersions: relationship({ ref: 'FinanceMenuVersion.deal', many: true, access: { read: permissions.canManageFinancing, create: () => false, update: () => false } }),
+    financeComplianceChecks: relationship({ ref: 'FinanceComplianceCheck.deal', many: true, access: { read: permissions.canManageFinancing, create: () => false, update: () => false } }),
+    financeContractPackages: relationship({ ref: 'FinanceContractPackage.deal', many: true, access: { read: permissions.canManageFinancing, create: () => false, update: () => false } }),
+    financeFundingCases: relationship({ ref: 'FinanceFundingCase.deal', many: true, access: { read: permissions.canManageFinancing, create: () => false, update: () => false } }),
+    paymentTransactions: relationship({ ref: 'PaymentTransaction.deal', many: true, access: { read: permissions.canViewReports, create: () => false, update: () => false } }),
     approvals: relationship({
       ref: 'DealApproval.deal',
       many: true,
@@ -145,21 +239,15 @@ export const Deal = list({
         description: 'Date the sale was completed',
       },
     }),
-    createdAt: timestamp({
-      defaultValue: { kind: 'now' },
-      label: 'Created At',
-      ui: {
-        createView: { fieldMode: 'hidden' },
-        itemView: { fieldMode: 'read' },
-      },
+    lockedAt: timestamp({
+      label: 'Evidence Locked At',
+      ui: { itemView: { fieldMode: 'read' } },
     }),
-    updatedAt: timestamp({
-      db: { updatedAt: true },
-      label: 'Updated At',
-      ui: {
-        createView: { fieldMode: 'hidden' },
-        itemView: { fieldMode: 'read' },
-      },
+    evidenceSnapshot: json({
+      access: { create: () => false, update: () => false },
+      defaultValue: {},
+      label: 'Immutable Deal Evidence',
+      ui: { itemView: { fieldMode: 'read' } },
     }),
 
     // Virtual Fields for Calculations
@@ -167,17 +255,7 @@ export const Deal = list({
       field: graphql.field({
         type: graphql.Float,
         async resolve(item) {
-          const vehiclePrice = item.vehiclePrice || 0
-          const tradeInValue = item.tradeInValue || 0
-          const taxAmount = item.taxAmount || 0
-
-          // Calculate fees total
-          let feesTotal = 0
-          if (item.fees && Array.isArray(item.fees)) {
-            feesTotal = item.fees.reduce((sum: number, fee: any) => sum + (fee.amount || 0), 0)
-          }
-
-          return vehiclePrice - tradeInValue + taxAmount + feesTotal
+          return calculateDealPrice(item as any).totalPriceCents / 100
         },
       }),
       ui: {
@@ -189,20 +267,20 @@ export const Deal = list({
       field: graphql.field({
         type: graphql.Float,
         async resolve(item, args, context) {
-          // Get vehicle purchase price
-          if (!item.vehicleId) return null
+          const deal = item as any
+          const keystone = context as any
 
-          const vehicle = await context.query.Vehicle.findOne({
-            where: { id: item.vehicleId },
-            query: 'purchasePrice',
+          // Get vehicle purchase price
+          if (!deal.vehicleId) return null
+
+          const vehicle = await keystone.query.Vehicle.findOne({
+            where: { id: deal.vehicleId },
+            query: 'purchasePriceCents',
           })
 
-          if (!vehicle?.purchasePrice) return null
+          if (vehicle?.purchasePriceCents == null) return null
 
-          const vehiclePrice = item.vehiclePrice || 0
-          const purchasePrice = vehicle.purchasePrice || 0
-
-          return vehiclePrice - purchasePrice
+          return (calculateDealPrice(deal).vehiclePriceCents - calculateDealPrice(deal).rebatesCents - Number(vehicle.purchasePriceCents)) / 100
         },
       }),
       ui: {

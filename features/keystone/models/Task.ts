@@ -1,24 +1,43 @@
 import { list } from '@keystone-6/core'
+import { denyAll } from '@keystone-6/core/access'
 import { relationship, text, select, timestamp, checkbox } from '@keystone-6/core/fields'
 
-import { isSignedIn } from '../access'
+import { permissions, rules } from '../access'
+import { rooftopField, validateRooftopRecord } from '../tenantRecords'
+import { trackingFields } from './trackingFields'
 
 export const Task = list({
   access: {
     operation: {
-      query: isSignedIn,
-      create: isSignedIn,
-      update: isSignedIn,
-      delete: isSignedIn,
+      query: permissions.canManageTasks,
+      // Task lifecycle and Lead linkage are owned by controlled operator commands.
+      create: denyAll,
+      update: denyAll,
+      delete: denyAll,
     },
+    filter: {
+      query: rules.canReadLeadChildren,
+      update: rules.canReadLeadChildren,
+      delete: rules.canReadLeadChildren,
+    },
+    item: { create: () => false },
+  },
+  hooks: {
+    validate: (args: any) => validateRooftopRecord(args, [
+      { field: 'lead', listKey: 'Lead' },
+      { field: 'assignedTo', listKey: 'User', kind: 'user' },
+    ]),
   },
   ui: {
+    hideCreate: true,
     listView: {
       initialColumns: ['title', 'assignedTo', 'dueDate', 'priority', 'completed'],
     },
     labelField: 'title',
   },
   fields: {
+    ...trackingFields,
+    rooftop: rooftopField(),
     // Task Details
     title: text({
       validation: { isRequired: true },
@@ -63,6 +82,7 @@ export const Task = list({
       label: 'Priority',
     }),
     completed: checkbox({
+      access: { update: () => false },
       defaultValue: false,
       label: 'Completed',
     }),
@@ -72,17 +92,10 @@ export const Task = list({
       label: 'Due Date',
     }),
     completedDate: timestamp({
+      access: { update: () => false },
       label: 'Completed Date',
       ui: {
         description: 'When task was marked complete',
-      },
-    }),
-    createdAt: timestamp({
-      defaultValue: { kind: 'now' },
-      label: 'Created At',
-      ui: {
-        createView: { fieldMode: 'hidden' },
-        itemView: { fieldMode: 'read' },
       },
     }),
   },

@@ -1,24 +1,51 @@
 import { list } from '@keystone-6/core'
-import { allOperations } from '@keystone-6/core/access'
+import { denyAll } from '@keystone-6/core/access'
 import { relationship, text, select, timestamp } from '@keystone-6/core/fields'
 
-import { isSignedIn } from '../access'
+import { permissions, rules } from '../access'
+import { rooftopField, validateRooftopRecord } from '../tenantRecords'
+import { trackingFields } from './trackingFields'
 
 export const Lead = list({
   access: {
     operation: {
-      query: isSignedIn,
-      create: () => true, // Allow public lead creation from storefront forms
-      update: isSignedIn,
-      delete: isSignedIn,
+      query: permissions.canAccessLeads,
+      // Public intake and operator commands own identity, assignment and lifecycle.
+      // Raw and nested writes must not bypass their validation/audit transactions.
+      create: denyAll,
+      update: denyAll,
+      delete: denyAll,
+    },
+    filter: {
+      query: rules.canReadLeads,
     },
   },
+  hooks: {
+    validate: (args: any) => validateRooftopRecord(args, [
+      { field: 'customer', listKey: 'Customer' },
+      { field: 'interestedVehicle', listKey: 'Vehicle' },
+      { field: 'assignedSalesperson', listKey: 'User', kind: 'user' },
+    ]),
+  },
   ui: {
+    hideCreate: true,
     listView: {
       initialColumns: ['firstName', 'lastName', 'status', 'source', 'assignedSalesperson', 'createdAt'],
     },
   },
   fields: {
+    ...trackingFields,
+    rooftop: rooftopField(),
+    customer: relationship({
+      ref: 'Customer.leads',
+      db: {
+        extendPrismaSchema: field => field
+          .replace(/customer Customer\?/g, 'customer Customer')
+          .replace(/customerId String\?/g, 'customerId String'),
+      },
+      ui: { displayMode: 'select', labelField: 'primaryEmail' },
+    }),
+
     // Contact Information
     firstName: text({
       validation: { isRequired: true },
@@ -52,6 +79,23 @@ export const Lead = list({
         description: 'How the lead found the dealership',
       },
     }),
+    campaignKey: text({ access: { update: () => false }, label: 'Campaign key' }),
+    cadenceKey: text({ access: { update: () => false }, label: 'Cadence key' }),
+    cadenceStatus: select({
+      access: { update: () => false },
+      type: 'string',
+      options: [
+        { label: 'Not enrolled', value: 'none' },
+        { label: 'Active', value: 'active' },
+        { label: 'Paused', value: 'paused' },
+        { label: 'Completed', value: 'completed' },
+        { label: 'Suppressed', value: 'suppressed' },
+      ],
+      defaultValue: 'none',
+      validation: { isRequired: true },
+    }),
+    cadenceStep: text({ access: { update: () => false }, label: 'Cadence step' }),
+    cadenceDueAt: timestamp({ access: { update: () => false }, label: 'Cadence due' }),
 
     // Vehicle Interest
     interestedVehicle: relationship({
@@ -96,6 +140,7 @@ export const Lead = list({
 
     // Status
     status: select({
+      access: { update: () => false },
       type: 'string',
       options: [
         { label: 'New', value: 'new' },
@@ -118,6 +163,25 @@ export const Lead = list({
       },
       label: 'Assigned Salesperson',
     }),
+    assignedAt: timestamp({ access: { update: () => false }, label: 'Assigned At' }),
+    firstResponseDueAt: timestamp({ access: { update: () => false }, label: 'First Response Due' }),
+    firstResponseAt: timestamp({ access: { update: () => false }, label: 'First Response At' }),
+    assignmentEvents: relationship({ ref: 'LeadAssignmentEvent.lead', many: true, access: { update: denyAll }, ui: { displayMode: 'count' } }),
+    lostReasonCode: select({
+      access: { update: () => false },
+      type: 'string',
+      options: [
+        { label: 'Purchased elsewhere', value: 'purchased-elsewhere' },
+        { label: 'Price', value: 'price' },
+        { label: 'Financing', value: 'financing' },
+        { label: 'Vehicle unavailable', value: 'vehicle-unavailable' },
+        { label: 'No response', value: 'no-response' },
+        { label: 'Timing', value: 'timing' },
+        { label: 'Other', value: 'other' },
+      ],
+      label: 'Lost-sale outcome',
+    }),
+    lostReason: text({ access: { update: () => false }, label: 'Lost-sale details' }),
 
     // Notes
     notes: text({
@@ -129,15 +193,8 @@ export const Lead = list({
     }),
 
     // Timestamps
-    createdAt: timestamp({
-      defaultValue: { kind: 'now' },
-      label: 'Created At',
-      ui: {
-        createView: { fieldMode: 'hidden' },
-        itemView: { fieldMode: 'read' },
-      },
-    }),
     lastContact: timestamp({
+      access: { update: () => false },
       label: 'Last Contact',
       ui: {
         description: 'Last time this lead was contacted',
@@ -148,6 +205,7 @@ export const Lead = list({
     testDrives: relationship({
       ref: 'TestDrive.lead',
       many: true,
+      access: { update: denyAll },
       ui: {
         displayMode: 'cards',
         cardFields: ['vehicle', 'scheduledTime', 'completed'],
@@ -156,9 +214,30 @@ export const Lead = list({
       },
       label: 'Test Drives',
     }),
+    tradeIns: relationship({
+      ref: 'TradeIn.lead',
+      many: true,
+      access: { update: denyAll },
+      ui: {
+        displayMode: 'cards',
+        cardFields: ['year', 'make', 'model', 'condition', 'offerAmount'],
+      },
+      label: 'Trade-In Requests',
+    }),
+    serviceAppointments: relationship({
+      ref: 'ServiceAppointment.lead',
+      many: true,
+      access: { update: denyAll },
+      ui: {
+        displayMode: 'cards',
+        cardFields: ['appointmentDate', 'serviceType', 'status', 'customerVehicleDescription'],
+      },
+      label: 'Service Appointments',
+    }),
     deals: relationship({
       ref: 'Deal.lead',
       many: true,
+      access: { update: denyAll },
       ui: {
         displayMode: 'cards',
         cardFields: ['vehicle', 'status', 'vehiclePrice'],
@@ -168,6 +247,7 @@ export const Lead = list({
     interactions: relationship({
       ref: 'CustomerInteraction.lead',
       many: true,
+      access: { update: denyAll },
       ui: {
         displayMode: 'cards',
         cardFields: ['interactionType', 'date', 'outcome', 'followUpDate'],
@@ -178,12 +258,27 @@ export const Lead = list({
     tasks: relationship({
       ref: 'Task.lead',
       many: true,
+      access: { update: denyAll },
       ui: {
         displayMode: 'cards',
         cardFields: ['title', 'dueDate', 'priority', 'completed'],
         inlineCreate: { fields: ['title', 'dueDate', 'priority'] },
       },
       label: 'Tasks',
+    }),
+    salesVisits: relationship({
+      ref: 'SalesVisit.lead',
+      many: true,
+      access: { update: denyAll },
+      ui: { displayMode: 'count' },
+      label: 'Sales appointments and showroom visits',
+    }),
+    financingApplications: relationship({
+      access: { read: permissions.canManageFinancing, update: denyAll },
+      ref: 'FinancingApplication.lead',
+      many: true,
+      ui: { displayMode: 'count' },
+      label: 'Restricted Financing Applications',
     }),
   },
 })

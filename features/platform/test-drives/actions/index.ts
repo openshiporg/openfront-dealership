@@ -1,0 +1,65 @@
+'use server'
+
+import { revalidatePath } from 'next/cache'
+
+import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
+
+export type TestDrive = {
+  id: string
+  scheduledTime: string | null
+  completed: boolean | null
+  driverLicenseVerified: boolean | null
+  feedback: string | null
+  interestedLevel: string | null
+  lead: { id: string; firstName: string | null; lastName: string | null; email: string | null; phone: string | null; status: string | null } | null
+  vehicle: { id: string; year: number | null; make: string | null; model: string | null; stockNumber: string | null; vin: string | null; price: number | null } | null
+  salesperson: { id: string; name: string | null; email: string | null } | null
+}
+
+const TEST_DRIVES_PATH = '/dashboard/platform/test-drives'
+
+export async function getTestDrives() {
+  return keystoneClient<{ testDrives: TestDrive[] }>(`
+    query TestDriveDesk {
+      testDrives(orderBy: { scheduledTime: asc }, take: 200) {
+        id
+        scheduledTime
+        completed
+        driverLicenseVerified
+        feedback
+        interestedLevel
+        lead { id firstName lastName email phone status }
+        vehicle { id year make model stockNumber vin price }
+        salesperson { id name email }
+      }
+    }
+  `, {}, { cache: 'no-store' })
+}
+
+export async function verifyTestDriveLicense(id: string) {
+  const response = await keystoneClient(`
+    mutation VerifyLicense($data: TestDriveWorkflowInput!) {
+      updateTestDriveWorkflow(data: $data) { id driverLicenseVerified }
+    }
+  `, { data: { id, action: 'verify-license', idempotencyKey: `test-drive:${id}:verify-license` } })
+  if (response.success) revalidatePath(TEST_DRIVES_PATH)
+  return response
+}
+
+export async function completeTestDrive(data: { id: string; interestedLevel: string; feedback: string }) {
+  const response = await keystoneClient(`
+    mutation CompleteTestDrive($data: TestDriveWorkflowInput!) {
+      updateTestDriveWorkflow(data: $data) { id completed interestedLevel feedback lead { id status lastContact } }
+    }
+  `, {
+    data: {
+      id: data.id,
+      action: 'complete',
+      interestedLevel: data.interestedLevel,
+      feedback: data.feedback,
+      idempotencyKey: `test-drive:${data.id}:complete`,
+    },
+  })
+  if (response.success) revalidatePath(TEST_DRIVES_PATH)
+  return response
+}

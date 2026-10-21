@@ -1,1 +1,3 @@
-import { OverviewDashboardPage } from '@/features/platform/overview/screens/OverviewDashboardPage';\n\nexport default OverviewDashboardPage;
+import { OverviewDashboardPage } from '@/features/platform/overview/screens/OverviewDashboardPage'
+
+export default OverviewDashboardPage

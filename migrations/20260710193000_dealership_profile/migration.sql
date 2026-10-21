@@ -1,0 +1,27 @@
+-- Add the onboarding-owned public dealership profile singleton.
+CREATE TABLE IF NOT EXISTS "DealershipProfile" (
+  "id" INTEGER NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "name" TEXT NOT NULL DEFAULT 'Sam’s Motor Company',
+  "shortName" TEXT NOT NULL DEFAULT 'Sam’s Motor Company',
+  "salesEmail" TEXT NOT NULL DEFAULT '',
+  "serviceEmail" TEXT NOT NULL DEFAULT '',
+  "phone" TEXT NOT NULL DEFAULT '',
+  "addressLine1" TEXT NOT NULL DEFAULT '',
+  "addressLine2" TEXT NOT NULL DEFAULT '',
+  "city" TEXT NOT NULL DEFAULT '',
+  "state" TEXT NOT NULL DEFAULT '',
+  "postalCode" TEXT NOT NULL DEFAULT '',
+  "hoursMonFri" TEXT NOT NULL DEFAULT '',
+  "hoursSaturday" TEXT NOT NULL DEFAULT '',
+  "hoursSunday" TEXT NOT NULL DEFAULT '',
+  "websiteUrl" TEXT NOT NULL DEFAULT '',
+  "currencyCode" TEXT NOT NULL DEFAULT 'USD',
+  "homepageTitle" TEXT NOT NULL DEFAULT '',
+  "homepageDescription" TEXT NOT NULL DEFAULT '',
+  "logoIcon" TEXT NOT NULL DEFAULT '',
+  "logoColor" TEXT NOT NULL DEFAULT '',
+  CONSTRAINT "DealershipProfile_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "DealershipProfile_singleton_id" CHECK ("id" = 1)
+);

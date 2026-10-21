@@ -1,14 +1,32 @@
 import { list } from '@keystone-6/core'
-import { allOperations } from '@keystone-6/core/access'
+import { denyAll } from '@keystone-6/core/access'
 import { relationship, text, select, integer, timestamp } from '@keystone-6/core/fields'
 
-import { isSignedIn } from '../access'
+import { permissions } from '../access'
+import { canCreateRooftopRecord, rooftopField, validateRooftopRecord, withRooftopScope } from '../tenantRecords'
+import { trackingFields } from './trackingFields'
 
 export const ServiceAppointment = list({
   access: {
     operation: {
-      query: () => true, create: isSignedIn, update: isSignedIn,
+      query: permissions.canManageService,
+      create: permissions.canManageService,
+      update: permissions.canManageService,
+      delete: permissions.canManageService,
     },
+    filter: {
+      query: ({ session }) => withRooftopScope(true, session as any, 'canManageService'),
+      update: ({ session }) => withRooftopScope(true, session as any, 'canManageService'),
+      delete: ({ session }) => withRooftopScope(true, session as any, 'canManageService'),
+    },
+    item: { create: canCreateRooftopRecord('canManageService') },
+  },
+  hooks: {
+    validate: (args: any) => validateRooftopRecord(args, [
+      { field: 'lead', listKey: 'Lead' },
+      { field: 'customer', listKey: 'User', kind: 'user' },
+      { field: 'assignedTech', listKey: 'User', kind: 'user' },
+    ]),
   },
   ui: {
     listView: {
@@ -16,7 +34,19 @@ export const ServiceAppointment = list({
     },
   },
   fields: {
+    ...trackingFields,
+    rooftop: rooftopField(),
+    requestedBy: relationship({ ref: 'User', access: { read: denyAll, create: denyAll, update: denyAll } }),
     // Customer and Vehicle
+    lead: relationship({
+      access: { create: denyAll, update: denyAll },
+      ref: 'Lead.serviceAppointments',
+      ui: {
+        displayMode: 'select',
+        labelField: 'email',
+      },
+      label: 'Customer Lead',
+    }),
     customer: relationship({
       ref: 'User.customerAppointments',
       ui: {
@@ -25,6 +55,9 @@ export const ServiceAppointment = list({
       },
       label: 'Customer',
     }),
+    vehicleVin: text(),
+    transportationNeed: select({ type: 'string', options: ['none','waiter','shuttle','loaner','rental','drop-off'].map(value => ({ label: value, value })), defaultValue: 'none' }),
+    capacitySlot: text(),
     customerVehicleDescription: text({
       label: 'Customer Vehicle',
       ui: {
@@ -75,6 +108,7 @@ export const ServiceAppointment = list({
 
     // Status
     status: select({
+      access: { update: () => false },
       type: 'string',
       options: [
         { label: 'Scheduled', value: 'scheduled' },
@@ -107,6 +141,7 @@ export const ServiceAppointment = list({
 
     // Relationship to Service Order
     serviceOrder: relationship({
+      access: { update: () => false },
       ref: 'ServiceOrder.appointment',
       ui: {
         displayMode: 'cards',

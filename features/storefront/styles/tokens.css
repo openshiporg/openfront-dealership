@@ -1,0 +1,47 @@
+.storefront {
+  --sf-logo-hue: 0;
+  --sf-brand-hue: calc(55 + var(--sf-logo-hue));
+
+  --sf-paper: oklch(0.97 0.008 85);
+  --sf-paper-2: oklch(0.94 0.01 80);
+  --sf-paper-3: oklch(0.18 0.012 75);
+  --sf-ink: oklch(0.16 0.015 75);
+  --sf-ink-2: oklch(0.42 0.02 75);
+  --sf-ink-3: oklch(0.62 0.015 80);
+  --sf-rule: oklch(0.88 0.012 85);
+  --sf-accent: oklch(0.52 0.11 var(--sf-brand-hue));
+  --sf-accent-ink: oklch(0.98 0.01 85);
+  --sf-focus: oklch(0.48 0.14 var(--sf-brand-hue));
+
+  --sf-space-3xs: 0.25rem;
+  --sf-space-2xs: 0.5rem;
+  --sf-space-xs: 0.75rem;
+  --sf-space-sm: 1rem;
+  --sf-space-md: 1.5rem;
+  --sf-space-lg: 2rem;
+  --sf-space-xl: 3rem;
+  --sf-space-2xl: 4.5rem;
+  --sf-space-3xl: 7rem;
+
+  --sf-text-xs: 0.75rem;
+  --sf-text-sm: 0.875rem;
+  --sf-text-md: 1.0625rem;
+  --sf-text-lg: 1.25rem;
+  --sf-text-xl: 1.625rem;
+  --sf-text-2xl: 2.125rem;
+  --sf-text-display: clamp(2.25rem, 5vw, 3.75rem);
+
+  --sf-radius-sm: 2px;
+  --sf-radius-md: 4px;
+
+  --sf-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --sf-dur-short: 180ms;
+
+  --sf-font-display: var(--font-storefront-display), "Iowan Old Style", "Palatino Linotype", serif;
+  --sf-font-body: var(--font-storefront-body), system-ui, sans-serif;
+  --sf-font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  color: var(--sf-ink);
+  background: var(--sf-paper);
+  font-family: var(--sf-font-body);
+}

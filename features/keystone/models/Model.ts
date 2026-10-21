@@ -2,15 +2,16 @@ import { list } from '@keystone-6/core'
 import { allOperations } from '@keystone-6/core/access'
 import { relationship, text, select, integer } from '@keystone-6/core/fields'
 
-import { isSignedIn } from '../access'
+import { permissions } from '../access'
+import { trackingFields } from './trackingFields'
 
 export const Model = list({
   access: {
     operation: {
       query: () => true, // Allow public access
-      create: isSignedIn,
-      update: isSignedIn,
-      delete: isSignedIn,
+      create: permissions.canManageInventory,
+      update: permissions.canManageInventory,
+      delete: permissions.canManageInventory,
     },
   },
   ui: {
@@ -20,6 +21,7 @@ export const Model = list({
     labelField: 'name',
   },
   fields: {
+    ...trackingFields,
     name: text({
       validation: { isRequired: true },
       label: 'Model Name',

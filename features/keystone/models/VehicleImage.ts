@@ -1,24 +1,37 @@
 import { list } from '@keystone-6/core'
 import { relationship, image, checkbox, integer, text, select } from '@keystone-6/core/fields'
 
-import { isSignedIn } from '../access'
+import { permissions, rules } from '../access'
+import { rooftopField, validateRooftopRecord } from '../tenantRecords'
+import { trackingFields } from './trackingFields'
 
 export const VehicleImage = list({
   access: {
     operation: {
-      query: () => true, // Allow public access to view vehicle images
-      create: isSignedIn,
-      update: isSignedIn,
-      delete: isSignedIn,
+      query: permissions.canViewInventory,
+      create: () => false,
+      update: () => false,
+      delete: () => false,
+    },
+    filter: {
+      query: rules.canReadVehicleImages,
+      update: ({ session }) => rules.canReadVehicleImages({ session }),
+      delete: ({ session }) => rules.canReadVehicleImages({ session }),
     },
   },
+  hooks: {
+    validate: (args: any) => validateRooftopRecord(args, [{ field: 'vehicle', listKey: 'Vehicle' }]),
+  },
   ui: {
+    hideCreate: true,
     listView: {
       initialColumns: ['vehicle', 'caption', 'isPrimary', 'sortOrder'],
     },
     labelField: 'caption',
   },
   fields: {
+    ...trackingFields,
+    rooftop: rooftopField(),
     // Vehicle relationship
     vehicle: relationship({
       ref: 'Vehicle.images',
@@ -33,6 +46,13 @@ export const VehicleImage = list({
     image: image({
       storage: 'my_images',
       label: 'Image',
+    }),
+
+    imagePath: text({
+      label: 'Static Image Path',
+      ui: {
+        description: 'Public storefront asset path, for example /images/luxury-sedan.jpg',
+      },
     }),
 
     // Caption

@@ -1,1 +1,3 @@
-import { DealsPage } from '@/features/platform/deals/screens/DealsPage';\n\nexport default DealsPage;
+import { DealListPage } from '@/features/platform/deals/screens/DealListPage'
+
+export default DealListPage

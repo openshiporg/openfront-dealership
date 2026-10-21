@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DataCard } from "./DataCard";
 import seedData from "@/features/platform/onboarding/lib/seed.json";
+import { SECTION_TYPES } from "../config/templates";
 
 interface CustomSetupStepsProps {
   currentJson?: any;
@@ -40,17 +41,10 @@ function useCopyToClipboard(): [
 
 // Get complete setup configuration from seed data
 function getCompleteSetupJson() {
-  return {
-    dealership: seedData.dealership,
-    regions: seedData.regions,
-    paymentProviders: seedData.paymentProviders,
-    shipping_options: seedData.shipping_options,
-    vehicleMakes: seedData.vehicleMakes,
-    vehicleTypes: seedData.vehicleTypes,
-    services: seedData.services,
-    staff: seedData.staff,
-  };
+  return seedData;
 }
+
+const money = (cents: number) => `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export function CustomSetupSteps({
   currentJson,
@@ -81,6 +75,7 @@ export function CustomSetupSteps({
 
   // Generate the AI prompt focused on dealership customization
   const generateAIPrompt = () => {
+    const data = seedData;
     return `I need help customizing my auto dealership configuration. I've pasted my current setup.
 
 **Your first response should be:**
@@ -88,42 +83,28 @@ export function CustomSetupSteps({
 Start by telling me what this JSON configuration currently contains:
 
 **DEALERSHIP INFORMATION:**
-- Name: Elite Auto Dealership
-- Default Currency: USD
-- Homepage Title: Premium Vehicle Sales & Service
-- Homepage Description: Your trusted partner for quality vehicles and automotive services.
+- Name: ${data.dealership.name}
+- Address: ${data.dealership.addressLine1}, ${data.dealership.city}, ${data.dealership.state} ${data.dealership.postalCode}
+- Currency: ${data.dealership.currencyCode}
 
-**REGIONS & CURRENCIES:**
-- North America (USD, $) - United States, Canada - 8.5% tax rate
-- Europe (EUR, €) - Germany, France - 20% tax rate
-- United Kingdom (GBP, £) - United Kingdom - 20% tax rate
+**INVENTORY:**
+- Makes: ${data.vehicleMakes.map((make) => make.name).join(", ")}
+- Vehicles: ${data.vehicles.length} vehicles including ${data.vehicles.slice(0, 3).map((vehicle) => `${vehicle.year} ${vehicle.make} ${vehicle.model}`).join(", ")}
 
-**PAYMENT PROVIDERS:**
-- Credit/Debit Card (Stripe)
-- Dealer Financing
-- Cash/Check
+**SERVICE & PARTS:**
+- Service packages: ${data.services.map((service) => `${service.name} (${money(service.priceCents)})`).join(", ")}
+- Parts: ${data.parts.length} stocked parts
 
-**DELIVERY OPTIONS:**
-- Dealership Pickup: Free
-- Vehicle Delivery: $500
-- Transfer Service: $250
+**FINANCE & ACCOUNTING:**
+- Finance products: ${data.financeProducts.map((product) => product.name).join(", ")}
+- Accounting mappings: ${data.accountingMappings.length} source-to-account mappings
+- Payment providers: ${data.paymentProviders.map((provider) => provider.name).join(", ")}
 
-**VEHICLE MAKES:**
-- Ford, Chevrolet, Toyota, Honda, BMW, Mercedes-Benz
+**SALES:**
+- Lead routing: ${data.leadRoutingRules.map((rule) => rule.name).join(", ")}
+- Staff roles: ${data.staff.map((role) => role.role).join(", ")}
 
-**VEHICLE TYPES:**
-- Sedan, SUV, Truck, Coupe, Van, Electric
-
-**SERVICES:**
-- Oil Change ($50, 30min)
-- Tire Rotation ($40, 45min)
-- Brake Service ($150, 90min)
-- Vehicle Inspection ($75, 60min)
-- Detailing ($200, 120min)
-- Parts Sales
-
-**STAFF ROLES:**
-- Sales Manager, Sales Associate, Finance Manager, Service Manager, Technician, Parts Specialist
+All prices are whole numbers of cents (for example 8995 is $89.95).
 
 Then ask: "This is what your dealership configuration currently has. What would you like to change?
 As the user provides more changes to the JSON, keep asking what changes and once the user is finished and indicates they are done, return the JSON and tell them to paste it into Openfront."
@@ -137,16 +118,7 @@ After I tell you what to change, modify the JSON and provide the complete update
     try {
       const parsed = JSON.parse(customJson);
 
-      const requiredKeys = [
-        "dealership",
-        "regions",
-        "paymentProviders",
-        "shipping_options",
-        "vehicleMakes",
-        "vehicleTypes",
-        "services",
-        "staff",
-      ];
+      const requiredKeys = SECTION_TYPES;
       const missingKeys = requiredKeys.filter((key) => {
         if (key === "dealership") {
           return !parsed[key] || typeof parsed[key] !== "object";
@@ -209,8 +181,8 @@ After I tell you what to change, modify the JSON and provide the complete update
           </p>
           <ul className="text-sm text-muted-foreground space-y-1 ml-4">
             <li>• What vehicle makes and models do you sell?</li>
-            <li>• Which regions/countries do you operate in?</li>
-            <li>• What financing options do you offer?</li>
+            <li>• Which vehicles are on your lot?</li>
+            <li>• Which staff roles need access?</li>
             <li>• What service offerings do you provide?</li>
           </ul>
           <p className="text-sm text-muted-foreground">

@@ -1,16 +1,31 @@
 import { list } from '@keystone-6/core'
-import { relationship, float, timestamp, text } from '@keystone-6/core/fields'
+import { relationship, integer, timestamp, text, virtual } from '@keystone-6/core/fields'
+import { graphql } from '@graphql-ts/schema'
 
-import { isSignedIn } from '../access'
+import { permissions } from '../access'
+import { canCreateRooftopRecord, rooftopField, validateRooftopRecord, withRooftopScope } from '../tenantRecords'
+import { trackingFields } from './trackingFields'
 
 export const PriceHistory = list({
   access: {
     operation: {
-      query: isSignedIn,
-      create: isSignedIn,
-      update: isSignedIn,
-      delete: isSignedIn,
+      query: permissions.canViewDealerCost,
+      create: permissions.canManageInventory,
+      update: permissions.canManageInventory,
+      delete: permissions.canManageInventory,
     },
+    filter: {
+      query: ({ session }) => withRooftopScope(true, session as any, ['canManageInventory', 'canManageFinancing']),
+      update: ({ session }) => withRooftopScope(true, session as any, 'canManageInventory'),
+      delete: ({ session }) => withRooftopScope(true, session as any, 'canManageInventory'),
+    },
+    item: { create: canCreateRooftopRecord('canManageInventory') },
+  },
+  hooks: {
+    validate: (args: any) => validateRooftopRecord(args, [
+      { field: 'vehicle', listKey: 'Vehicle' },
+      { field: 'changedBy', listKey: 'User', kind: 'user' },
+    ]),
   },
   ui: {
     listView: {
@@ -18,6 +33,8 @@ export const PriceHistory = list({
     },
   },
   fields: {
+    ...trackingFields,
+    rooftop: rooftopField(),
     // Vehicle relationship
     vehicle: relationship({
       ref: 'Vehicle.priceHistory',
@@ -37,18 +54,15 @@ export const PriceHistory = list({
         description: 'Date when price change took effect',
       },
     }),
-    previousPrice: float({
-      label: 'Previous Price',
-      ui: {
-        description: 'Price before this change',
-      },
+    previousPriceCents: integer({ label: 'Previous Price (cents)', ui: { description: 'Previous price in integer USD cents' } }),
+    newPriceCents: integer({ validation: { isRequired: true }, label: 'New Price (cents)', ui: { description: 'New price in integer USD cents' } }),
+    previousPrice: virtual({
+      field: graphql.field({ type: graphql.Float, resolve(item: any) { return item.previousPriceCents == null ? null : item.previousPriceCents / 100 } }),
+      ui: { itemView: { fieldMode: 'read' } },
     }),
-    newPrice: float({
-      validation: { isRequired: true },
-      label: 'New Price',
-      ui: {
-        description: 'Price after this change',
-      },
+    newPrice: virtual({
+      field: graphql.field({ type: graphql.Float, resolve(item: any) { return item.newPriceCents / 100 } }),
+      ui: { itemView: { fieldMode: 'read' } },
     }),
 
     // Change Reason

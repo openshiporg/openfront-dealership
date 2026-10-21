@@ -1,17 +1,29 @@
 import { list } from '@keystone-6/core'
-import { text, float, integer, json } from '@keystone-6/core/fields'
+import { text, integer, json, virtual } from '@keystone-6/core/fields'
+import { graphql } from '@graphql-ts/schema'
 
-import { isSignedIn } from '../access'
+import { permissions } from '../access'
+import { canCreateRooftopRecord, publicActiveRooftopScope, rooftopField, validateRooftopRecord, withRooftopScope } from '../tenantRecords'
+import { trackingFields } from './trackingFields'
 
 export const ServicePackage = list({
   access: {
     operation: {
       query: () => true, // Allow public access to view service packages
-      create: isSignedIn,
-      update: isSignedIn,
-      delete: isSignedIn,
+      create: permissions.canManageService,
+      update: permissions.canManageService,
+      delete: permissions.canManageService,
     },
+    filter: {
+      query: ({ session }) => session && permissions.canManageService({ session })
+        ? withRooftopScope(true, session as any, 'canManageService')
+        : publicActiveRooftopScope({}),
+      update: ({ session }) => withRooftopScope(true, session as any, 'canManageService'),
+      delete: ({ session }) => withRooftopScope(true, session as any, 'canManageService'),
+    },
+    item: { create: canCreateRooftopRecord('canManageService') },
   },
+  hooks: { validate: (args: any) => validateRooftopRecord(args) },
   ui: {
     listView: {
       initialColumns: ['name', 'price', 'estimatedDuration'],
@@ -19,6 +31,8 @@ export const ServicePackage = list({
     labelField: 'name',
   },
   fields: {
+    ...trackingFields,
+    rooftop: rooftopField(),
     // Package Details
     name: text({
       validation: { isRequired: true },
@@ -35,12 +49,10 @@ export const ServicePackage = list({
     }),
 
     // Pricing and Duration
-    price: float({
-      validation: { isRequired: true },
-      label: 'Price',
-      ui: {
-        description: 'Package price',
-      },
+    priceCents: integer({ validation: { isRequired: true }, label: 'Price (cents)', ui: { description: 'Package price in integer USD cents' } }),
+    price: virtual({
+      field: graphql.field({ type: graphql.Float, resolve(item: any) { return item.priceCents / 100 } }),
+      ui: { itemView: { fieldMode: 'read' } },
     }),
     estimatedDuration: integer({
       label: 'Estimated Duration (Minutes)',

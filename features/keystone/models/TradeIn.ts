@@ -1,17 +1,33 @@
 import { list } from '@keystone-6/core'
-import { allOperations } from '@keystone-6/core/access'
-import { relationship, text, select, float, integer, image } from '@keystone-6/core/fields'
+import { denyAll } from '@keystone-6/core/access'
+import { relationship, text, select, integer, image, virtual } from '@keystone-6/core/fields'
+import { graphql } from '@graphql-ts/schema'
 
-import { isSignedIn } from '../access'
+import { permissions, rules, TRADE_IN_ACCESS_PERMISSIONS } from '../access'
+import { canCreateRooftopRecord, rooftopField, validateRooftopRecord } from '../tenantRecords'
+import { trackingFields } from './trackingFields'
 
 export const TradeIn = list({
   access: {
     operation: {
-      query: isSignedIn,
-      create: () => true, // Allow public trade-in submissions from storefront
-      update: isSignedIn,
-      delete: isSignedIn,
+      query: permissions.canAccessTradeIns,
+      create: permissions.canAccessTradeIns,
+      update: permissions.canAccessTradeIns,
+      delete: permissions.canManageTradeIns,
     },
+    filter: {
+      query: rules.canReadTradeIns,
+      update: rules.canReadTradeIns,
+      delete: rules.canReadTradeIns,
+    },
+    item: { create: canCreateRooftopRecord(TRADE_IN_ACCESS_PERMISSIONS) },
+  },
+  hooks: {
+    validate: (args: any) => validateRooftopRecord(args, [
+      { field: 'lead', listKey: 'Lead' },
+      { field: 'deal', listKey: 'Deal' },
+      { field: 'appraisedBy', listKey: 'User', kind: 'user' },
+    ]),
   },
   ui: {
     listView: {
@@ -20,6 +36,8 @@ export const TradeIn = list({
     labelField: 'vin',
   },
   fields: {
+    ...trackingFields,
+    rooftop: rooftopField(),
     // Vehicle Identification
     vin: text({
       label: 'VIN',
@@ -88,17 +106,19 @@ export const TradeIn = list({
     }),
 
     // Valuation
-    kbbValue: float({
-      label: 'KBB Value',
-      ui: {
-        description: 'Kelley Blue Book estimated value',
-      },
+    kbbValueCents: integer({ access: { update: () => false }, label: 'Reference Value Storage (cents)', ui: { description: 'Legacy storage column for an operator-recorded, provider-neutral reference value', itemView: { fieldMode: 'hidden' }, listView: { fieldMode: 'hidden' } } }),
+    offerAmountCents: integer({ access: { update: () => false }, label: 'Offer Amount (cents)', ui: { description: 'Dealership offer in integer USD cents' } }),
+    referenceValue: virtual({
+      field: graphql.field({ type: graphql.Float, resolve(item: any) { return item.kbbValueCents == null ? null : item.kbbValueCents / 100 } }),
+      ui: { itemView: { fieldMode: 'read' } },
     }),
-    offerAmount: float({
-      label: 'Offer Amount',
-      ui: {
-        description: 'Actual trade-in offer from dealership',
-      },
+    kbbValue: virtual({
+      field: graphql.field({ type: graphql.Float, resolve(item: any) { return item.kbbValueCents == null ? null : item.kbbValueCents / 100 } }),
+      ui: { itemView: { fieldMode: 'hidden' }, listView: { fieldMode: 'hidden' } },
+    }),
+    offerAmount: virtual({
+      field: graphql.field({ type: graphql.Float, resolve(item: any) { return item.offerAmountCents == null ? null : item.offerAmountCents / 100 } }),
+      ui: { itemView: { fieldMode: 'read' } },
     }),
 
     // Images
@@ -108,6 +128,14 @@ export const TradeIn = list({
     }),
 
     // Relationships
+    lead: relationship({
+      access: { create: denyAll, update: denyAll },
+      ref: 'Lead.tradeIns',
+      ui: {
+        displayMode: 'select',
+      },
+      label: 'Customer Lead',
+    }),
     deal: relationship({
       ref: 'Deal.tradeInVehicle',
       ui: {
@@ -116,6 +144,7 @@ export const TradeIn = list({
       label: 'Deal',
     }),
     appraisedBy: relationship({
+      access: { update: () => false },
       ref: 'User',
       ui: {
         displayMode: 'select',

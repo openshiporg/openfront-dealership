@@ -1,1 +1,3 @@
-import { VehicleListPage } from '@/features/platform/vehicles/screens/VehicleListPage';\n\nexport default VehicleListPage;
+import { VehicleListPage } from '@/features/platform/vehicles/screens/VehicleListPage'
+
+export default VehicleListPage

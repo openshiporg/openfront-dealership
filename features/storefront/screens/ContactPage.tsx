@@ -1,13 +1,29 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
+import { ArrowUpRight } from 'lucide-react'
 import { submitStorefrontInquiry } from '../actions/submissions'
-import { Button } from '../components/Button'
 import { Container } from '../components/Container'
 import { PageHeader } from '../components/PageHeader'
 import { useStorefrontBusiness } from '../components/StorefrontBusinessProvider'
 import { customerRequestReference } from '../lib/customerRequests'
+import { Field, Notice, PILL_TARGET, RequestReceived, Sticker } from '../components/forms/RequestForm'
+
+const PREFERRED_CONTACT = [
+  { value: 'email', label: 'Email' },
+  { value: 'phone', label: 'Phone' },
+  { value: 'text', label: 'Text' },
+]
+
+function InfoRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 border-b py-3 text-[var(--sf-text-sm)]" style={{ borderColor: 'var(--sf-rule)' }}>
+      <dt className="sf-muted shrink-0">{label}</dt>
+      <dd className="min-w-0 text-right">{children}</dd>
+    </div>
+  )
+}
 
 export function ContactPage() {
   const business = useStorefrontBusiness()
@@ -48,99 +64,188 @@ export function ContactPage() {
     }
   }
 
+  const preferredLabel = PREFERRED_CONTACT.find((option) => option.value === formData.preferredContact)?.label
+
   if (submitted) {
     return (
-      <>
-        <PageHeader title="Message received" description={`${business.fullName} will respond using your preferred contact method.`} />
-        <Container className="py-[var(--sf-space-2xl)] max-w-lg text-center">
-          {submissionReference && <p className="sf-eyebrow mb-6" role="status">Reference {submissionReference}</p>}
-          <Button href="/">Back home</Button>
-        </Container>
-      </>
+      <RequestReceived
+        eyebrow="Message"
+        reference={submissionReference}
+        summary={
+          <Sticker
+            title="Message"
+            meta={business.shortName || business.fullName}
+            rows={[
+              { label: 'Name', value: [formData.firstName, formData.lastName].filter(Boolean).join(' ') },
+              { label: 'Reply by', value: preferredLabel, strong: true },
+              { label: 'Email', value: formData.email },
+              ...(formData.phone ? [{ label: 'Phone', value: formData.phone }] : []),
+            ]}
+          />
+        }
+        actions={
+          <>
+            <Link href="/" className={`sf-pill sf-pill-primary ${PILL_TARGET}`}>Back home</Link>
+            <Link href="/inventory" className={`sf-pill ${PILL_TARGET}`}>Inventory</Link>
+            <Link href="/service" className={`sf-pill ${PILL_TARGET}`}>Service</Link>
+          </>
+        }
+      />
     )
   }
 
+  const hasAddress = Boolean(business.addressLine1 || business.addressLine2)
+  const hours = [
+    { label: 'Mon–Fri', value: business.hoursMonFri },
+    { label: 'Saturday', value: business.hoursSaturday },
+    { label: 'Sunday', value: business.hoursSunday },
+  ].filter((row) => row.value)
+  const departments = [
+    business.salesEmail ? { label: 'Sales', email: business.salesEmail } : null,
+    business.serviceEmail ? { label: 'Service', email: business.serviceEmail } : null,
+  ].filter((row): row is { label: string; email: string } => Boolean(row))
+
   return (
     <>
-      <PageHeader
-        eyebrow="Contact"
-        title="Talk to our team"
-        description="Questions about a vehicle, financing, or service? Send a message and we'll follow up."
-      />
+      <PageHeader eyebrow="Contact" title={business.fullName} />
 
-      <Container className="py-[var(--sf-space-2xl)]">
-        <div className="grid lg:grid-cols-[1.2fr_0.8fr] gap-[var(--sf-space-xl)]">
-          <form onSubmit={handleSubmit} className="sf-card p-[var(--sf-space-lg)] space-y-4">
-            <div className="grid sm:grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="contact-first-name" className="sf-eyebrow block mb-2">First name</label>
+      <Container className="sf-section">
+        <div className="grid gap-[var(--sf-space-xl)] lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] xl:gap-[var(--sf-space-2xl)]">
+          <aside className="order-2 min-w-0 space-y-[var(--sf-space-lg)] lg:order-1">
+            <section>
+              <p className="sf-eyebrow mb-3">Visit</p>
+              {hasAddress ? (
+                <>
+                  <address className="not-italic">
+                    {business.addressLine1 && <p className="sf-heading text-[length:var(--sf-text-xl)]">{business.addressLine1}</p>}
+                    {business.addressLine2 && <p className="sf-muted mt-1">{business.addressLine2}</p>}
+                  </address>
+                  {business.directionsHref && (
+                    <div className="sf-track mt-4">
+                      <a href={business.directionsHref} target="_blank" rel="noopener noreferrer" className={`sf-pill sf-pill-raised ${PILL_TARGET}`}>
+                        Directions
+                        <ArrowUpRight className="size-4" aria-hidden="true" />
+                      </a>
+                      {business.phoneHref && business.phoneDisplay && (
+                        <a href={business.phoneHref} className={`sf-pill ${PILL_TARGET}`}>Call</a>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="sf-muted text-[var(--sf-text-sm)]">Address not listed</p>
+              )}
+            </section>
+
+            <section>
+              <p className="sf-eyebrow mb-3">Departments</p>
+              {business.phoneDisplay || departments.length ? (
+                <dl className="border-t" style={{ borderColor: 'var(--sf-rule)' }}>
+                  {business.phoneHref && business.phoneDisplay && (
+                    <InfoRow label="Phone">
+                      <a href={business.phoneHref} className="sf-link sf-figure">{business.phoneDisplay}</a>
+                    </InfoRow>
+                  )}
+                  {departments.map((row) => (
+                    <InfoRow key={row.label} label={row.label}>
+                      <a href={`mailto:${row.email}`} className="sf-link break-all">{row.email}</a>
+                    </InfoRow>
+                  ))}
+                </dl>
+              ) : (
+                <p className="sf-muted text-[var(--sf-text-sm)]">Contact details not listed</p>
+              )}
+            </section>
+
+            <section>
+              <p className="sf-eyebrow mb-3">Hours</p>
+              {hours.length ? (
+                <dl className="border-t" style={{ borderColor: 'var(--sf-rule)' }}>
+                  {hours.map((row) => (
+                    <InfoRow key={row.label} label={row.label}>
+                      <span className="sf-figure">{row.value}</span>
+                    </InfoRow>
+                  ))}
+                </dl>
+              ) : (
+                <p className="sf-muted text-[var(--sf-text-sm)]">Hours not listed</p>
+              )}
+            </section>
+          </aside>
+
+          <form onSubmit={handleSubmit} className="order-1 min-w-0 lg:order-2 lg:border-l lg:pl-[var(--sf-space-xl)]" style={{ borderColor: 'var(--sf-rule)' }}>
+            <h2 className="sf-heading mb-5 text-[length:var(--sf-text-xl)]">Message</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="First name" htmlFor="contact-first-name">
                 <input
                   id="contact-first-name"
                   type="text"
                   required
+                  autoComplete="given-name"
                   value={formData.firstName}
                   onChange={(e) => setFormData((p) => ({ ...p, firstName: e.target.value }))}
                   className="sf-input"
                 />
-              </div>
-              <div>
-                <label htmlFor="contact-last-name" className="sf-eyebrow block mb-2">Last name</label>
+              </Field>
+              <Field label="Last name" htmlFor="contact-last-name">
                 <input
                   id="contact-last-name"
                   type="text"
                   required
+                  autoComplete="family-name"
                   value={formData.lastName}
                   onChange={(e) => setFormData((p) => ({ ...p, lastName: e.target.value }))}
                   className="sf-input"
                 />
+              </Field>
+              <Field label="Email" htmlFor="contact-email">
+                <input
+                  id="contact-email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData((p) => ({ ...p, email: e.target.value }))}
+                  className="sf-input"
+                />
+              </Field>
+              <Field label="Phone" htmlFor="contact-phone" optional={formData.preferredContact === 'email'}>
+                <input
+                  id="contact-phone"
+                  type="tel"
+                  autoComplete="tel"
+                  required={formData.preferredContact !== 'email'}
+                  value={formData.phone}
+                  onChange={(e) => setFormData((p) => ({ ...p, phone: e.target.value }))}
+                  className="sf-input"
+                />
+              </Field>
+              <div className="sm:col-span-2">
+                <p id="contact-preferred" className="sf-label">Preferred contact</p>
+                <div role="group" aria-labelledby="contact-preferred" className="sf-track">
+                  {PREFERRED_CONTACT.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`sf-pill ${PILL_TARGET} px-5`}
+                      aria-pressed={formData.preferredContact === option.value}
+                      onClick={() => setFormData((p) => ({ ...p, preferredContact: option.value }))}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div>
-              <label htmlFor="contact-email" className="sf-eyebrow block mb-2">Email</label>
-              <input
-                id="contact-email"
-                type="email"
-                required
-                value={formData.email}
-                onChange={(e) => setFormData((p) => ({ ...p, email: e.target.value }))}
-                className="sf-input"
-              />
-            </div>
-            <div>
-              <label htmlFor="contact-phone" className="sf-eyebrow block mb-2">Phone</label>
-              <input
-                id="contact-phone"
-                type="tel"
-                required={formData.preferredContact !== 'email'}
-                value={formData.phone}
-                onChange={(e) => setFormData((p) => ({ ...p, phone: e.target.value }))}
-                className="sf-input"
-              />
-            </div>
-            <div>
-              <label htmlFor="contact-preferred" className="sf-eyebrow block mb-2">Preferred contact</label>
-              <select
-                id="contact-preferred"
-                value={formData.preferredContact}
-                onChange={(e) => setFormData((p) => ({ ...p, preferredContact: e.target.value }))}
-                className="sf-input"
-              >
-                <option value="email">Email</option>
-                <option value="phone">Phone</option>
-                <option value="text">Text</option>
-              </select>
-            </div>
-            <div>
-              <label htmlFor="contact-message" className="sf-eyebrow block mb-2">Message</label>
-              <textarea
-                id="contact-message"
-                required
-                rows={5}
-                value={formData.message}
-                onChange={(e) => setFormData((p) => ({ ...p, message: e.target.value }))}
-                className="sf-input resize-y"
-                placeholder="How can we help?"
-              />
+              <Field label="Message" htmlFor="contact-message" className="sm:col-span-2">
+                <textarea
+                  id="contact-message"
+                  required
+                  rows={6}
+                  value={formData.message}
+                  onChange={(e) => setFormData((p) => ({ ...p, message: e.target.value }))}
+                  className="sf-input"
+                />
+              </Field>
             </div>
             <input
               type="text"
@@ -152,85 +257,13 @@ export function ContactPage() {
               className="hidden"
               aria-hidden="true"
             />
-            {submissionError && (
-              <p role="alert" className="text-[var(--sf-text-sm)]" style={{ color: 'oklch(0.45 0.15 25)' }}>
-                {submissionError}
-              </p>
-            )}
-            <button type="submit" disabled={isSubmitting} className="sf-btn sf-btn-primary w-full">
-              {isSubmitting ? 'Sending…' : 'Send message'}
-            </button>
+            <div className="mt-6 space-y-4">
+              {submissionError && <Notice tone="bad">{submissionError}</Notice>}
+              <button type="submit" disabled={isSubmitting} className="sf-btn sf-btn-primary w-full sm:w-auto sm:min-w-56">
+                {isSubmitting ? 'Sending…' : 'Send message'}
+              </button>
+            </div>
           </form>
-
-          <aside className="space-y-[var(--sf-space-md)]">
-            <div className="sf-card p-[var(--sf-space-lg)] text-[var(--sf-text-sm)]">
-              <p className="sf-eyebrow mb-3">Reach us</p>
-              {(business.addressLine1 || business.addressLine2) && (
-                <address className="not-italic">
-                  {business.addressLine1 && <p className="font-medium">{business.addressLine1}</p>}
-                  {business.addressLine2 && <p style={{ color: 'var(--sf-ink-2)' }}>{business.addressLine2}</p>}
-                </address>
-              )}
-              {(business.addressLine1 || business.addressLine2) && (
-                <p className="mt-3">
-                  <a href={business.directionsHref} target="_blank" rel="noopener noreferrer" className="font-semibold underline underline-offset-2 hover:text-[var(--sf-accent)]">
-                    Get directions
-                  </a>
-                </p>
-              )}
-              {(business.addressLine1 || business.addressLine2) && <hr className="sf-rule my-4" />}
-              {business.phoneHref && business.phoneDisplay && (
-                <p>
-                  <a href={business.phoneHref} className="hover:text-[var(--sf-accent)]">
-                    {business.phoneDisplay}
-                  </a>
-                </p>
-              )}
-              {business.salesEmail && (
-                <p className={business.phoneDisplay ? 'mt-2' : ''}>
-                  <a href={`mailto:${business.salesEmail}`} className="break-all hover:text-[var(--sf-accent)]">
-                    {business.salesEmail}
-                  </a>
-                </p>
-              )}
-              {!business.addressLine1 && !business.addressLine2 && !business.phoneDisplay && !business.salesEmail ? (
-                <p style={{ color: 'var(--sf-ink-2)' }}>Contact details have not been published.</p>
-              ) : null}
-            </div>
-
-            <div className="sf-card p-[var(--sf-space-lg)] text-[var(--sf-text-sm)]">
-              <p className="sf-eyebrow mb-3">Departments</p>
-              {business.salesEmail || business.serviceEmail ? (
-                <ul className="space-y-3" style={{ color: 'var(--sf-ink-2)' }}>
-                  {business.salesEmail && (
-                    <li>
-                      Sales ·{' '}
-                      <a href={`mailto:${business.salesEmail}`} className="break-all hover:text-[var(--sf-accent)]">
-                        {business.salesEmail}
-                      </a>
-                    </li>
-                  )}
-                  {business.serviceEmail && (
-                    <li>
-                      Service ·{' '}
-                      <a href={`mailto:${business.serviceEmail}`} className="break-all hover:text-[var(--sf-accent)]">
-                        {business.serviceEmail}
-                      </a>
-                    </li>
-                  )}
-                </ul>
-              ) : (
-                <p style={{ color: 'var(--sf-ink-2)' }}>Department emails have not been published.</p>
-              )}
-            </div>
-
-            <p className="text-[var(--sf-text-xs)]" style={{ color: 'var(--sf-ink-3)' }}>
-              Prefer to browse first?{' '}
-              <Link href="/inventory" className="underline underline-offset-2 hover:text-[var(--sf-accent)]">
-                View inventory
-              </Link>
-            </p>
-          </aside>
         </div>
       </Container>
     </>

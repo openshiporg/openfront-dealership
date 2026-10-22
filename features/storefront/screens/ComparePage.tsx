@@ -11,13 +11,14 @@ import {
   removeFromComparison,
   clearComparison,
 } from '@/features/storefront/lib/comparison'
-import { Button } from '../components/Button'
+import { Plus, X } from 'lucide-react'
 import { Container } from '../components/Container'
 import { PageHeader } from '../components/PageHeader'
 import { useStorefrontBusiness } from '../components/StorefrontBusinessProvider'
 import { VehiclePhotoPlaceholder } from '../components/VehiclePhotoPlaceholder'
 import { formatPrice, formatMileage, vehicleTitle } from '../lib/format'
-import { vehicleImageUrl } from '../lib/images'
+import { primaryVehicleImage, vehicleImageUrl } from '../lib/images'
+import { vehicleConditionLabel, vehicleStatus } from '../lib/vehicleStatus'
 import { partitionSavedVehicleResults } from '../lib/data/compare-inventory'
 
 const COMPARISON_FIELDS: {
@@ -25,19 +26,20 @@ const COMPARISON_FIELDS: {
   key: string
   format: (v: Vehicle, currencyCode?: string) => string
   highlight: boolean
+  mono?: boolean
 }[] = [
-  { label: 'Price', key: 'price', format: (v, currencyCode) => formatPrice(v.price, currencyCode), highlight: true },
-  { label: 'Year', key: 'year', format: (v) => String(v.year), highlight: false },
+  { label: 'Price', key: 'price', format: (v, currencyCode) => formatPrice(v.price, currencyCode), highlight: true, mono: true },
+  { label: 'Year', key: 'year', format: (v) => String(v.year), highlight: false, mono: true },
   { label: 'Make', key: 'make', format: (v) => v.make, highlight: false },
   { label: 'Model', key: 'model', format: (v) => v.model, highlight: false },
   { label: 'Trim', key: 'trim', format: (v) => v.trim || '—', highlight: false },
-  { label: 'Mileage', key: 'mileage', format: (v) => formatMileage(v.mileage), highlight: true },
-  { label: 'Condition', key: 'condition', format: (v) => v.condition || '—', highlight: false },
+  { label: 'Mileage', key: 'mileage', format: (v) => formatMileage(v.mileage), highlight: true, mono: true },
+  { label: 'Condition', key: 'condition', format: (v) => (v.condition ? vehicleConditionLabel(v.condition) : '—'), highlight: false },
   { label: 'Color', key: 'color', format: (v) => v.color || '—', highlight: false },
-  { label: 'MPG city', key: 'mpgCity', format: (v) => String(v.features?.mpgCity ?? '—'), highlight: true },
-  { label: 'MPG highway', key: 'mpgHighway', format: (v) => String(v.features?.mpgHighway ?? '—'), highlight: true },
-  { label: 'VIN', key: 'vin', format: (v) => v.vin, highlight: false },
-  { label: 'Stock #', key: 'stockNumber', format: (v) => v.stockNumber, highlight: false },
+  { label: 'MPG city', key: 'mpgCity', format: (v) => String(v.features?.mpgCity ?? '—'), highlight: true, mono: true },
+  { label: 'MPG highway', key: 'mpgHighway', format: (v) => String(v.features?.mpgHighway ?? '—'), highlight: true, mono: true },
+  { label: 'VIN', key: 'vin', format: (v) => v.vin, highlight: false, mono: true },
+  { label: 'Stock #', key: 'stockNumber', format: (v) => v.stockNumber, highlight: false, mono: true },
 ]
 
 function numericValue(field: (typeof COMPARISON_FIELDS)[number], v: Vehicle): number | null {
@@ -110,12 +112,50 @@ export function ComparePage() {
     clearComparison()
   }
 
+  const browseTrack = (
+    <div className="sf-track">
+      <Link href="/inventory" className="sf-pill sf-pill-primary min-h-11 sm:min-h-9">Browse inventory</Link>
+    </div>
+  )
+
+  const unavailableList = (
+    <ul className="mt-3 divide-y" style={{ borderColor: 'var(--sf-rule)' }}>
+      {unavailableIds.map((id) => (
+        <li key={id} className="flex items-center justify-between gap-4 py-2" style={{ borderColor: 'var(--sf-rule)' }}>
+          <span className="sf-title-line min-w-0">
+            <span className="sf-dot" aria-hidden="true" />
+            <span className="truncate">Vehicle no longer available</span>
+          </span>
+          <span className="sf-track shrink-0">
+            <button type="button" onClick={() => removeFromComparison(id)} className="sf-pill min-h-11 sm:min-h-9">
+              <X className="size-4" aria-hidden="true" />
+              Remove
+            </button>
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+
   if (loading) {
     return (
       <>
         <PageHeader eyebrow="Compare" title="Compare vehicles" />
-        <Container className="py-[var(--sf-space-2xl)]">
-          <div className="sf-skeleton h-64 rounded-[var(--sf-radius-md)]" />
+        <Container className="py-[var(--sf-space-xl)]">
+          <div className="flex gap-4 overflow-hidden" aria-busy="true" aria-label="Loading comparison">
+            <div className="hidden w-32 shrink-0 space-y-3 sm:block">
+              <div className="sf-skeleton h-56" />
+              {Array.from({ length: 6 }).map((_, i) => <div key={i} className="sf-skeleton h-6" />)}
+            </div>
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="w-60 shrink-0 space-y-3">
+                <div className="sf-skeleton aspect-[4/3] rounded-[var(--sf-radius-md)]" />
+                <div className="sf-skeleton h-5 w-3/4" />
+                <div className="sf-skeleton h-7 w-1/2" />
+                {Array.from({ length: 6 }).map((_, j) => <div key={j} className="sf-skeleton h-6" />)}
+              </div>
+            ))}
+          </div>
         </Container>
       </>
     )
@@ -125,15 +165,18 @@ export function ComparePage() {
     return (
       <>
         <PageHeader eyebrow="Compare" title="Compare vehicles" />
-        <Container className="py-[var(--sf-space-2xl)] max-w-lg text-center">
-          <p role="alert" className="text-[var(--sf-text-md)] mb-6" style={{ color: 'var(--sf-ink-2)' }}>
-            These vehicles couldn&apos;t be loaded. Please try again.
-          </p>
-          <div className="flex justify-center gap-3">
-            <button type="button" onClick={() => void loadComparisonVehicles()} className="sf-btn sf-btn-ghost">
-              Retry
-            </button>
-            <Button href="/inventory">Browse inventory</Button>
+        <Container className="py-[var(--sf-space-xl)]">
+          <div className="sf-well flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+            <p role="alert" className="sf-title-line font-semibold">
+              <span className="sf-dot" data-tone="bad" aria-hidden="true" />
+              These vehicles couldn&apos;t be loaded.
+            </p>
+            <div className="sf-track shrink-0">
+              <button type="button" onClick={() => void loadComparisonVehicles()} className="sf-pill sf-pill-raised min-h-11 sm:min-h-9">
+                Retry
+              </button>
+              <Link href="/inventory" className="sf-pill min-h-11 sm:min-h-9">Browse inventory</Link>
+            </div>
           </div>
         </Container>
       </>
@@ -144,11 +187,14 @@ export function ComparePage() {
     return (
       <>
         <PageHeader eyebrow="Compare" title="No vehicles to compare" />
-        <Container className="py-[var(--sf-space-2xl)] max-w-lg text-center">
-          <p className="text-[var(--sf-text-md)] mb-6" style={{ color: 'var(--sf-ink-2)' }}>
-            You haven&apos;t added any vehicles to compare yet.
-          </p>
-          <Button href="/inventory">Browse inventory</Button>
+        <Container className="py-[var(--sf-space-xl)]">
+          <div className="sf-well flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+            <p className="sf-title-line font-semibold">
+              <span className="sf-dot" aria-hidden="true" />
+              No vehicles added
+            </p>
+            {browseTrack}
+          </div>
         </Container>
       </>
     )
@@ -158,155 +204,150 @@ export function ComparePage() {
     return (
       <>
         <PageHeader eyebrow="Compare" title="Vehicles no longer available" />
-        <Container className="py-[var(--sf-space-2xl)] max-w-lg text-center">
-          <p className="text-[var(--sf-text-md)] mb-6" style={{ color: 'var(--sf-ink-2)' }}>
-            These vehicles are no longer available.
-          </p>
-          <div className="space-y-3 mb-6">
-            {unavailableIds.map((id) => (
-              <div key={id} className="sf-card flex items-center justify-between gap-4 p-4 text-left">
-                <span>Vehicle no longer available</span>
-                <button type="button" onClick={() => removeFromComparison(id)} className="sf-btn sf-btn-ghost text-sm">
-                  Remove
-                </button>
-              </div>
-            ))}
+        <Container className="py-[var(--sf-space-xl)]">
+          <div className="sf-well p-6">
+            <p className="sf-title-line font-semibold">
+              <span className="sf-dot" data-tone="warn" aria-hidden="true" />
+              These vehicles are no longer available.
+            </p>
+            {unavailableList}
           </div>
-          <Button href="/inventory">Browse inventory</Button>
+          <div className="mt-6">{browseTrack}</div>
         </Container>
       </>
     )
   }
 
+  const stickyCell = 'sticky left-0 z-10 w-28 min-w-28 border-r px-3 text-left align-top sm:w-40 sm:min-w-40 sm:px-4'
+  const stickyStyle = { background: 'var(--sf-paper)', borderColor: 'var(--sf-rule)' }
+
   return (
     <>
       <PageHeader
-        eyebrow="Compare"
+        eyebrow={`Compare · ${vehicles.length} ${vehicles.length === 1 ? 'vehicle' : 'vehicles'}`}
         title="Compare vehicles"
-        description={`Comparing ${vehicles.length} vehicle${vehicles.length !== 1 ? 's' : ''}`}
+        actions={
+          <div className="sf-track">
+            <button type="button" onClick={handleClearAll} className="sf-pill min-h-11 sm:min-h-9">
+              Clear all
+            </button>
+            <Link href="/inventory" className="sf-pill sf-pill-raised min-h-11 sm:min-h-9">
+              <Plus className="size-4" aria-hidden="true" />
+              Add vehicles
+            </Link>
+          </div>
+        }
       />
 
-      <Container className="py-[var(--sf-space-2xl)]">
+      <Container className="py-[var(--sf-space-lg)] md:py-[var(--sf-space-xl)]">
         {unavailableIds.length > 0 && (
-          <div className="sf-card p-4 mb-[var(--sf-space-md)]" role="status">
-            <p className="mb-3">Some vehicles are no longer available.</p>
-            <div className="space-y-2">
-              {unavailableIds.map((id) => (
-                <div key={id} className="flex items-center justify-between gap-4 border-t pt-2" style={{ borderColor: 'var(--sf-rule)' }}>
-                  <span>Vehicle no longer available</span>
-                  <button type="button" onClick={() => removeFromComparison(id)} className="sf-btn sf-btn-ghost text-sm">
-                    Remove
-                  </button>
-                </div>
-              ))}
-            </div>
+          <div className="sf-notice mb-6" data-tone="warn" role="status">
+            <p className="font-semibold">Some vehicles are no longer available.</p>
+            {unavailableList}
           </div>
         )}
-        <div className="flex justify-end gap-3 mb-[var(--sf-space-md)]">
-          <button onClick={handleClearAll} className="sf-btn sf-btn-ghost text-sm">
-            Clear all
-          </button>
-          <Button href="/inventory" variant="ghost" className="text-sm">
-            Add more vehicles
-          </Button>
+
+        <div className="mb-3 flex items-center justify-end gap-2">
+          <span className="sf-chip sf-best">Best value</span>
         </div>
 
-        <div className="sf-card overflow-x-auto">
-          <table className="w-full border-collapse">
+        <div
+          className="overflow-x-auto overscroll-x-contain rounded-[var(--sf-radius-md)] border"
+          style={{ borderColor: 'var(--sf-rule)' }}
+          role="region"
+          aria-label="Comparison table"
+          tabIndex={0}
+        >
+          <table className="w-full border-collapse text-[var(--sf-text-sm)]">
             <thead>
-              <tr style={{ background: 'var(--sf-paper-2)' }}>
-                <th className="p-4 text-left sf-eyebrow sticky left-0 z-10 align-bottom" style={{ background: 'var(--sf-paper-2)' }}>
-                  Feature
+              <tr>
+                <th scope="col" className={`${stickyCell} sf-eyebrow align-bottom py-4`} style={stickyStyle}>
+                  Spec
                 </th>
-                {vehicles.map((vehicle) => (
-                  <th key={vehicle.id} className="p-4 min-w-[240px] align-bottom">
-                    <div className="relative aspect-[16/10] mb-3 bg-[var(--sf-paper-2)] overflow-hidden">
-                      {vehicleImageUrl(vehicle.images?.[0]) ? (
-                        <Image
-                          src={vehicleImageUrl(vehicle.images?.[0])!}
-                          alt={vehicleTitle(vehicle)}
-                          width={300}
-                          height={190}
-                          className="object-cover w-full h-full"
-                          unoptimized
-                        />
-                      ) : (
-                        <VehiclePhotoPlaceholder />
-                      )}
-                    </div>
-                    <h3 className="sf-display text-[length:var(--sf-text-lg)] leading-tight">{vehicleTitle(vehicle)}</h3>
-                    <p className="text-[var(--sf-text-sm)] mt-1" style={{ color: 'var(--sf-ink-2)' }}>
-                      {formatPrice(vehicle.price, currencyCode)}
-                    </p>
-                    <button
-                      onClick={() => removeFromComparison(vehicle.id)}
-                      className="text-[var(--sf-text-xs)] mt-2 hover:underline"
-                      style={{ color: 'var(--sf-ink-3)' }}
-                    >
-                      Remove
-                    </button>
-                  </th>
-                ))}
+                {vehicles.map((vehicle) => {
+                  const imageUrl = vehicleImageUrl(primaryVehicleImage(vehicle.images))
+                  const status = vehicleStatus(vehicle.status)
+                  return (
+                    <th key={vehicle.id} scope="col" className="min-w-[13rem] p-3 text-left align-top font-normal sm:min-w-[15rem] sm:p-4">
+                      <Link href={`/inventory/${vehicle.id}`} className="sf-photo block aspect-[4/3]" tabIndex={-1} aria-hidden="true">
+                        {imageUrl ? (
+                          <Image src={imageUrl} alt="" fill className="object-cover" sizes="240px" unoptimized />
+                        ) : (
+                          <VehiclePhotoPlaceholder />
+                        )}
+                      </Link>
+                      <h2 className="sf-title-line mt-3">
+                        <span className="sf-dot" data-tone={status.tone} aria-hidden="true" />
+                        <Link href={`/inventory/${vehicle.id}`} className="sf-heading min-w-0 text-[var(--sf-text-md)] hover:text-[var(--sf-accent)]">
+                          {vehicle.year} {vehicle.make} {vehicle.model}
+                        </Link>
+                      </h2>
+                      <p className="sf-muted min-h-[1.5em] truncate pl-4 text-[var(--sf-text-xs)]">
+                        <span className="sr-only">{status.label}. </span>
+                        {vehicle.trim}
+                      </p>
+                      <p className="sf-price mt-2 pl-4 text-[var(--sf-text-xl)]">{formatPrice(vehicle.price, currencyCode)}</p>
+                      <div className="mt-3 pl-4">
+                        <span className="sf-track">
+                          <button
+                            type="button"
+                            onClick={() => removeFromComparison(vehicle.id)}
+                            className="sf-pill min-h-11 sm:min-h-9"
+                            aria-label={`Remove ${vehicleTitle(vehicle)} from compare`}
+                          >
+                            <X className="size-4" aria-hidden="true" />
+                            Remove
+                          </button>
+                        </span>
+                      </div>
+                    </th>
+                  )
+                })}
               </tr>
             </thead>
             <tbody>
-              {COMPARISON_FIELDS.map((field, idx) => (
-                <tr
-                  key={field.key}
-                  className="border-t"
-                  style={{ borderColor: 'var(--sf-rule)', background: idx % 2 === 0 ? 'var(--sf-paper)' : 'var(--sf-paper-2)' }}
-                >
-                  <td
-                    className="p-4 font-semibold text-[var(--sf-text-sm)] sticky left-0 z-10"
-                    style={{ background: 'inherit', borderRight: '1px solid var(--sf-rule)' }}
-                  >
-                    {field.label}
-                    {field.highlight && (
-                      <span className="ml-2" style={{ color: 'var(--sf-accent)' }}>★</span>
-                    )}
-                  </td>
-                  {vehicles.map((vehicle) => (
-                    <td
-                      key={vehicle.id}
-                      className={`p-4 text-center text-[var(--sf-text-sm)] ${bestValueClass(field, vehicle, vehicles)}`}
-                    >
-                      {field.format(vehicle, currencyCode)}
-                    </td>
-                  ))}
+              {COMPARISON_FIELDS.map((field) => (
+                <tr key={field.key} className="border-t" style={{ borderColor: 'var(--sf-rule)' }}>
+                  <th scope="row" className={`${stickyCell} py-3 align-middle`} style={stickyStyle}>
+                    <span className="sf-eyebrow">{field.label}</span>
+                  </th>
+                  {vehicles.map((vehicle) => {
+                    const best = bestValueClass(field, vehicle, vehicles)
+                    return (
+                      <td
+                        key={vehicle.id}
+                        className={`px-3 py-3 sm:px-4 ${field.mono ? 'sf-figure' : ''} ${field.key === 'vin' ? 'break-all text-[var(--sf-text-xs)]' : ''} ${best}`}
+                      >
+                        {field.format(vehicle, currencyCode)}
+                        {best && <span className="sr-only"> (best)</span>}
+                      </td>
+                    )
+                  })}
                 </tr>
               ))}
 
               <tr className="border-t" style={{ borderColor: 'var(--sf-rule)' }}>
-                <td
-                  className="p-4 font-semibold text-[var(--sf-text-sm)] sticky left-0 z-10 align-top"
-                  style={{ background: 'var(--sf-paper)', borderRight: '1px solid var(--sf-rule)' }}
-                >
-                  Description
-                </td>
+                <th scope="row" className={`${stickyCell} py-3`} style={stickyStyle}>
+                  <span className="sf-eyebrow">Description</span>
+                </th>
                 {vehicles.map((vehicle) => (
-                  <td key={vehicle.id} className="p-4 text-[var(--sf-text-sm)] align-top" style={{ color: 'var(--sf-ink-2)' }}>
-                    {vehicle.description || 'No description available'}
+                  <td key={vehicle.id} className="sf-muted px-3 py-3 align-top leading-relaxed sm:px-4">
+                    {vehicle.description || 'Not listed'}
                   </td>
                 ))}
               </tr>
 
-              <tr className="border-t" style={{ borderColor: 'var(--sf-rule)', background: 'var(--sf-paper-2)' }}>
-                <td
-                  className="p-4 font-semibold text-[var(--sf-text-sm)] sticky left-0 z-10"
-                  style={{ background: 'var(--sf-paper-2)', borderRight: '1px solid var(--sf-rule)' }}
-                >
-                  Actions
-                </td>
+              <tr className="border-t" style={{ borderColor: 'var(--sf-rule)' }}>
+                <th scope="row" className={`${stickyCell} py-4`} style={stickyStyle}>
+                  <span className="sf-eyebrow">Actions</span>
+                </th>
                 {vehicles.map((vehicle) => (
-                  <td key={vehicle.id} className="p-4">
-                    <div className="flex flex-col gap-2">
-                      <Link href={`/inventory/${vehicle.id}`} className="sf-btn sf-btn-primary text-xs">
-                        View details
+                  <td key={vehicle.id} className="px-3 py-4 sm:px-4">
+                    <div className="sf-track">
+                      <Link href={`/inventory/${vehicle.id}`} className="sf-pill sf-pill-primary min-h-11 sm:min-h-9">
+                        View
                       </Link>
-                      <Link
-                        href={`/test-drive?vehicleId=${vehicle.id}`}
-                        className="sf-btn sf-btn-ghost text-xs"
-                      >
+                      <Link href={`/test-drive?vehicleId=${vehicle.id}`} className="sf-pill min-h-11 sm:min-h-9">
                         Test drive
                       </Link>
                     </div>

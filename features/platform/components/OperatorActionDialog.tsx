@@ -1,11 +1,11 @@
 'use client'
 
 import type { FormEvent } from 'react'
-import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Notice, Pill, Track } from './desk'
 
 export type OperatorActionField = {
   name: string
@@ -56,21 +56,23 @@ export function OperatorActionDialog({
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
           {fields.map(field => <label key={field.name} htmlFor={`operator-${field.name}`} className={`grid gap-1.5 text-sm ${field.type === 'textarea' ? 'sm:col-span-2' : ''}`}>
-            <span className="font-medium">{field.label}</span>
+            <span className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">{field.label}</span>
             {field.type === 'textarea' ? <Textarea id={`operator-${field.name}`} required={field.required ?? true} maxLength={field.maxLength} placeholder={field.placeholder} value={values[field.name] || ''} onChange={event => change(field.name, event.target.value)} rows={3} /> :
               field.type === 'select' ? <Select required={field.required ?? true} value={values[field.name] || ''} onValueChange={value => change(field.name, value)}>
                 <SelectTrigger id={`operator-${field.name}`} aria-label={field.label}><SelectValue placeholder={field.placeholder || `Select ${field.label.toLowerCase()}`} /></SelectTrigger>
                 <SelectContent>{(field.options || []).map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
               </Select> :
-                field.type === 'checkbox' ? <span className="flex items-start gap-2 rounded-md border p-3"><input id={`operator-${field.name}`} type="checkbox" required={field.required ?? true} checked={values[field.name] === 'yes'} onChange={event => change(field.name, event.target.checked ? 'yes' : '')} /><span>{field.description || field.label}</span></span> :
+                field.type === 'checkbox' ? <span className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 shadow-[inset_0_1px_2px_rgb(0_0_0/0.06)]"><input id={`operator-${field.name}`} type="checkbox" required={field.required ?? true} checked={values[field.name] === 'yes'} onChange={event => change(field.name, event.target.checked ? 'yes' : '')} /><span>{field.description || field.label}</span></span> :
                   <Input id={`operator-${field.name}`} type={field.type || 'text'} required={field.required ?? true} min={field.min} max={field.max} step={field.step} maxLength={field.maxLength} placeholder={field.placeholder} value={values[field.name] || ''} onChange={event => change(field.name, event.target.value)} />}
             {field.description && field.type !== 'checkbox' && <span className="text-xs text-muted-foreground">{field.description}</span>}
           </label>)}
         </div>
-        {error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{error}</p>}
-        <DialogFooter>
-          <Button type="button" variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button type="submit" disabled={busy}>{busy ? 'Saving…' : submitLabel}</Button>
+        {error && <Notice tone="bad">{error}</Notice>}
+        <DialogFooter className="sm:justify-end">
+          <Track>
+            <Pill variant="plain" disabled={busy} onClick={() => onOpenChange(false)}>Cancel</Pill>
+            <Pill type="submit" variant="primary" disabled={busy}>{busy ? 'Saving…' : submitLabel}</Pill>
+          </Track>
         </DialogFooter>
       </form>
     </DialogContent>

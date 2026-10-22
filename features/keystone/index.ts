@@ -9,6 +9,7 @@ import { passwordResetPath } from "./lib/passwordResetPath";
 import Iron from "@hapi/iron";
 import * as cookie from "cookie";
 import { authenticateApiKey, refreshHumanSession } from "./utils/requestAuthentication";
+import { s3ForcePathStyle } from "./lib/s3-storage";
 
 function requiredEnv(name: string): string {
   const value = process.env[name];
@@ -241,7 +242,7 @@ export default withAuth(
         secretAccessKey,
         endpoint,
         signed: { expiry: 5000 },
-        forcePathStyle: true,
+        forcePathStyle: s3ForcePathStyle(endpoint),
       },
     },
     ui: {

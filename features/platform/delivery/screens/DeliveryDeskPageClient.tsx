@@ -2,17 +2,28 @@
 
 import { useMemo, useState, type FormEvent } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, CalendarClock, CheckCircle2, Circle, ClipboardCheck, RefreshCw, Search, Square, Triangle } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { EmptyState } from '@/components/ui/empty-state'
+import { Check, ChevronRight, Plus, RefreshCw, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
+import {
+  Code,
+  DeskHeader,
+  DeskSection,
+  Meter,
+  Notice,
+  Panel,
+  Pill,
+  Readout,
+  ReadoutStrip,
+  Segmented,
+  TitleLine,
+  Track,
+  type DeskTone,
+} from '@/features/platform/components/desk'
 import { readFinanceEvidence, type FinanceEvidence } from '@/features/platform/deals/lib/financeEvidence'
 import { FinanceEvidenceHistory } from '@/features/platform/deals/components/FinanceEvidenceHistory'
 import { buildDeliveryChecklistEntry, DELIVERY_CHECKLIST_ITEMS } from '../lib/checklistEvidence'
@@ -49,11 +60,24 @@ function readDeliveries(workspace: DeliveryWorkspace | null): Delivery[] {
   return (workspace?.deliveries || []).map(delivery => ({ ...delivery, financeEvidence: readFinanceEvidence(delivery.financeEvidence) }))
 }
 
-const caseBadge: Record<string, string> = {
-  scheduled: 'border-blue-200 bg-blue-50 text-blue-700',
-  arrived: 'border-cyan-200 bg-cyan-50 text-cyan-700',
-  ready: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-  delivered: 'border-green-200 bg-green-50 text-green-700',
+const caseTone: Record<string, DeskTone> = {
+  scheduled: 'info',
+  arrived: 'info',
+  ready: 'ok',
+  delivered: 'ok',
+}
+
+const fieldLabel = 'font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground'
+
+function deliveryTone(delivery: Delivery, deliveryCase: DeliveryCase | undefined): DeskTone {
+  if (delivery.status === 'delivered') return 'ok'
+  if (!deliveryCase) return delivery.status === 'financed' ? 'warn' : 'idle'
+  return caseTone[deliveryCase.status] ?? 'idle'
+}
+
+function deliveryStatusLabel(delivery: Delivery, deliveryCase: DeliveryCase | undefined) {
+  const status = deliveryCase?.status || delivery.status
+  return !deliveryCase && delivery.status === 'financed' ? 'Not scheduled' : status.charAt(0).toUpperCase() + status.slice(1)
 }
 
 function customerName(delivery: Delivery) {
@@ -70,39 +94,22 @@ function formatDate(value: string | null | undefined) {
     : 'Not scheduled'
 }
 
-function Summary({ title, value, detail, icon: Icon }: { title: string; value: string; detail: string; icon: React.ElementType }) {
+/** The time readout at the head of each delivery row. */
+function TimeReadout({ value }: { value: string | null | undefined }) {
+  if (!value) {
+    return (
+      <div className="font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+        <p>Not</p>
+        <p>scheduled</p>
+      </div>
+    )
+  }
+  const date = new Date(value)
   return (
-    <Card>
-      <CardContent className="flex items-center justify-between gap-3 p-4">
-        <div>
-          <p className="text-sm text-muted-foreground">{title}</p>
-          <p className="mt-1 text-2xl font-semibold">{value}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
-        </div>
-        <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
-      </CardContent>
-    </Card>
-  )
-}
-
-function EmptyStateDefault() {
-  return (
-    <EmptyState
-      title="No deliveries"
-      description="Scheduled deliveries will appear here."
-      icons={[Triangle, Square, Circle]}
-    />
-  )
-}
-
-function EmptyStateSearch({ onResetFilters }: { onResetFilters: () => void }) {
-  return (
-    <EmptyState
-      title="No results found"
-      description="Try adjusting your search or filters."
-      icons={[Search]}
-      action={{ label: 'Reset filters', onClick: onResetFilters }}
-    />
+    <time dateTime={value} className="block font-mono tabular-nums">
+      <span className="block text-[11px] uppercase tracking-[0.1em] text-muted-foreground">{date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+      <span className="block text-lg font-semibold tracking-tight text-foreground">{date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
+    </time>
   )
 }
 
@@ -345,260 +352,273 @@ export function DeliveryDeskPageClient({
   ]
 
   const header = (
-    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">Delivery</h1>
-        <p className="text-muted-foreground">Schedule deliveries and complete handoff checklists.</p>
-      </div>
-      <Button className="self-start" variant="outline" onClick={load} disabled={loading}>
-        <RefreshCw className="mr-2 h-4 w-4" />
-        Refresh
-      </Button>
-    </div>
+    <DeskHeader
+      title="Delivery"
+      tone={error ? 'bad' : ready.length > 0 ? 'ok' : openPromises.length > 0 ? 'warn' : 'idle'}
+      status={error ? 'Unavailable' : `${ready.length} ready`}
+      meta={error ? 'Unavailable' : `${scheduled.length} scheduled · ${ready.length} ready · ${openPromises.length} open we-owes`}
+      actions={
+        <Track>
+          <Pill onClick={load} disabled={loading} aria-label="Refresh deliveries">
+            <RefreshCw className={loading ? 'animate-spin' : undefined} />
+            Refresh
+          </Pill>
+        </Track>
+      }
+    />
   )
+
+  const filterOptions = [
+    { value: 'active', label: 'Active', count: deliveries.filter(delivery => delivery.status !== 'delivered').length },
+    { value: 'ready', label: 'Ready', tone: 'ok' as const, count: ready.length },
+    { value: 'we-owe', label: 'Open we-owes', tone: 'warn' as const, count: deliveries.filter(delivery => caseFor(delivery.id)?.weOweItems.some(item => item.status === 'open')).length },
+    { value: 'delivered', label: 'Delivered', count: completed.length },
+    { value: 'all', label: 'All', count: deliveries.length },
+  ]
 
   return (
     <PageContainer title="Delivery" header={header} breadcrumbs={breadcrumbs}>
-      <div className="min-w-0 space-y-6 px-4 pb-6 md:px-6">
-        {notice && (
-          <p role="status" className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
-            {notice}
-          </p>
-        )}
+      <div className="min-w-0 max-w-full space-y-8 px-4 pb-10 md:px-6">
+        {notice && <Notice tone={notice.startsWith('Unable') ? 'bad' : 'ok'} role="status">{notice}</Notice>}
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Summary title="Scheduled" value={String(scheduled.length)} detail="Delivery appointments" icon={CalendarClock} />
-          <Summary title="Ready" value={String(ready.length)} detail="Ready for handoff" icon={ClipboardCheck} />
-          <Summary title="Open we-owes" value={String(openPromises.length)} detail="Promised to customers" icon={AlertTriangle} />
-          <Summary title="Delivered" value={String(completed.length)} detail="Completed handoffs" icon={CheckCircle2} />
-        </div>
+        <ReadoutStrip>
+          <Readout label="Scheduled" value={scheduled.length} tone={scheduled.length > 0 ? 'info' : 'idle'} />
+          <Readout label="Ready" value={ready.length} tone={ready.length > 0 ? 'ok' : 'idle'} />
+          <Readout label="Open we-owes" value={openPromises.length} tone={openPromises.length > 0 ? 'warn' : 'idle'} />
+          <Readout label="Delivered" value={completed.length} />
+        </ReadoutStrip>
 
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <div className="relative min-w-0 flex-1 lg:max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="pl-9"
-              value={search}
-              onChange={event => setSearch(event.target.value)}
-              placeholder="Search customer, stock, vehicle, or VIN"
-              aria-label="Search deliveries"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-2 sm:flex">
-            <Select value={filter} onValueChange={setFilter}>
-              <SelectTrigger className="w-full sm:w-[170px]" aria-label="Filter deliveries">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="ready">Ready</SelectItem>
-                <SelectItem value="we-owe">Open we-owes</SelectItem>
-                <SelectItem value="delivered">Delivered</SelectItem>
-                <SelectItem value="all">All</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={sort} onValueChange={setSort}>
-              <SelectTrigger className="w-full sm:w-[170px]" aria-label="Sort deliveries">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="appointment">Appointment first</SelectItem>
-                <SelectItem value="updated">Recently updated</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {loading && (
-            <span className="text-sm text-muted-foreground" role="status">
-              Refreshing…
-            </span>
-          )}
-        </div>
+        <DeskSection
+          title="Deliveries"
+          count={visible.length}
+          actions={loading ? <span className="text-xs text-muted-foreground" role="status">Refreshing…</span> : undefined}
+        >
+          <div className="space-y-3">
+            <Segmented label="Filter deliveries" value={filter} onChange={setFilter} options={filterOptions} size="sm" className="w-full sm:w-auto" />
+            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative min-w-0 flex-1 sm:max-w-md">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  className="pl-9"
+                  value={search}
+                  onChange={event => setSearch(event.target.value)}
+                  placeholder="Customer, stock, vehicle or VIN"
+                  aria-label="Search deliveries"
+                />
+              </div>
+              <Select value={sort} onValueChange={setSort}>
+                <SelectTrigger className="w-full sm:w-[180px]" aria-label="Sort deliveries">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="appointment">Appointment first</SelectItem>
+                  <SelectItem value="updated">Recently updated</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-        {error ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-destructive" />
-              <p className="font-medium">Deliveries are unavailable</p>
-              <p className="mt-1 text-sm text-muted-foreground">{error}</p>
-              <Button className="mt-4" variant="outline" onClick={load}>
-                Retry
-              </Button>
-            </CardContent>
-          </Card>
-        ) : visible.length === 0 ? (
-          deliveries.length > 0 && isFiltered ? (
-            <EmptyStateSearch onResetFilters={resetFilters} />
-          ) : (
-            <EmptyStateDefault />
-          )
-        ) : (
-          <div className="grid gap-4 xl:grid-cols-2">
-            {visible.map(delivery => {
-              const deliveryCase = caseFor(delivery.id)
-              const completedChecks = DELIVERY_CHECKLIST_ITEMS.filter(({ code }) =>
-                deliveryCase?.checklist?.some(item => item.code === code && ['complete', 'waived'].includes(item.status))
-              ).length
-              const openWeOwe = deliveryCase?.weOweItems.filter(item => item.status === 'open') || []
-              const finance = delivery.financeEvidence
-              return (
-                <Card key={delivery.id} className="min-w-0">
-                  <CardHeader className="space-y-3">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <CardTitle className="break-words text-lg">{vehicleName(delivery)}</CardTitle>
-                        <p className="mt-1 break-all text-xs text-muted-foreground">
-                          Stock {delivery.vehicle?.stockNumber || '—'} · VIN {delivery.vehicle?.vin || '—'}
-                        </p>
-                      </div>
-                      <Badge variant="outline" className={caseBadge[deliveryCase?.status || delivery.status] || ''}>
-                        {deliveryCase?.status || delivery.status}
-                      </Badge>
-                    </div>
-                    <div className="grid gap-2 text-sm sm:grid-cols-2">
-                      <div>
-                        <p className="text-muted-foreground">Customer</p>
-                        {delivery.lead ? (
-                          <Link className="font-medium hover:underline" href={`${basePath}/platform/crm/${delivery.lead.id}`}>
-                            {customerName(delivery)}
-                          </Link>
-                        ) : (
-                          <p className="font-medium">{customerName(delivery)}</p>
+            {error ? (
+              <Notice tone="bad">
+                <p className="font-medium">Deliveries are unavailable</p>
+                <p className="mt-0.5 text-muted-foreground">{error}</p>
+                <Track className="mt-2">
+                  <Pill size="sm" onClick={load}>Retry</Pill>
+                </Track>
+              </Notice>
+            ) : visible.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-muted-foreground">
+                <p>{deliveries.length > 0 && isFiltered ? 'No matching deliveries' : 'No deliveries'}</p>
+                {deliveries.length > 0 && isFiltered && (
+                  <Track>
+                    <Pill size="sm" onClick={resetFilters}>Reset filters</Pill>
+                  </Track>
+                )}
+              </div>
+            ) : (
+              <Panel className="divide-y">
+                {visible.map(delivery => {
+                  const deliveryCase = caseFor(delivery.id)
+                  const completedChecks = DELIVERY_CHECKLIST_ITEMS.filter(({ code }) =>
+                    deliveryCase?.checklist?.some(item => item.code === code && ['complete', 'waived'].includes(item.status))
+                  ).length
+                  const openWeOwe = deliveryCase?.weOweItems.filter(item => item.status === 'open') || []
+                  const finance = delivery.financeEvidence
+                  const busy = activeId === delivery.id
+                  const allChecked = completedChecks === DELIVERY_CHECKLIST_ITEMS.length
+                  return (
+                    <article key={delivery.id} className="grid min-w-0 gap-3 px-4 py-4 sm:grid-cols-[6.5rem_minmax(0,1fr)] sm:gap-5">
+                      <TimeReadout value={deliveryCase?.appointmentAt} />
+
+                      <div className="min-w-0 space-y-4">
+                        <div className="min-w-0">
+                          <TitleLine as="h3" tone={deliveryTone(delivery, deliveryCase)} status={deliveryStatusLabel(delivery, deliveryCase)} className="text-base font-semibold text-foreground">
+                            {vehicleName(delivery)}
+                          </TitleLine>
+                          <p className="pl-4 text-sm text-muted-foreground">
+                            <span className="text-foreground">{deliveryStatusLabel(delivery, deliveryCase)}</span>
+                            {' · '}
+                            {delivery.lead ? (
+                              <Link className="hover:text-foreground hover:underline" href={`${basePath}/platform/crm/${delivery.lead.id}`}>
+                                {customerName(delivery)}
+                              </Link>
+                            ) : (
+                              customerName(delivery)
+                            )}
+                            {delivery.salesperson?.name ? ` · ${delivery.salesperson.name}` : ''}
+                          </p>
+                          <p className="flex min-w-0 flex-wrap gap-x-3 pl-4">
+                            <Code>Stock {delivery.vehicle?.stockNumber || '—'}</Code>
+                            <Code className="break-all">VIN {delivery.vehicle?.vin || '—'}</Code>
+                          </p>
+                        </div>
+
+                        <div className="min-w-0 space-y-2">
+                          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                            <span className={fieldLabel}>Checklist</span>
+                            <Meter value={completedChecks / DELIVERY_CHECKLIST_ITEMS.length} segments={DELIVERY_CHECKLIST_ITEMS.length} tone={allChecked ? 'ok' : 'warn'} label={`${vehicleName(delivery)} checklist progress`} />
+                            <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                              {completedChecks}/{DELIVERY_CHECKLIST_ITEMS.length} complete
+                            </span>
+                          </div>
+                          <ul className="grid min-w-0 gap-x-4 gap-y-1 sm:grid-cols-2 xl:grid-cols-3">
+                            {DELIVERY_CHECKLIST_ITEMS.map(({ code, label }) => {
+                              const item = deliveryCase?.checklist?.find(value => value.code === code)
+                              const done = Boolean(item && ['complete', 'waived'].includes(item.status))
+                              return (
+                                <li key={code} className="min-w-0 text-xs">
+                                  <TitleLine as="span" tone={done ? 'ok' : 'idle'} className="text-foreground">
+                                    {label}
+                                    <span className="text-muted-foreground"> · {item?.status || 'missing'}{item?.evidenceReference ? ' · reference recorded' : ''}</span>
+                                  </TitleLine>
+                                </li>
+                              )
+                            })}
+                            <li className="min-w-0 text-xs">
+                              <TitleLine as="span" tone={deliveryCase?.customerAcknowledgment ? 'ok' : 'idle'} className="text-foreground">
+                                Customer acknowledgment
+                                <span className="text-muted-foreground"> · {deliveryCase?.customerAcknowledgment ? 'Recorded' : 'Missing'}</span>
+                              </TitleLine>
+                            </li>
+                          </ul>
+                        </div>
+
+                        <div className="min-w-0 space-y-1.5 text-sm">
+                          <TitleLine as="p" tone={finance?.fundingCurrent ? 'ok' : delivery.status === 'delivered' ? 'idle' : 'warn'} className="text-foreground">
+                            Worksheet {finance?.worksheetVersion} · funding {finance?.fundingStatus || 'missing'}
+                            {finance?.fundingCurrent ? ' · current' : delivery.status === 'delivered' ? '' : ' · needs review'}
+                          </TitleLine>
+                          <TitleLine as="p" tone={finance?.prerequisites?.current ? 'ok' : 'warn'} className="text-foreground">
+                            Contract, menu, and compliance: {finance?.prerequisites?.current ? 'Reviewed' : 'Needs review'}
+                            {finance?.prerequisites?.issue ? `. ${finance.prerequisites.issue}` : ''}
+                          </TitleLine>
+                          {finance?.issue && (
+                            <Notice tone="warn" role="status">
+                              {finance.issue}{' '}
+                              <Link className="underline" href={`${basePath}/platform/finance`}>
+                                Review funding
+                              </Link>
+                            </Notice>
+                          )}
+                          {delivery.status === 'delivered' && (
+                            <p className="text-sm text-muted-foreground">Delivered {formatDate(delivery.saleDate)}.</p>
+                          )}
+                        </div>
+
+                        {delivery.status === 'financed' && (
+                          <Track aria-label={`${vehicleName(delivery)} actions`}>
+                            {!deliveryCase && (
+                              <Pill size="sm" variant="primary" onClick={() => manageCase(delivery, 'schedule')} disabled={busy}>
+                                Schedule
+                              </Pill>
+                            )}
+                            {deliveryCase?.status === 'scheduled' && (
+                              <Pill size="sm" variant="primary" onClick={() => manageCase(delivery, 'arrive')} disabled={busy}>
+                                Record arrival
+                              </Pill>
+                            )}
+                            {deliveryCase?.status === 'ready' && (
+                              <Pill size="sm" variant="primary" onClick={() => complete(delivery)} disabled={busy || !finance?.fundingCurrent}>
+                                <Check />
+                                Complete delivery
+                              </Pill>
+                            )}
+                            {deliveryCase && (
+                              <>
+                                <Pill size="sm" onClick={() => manageCase(delivery, 'record-checklist')} disabled={busy}>
+                                  Record checklist item
+                                </Pill>
+                                <Pill size="sm" onClick={() => manageCase(delivery, 'acknowledge')} disabled={busy}>
+                                  Record acknowledgment
+                                </Pill>
+                                <Pill size="sm" onClick={() => addWeOwe(delivery)} disabled={busy}>
+                                  <Plus />
+                                  Add we-owe
+                                </Pill>
+                              </>
+                            )}
+                          </Track>
                         )}
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Appointment</p>
-                        <p className="font-medium">{formatDate(deliveryCase?.appointmentAt)}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Checklist</p>
-                        <p className="font-medium">
-                          {completedChecks}/{DELIVERY_CHECKLIST_ITEMS.length} complete
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Customer acknowledgment</p>
-                        <p className="font-medium">{deliveryCase?.customerAcknowledgment ? 'Recorded' : 'Missing'}</p>
-                      </div>
-                      <div className="sm:col-span-2">
-                        <p className="text-muted-foreground">Checklist items</p>
-                        <ul className="mt-1 grid gap-1 sm:grid-cols-2">
-                          {DELIVERY_CHECKLIST_ITEMS.map(({ code, label }) => {
-                            const item = deliveryCase?.checklist?.find(value => value.code === code)
-                            return (
-                              <li key={code} className="text-xs">
-                                {label}: {item?.status || 'missing'}
-                                {item?.evidenceReference ? ' · reference recorded' : ''}
-                              </li>
-                            )
-                          })}
-                        </ul>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {delivery.status === 'financed' && (
-                      <div className="flex flex-wrap gap-2">
-                        {!deliveryCase && (
-                          <Button size="sm" variant="outline" onClick={() => manageCase(delivery, 'schedule')} disabled={activeId === delivery.id}>
-                            Schedule
-                          </Button>
-                        )}
-                        {deliveryCase?.status === 'scheduled' && (
-                          <Button size="sm" variant="outline" onClick={() => manageCase(delivery, 'arrive')} disabled={activeId === delivery.id}>
-                            Record arrival
-                          </Button>
-                        )}
-                        {deliveryCase && (
-                          <>
-                            <Button size="sm" variant="outline" onClick={() => manageCase(delivery, 'record-checklist')} disabled={activeId === delivery.id}>
-                              Record checklist item
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => manageCase(delivery, 'acknowledge')} disabled={activeId === delivery.id}>
-                              Record acknowledgment
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => addWeOwe(delivery)} disabled={activeId === delivery.id}>
-                              Add we-owe
-                            </Button>
-                          </>
-                        )}
-                        {deliveryCase?.status === 'ready' && (
-                          <Button size="sm" onClick={() => complete(delivery)} disabled={activeId === delivery.id || !finance?.fundingCurrent}>
-                            <CheckCircle2 className="mr-2 h-4 w-4" />
-                            Complete delivery
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                    <p className="text-sm">
-                      Worksheet {finance?.worksheetVersion} · funding {finance?.fundingStatus || 'missing'}
-                      {finance?.fundingCurrent ? ' · current' : delivery.status === 'delivered' ? '' : ' · needs review'}
-                    </p>
-                    {finance?.issue && (
-                      <p role="status" className="text-sm text-amber-700">
-                        {finance.issue}{' '}
-                        <Link className="underline" href={`${basePath}/platform/finance`}>
-                          Review funding
-                        </Link>
-                      </p>
-                    )}
-                    <p className="text-sm">
-                      Contract, menu, and compliance: {finance?.prerequisites?.current ? 'Reviewed' : 'Needs review'}
-                      {finance?.prerequisites?.issue ? `. ${finance.prerequisites.issue}` : ''}
-                    </p>
-                    <FinanceEvidenceHistory dealId={delivery.id} aggregateType="DeliveryCase" label="Delivery history" />
-                    <FinanceEvidenceHistory dealId={delivery.id} aggregateType="Deal" label="Deal history" />
-                    {deliveryCase?.deliverySnapshot != null && (
-                      <details className="text-sm">
-                        <summary>Delivery record</summary>
-                        <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">
-                          {JSON.stringify(deliveryCase.deliverySnapshot, null, 2)}
-                        </pre>
-                      </details>
-                    )}
-                    {delivery.status === 'delivered' && (
-                      <p className="text-sm text-muted-foreground">Delivered {formatDate(delivery.saleDate)}.</p>
-                    )}
-                    {(deliveryCase?.weOweItems.length || 0) > 0 && (
-                      <div className="rounded-lg border p-3">
-                        <p className="text-sm font-medium">We-owe items</p>
-                        <div className="mt-2 space-y-3">
-                          {deliveryCase?.weOweItems.map(item => (
-                            <div
-                              key={item.id}
-                              className="flex flex-col gap-2 border-t pt-2 first:border-0 first:pt-0 sm:flex-row sm:items-center sm:justify-between"
-                            >
-                              <div className="min-w-0">
-                                <p className="break-words text-sm">{item.description}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {item.status} · promised {formatDate(item.promisedAt)} · {item.owner?.name || 'Unassigned'}
-                                </p>
-                              </div>
-                              {item.status === 'open' && (
-                                <div className="flex shrink-0 gap-2">
-                                  <Button size="sm" variant="outline" onClick={() => closeWeOwe(delivery, item, 'fulfill')} disabled={activeId === delivery.id}>
-                                    Fulfill
-                                  </Button>
-                                  <Button size="sm" variant="ghost" onClick={() => closeWeOwe(delivery, item, 'waive')} disabled={activeId === delivery.id}>
-                                    Waive
-                                  </Button>
-                                </div>
+
+                        {(deliveryCase?.weOweItems.length || 0) > 0 && (
+                          <div className="min-w-0">
+                            <div className="flex items-baseline gap-2 border-b pb-1.5">
+                              <span className={fieldLabel}>We-owe items</span>
+                              {openWeOwe.length > 0 && (
+                                <span className="font-mono text-xs tabular-nums text-amber-700 dark:text-amber-300">
+                                  {openWeOwe.length} open we-owe{openWeOwe.length === 1 ? '' : 's'}
+                                </span>
                               )}
                             </div>
-                          ))}
+                            <ul className="divide-y">
+                              {deliveryCase?.weOweItems.map(item => (
+                                <li key={item.id} className="flex min-w-0 flex-col gap-2 py-2 sm:flex-row sm:items-center sm:justify-between">
+                                  <div className="min-w-0">
+                                    <TitleLine as="p" tone={item.status === 'open' ? 'warn' : item.status === 'waived' ? 'idle' : 'ok'} status={item.status} className="text-sm text-foreground">
+                                      {item.description}
+                                    </TitleLine>
+                                    <p className="pl-4 text-xs text-muted-foreground">
+                                      {item.status} · promised {formatDate(item.promisedAt)} · {item.owner?.name || 'Unassigned'}
+                                    </p>
+                                  </div>
+                                  {item.status === 'open' && (
+                                    <Track className="shrink-0 self-start sm:self-auto">
+                                      <Pill size="sm" onClick={() => closeWeOwe(delivery, item, 'fulfill')} disabled={busy}>
+                                        Fulfill
+                                      </Pill>
+                                      <Pill size="sm" variant="plain" onClick={() => closeWeOwe(delivery, item, 'waive')} disabled={busy}>
+                                        Waive
+                                      </Pill>
+                                    </Track>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        <div className="min-w-0 divide-y border-t">
+                          <FinanceEvidenceHistory dealId={delivery.id} aggregateType="DeliveryCase" label="Delivery history" />
+                          <FinanceEvidenceHistory dealId={delivery.id} aggregateType="Deal" label="Deal history" />
+                          {deliveryCase?.deliverySnapshot != null && (
+                            <details className="group min-w-0 text-sm">
+                              <summary className="flex cursor-pointer list-none items-center gap-2 py-1.5 font-medium text-foreground [&::-webkit-details-marker]:hidden">
+                                <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
+                                Delivery record
+                              </summary>
+                              <pre className="mb-2 ml-5 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/50 p-2 font-mono text-[11px] text-muted-foreground">
+                                {JSON.stringify(deliveryCase.deliverySnapshot, null, 2)}
+                              </pre>
+                            </details>
+                          )}
                         </div>
                       </div>
-                    )}
-                    {openWeOwe.length > 0 && (
-                      <p className="text-xs text-amber-700">
-                        {openWeOwe.length} open we-owe{openWeOwe.length === 1 ? '' : 's'}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              )
-            })}
+                    </article>
+                  )
+                })}
+              </Panel>
+            )}
           </div>
-        )}
+        </DeskSection>
 
         <Dialog
           open={Boolean(task)}
@@ -617,7 +637,7 @@ export function DeliveryDeskPageClient({
             <form onSubmit={submitTask} className="space-y-4">
               {task?.kind === 'schedule' && (
                 <label htmlFor="delivery-appointment" className="grid gap-1.5 text-sm">
-                  <span className="font-medium">Appointment</span>
+                  <span className={fieldLabel}>Appointment</span>
                   <Input
                     id="delivery-appointment"
                     type="datetime-local"
@@ -631,7 +651,7 @@ export function DeliveryDeskPageClient({
               {task?.kind === 'checklist' && (
                 <>
                   <div className="grid gap-1.5 text-sm">
-                    <span className="font-medium" id="delivery-checklist-code-label">
+                    <span className={fieldLabel} id="delivery-checklist-code-label">
                       Checklist item
                     </span>
                     <Select value={task.fields.code || ''} onValueChange={value => updateTaskField('code', value)}>
@@ -648,7 +668,7 @@ export function DeliveryDeskPageClient({
                     </Select>
                   </div>
                   <label htmlFor="delivery-reference" className="grid gap-1.5 text-sm">
-                    <span className="font-medium">Reference</span>
+                    <span className={fieldLabel}>Reference</span>
                     <Input
                       id="delivery-reference"
                       required
@@ -662,7 +682,7 @@ export function DeliveryDeskPageClient({
               )}
               {task?.kind === 'acknowledge' && (
                 <label htmlFor="delivery-acknowledgment" className="grid gap-1.5 text-sm">
-                  <span className="font-medium">Customer acknowledgment reference</span>
+                  <span className={fieldLabel}>Customer acknowledgment reference</span>
                   <Input
                     id="delivery-acknowledgment"
                     required
@@ -674,7 +694,7 @@ export function DeliveryDeskPageClient({
               {task?.kind === 'we-owe' && (
                 <>
                   <label htmlFor="we-owe-description" className="grid gap-1.5 text-sm">
-                    <span className="font-medium">Description</span>
+                    <span className={fieldLabel}>Description</span>
                     <Textarea
                       id="we-owe-description"
                       required
@@ -685,7 +705,7 @@ export function DeliveryDeskPageClient({
                     />
                   </label>
                   <label htmlFor="we-owe-promised-at" className="grid gap-1.5 text-sm">
-                    <span className="font-medium">Promised by</span>
+                    <span className={fieldLabel}>Promised by</span>
                     <Input
                       id="we-owe-promised-at"
                       type="datetime-local"
@@ -699,7 +719,7 @@ export function DeliveryDeskPageClient({
               {task?.kind === 'close-we-owe' && (
                 <>
                   <label htmlFor="we-owe-fulfillment" className="grid gap-1.5 text-sm">
-                    <span className="font-medium">{task.action === 'waive' ? 'Waiver' : 'Fulfillment'} reference</span>
+                    <span className={fieldLabel}>{task.action === 'waive' ? 'Waiver' : 'Fulfillment'} reference</span>
                     <Input
                       id="we-owe-fulfillment"
                       required
@@ -708,7 +728,7 @@ export function DeliveryDeskPageClient({
                     />
                   </label>
                   <label htmlFor="we-owe-ack" className="grid gap-1.5 text-sm">
-                    <span className="font-medium">Customer acknowledgment reference</span>
+                    <span className={fieldLabel}>Customer acknowledgment reference</span>
                     <Input
                       id="we-owe-ack"
                       required
@@ -719,7 +739,7 @@ export function DeliveryDeskPageClient({
                 </>
               )}
               {task?.kind === 'complete' && (
-                <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
+                <label className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-sm shadow-[inset_0_1px_2px_rgb(0_0_0/0.06)]">
                   <input
                     type="checkbox"
                     className="mt-1"
@@ -729,26 +749,23 @@ export function DeliveryDeskPageClient({
                   <span>The vehicle is ready for delivery.</span>
                 </label>
               )}
-              {taskError && (
-                <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-                  {taskError}
-                </p>
-              )}
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={Boolean(activeId)}
-                  onClick={() => {
-                    setTask(null)
-                    setTaskError(null)
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={Boolean(activeId)}>
-                  {activeId ? 'Saving…' : task?.kind === 'complete' ? 'Complete delivery' : 'Save'}
-                </Button>
+              {taskError && <Notice tone="bad">{taskError}</Notice>}
+              <DialogFooter className="sm:justify-end">
+                <Track>
+                  <Pill
+                    variant="plain"
+                    disabled={Boolean(activeId)}
+                    onClick={() => {
+                      setTask(null)
+                      setTaskError(null)
+                    }}
+                  >
+                    Cancel
+                  </Pill>
+                  <Pill type="submit" variant="primary" disabled={Boolean(activeId)}>
+                    {activeId ? 'Saving…' : task?.kind === 'complete' ? 'Complete delivery' : 'Save'}
+                  </Pill>
+                </Track>
               </DialogFooter>
             </form>
           </DialogContent>

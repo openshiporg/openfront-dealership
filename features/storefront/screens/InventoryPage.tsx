@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { ChevronLeft, ChevronRight, Search, SlidersHorizontal, X } from 'lucide-react'
 import { fetchGraphQL } from '@/features/storefront/lib/data/graphql-client'
 import { GET_VEHICLES } from '@/features/storefront/lib/data/queries'
 import { Vehicle } from '@/features/storefront/lib/types'
@@ -9,6 +10,31 @@ import { buildVehicleOrderBy, buildVehicleWhereInput } from '@/features/storefro
 import { INVENTORY_PAGE_SIZE, parseInventoryPage, resolveInventoryPage } from '@/features/storefront/lib/data/inventory-pagination'
 import { Container } from '../components/Container'
 import { VehicleCard } from '../components/VehicleCard'
+import { useStorefrontBusiness } from '../components/StorefrontBusinessProvider'
+import { InventoryCardSkeleton } from '../components/inventory/InventoryCardSkeleton'
+import { formatPrice } from '../lib/format'
+import { isEscapeKey, trapDialogFocus } from '../lib/dialogAccessibility'
+
+const CONDITIONS = [
+  { value: '', label: 'All' },
+  { value: 'new', label: 'New' },
+  { value: 'used', label: 'Pre-owned' },
+  { value: 'certified', label: 'Certified' },
+]
+
+const SORTS = [
+  { value: 'year-desc', label: 'Newest' },
+  { value: 'year-asc', label: 'Oldest' },
+  { value: 'price-asc', label: 'Price low' },
+  { value: 'price-desc', label: 'Price high' },
+  { value: 'mileage-asc', label: 'Lowest miles' },
+]
+
+const SHEET_QUERY = '(max-width: 1023.98px)'
+
+function isSheetViewport() {
+  return typeof window !== 'undefined' && window.matchMedia(SHEET_QUERY).matches
+}
 
 export function InventoryPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
@@ -212,292 +238,491 @@ export function InventoryPage() {
   const currentYear = new Date().getFullYear()
   const years = Array.from({ length: 20 }, (_, i) => currentYear - i)
 
+  const { currencyCode } = useStorefrontBusiness()
+  const sheetRef = useRef<HTMLElement>(null)
+  const sheetCloseRef = useRef<HTMLButtonElement>(null)
+  const filtersButtonRef = useRef<HTMLButtonElement>(null)
+
+  // Phone filter sheet: lock page scroll and move focus in while open; close if the viewport grows into the rail layout.
+  useEffect(() => {
+    if (!filtersOpen) return
+    const query = window.matchMedia(SHEET_QUERY)
+    if (!query.matches) {
+      setFiltersOpen(false)
+      return
+    }
+    const onChange = () => {
+      if (!query.matches) setFiltersOpen(false)
+    }
+    query.addEventListener('change', onChange)
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const frame = requestAnimationFrame(() => sheetCloseRef.current?.focus())
+    return () => {
+      cancelAnimationFrame(frame)
+      query.removeEventListener('change', onChange)
+      document.body.style.overflow = previousOverflow
+    }
+  }, [filtersOpen])
+
+  const closeSheet = () => {
+    setFiltersOpen(false)
+    requestAnimationFrame(() => filtersButtonRef.current?.focus())
+  }
+
+  const handleSheetKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (!filtersOpen || !isSheetViewport()) return
+    if (isEscapeKey(event.key)) {
+      event.preventDefault()
+      event.stopPropagation()
+      closeSheet()
+      return
+    }
+    if (sheetRef.current) trapDialogFocus(event, sheetRef.current)
+  }
+
+  const changeSort = (value: string) => {
+    setSortBy(value)
+    setCurrentPage(1)
+    setInvalidPage(false)
+    setPageNotice(null)
+  }
+
+  const money = (value: string) => {
+    const amount = Number(value)
+    return value.trim() && Number.isFinite(amount) ? formatPrice(amount, currencyCode) : value
+  }
+  const miles = (value: string) => {
+    const amount = Number(value)
+    return value.trim() && Number.isFinite(amount) ? `${new Intl.NumberFormat('en-US').format(amount)} mi` : value
+  }
+  const range = (min: string, max: string, format: (value: string) => string) => {
+    if (min && max) return min === max ? format(min) : `${format(min)}–${format(max)}`
+    return min ? `From ${format(min)}` : `Up to ${format(max)}`
+  }
+
+  const chips: { key: string; label: string; clear: () => void }[] = []
+  if (filters.search) chips.push({ key: 'search', label: `“${filters.search}”`, clear: () => handleFilterChange('search', '') })
+  if (filters.condition) {
+    chips.push({
+      key: 'condition',
+      label: CONDITIONS.find((option) => option.value === filters.condition)?.label ?? filters.condition,
+      clear: () => handleFilterChange('condition', ''),
+    })
+  }
+  if (filters.make) chips.push({ key: 'make', label: filters.make, clear: () => handleFilterChange('make', '') })
+  if (filters.model) chips.push({ key: 'model', label: filters.model, clear: () => handleFilterChange('model', '') })
+  if (filters.yearMin || filters.yearMax) {
+    chips.push({
+      key: 'year',
+      label: range(filters.yearMin, filters.yearMax, (value) => value),
+      clear: () => {
+        handleFilterChange('yearMin', '')
+        handleFilterChange('yearMax', '')
+      },
+    })
+  }
+  if (filters.priceMin || filters.priceMax) {
+    chips.push({
+      key: 'price',
+      label: range(filters.priceMin, filters.priceMax, money),
+      clear: () => {
+        handleFilterChange('priceMin', '')
+        handleFilterChange('priceMax', '')
+      },
+    })
+  }
+  if (filters.mileageMax) chips.push({ key: 'mileage', label: `Max ${miles(filters.mileageMax)}`, clear: () => handleFilterChange('mileageMax', '') })
+
+  const readout = loading
+    ? 'Loading'
+    : invalidPage
+      ? 'Invalid page'
+      : loadError
+        ? 'Unavailable'
+        : `${new Intl.NumberFormat('en-US').format(totalCount)} ${totalCount === 1 ? 'vehicle' : 'vehicles'}`
+  const readoutTone = loading ? 'idle' : invalidPage || loadError ? 'bad' : totalCount > 0 ? 'ok' : 'idle'
+  const pages = Array.from({ length: visiblePageCount }, (_, i) => firstVisiblePage + i)
+
+  const sortTrack = (className: string, pillClassName = '') => (
+    <div role="group" aria-label="Sort" className={`sf-track ${className}`}>
+      {SORTS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          className={`sf-pill ${pillClassName}`}
+          aria-pressed={sortBy === option.value}
+          onClick={() => changeSort(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+
   return (
     <>
-      <section style={{ background: 'var(--sf-paper-3)', color: 'var(--sf-accent-ink)' }}>
-        <Container className="py-[var(--sf-space-xl)]">
-          <p className="sf-eyebrow opacity-70 mb-2">Inventory</p>
-          <h1 className="sf-display text-[length:var(--sf-text-display)]">On the lot</h1>
-          <p className="mt-3 text-[var(--sf-text-md)] opacity-80 max-w-xl">
-            {loading
-              ? 'Loading vehicles…'
-              : invalidPage
-                ? 'Invalid inventory page'
-                : loadError
-                  ? 'Inventory results unavailable'
-                  : `${totalCount} vehicle${totalCount === 1 ? '' : 's'} match your search`}
+      <section className="border-b" style={{ borderColor: 'var(--sf-rule)' }}>
+        <Container className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 py-6 md:py-10">
+          <div className="min-w-0">
+            <p className="sf-eyebrow">Inventory</p>
+            <h1 className="sf-display mt-2 text-[length:var(--sf-text-2xl)] md:text-[2.75rem]">On the lot</h1>
+          </div>
+          <p className="sf-title-line sf-figure text-[var(--sf-text-sm)]" aria-live="polite">
+            <span className="sf-dot" data-tone={readoutTone} aria-hidden="true" />
+            {readout}
           </p>
         </Container>
       </section>
 
-      <Container className="py-[var(--sf-space-lg)]">
-        <div className="flex flex-col lg:flex-row gap-[var(--sf-space-lg)]">
-          <aside className={`lg:w-72 shrink-0 ${filtersOpen ? 'block' : 'hidden lg:block'}`}>
-            <div className="sf-card p-[var(--sf-space-md)] lg:sticky lg:top-28">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold">Refine</h2>
-                <button type="button" onClick={clearFilters} className="text-[var(--sf-text-xs)] hover:text-[var(--sf-accent)]">
-                  Reset
+      <Container className="py-6 md:py-10">
+        <div className="lg:grid lg:grid-cols-[19.5rem_minmax(0,1fr)] lg:items-start lg:gap-10 xl:gap-14">
+          <aside
+            ref={sheetRef}
+            id="inventory-filters"
+            role={filtersOpen ? 'dialog' : undefined}
+            aria-modal={filtersOpen || undefined}
+            aria-labelledby="inventory-filters-title"
+            onKeyDown={handleSheetKeyDown}
+            className={`${filtersOpen ? 'flex max-lg:fixed max-lg:inset-0 max-lg:z-[60]' : 'hidden lg:flex'} flex-col lg:sticky lg:top-28 lg:max-h-[calc(100dvh-8rem)]`}
+            style={{ background: 'var(--sf-paper)' }}
+          >
+            <div
+              className="flex items-center justify-between gap-3 border-b px-4 py-2 lg:border-b-0 lg:px-0 lg:pb-5 lg:pt-0"
+              style={{ borderColor: 'var(--sf-rule)' }}
+            >
+              <h2 id="inventory-filters-title" className="sf-title-line sf-heading text-[var(--sf-text-lg)]">
+                Filters
+                {activeFilterCount > 0 && (
+                  <span className="sf-chip sf-figure" aria-label={`${activeFilterCount} active`}>{activeFilterCount}</span>
+                )}
+              </h2>
+              <div className="flex items-center gap-1">
+                <div className="sf-track hidden lg:inline-flex">
+                  <button type="button" onClick={clearFilters} className="sf-pill" disabled={activeFilterCount === 0}>
+                    Reset
+                  </button>
+                </div>
+                <button
+                  ref={sheetCloseRef}
+                  type="button"
+                  onClick={closeSheet}
+                  className="grid size-11 place-items-center rounded-full lg:hidden"
+                  aria-label="Close filters"
+                >
+                  <X className="size-5" aria-hidden="true" />
                 </button>
               </div>
+            </div>
 
-              <div className="space-y-4 text-[var(--sf-text-sm)]">
-                <div>
-                  <label htmlFor="inventory-search" className="sf-eyebrow block mb-2">Search</label>
+            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-4 py-5 lg:-mx-1 lg:px-1 lg:py-1">
+              <div>
+                <p id="inventory-condition-label" className="sf-label">Condition</p>
+                <div role="group" aria-labelledby="inventory-condition-label" className="sf-track sf-track-block">
+                  {CONDITIONS.map((option) => (
+                    <button
+                      key={option.value || 'all'}
+                      type="button"
+                      className="sf-pill flex-auto px-2.5 max-lg:min-h-11"
+                      aria-pressed={filters.condition === option.value}
+                      onClick={() => handleFilterChange('condition', option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="lg:hidden">
+                <p className="sf-label">Sort</p>
+                {sortTrack('flex w-full flex-wrap rounded-[1.375rem]', 'flex-auto min-h-11')}
+              </div>
+
+              <div>
+                <label htmlFor="inventory-search" className="sf-label">Search</label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" style={{ color: 'var(--sf-ink-3)' }} aria-hidden="true" />
                   <input
                     id="inventory-search"
                     type="search"
                     value={filters.search}
                     onChange={(e) => handleFilterChange('search', e.target.value)}
                     placeholder="Make, model or trim"
-                    className="sf-input"
+                    className="sf-input pl-9"
                   />
                 </div>
-                <div>
-                  <label htmlFor="inventory-condition" className="sf-eyebrow block mb-2">Condition</label>
-                  <select
-                    id="inventory-condition"
-                    value={filters.condition}
-                    onChange={(e) => handleFilterChange('condition', e.target.value)}
-                    className="sf-input"
-                  >
-                    <option value="">All</option>
-                    <option value="new">New</option>
-                    <option value="used">Used</option>
-                    <option value="certified">Certified pre-owned</option>
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="inventory-make" className="sf-eyebrow block mb-2">Make</label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="min-w-0">
+                  <label htmlFor="inventory-make" className="sf-label">Make</label>
                   <input
                     id="inventory-make"
                     type="text"
                     value={filters.make}
                     onChange={(e) => handleFilterChange('make', e.target.value)}
-                    placeholder="e.g. Toyota"
+                    placeholder="Any"
                     className="sf-input"
                   />
                 </div>
-                <div>
-                  <label htmlFor="inventory-model" className="sf-eyebrow block mb-2">Model</label>
+                <div className="min-w-0">
+                  <label htmlFor="inventory-model" className="sf-label">Model</label>
                   <input
                     id="inventory-model"
                     type="text"
                     value={filters.model}
                     onChange={(e) => handleFilterChange('model', e.target.value)}
-                    placeholder="e.g. Camry"
-                    className="sf-input"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="inventory-year-min" className="sf-eyebrow block mb-2">Year</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <select
-                      id="inventory-year-min"
-                      value={filters.yearMin}
-                      onChange={(e) => handleFilterChange('yearMin', e.target.value)}
-                      className="sf-input"
-                      aria-label="Minimum year"
-                    >
-                      <option value="">Min</option>
-                      {years.map((y) => (
-                        <option key={y} value={y}>
-                          {y}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={filters.yearMax}
-                      onChange={(e) => handleFilterChange('yearMax', e.target.value)}
-                      className="sf-input"
-                      aria-label="Maximum year"
-                    >
-                      <option value="">Max</option>
-                      {years.map((y) => (
-                        <option key={y} value={y}>
-                          {y}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label htmlFor="inventory-price-min" className="sf-eyebrow block mb-2">Price</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      id="inventory-price-min"
-                      aria-label="Minimum price"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={filters.priceMin}
-                      onChange={(e) => handleFilterChange('priceMin', e.target.value)}
-                      placeholder="Min"
-                      className="sf-input"
-                    />
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={filters.priceMax}
-                      onChange={(e) => handleFilterChange('priceMax', e.target.value)}
-                      placeholder="Max"
-                      className="sf-input"
-                      aria-label="Maximum price"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label htmlFor="inventory-mileage-max" className="sf-eyebrow block mb-2">Max mileage</label>
-                  <input
-                    id="inventory-mileage-max"
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={filters.mileageMax}
-                    onChange={(e) => handleFilterChange('mileageMax', e.target.value)}
                     placeholder="Any"
                     className="sf-input"
                   />
                 </div>
               </div>
+
+              <div>
+                <label htmlFor="inventory-year-min" className="sf-label">Year</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <select
+                    id="inventory-year-min"
+                    value={filters.yearMin}
+                    onChange={(e) => handleFilterChange('yearMin', e.target.value)}
+                    className="sf-input sf-figure"
+                    aria-label="Minimum year"
+                  >
+                    <option value="">Min</option>
+                    {years.map((y) => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={filters.yearMax}
+                    onChange={(e) => handleFilterChange('yearMax', e.target.value)}
+                    className="sf-input sf-figure"
+                    aria-label="Maximum year"
+                  >
+                    <option value="">Max</option>
+                    {years.map((y) => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="inventory-price-min" className="sf-label">Price</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    id="inventory-price-min"
+                    aria-label="Minimum price"
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    value={filters.priceMin}
+                    onChange={(e) => handleFilterChange('priceMin', e.target.value)}
+                    placeholder="Min"
+                    className="sf-input sf-figure"
+                  />
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    value={filters.priceMax}
+                    onChange={(e) => handleFilterChange('priceMax', e.target.value)}
+                    placeholder="Max"
+                    className="sf-input sf-figure"
+                    aria-label="Maximum price"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="inventory-mileage-max" className="sf-label">Max mileage</label>
+                <input
+                  id="inventory-mileage-max"
+                  type="number"
+                  inputMode="numeric"
+                  min="0"
+                  step="1"
+                  value={filters.mileageMax}
+                  onChange={(e) => handleFilterChange('mileageMax', e.target.value)}
+                  placeholder="Any"
+                  className="sf-input sf-figure"
+                />
+              </div>
+            </div>
+
+            <div
+              className="border-t px-4 pt-3 lg:hidden"
+              style={{ borderColor: 'var(--sf-rule)', paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+            >
+              <div className="sf-track sf-track-block">
+                <button type="button" onClick={clearFilters} className="sf-pill min-h-11" disabled={activeFilterCount === 0}>
+                  Reset
+                </button>
+                <button type="button" onClick={closeSheet} className="sf-pill sf-pill-primary min-h-11">
+                  {loading || loadError || invalidPage ? 'Show results' : `Show ${new Intl.NumberFormat('en-US').format(totalCount)}`}
+                </button>
+              </div>
             </div>
           </aside>
 
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-[var(--sf-space-md)]">
-              <button
-                type="button"
-                onClick={() => setFiltersOpen((v) => !v)}
-                className="lg:hidden sf-btn sf-btn-ghost text-sm"
-              >
-                {filtersOpen ? 'Hide filters' : 'Show filters'}
-              </button>
-              <div className="flex items-center gap-2 ml-auto">
-                <label htmlFor="sort" className="sf-eyebrow">
-                  Sort
-                </label>
-                <select
-                  id="sort"
-                  value={sortBy}
-                  onChange={(e) => {
-                    setSortBy(e.target.value)
-                    setCurrentPage(1)
-                    setInvalidPage(false)
-                    setPageNotice(null)
-                  }}
-                  className="sf-input w-auto"
+          <div className="min-w-0">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="sf-track lg:hidden">
+                <button
+                  ref={filtersButtonRef}
+                  type="button"
+                  onClick={() => setFiltersOpen(true)}
+                  className="sf-pill sf-pill-raised min-h-11"
+                  aria-expanded={filtersOpen}
+                  aria-controls="inventory-filters"
                 >
-                  <option value="year-desc">Year · newest</option>
-                  <option value="year-asc">Year · oldest</option>
-                  <option value="price-asc">Price · low to high</option>
-                  <option value="price-desc">Price · high to low</option>
-                  <option value="mileage-asc">Mileage · low to high</option>
-                </select>
+                  <SlidersHorizontal className="size-4" aria-hidden="true" />
+                  Filters
+                  {activeFilterCount > 0 && <span className="sf-count">{activeFilterCount}</span>}
+                </button>
               </div>
+              {sortTrack('ml-auto hidden lg:inline-flex')}
             </div>
 
-            {activeFilterCount > 0 && (
-              <p className="text-[var(--sf-text-xs)] mb-4" style={{ color: 'var(--sf-ink-3)' }}>
-                {activeFilterCount} active filter{activeFilterCount === 1 ? '' : 's'}
-              </p>
+            {chips.length > 0 && (
+              <ul className="mb-6 flex flex-wrap items-center gap-x-1.5" aria-label="Active filters">
+                {chips.map((chip) => (
+                  <li key={chip.key}>
+                    <button
+                      type="button"
+                      onClick={chip.clear}
+                      className="group inline-flex min-h-11 items-center"
+                      aria-label={`Remove filter ${chip.label}`}
+                    >
+                      <span className="sf-chip normal-case tracking-normal transition-colors group-hover:text-[var(--sf-ink)]">
+                        {chip.label}
+                        <X className="size-3.5" aria-hidden="true" />
+                      </span>
+                    </button>
+                  </li>
+                ))}
+                <li>
+                  <button type="button" onClick={clearFilters} className="sf-link inline-flex min-h-11 items-center px-2 text-[var(--sf-text-xs)]">
+                    Clear all
+                  </button>
+                </li>
+              </ul>
             )}
 
             {pageNotice && !loading && !loadError && !invalidPage && (
-              <p role="status" className="sf-card p-4 mb-[var(--sf-space-md)]">{pageNotice}</p>
+              <p role="status" className="sf-notice mb-6" data-tone="warn">{pageNotice}</p>
             )}
 
             {loading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-[var(--sf-space-md)]">
+              <div className="grid min-w-0 grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true" aria-label="Loading vehicles">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="sf-card aspect-[4/5] sf-skeleton" aria-hidden />
+                  <InventoryCardSkeleton key={i} />
                 ))}
               </div>
             ) : invalidPage ? (
-              <div className="sf-card p-[var(--sf-space-xl)] text-center">
-                <p role="alert" className="text-[var(--sf-text-md)]">Page not found.</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setInvalidPage(false)
-                    setCurrentPage(1)
-                    setPageNotice(null)
-                  }}
-                  className="mt-4 sf-btn sf-btn-primary"
-                >
-                  Return to first page
-                </button>
+              <div className="sf-well flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+                <p role="alert" className="sf-title-line font-semibold">
+                  <span className="sf-dot" data-tone="bad" aria-hidden="true" />
+                  Page not found.
+                </p>
+                <div className="sf-track">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInvalidPage(false)
+                      setCurrentPage(1)
+                      setPageNotice(null)
+                    }}
+                    className="sf-pill sf-pill-raised min-h-11 sm:min-h-9"
+                  >
+                    Return to first page
+                  </button>
+                </div>
               </div>
             ) : loadError ? (
-              <div className="sf-card p-[var(--sf-space-xl)] text-center">
-                <p role="alert" className="text-[var(--sf-text-md)]">
+              <div className="sf-well flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+                <p role="alert" className="sf-title-line font-semibold">
+                  <span className="sf-dot" data-tone="bad" aria-hidden="true" />
                   {loadError}
                 </p>
-                <div className="mt-4 flex justify-center gap-2">
-                  <button type="button" onClick={() => void loadVehicles()} className="sf-btn sf-btn-ghost">
+                <div className="sf-track shrink-0">
+                  <button type="button" onClick={() => void loadVehicles()} className="sf-pill sf-pill-raised min-h-11 sm:min-h-9">
                     Retry
                   </button>
-                  <button type="button" onClick={clearFilters} className="sf-btn sf-btn-primary">
+                  <button type="button" onClick={clearFilters} className="sf-pill min-h-11 sm:min-h-9">
                     Clear filters
                   </button>
                 </div>
               </div>
             ) : vehicles.length > 0 ? (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-[var(--sf-space-md)] min-w-0">
+                <div className="grid min-w-0 grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 xl:grid-cols-3">
                   {vehicles.map((vehicle) => (
                     <VehicleCard key={vehicle.id} vehicle={vehicle} priority />
                   ))}
                 </div>
 
                 {totalPages > 1 && (
-                  <nav className="mt-[var(--sf-space-xl)] flex justify-center gap-2 flex-wrap" aria-label="Pagination">
-                    <button
-                      type="button"
-                      onClick={() => goToPage(Math.max(1, currentPage - 1))}
-                      disabled={currentPage === 1}
-                      className="sf-btn sf-btn-ghost text-sm"
-                    >
-                      Previous
-                    </button>
-                    {firstVisiblePage > 1 && <span className="px-2 self-center text-[var(--sf-ink-3)]">…</span>}
-                    {Array.from({ length: visiblePageCount }, (_, i) => {
-                      const page = firstVisiblePage + i
-                      return (
+                  <nav className="mt-14 flex flex-col items-center gap-3" aria-label="Pagination">
+                    <div className="sf-track">
+                      <button
+                        type="button"
+                        onClick={() => goToPage(Math.max(1, currentPage - 1))}
+                        disabled={currentPage === 1}
+                        className="sf-pill min-h-11 min-w-11 px-3 sm:min-h-9"
+                        aria-label="Previous page"
+                      >
+                        <ChevronLeft className="size-4" aria-hidden="true" />
+                        <span className="hidden sm:inline">Previous</span>
+                      </button>
+                      {firstVisiblePage > 1 && <span className="sf-faint hidden px-1 sm:inline" aria-hidden="true">…</span>}
+                      {pages.map((page) => (
                         <button
                           key={page}
                           type="button"
                           onClick={() => goToPage(page)}
                           aria-current={currentPage === page ? 'page' : undefined}
-                          className={`sf-btn text-sm ${currentPage === page ? 'sf-btn-primary' : 'sf-btn-ghost'}`}
+                          aria-label={`Page ${page}`}
+                          className={`sf-pill sf-figure min-h-11 min-w-11 px-2 sm:min-h-9 sm:min-w-9 ${Math.abs(page - currentPage) > 1 ? 'max-sm:hidden' : ''}`}
                         >
                           {page}
                         </button>
-                      )
-                    })}
-                    {firstVisiblePage + visiblePageCount - 1 < totalPages && <span className="px-2 self-center text-[var(--sf-ink-3)]">…</span>}
-                    <span className="self-center px-2 text-[var(--sf-ink-3)]" aria-live="polite">
+                      ))}
+                      {firstVisiblePage + visiblePageCount - 1 < totalPages && <span className="sf-faint hidden px-1 sm:inline" aria-hidden="true">…</span>}
+                      <button
+                        type="button"
+                        onClick={() => goToPage(Math.min(totalPages, currentPage + 1))}
+                        disabled={currentPage === totalPages}
+                        className="sf-pill min-h-11 min-w-11 px-3 sm:min-h-9"
+                        aria-label="Next page"
+                      >
+                        <span className="hidden sm:inline">Next</span>
+                        <ChevronRight className="size-4" aria-hidden="true" />
+                      </button>
+                    </div>
+                    <p className="sf-figure sf-faint text-[var(--sf-text-xs)]" aria-live="polite">
                       Page {currentPage} of {totalPages}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => goToPage(Math.min(totalPages, currentPage + 1))}
-                      disabled={currentPage === totalPages}
-                      className="sf-btn sf-btn-ghost text-sm"
-                    >
-                      Next
-                    </button>
+                    </p>
                   </nav>
                 )}
               </>
             ) : (
-              <div className="sf-card p-[var(--sf-space-xl)] text-center">
-                <p className="text-[var(--sf-text-md)]" style={{ color: 'var(--sf-ink-2)' }}>
+              <div className="sf-well flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+                <p className="sf-title-line font-semibold">
+                  <span className="sf-dot" aria-hidden="true" />
                   No vehicles match these filters.
                 </p>
-                <button type="button" onClick={clearFilters} className="mt-4 sf-btn sf-btn-primary">
-                  Clear filters
-                </button>
+                <div className="sf-track">
+                  <button type="button" onClick={clearFilters} className="sf-pill sf-pill-raised min-h-11 sm:min-h-9">
+                    Clear filters
+                  </button>
+                </div>
               </div>
             )}
           </div>

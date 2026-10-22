@@ -1,12 +1,17 @@
+import Image from 'next/image'
 import Link from 'next/link'
+import { ArrowRight, KeyRound, Landmark, Repeat2, Wrench } from 'lucide-react'
 import { fetchGraphQL } from '@/features/storefront/lib/data/graphql-client'
 import { GET_MAKES, GET_VEHICLES, GET_VEHICLES_COUNT } from '@/features/storefront/lib/data/queries'
 import { Make, Vehicle } from '@/features/storefront/lib/types'
-import { Button } from '../components/Button'
 import { Container } from '../components/Container'
 import { HeroSearch } from '../components/HeroSearch'
 import { HomeContactPanel } from '../components/HomeContactPanel'
 import { VehicleCard } from '../components/VehicleCard'
+import { vehicleConditionLabel } from '../lib/vehicleStatus'
+import { VehiclePhotoPlaceholder } from '../components/VehiclePhotoPlaceholder'
+import { formatPrice, vehicleTitle } from '../lib/format'
+import { primaryVehicleImage, vehicleImageUrl } from '../lib/images'
 import { loadHomeQuery, selectHomeFeaturedVehicles, selectHomeInventoryCount } from '../lib/data/home-inventory'
 import { loadStorefrontBusiness } from '../lib/data/storefront-business'
 import { createStorefrontBusiness } from '../lib/business'
@@ -40,6 +45,13 @@ async function getMakes(): Promise<Make[]> {
   }
 }
 
+const LANES = [
+  { href: '/financing', label: 'Financing', action: 'Get pre-qualified', icon: Landmark },
+  { href: '/trade-in', label: 'Trade-in', action: 'Value your vehicle', icon: Repeat2 },
+  { href: '/test-drive', label: 'Test drive', action: 'Pick a time', icon: KeyRound },
+  { href: '/service', label: 'Service', action: 'Book an appointment', icon: Wrench },
+]
+
 export async function HomePage() {
   const [featured, inventoryCount, makes, settings] = await Promise.all([
     getFeaturedVehicles(),
@@ -49,113 +61,131 @@ export async function HomePage() {
   ])
   const business = settings.status === 'ready' ? settings.business : createStorefrontBusiness()
   const currentYear = new Date().getFullYear()
-  const years = Array.from({ length: 30 }, (_, i) => currentYear - i)
-  const lead = featured.status === 'ready' ? featured.value[0] : undefined
+  const years = Array.from({ length: 30 }, (_, i) => currentYear + 1 - i)
+  const vehicles = featured.status === 'ready' ? featured.value : []
+  const lead = vehicles[0]
+  const leadImage = lead ? vehicleImageUrl(primaryVehicleImage(lead.images)) : null
+  const count = inventoryCount.status === 'ready' ? inventoryCount.value : null
 
   return (
     <>
-      <section className="border-b" style={{ borderColor: 'var(--sf-rule)' }}>
-        <Container className="py-[var(--sf-space-2xl)] md:py-[var(--sf-space-3xl)]">
-          <div className="grid lg:grid-cols-[1fr_0.9fr] gap-[var(--sf-space-xl)] items-end">
-            <div className="min-w-0">
-              <p className="sf-eyebrow mb-[var(--sf-space-sm)]">On the lot now</p>
-              <h1 className="sf-display text-[length:var(--sf-text-display)] max-w-[14ch]">
-                {business.homepageTitle || (inventoryCount.status === 'ready' && inventoryCount.value > 0
-                  ? `${inventoryCount.value} vehicles`
-                  : business.fullName)}
-              </h1>
-              {business.homepageDescription && (
-                <p className="mt-[var(--sf-space-md)] max-w-md text-[var(--sf-text-md)] leading-relaxed" style={{ color: 'var(--sf-ink-2)' }}>
-                  {business.homepageDescription}
-                </p>
-              )}
-              <div className="mt-[var(--sf-space-lg)] flex flex-wrap gap-3">
-                <Button href="/inventory">Browse inventory</Button>
-                <Button href="/test-drive" variant="secondary">
-                  Schedule test drive
-                </Button>
-              </div>
-            </div>
-
-            {lead && (
-              <div className="hidden lg:block min-w-0">
-                <p className="sf-eyebrow mb-3">Featured</p>
-                <VehicleCard vehicle={lead} layout="feature" priority />
-              </div>
+      <section className="sf-band relative overflow-hidden">
+        <Container className="relative grid gap-10 pb-28 pt-10 md:pb-36 md:pt-16 lg:grid-cols-[1fr_1.05fr] lg:items-end lg:gap-14">
+          <div className="min-w-0">
+            {count !== null && (
+              <p className="sf-title-line sf-eyebrow">
+                <span className="sf-dot" data-tone={count > 0 ? 'ok' : 'idle'} aria-hidden="true" />
+                <span className="sf-figure">{new Intl.NumberFormat('en-US').format(count)}</span> in stock
+              </p>
             )}
+            <h1 className="sf-display mt-4 max-w-[15ch] text-[length:var(--sf-text-display)]">
+              {business.homepageTitle || business.fullName}
+            </h1>
+            {business.homepageDescription && (
+              <p className="mt-5 max-w-md text-[var(--sf-text-md)]" style={{ color: 'var(--sf-on-dark-2)' }}>
+                {business.homepageDescription}
+              </p>
+            )}
+            <div className="sf-track mt-8">
+              <Link href="/inventory" className="sf-pill sf-pill-primary">Shop inventory</Link>
+              <Link href="/test-drive" className="sf-pill">Book a test drive</Link>
+            </div>
           </div>
 
-          <div className="mt-[var(--sf-space-xl)]">
-            <HeroSearch makes={makes} years={years} />
-          </div>
+          {lead && (
+            <Link href={`/inventory/${lead.id}`} className="group relative hidden min-w-0 lg:block">
+              <div className="relative aspect-[16/10] overflow-hidden rounded-[var(--sf-radius-lg)]" style={{ background: 'var(--sf-paper-4)' }}>
+                {leadImage ? (
+                  <Image src={leadImage} alt={vehicleTitle(lead)} fill priority unoptimized sizes="50vw" className="object-cover transition-transform duration-700 group-hover:scale-[1.02]" />
+                ) : (
+                  <VehiclePhotoPlaceholder />
+                )}
+              </div>
+              <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-4 rounded-[var(--sf-radius-md)] p-4" style={{ background: 'oklch(0.18 0.012 262 / 0.78)', backdropFilter: 'blur(10px)' }}>
+                <div className="min-w-0">
+                  <p className="sf-eyebrow">{vehicleConditionLabel(lead.condition)}</p>
+                  <p className="sf-heading mt-1 truncate text-[var(--sf-text-lg)]">{vehicleTitle(lead)}</p>
+                </div>
+                <p className="sf-price shrink-0 text-[var(--sf-text-xl)]">{formatPrice(lead.price, business.currencyCode)}</p>
+              </div>
+            </Link>
+          )}
         </Container>
       </section>
 
-      <section>
-        <Container className="py-[var(--sf-space-2xl)]">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-[var(--sf-space-lg)]">
-            <div>
-              <h2 className="sf-display text-[length:var(--sf-text-2xl)]">Latest arrivals</h2>
-            </div>
-            <Link href="/inventory" className="text-[var(--sf-text-sm)] font-semibold hover:text-[var(--sf-accent)] transition-colors">
-              View all →
+      <Container className="relative z-10 -mt-20 md:-mt-24">
+        <HeroSearch makes={makes} years={years} />
+      </Container>
+
+      <section className="sf-section">
+        <Container>
+          <div className="mb-8 flex items-end justify-between gap-4">
+            <h2 className="sf-display text-[length:var(--sf-text-2xl)]">Latest arrivals</h2>
+            <Link href="/inventory" className="sf-link inline-flex shrink-0 items-center gap-1 text-[var(--sf-text-sm)]">
+              All inventory
+              <ArrowRight className="size-4" aria-hidden="true" />
             </Link>
           </div>
 
           {featured.status === 'unavailable' ? (
-            <div className="sf-card p-[var(--sf-space-xl)] text-center" role="alert">
-              <p className="text-[var(--sf-text-md)]" style={{ color: 'var(--sf-ink-2)' }}>
+            <div className="sf-well flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between" role="alert">
+              <p className="sf-title-line font-semibold">
+                <span className="sf-dot" data-tone="bad" aria-hidden="true" />
                 Inventory couldn&apos;t be loaded.
               </p>
-              <div className="mt-4">
-                <Link href="/" prefetch={false} className="sf-btn sf-btn-secondary">Retry</Link>
+              <div className="sf-track">
+                <Link href="/" prefetch={false} className="sf-pill sf-pill-raised">Retry</Link>
               </div>
             </div>
-          ) : featured.value.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[var(--sf-space-md)] min-w-0">
-              {featured.value.map((vehicle) => (
-                <VehicleCard key={vehicle.id} vehicle={vehicle} priority />
+          ) : vehicles.length > 0 ? (
+            <div className="grid min-w-0 grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+              {vehicles.map((vehicle, index) => (
+                <VehicleCard key={vehicle.id} vehicle={vehicle} priority={index < 3} />
               ))}
             </div>
           ) : (
-            <div className="sf-card p-[var(--sf-space-xl)] text-center">
-              <p className="text-[var(--sf-text-md)]" style={{ color: 'var(--sf-ink-2)' }}>
-                No vehicles are listed right now.
+            <div className="sf-well flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+              <p className="sf-title-line font-semibold">
+                <span className="sf-dot" aria-hidden="true" />
+                No vehicles listed
               </p>
-              <div className="mt-4">
-                <Button href="/contact" variant="secondary">
-                  Contact sales
-                </Button>
+              <div className="sf-track">
+                <Link href="/contact" className="sf-pill sf-pill-raised">Contact sales</Link>
               </div>
             </div>
           )}
         </Container>
       </section>
 
-      <section style={{ background: 'var(--sf-paper-2)' }}>
-        <Container className="py-[var(--sf-space-2xl)]">
-          <div className="grid md:grid-cols-2 gap-[var(--sf-space-xl)]">
-            <div>
-              <h2 className="sf-display text-[length:var(--sf-text-xl)]">Shop with us</h2>
-              <ul className="mt-[var(--sf-space-md)] space-y-4">
-                {[
-                  { href: '/financing', title: 'Get financing' },
-                  { href: '/trade-in', title: 'Value your trade' },
-                  { href: '/service', title: 'Book service' },
-                ].map((item) => (
-                  <li key={item.href}>
-                    <Link href={item.href} className="group block">
-                      <p className="font-semibold group-hover:text-[var(--sf-accent)] transition-colors">{item.title}</p>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <HomeContactPanel />
-          </div>
+      <section className="border-t" style={{ borderColor: 'var(--sf-rule)' }}>
+        <Container>
+          <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+            {LANES.map((lane, index) => {
+              const Icon = lane.icon
+              return (
+                <li
+                  key={lane.href}
+                  className={`border-b sm:border-b-0 ${index > 0 ? 'lg:border-l' : ''} ${index % 2 === 1 ? 'sm:border-l' : ''} ${index < 2 ? 'sm:border-b lg:border-b-0' : ''}`}
+                  style={{ borderColor: 'var(--sf-rule)' }}
+                >
+                  <Link href={lane.href} className="group flex h-full items-center gap-4 py-6 sm:flex-col sm:items-start sm:px-6 sm:py-10 lg:first:pl-0">
+                    <span className="grid size-11 shrink-0 place-items-center rounded-full" style={{ background: 'var(--sf-paper-2)' }}>
+                      <Icon className="size-5" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="sf-eyebrow block">{lane.label}</span>
+                      <span className="sf-heading mt-1 block text-[var(--sf-text-lg)] transition-colors group-hover:text-[var(--sf-accent)]">{lane.action}</span>
+                    </span>
+                    <ArrowRight className="size-5 shrink-0 transition-transform group-hover:translate-x-1 sm:hidden" aria-hidden="true" />
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
         </Container>
       </section>
+
+      <HomeContactPanel />
     </>
   )
 }

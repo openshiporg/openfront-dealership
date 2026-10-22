@@ -2,10 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { Mail, MoreVertical, Phone, Users } from "lucide-react";
-import { Badge, coloredBadgeVariants } from "@/components/ui/badge";
-import type { VariantProps } from "class-variance-authority";
-import { Button } from "@/components/ui/button";
+import { MoreHorizontal } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,9 +10,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { basePath } from "@/features/dashboard/lib/config";
+import { Facts, Pill, StatusDot, TitleLine, Track, type DeskTone } from "@/features/platform/components/desk";
 import { EditItemDrawerClientWrapper } from "../../components/EditItemDrawerClientWrapper";
-
-type BadgeColor = NonNullable<VariantProps<typeof coloredBadgeVariants>["color"]>;
 
 interface UserDetailsComponentProps {
   user: {
@@ -36,110 +32,85 @@ interface UserDetailsComponentProps {
 
 export function UserDetailsComponent({ user }: UserDetailsComponentProps) {
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
   const leads = user.assignedLeadsCount ?? 0;
   const deals = user.dealsCount ?? 0;
-  const roleBadges: Array<{ label: string; color: BadgeColor }> = [];
-  if (user.isSalesperson) roleBadges.push({ label: "SALES", color: "blue" });
-  if (user.isServiceAdvisor) roleBadges.push({ label: "SERVICE", color: "orange" });
-  if (user.isFinanceManager) roleBadges.push({ label: "FINANCE", color: "indigo" });
+  const roleBadges: Array<{ label: string; tone: DeskTone }> = [];
+  if (user.isSalesperson) roleBadges.push({ label: "Sales", tone: "info" });
+  if (user.isServiceAdvisor) roleBadges.push({ label: "Service", tone: "warn" });
+  if (user.isFinanceManager) roleBadges.push({ label: "Finance", tone: "accent" });
+  const displayName = user.name || user.email;
+  const joined = user.createdAt
+    ? new Date(user.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+    : null;
 
   return (
     <>
-      <div className="px-4 md:px-6 py-3 md:py-4 flex justify-between gap-4 w-full border-b relative">
-        <div className="flex flex-col items-start text-left gap-2 sm:gap-1.5 min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href={`${basePath}/users/${user.id}`}
-              className="font-medium text-base hover:text-blue-600 dark:hover:text-blue-400"
-            >
-              {user.name || user.email}
-            </Link>
-            {user.createdAt && (
-              <>
-                <span>‧</span>
-                <span className="text-sm font-medium text-muted-foreground/75">
-                  {new Date(user.createdAt).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
-                </span>
-              </>
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
-            {user.email && (
-              <>
-                <span className="flex items-center gap-1 break-all">
-                  <Mail className="w-3 h-3" />
-                  {user.email}
-                </span>
-                <span>‧</span>
-              </>
-            )}
-            {user.phone && (
-              <>
-                <span className="flex items-center gap-1">
-                  <Phone className="w-3 h-3" />
-                  {user.phone}
-                </span>
-                <span>‧</span>
-              </>
-            )}
-            <span>
-              {leads} {leads === 1 ? "lead" : "leads"}
-            </span>
-            <span>‧</span>
-            <span>
-              {deals} {deals === 1 ? "deal" : "deals"}
-            </span>
-          </div>
-
-          {user.role && (
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <Users className="w-3 h-3" />
-              <span>Role: {user.role.name}</span>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-start gap-2 shrink-0">
-          {roleBadges.length > 0 && (
-            <div className="hidden sm:flex flex-wrap justify-end gap-1.5">
+      <div className="min-w-0 px-4 py-3">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <TitleLine as="h3" tone={user.role ? "ok" : "idle"} status={user.role ? user.role.name : "No role"} className="text-sm font-medium text-foreground">
+              <Link href={`${basePath}/users/${user.id}`} className="hover:underline">
+                {displayName}
+              </Link>
+              <span className="font-normal text-muted-foreground"> · {user.role ? user.role.name : "No role"}</span>
+            </TitleLine>
+            <p className="mt-0.5 flex min-w-0 flex-wrap gap-x-2 gap-y-0.5 pl-4 text-xs text-muted-foreground">
+              {user.email && <span className="break-all">{user.email}</span>}
+              {user.phone && <span>{user.phone}</span>}
               {roleBadges.map((badge) => (
-                <Badge
-                  key={badge.label}
-                  color={badge.color}
-                  className="text-[.6rem] sm:text-[.7rem] py-0 px-2 sm:px-3 tracking-wide font-medium rounded-md border h-6"
-                >
+                <span key={badge.label} className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.08em]">
+                  <StatusDot tone={badge.tone} className="size-1.5 shadow-none" />
                   {badge.label}
-                </Badge>
+                </span>
               ))}
+            </p>
+          </div>
+
+          <div className="flex shrink-0 items-start gap-3">
+            <div className="hidden text-right font-mono text-xs tabular-nums text-muted-foreground sm:block">
+              <p>{leads} {leads === 1 ? "lead" : "leads"}</p>
+              <p>{deals} {deals === 1 ? "deal" : "deals"}</p>
             </div>
-          )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="secondary"
-                size="icon"
-                className="border [&_svg]:size-3 h-6 w-6"
-                aria-label={`Actions for ${user.name || user.email}`}
-              >
-                <MoreVertical className="stroke-muted-foreground" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setIsEditDrawerOpen(true)}>
-                Edit staff member
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href={`${basePath}/users/${user.id}`}>Open full record</Link>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            <Track>
+              <Pill size="sm" variant={isOpen ? undefined : "plain"} aria-expanded={isOpen} onClick={() => setIsOpen((open) => !open)}>
+                Details
+              </Pill>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Pill size="sm" variant="plain" aria-label={`Actions for ${displayName}`}>
+                    <MoreHorizontal />
+                  </Pill>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setIsEditDrawerOpen(true)}>
+                    Edit staff member
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href={`${basePath}/users/${user.id}`}>Open full record</Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </Track>
+          </div>
         </div>
+
+        {isOpen && (
+          <div className="mt-3 rounded-lg bg-muted/40 px-3 sm:ml-4">
+            <Facts
+              items={[
+                { label: "Email", value: user.email || "None" },
+                { label: "Phone", value: user.phone || "None" },
+                { label: "Role", value: user.role?.name || "None" },
+                { label: "Functions", value: roleBadges.length ? roleBadges.map((badge) => badge.label).join(", ") : "None" },
+                { label: "Assigned leads", value: leads, mono: true },
+                { label: "Deals", value: deals, mono: true },
+                joined ? { label: "Joined", value: joined } : null,
+              ]}
+            />
+          </div>
+        )}
       </div>
 
       <EditItemDrawerClientWrapper

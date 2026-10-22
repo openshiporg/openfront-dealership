@@ -2,29 +2,47 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ArrowRight, Wrench } from 'lucide-react'
-import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from 'recharts'
+import { ArrowRight, RefreshCw } from 'lucide-react'
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
+import {
+  DeskHeader,
+  DeskSection,
+  Meter,
+  Notice,
+  Panel,
+  Pill,
+  Readout,
+  ReadoutStrip,
+  TitleLine,
+  Track,
+  type DeskTone,
+} from '@/features/platform/components/desk'
 import { getOperationalReport, type OperationalReport, type PeriodMetric } from '../actions'
 
-const COLORS = ['#2563eb', '#16a34a', '#f59e0b', '#dc2626', '#8b5cf6', '#06b6d4']
 const chartConfig = {
-  revenue: { label: 'Delivered revenue', color: '#2563eb' },
-  count: { label: 'Count', color: '#16a34a' },
+  revenue: { label: 'Delivered revenue', color: 'var(--foreground)' },
 }
 
 const statusLabels: Record<string, string> = {
   new: 'New',
   contacted: 'Contacted',
-  'test-drive-scheduled': 'Test Drive',
+  'test-drive-scheduled': 'Test drive',
   negotiating: 'Negotiating',
-  'closed-won': 'Closed Won',
-  'closed-lost': 'Closed Lost',
+  'closed-won': 'Closed won',
+  'closed-lost': 'Closed lost',
+}
+
+const dealTone: Record<string, DeskTone> = {
+  pencil: 'idle',
+  submitted: 'warn',
+  approved: 'info',
+  financed: 'info',
+  delivered: 'ok',
+  cancelled: 'bad',
 }
 
 function formatDate(value: string) {
@@ -32,29 +50,14 @@ function formatDate(value: string) {
 }
 
 function comparisonLabel(metric: PeriodMetric) {
-  if (metric.previous === 0) return metric.current === 0 ? 'No change vs prior 30 days' : 'No prior-period data'
+  if (metric.previous === 0) return metric.current === 0 ? 'No change' : 'No prior period'
   const prefix = Number(metric.percentChange) > 0 ? '+' : ''
-  return `${prefix}${metric.percentChange}% vs prior 30 days`
+  return `${prefix}${metric.percentChange}% vs prior 30d`
 }
 
-function ReportValue({ title, value, comparison, href }: { title: string; value: string; comparison?: PeriodMetric; href?: string }) {
-  return (
-    <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2 border-b py-3 text-sm">
-      <dt>
-        {href ? (
-          <Link className="underline" href={href}>
-            {title}
-          </Link>
-        ) : (
-          title
-        )}
-      </dt>
-      <dd className="font-medium tabular-nums">
-        {value}
-        {comparison && <span className="ml-2 text-xs text-muted-foreground">{comparisonLabel(comparison)}</span>}
-      </dd>
-    </div>
-  )
+function comparisonTone(metric: PeriodMetric): DeskTone | undefined {
+  if (metric.previous === 0) return undefined
+  return metric.direction === 'up' ? 'ok' : metric.direction === 'down' ? 'bad' : 'idle'
 }
 
 export function OverviewDashboardPageClient({
@@ -93,38 +96,43 @@ export function OverviewDashboardPageClient({
     { type: 'page' as const, label: 'Overview' },
   ]
 
+  const exceptions = report?.exceptions.total ?? 0
+
   const header = (
-    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">Overview</h1>
-        <p className="text-muted-foreground">
-          {report
-            ? `30 days ending ${formatDate(report.metrics.period.generatedAt)} · updated ${new Date(report.generatedAt).toLocaleString()}`
-            : 'Daily sales, inventory, and service performance.'}
-        </p>
-      </div>
-      <Button asChild variant="outline" className="max-w-full self-start whitespace-normal text-left">
-        <Link href={`${basePath}/platform/analytics`}>
-          View analytics
-          <ArrowRight className="ml-2 h-4 w-4 shrink-0" />
-        </Link>
-      </Button>
-    </div>
+    <DeskHeader
+      title="Overview"
+      tone={report ? (exceptions > 0 ? 'warn' : 'ok') : 'bad'}
+      status={report ? (exceptions > 0 ? `${exceptions} open exceptions` : 'No open exceptions') : 'Unavailable'}
+      meta={
+        report
+          ? `30 days to ${formatDate(report.metrics.period.generatedAt)} · Updated ${new Date(report.generatedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+          : 'Unavailable'
+      }
+      actions={
+        <Track>
+          <Pill onClick={loadDashboardData} disabled={loading} aria-label="Refresh">
+            <RefreshCw className={loading ? 'animate-spin' : undefined} />
+            Refresh
+          </Pill>
+          <Pill asChild variant="primary">
+            <Link href={`${basePath}/platform/analytics`}>
+              Analytics
+              <ArrowRight />
+            </Link>
+          </Pill>
+        </Track>
+      }
+    />
   )
 
   if (!report) {
     return (
       <PageContainer title="Overview" header={header} breadcrumbs={breadcrumbs}>
         <div className="px-4 pb-6 md:px-6">
-          <Card>
-            <CardContent className="py-12 text-center">
-              <p className="font-medium">Unable to load the overview</p>
-              <p className="mt-1 text-sm text-muted-foreground">{error}</p>
-              <Button className="mt-4" variant="outline" onClick={loadDashboardData} disabled={loading}>
-                Retry
-              </Button>
-            </CardContent>
-          </Card>
+          <Notice tone="bad">
+            <p className="font-medium">Unable to load the overview</p>
+            {error && <p className="mt-0.5 text-muted-foreground">{error}</p>}
+          </Notice>
         </div>
       </PageContainer>
     )
@@ -133,156 +141,151 @@ export function OverviewDashboardPageClient({
   const metrics = report.metrics
   const revenueChart = metrics.deliveredByMonth.map(item => ({ ...item, revenue: item.revenueCents / 100 }))
   const compactCurrency = new Intl.NumberFormat('en-US', { style: 'currency', currency: currencyCode, notation: 'compact', maximumFractionDigits: 0 })
+  const funnelMax = Math.max(1, ...metrics.salesFunnel.map(stage => stage.count))
+  const leaderRevenue = Math.max(1, ...metrics.topSalespeople.map(person => person.revenueCents))
+  const pc = metrics.periodComparison
 
   return (
     <PageContainer title="Overview" header={header} breadcrumbs={breadcrumbs}>
-      <div className="min-w-0 max-w-full space-y-6 px-4 pb-6 md:px-6">
-        {error && (
-          <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
+      <div className="min-w-0 max-w-full space-y-8 px-4 pb-10 md:px-6">
+        {error && <Notice tone="bad">{error}</Notice>}
 
-        <dl className="divide-y rounded-lg border px-4">
-          <ReportValue
-            title="Delivered revenue · 30d"
-            value={formatCurrencyCents(metrics.periodComparison.deliveredRevenueCents.current)}
-            comparison={metrics.periodComparison.deliveredRevenueCents}
-            href={`${basePath}/platform/analytics`}
-          />
-          <ReportValue
-            title="Delivered deals · 30d"
-            value={String(metrics.periodComparison.deliveredCount.current)}
-            comparison={metrics.periodComparison.deliveredCount}
-            href={`${basePath}/platform/deals`}
-          />
-          <ReportValue
-            title="New leads · 30d"
-            value={String(metrics.periodComparison.newLeads.current)}
-            comparison={metrics.periodComparison.newLeads}
-            href={`${basePath}/platform/crm`}
-          />
-          <ReportValue title="Available inventory" value={String(metrics.inventory.available)} href={`${basePath}/platform/vehicles`} />
-        </dl>
+        <DeskSection title="Today">
+          <ReadoutStrip>
+            <Link href={`${basePath}/platform/test-drives`} className="transition-colors hover:bg-muted/40">
+              <Readout label="Appointments" value={metrics.todayAppointments} tone={metrics.todayAppointments > 0 ? 'info' : 'idle'} />
+            </Link>
+            <Link href={`${basePath}/platform/deals`} className="transition-colors hover:bg-muted/40">
+              <Readout label="Pending deals" value={metrics.pendingDeals} tone={metrics.pendingDeals > 0 ? 'warn' : 'idle'} />
+            </Link>
+            <Link href={`${basePath}/platform/accounting`} className="transition-colors hover:bg-muted/40">
+              <Readout
+                label="Exceptions"
+                value={exceptions}
+                tone={exceptions > 0 ? 'bad' : 'ok'}
+                sub={`Acct ${report.exceptions.accounting} · Pay ${report.exceptions.payments} · Fund ${report.exceptions.funding}`}
+              />
+            </Link>
+            <Link href={`${basePath}/platform/vehicles`} className="transition-colors hover:bg-muted/40">
+              <Readout label="Units in stock" value={metrics.inventory.available} sub={`Avg age ${Math.round(metrics.inventory.averageAgeDays)} days`} />
+            </Link>
+          </ReadoutStrip>
+        </DeskSection>
 
-        <dl className="divide-y rounded-lg border px-4 text-sm">
-          {[
-            ['Pending deals', metrics.pendingDeals],
-            ['Today’s appointments', metrics.todayAppointments],
-            ['Avg delivered gross', formatCurrencyCents(metrics.averageDeliveredGrossCents)],
-            ['Lead conversion', `${metrics.leadConversionPercent.toFixed(1)}%`],
-            ['Open exceptions', report.exceptions.total],
-          ].map(([label, value]) => (
-            <div key={label} className="flex justify-between gap-4 py-3">
-              <dt>{label}</dt>
-              <dd className="tabular-nums">{value}</dd>
-            </div>
-          ))}
-        </dl>
+        <DeskSection title="Last 30 days">
+          <ReadoutStrip>
+            <Readout label="Delivered revenue" value={formatCurrencyCents(pc.deliveredRevenueCents.current)} sub={comparisonLabel(pc.deliveredRevenueCents)} tone={comparisonTone(pc.deliveredRevenueCents)} />
+            <Readout label="Units delivered" value={pc.deliveredCount.current} sub={comparisonLabel(pc.deliveredCount)} tone={comparisonTone(pc.deliveredCount)} />
+            <Readout label="Gross" value={formatCurrencyCents(pc.deliveredGrossCents.current)} sub={`Avg ${formatCurrencyCents(metrics.averageDeliveredGrossCents)}`} tone={comparisonTone(pc.deliveredGrossCents)} />
+            <Readout label="New leads" value={pc.newLeads.current} sub={comparisonLabel(pc.newLeads)} tone={comparisonTone(pc.newLeads)} />
+            <Readout label="Lead conversion" value={`${metrics.leadConversionPercent.toFixed(1)}%`} sub={`${metrics.totalLeads} leads`} />
+            <Readout label="Service revenue" value={formatCurrencyCents(pc.settledServiceRevenueCents.current)} sub={comparisonLabel(pc.settledServiceRevenueCents)} tone={comparisonTone(pc.settledServiceRevenueCents)} />
+          </ReadoutStrip>
+        </DeskSection>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Delivered revenue by month</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ChartContainer config={chartConfig} className="h-[250px]">
-                <BarChart data={revenueChart}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} tickFormatter={value => compactCurrency.format(Number(value))} />
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1.4fr_1fr]">
+          <DeskSection title="Delivered revenue by month">
+            {revenueChart.length > 0 ? (
+              <ChartContainer config={chartConfig} className="h-[240px] w-full">
+                <BarChart data={revenueChart} margin={{ left: 0, right: 0, top: 8 }}>
+                  <CartesianGrid vertical={false} strokeDasharray="2 4" />
+                  <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                  <YAxis width={56} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} tickFormatter={value => compactCurrency.format(Number(value))} />
                   <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[6, 6, 2, 2]} maxBarSize={40} />
                 </BarChart>
               </ChartContainer>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Lead pipeline</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ChartContainer config={chartConfig} className="h-[250px]">
-                <PieChart>
-                  <Pie
-                    data={metrics.salesFunnel}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={2}
-                    dataKey="count"
-                    nameKey="label"
-                    label={({ label, count }) => `${statusLabels[label] || label}: ${count}`}
-                  >
-                    {metrics.salesFunnel.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                </PieChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
+            ) : (
+              <p className="py-10 text-center text-sm text-muted-foreground">No deliveries</p>
+            )}
+          </DeskSection>
+
+          <DeskSection title="Lead pipeline" count={metrics.totalLeads} actions={<Link href={`${basePath}/platform/crm`} className="text-xs font-medium text-muted-foreground hover:text-foreground">CRM</Link>}>
+            {metrics.salesFunnel.length > 0 ? (
+              <ul className="space-y-2.5">
+                {metrics.salesFunnel.map(stage => (
+                  <li key={stage.label} className="flex items-center gap-3 text-sm">
+                    <span className="w-28 shrink-0 truncate text-muted-foreground">{statusLabels[stage.label] || stage.label}</span>
+                    <span className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+                      <span className="block h-full rounded-full bg-foreground/80" style={{ width: `${(stage.count / funnelMax) * 100}%` }} />
+                    </span>
+                    <span className="w-8 shrink-0 text-right font-mono text-xs tabular-nums">{stage.count}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="py-10 text-center text-sm text-muted-foreground">No leads</p>
+            )}
+          </DeskSection>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg">Recent deals</CardTitle>
-              <Link href={`${basePath}/platform/deals`} className="text-sm text-primary hover:underline">
-                View all
-              </Link>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {metrics.recentDeals.map(deal => (
-                <Link
-                  key={deal.id}
-                  href={`${basePath}/platform/deals/${deal.id}`}
-                  className="flex items-center justify-between rounded-lg px-3 py-2 transition-colors hover:bg-muted/50"
-                >
-                  <div>
-                    <p className="text-sm font-medium">
-                      {deal.vehicle ? `${deal.vehicle.year} ${deal.vehicle.make} ${deal.vehicle.model}` : 'No vehicle'}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {deal.lead ? `${deal.lead.firstName} ${deal.lead.lastName}` : 'No customer'} · {formatDate(deal.occurredAt)}
-                    </p>
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+          <DeskSection
+            title="Recent deals"
+            count={metrics.recentDeals.length}
+            actions={<Link href={`${basePath}/platform/deals`} className="text-xs font-medium text-muted-foreground hover:text-foreground">All deals</Link>}
+          >
+            {metrics.recentDeals.length > 0 ? (
+              <Panel className="divide-y">
+                {metrics.recentDeals.map(deal => (
+                  <Link
+                    key={deal.id}
+                    href={`${basePath}/platform/deals/${deal.id}`}
+                    className="flex min-w-0 items-start justify-between gap-4 px-4 py-3 transition-colors hover:bg-muted/40"
+                  >
+                    <div className="min-w-0">
+                      <TitleLine as="p" tone={dealTone[deal.status] ?? 'idle'} status={deal.status} className="text-sm font-medium">
+                        {deal.vehicle ? `${deal.vehicle.year} ${deal.vehicle.make} ${deal.vehicle.model}` : 'No vehicle'}
+                      </TitleLine>
+                      <p className="truncate pl-4 text-xs text-muted-foreground">
+                        {deal.lead ? `${deal.lead.firstName} ${deal.lead.lastName}` : 'No customer'} · {formatDate(deal.occurredAt)}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-medium tabular-nums">{formatCurrencyCents(deal.vehiclePriceCents)}</p>
+                      <p className="text-xs capitalize text-muted-foreground">{deal.status}</p>
+                    </div>
+                  </Link>
+                ))}
+              </Panel>
+            ) : (
+              <p className="py-6 text-center text-sm text-muted-foreground">No recent deals</p>
+            )}
+          </DeskSection>
+
+          <DeskSection title="Top salespeople" count={metrics.topSalespeople.length}>
+            {metrics.topSalespeople.length > 0 ? (
+              <Panel className="divide-y">
+                {metrics.topSalespeople.map((person, index) => (
+                  <div key={person.id} className="flex min-w-0 items-center gap-3 px-4 py-3">
+                    <span className="w-5 shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{String(index + 1).padStart(2, '0')}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{person.name}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {person.deals} delivered · Gross {formatCurrencyCents(person.grossCents)}
+                      </p>
+                    </div>
+                    <div className="hidden sm:block">
+                      <Meter value={person.revenueCents / leaderRevenue} label={`${person.name} share of leader revenue`} />
+                    </div>
+                    <p className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">{formatCurrencyCents(person.revenueCents)}</p>
                   </div>
-                  <div className="text-right">
-                    <p className="font-medium">{formatCurrencyCents(deal.vehiclePriceCents)}</p>
-                    <p className={deal.status === 'delivered' ? 'text-xs text-green-600' : 'text-xs text-amber-600'}>{deal.status}</p>
-                  </div>
-                </Link>
-              ))}
-              {metrics.recentDeals.length === 0 && <p className="py-4 text-center text-muted-foreground">No recent deals</p>}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Top salespeople</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {metrics.topSalespeople.map((person, index) => (
-                <div key={person.id} className="flex items-center gap-4">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-sm font-bold">{index + 1}</div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{person.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {person.deals} delivered · gross {formatCurrencyCents(person.grossCents)}
-                    </p>
-                  </div>
-                  <p className="font-bold text-green-600">{formatCurrencyCents(person.revenueCents)}</p>
-                </div>
-              ))}
-              {metrics.topSalespeople.length === 0 && <p className="py-4 text-center text-muted-foreground">No delivered deals yet</p>}
-              <div className="mt-4 flex items-center gap-2 rounded-lg border p-3 text-sm text-muted-foreground">
-                <Wrench className="h-4 w-4" />
-                <span>Service revenue · 30d: {formatCurrencyCents(metrics.periodComparison.settledServiceRevenueCents.current)}</span>
-              </div>
-            </CardContent>
-          </Card>
+                ))}
+              </Panel>
+            ) : (
+              <p className="py-6 text-center text-sm text-muted-foreground">No delivered deals</p>
+            )}
+          </DeskSection>
         </div>
+
+        <DeskSection title="Inventory value">
+          <ReadoutStrip>
+            <Readout label="Retail" value={formatCurrencyCents(metrics.inventory.retailCents)} />
+            <Readout label="Cost" value={formatCurrencyCents(metrics.inventory.costCents)} />
+            <Readout label="Spread" value={formatCurrencyCents(metrics.inventory.retailCents - metrics.inventory.costCents)} />
+            <Readout label="Service hours" value={metrics.service.soldHours.toFixed(1)} sub={`Actual ${metrics.service.actualHours.toFixed(1)} · ELR ${formatCurrencyCents(metrics.service.effectiveLaborRateCents)}`} />
+          </ReadoutStrip>
+        </DeskSection>
       </div>
     </PageContainer>
   )

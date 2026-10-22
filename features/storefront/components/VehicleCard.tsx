@@ -3,14 +3,16 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { Check, Plus } from 'lucide-react'
 import { Vehicle } from '@/features/storefront/lib/types'
 import {
   addToComparison,
   isInComparison,
   removeFromComparison,
 } from '@/features/storefront/lib/comparison'
-import { formatMileage, formatPrice, vehicleTitle } from '../lib/format'
+import { formatMileage, formatPrice } from '../lib/format'
 import { primaryVehicleImage, vehicleImageUrl } from '../lib/images'
+import { vehicleConditionLabel, vehicleStatus } from '../lib/vehicleStatus'
 import { PhotoAttribution } from './PhotoAttribution'
 import { useStorefrontBusiness } from './StorefrontBusinessProvider'
 import { VehiclePhotoPlaceholder } from './VehiclePhotoPlaceholder'
@@ -40,7 +42,10 @@ export function VehicleCard({
   }, [vehicle.id])
 
   const imageUrl = vehicleImageUrl(primaryVehicleImage(vehicle.images))
-  const title = vehicleTitle(vehicle)
+  const name = `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+  const title = vehicle.trim ? `${name} ${vehicle.trim}` : name
+  const status = vehicleStatus(vehicle.status)
+  const href = `/inventory/${vehicle.id}`
 
   const toggleCompare = () => {
     if (comparing) {
@@ -51,110 +56,107 @@ export function VehicleCard({
     setCompareFull(!addToComparison(vehicle.id))
   }
 
-  const conditionLabel =
-    vehicle.condition === 'certified'
-      ? 'Certified'
-      : vehicle.condition === 'new'
-        ? 'New'
-        : 'Pre-owned'
+  const compareButton = showCompareButton ? (
+    <button
+      type="button"
+      onClick={toggleCompare}
+      className="sf-pill"
+      data-active={comparing ? 'true' : undefined}
+      aria-pressed={comparing}
+      aria-label={comparing ? `Remove ${title} from compare` : `Add ${title} to compare`}
+    >
+      {comparing ? <Check className="size-4" aria-hidden="true" /> : <Plus className="size-4" aria-hidden="true" />}
+      Compare
+    </button>
+  ) : null
 
   if (layout === 'feature') {
     return (
-      <article className="sf-card grid md:grid-cols-[1.15fr_1fr] min-w-0 overflow-hidden">
-        <Link href={`/inventory/${vehicle.id}`} className="relative block aspect-[4/3] md:aspect-auto md:min-h-[22rem] bg-[var(--sf-paper-2)]">
+      <article className="sf-lift grid min-w-0 gap-5 md:grid-cols-[1.25fr_1fr] md:gap-8">
+        <Link href={href} className="sf-photo block aspect-[4/3]" tabIndex={-1} aria-hidden="true">
           {imageUrl ? (
-            <Image src={imageUrl} alt={title} fill className="object-cover" sizes="(max-width: 768px) 100vw, 55vw" priority={priority} unoptimized />
+            <Image src={imageUrl} alt="" fill className="object-cover" sizes="(max-width: 768px) 100vw, 55vw" priority={priority} unoptimized />
           ) : (
             <VehiclePhotoPlaceholder />
           )}
+          <span className="sf-chip sf-chip-dark absolute left-3 top-3">{vehicleConditionLabel(vehicle.condition)}</span>
         </Link>
-        <div className="p-[var(--sf-space-lg)] flex flex-col justify-between gap-[var(--sf-space-md)]">
-          <div>
-            <p className="sf-eyebrow mb-2">{conditionLabel} · Stock {vehicle.stockNumber}</p>
-            <h3 className="sf-display text-[length:var(--sf-text-xl)]">
-              <Link href={`/inventory/${vehicle.id}`} className="hover:text-[var(--sf-accent)] transition-colors">
-                {title}
+        <div className="flex min-w-0 flex-col justify-end gap-5">
+          <div className="min-w-0">
+            <h3 className="sf-title-line">
+              <span className="sf-dot" data-tone={status.tone} aria-hidden="true" />
+              <Link href={href} className="sf-heading text-[length:var(--sf-text-xl)] hover:text-[var(--sf-accent)]">
+                {name}
               </Link>
             </h3>
-            <p className="mt-3 text-[var(--sf-text-sm)]" style={{ color: 'var(--sf-ink-2)' }}>
-              {formatMileage(vehicle.mileage)} · {vehicle.color}
+            <p className="sf-muted mt-1 pl-4 text-[var(--sf-text-sm)]">
+              <span className="sr-only">{status.label}. </span>
+              {vehicle.trim}
             </p>
-            <PhotoAttribution src={imageUrl} className="mt-2" />
-            {compareFull && <p role="status" className="mt-2 text-[var(--sf-text-xs)]" style={{ color: 'var(--sf-ink-2)' }}>You can compare up to 4 vehicles at a time.</p>}
           </div>
-          <div className="flex items-end justify-between gap-4 flex-wrap">
-            <p className="sf-display text-[length:var(--sf-text-2xl)]" style={{ color: 'var(--sf-accent)' }}>
-              {formatPrice(vehicle.price, currencyCode)}
-            </p>
-            <div className="flex gap-2">
-              <Link href={`/inventory/${vehicle.id}`} className="sf-btn sf-btn-primary text-sm">
-                View details
-              </Link>
-              {showCompareButton && (
-                <button type="button" onClick={toggleCompare} className="sf-btn sf-btn-ghost text-sm" aria-pressed={comparing}>
-                  {comparing ? 'Comparing' : 'Compare'}
-                </button>
-              )}
+          <dl className="sf-spec">
+            <div><dt>Mileage</dt><dd className="sf-figure">{formatMileage(vehicle.mileage)}</dd></div>
+            <div><dt>Color</dt><dd>{vehicle.color || 'Not listed'}</dd></div>
+            <div><dt>Stock</dt><dd className="sf-figure">{vehicle.stockNumber}</dd></div>
+          </dl>
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <p className="sf-price text-[length:var(--sf-text-2xl)]">{formatPrice(vehicle.price, currencyCode)}</p>
+            <div className="sf-track">
+              <Link href={href} className="sf-pill sf-pill-primary">View vehicle</Link>
+              {compareButton}
             </div>
           </div>
+          {compareFull && <p role="status" className="sf-muted text-[var(--sf-text-xs)]">Compare holds 4 vehicles.</p>}
+          <PhotoAttribution src={imageUrl} />
         </div>
       </article>
     )
   }
 
   return (
-    <article className="sf-card flex flex-col min-w-0 overflow-hidden h-full">
-      <Link href={`/inventory/${vehicle.id}`} className="relative block aspect-[16/10] bg-[var(--sf-paper-2)]">
+    <article className="sf-lift flex h-full min-w-0 flex-col">
+      <Link href={href} className="sf-photo block aspect-[4/3]" tabIndex={-1} aria-hidden="true">
         {imageUrl ? (
           <Image
             src={imageUrl}
-            alt={title}
+            alt=""
             fill
             className="object-cover"
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
             priority={priority}
             unoptimized
           />
         ) : (
           <VehiclePhotoPlaceholder />
         )}
-        <span
-          className="absolute top-3 left-3 px-2 py-1 text-[10px] font-semibold tracking-wide uppercase"
-          style={{ background: 'var(--sf-paper-3)', color: 'var(--sf-accent-ink)' }}
-        >
-          {conditionLabel}
-        </span>
+        <span className="sf-chip sf-chip-dark absolute left-3 top-3">{vehicleConditionLabel(vehicle.condition)}</span>
       </Link>
 
-      <div className="p-[var(--sf-space-md)] flex flex-col flex-1 gap-[var(--sf-space-sm)]">
-        <div className="flex-1">
-          <h3 className="font-semibold text-[var(--sf-text-md)] leading-snug">
-            <Link href={`/inventory/${vehicle.id}`} className="hover:text-[var(--sf-accent)] transition-colors">
-              {title}
-            </Link>
-          </h3>
-          <p className="mt-1 text-[var(--sf-text-xs)]" style={{ color: 'var(--sf-ink-3)' }}>
-            {formatMileage(vehicle.mileage)} · {vehicle.color}
-          </p>
+      <div className="flex flex-1 flex-col pt-4">
+        <h3 className="sf-title-line">
+          <span className="sf-dot" data-tone={status.tone} aria-hidden="true" />
+          <Link href={href} className="sf-heading min-w-0 text-[var(--sf-text-lg)] hover:text-[var(--sf-accent)]">
+            {name}
+          </Link>
+        </h3>
+        <p className="sf-muted mt-0.5 min-h-[1.5em] truncate pl-4 text-[var(--sf-text-sm)]">
+          <span className="sr-only">{status.label}. </span>
+          {vehicle.trim}
+        </p>
+
+        <div className="mt-3 flex items-baseline justify-between gap-3 pl-4">
+          <p className="sf-price text-[length:var(--sf-text-xl)]">{formatPrice(vehicle.price, currencyCode)}</p>
+          <p className="sf-figure sf-faint truncate text-[var(--sf-text-xs)]">{formatMileage(vehicle.mileage)}</p>
         </div>
 
-        <div className="flex items-center justify-between gap-2 pt-2 border-t" style={{ borderColor: 'var(--sf-rule)' }}>
-          <span className="font-semibold text-[var(--sf-text-lg)]" style={{ color: 'var(--sf-accent)' }}>
-            {formatPrice(vehicle.price, currencyCode)}
-          </span>
-          <div className="flex gap-2">
-            <Link href={`/inventory/${vehicle.id}`} className="sf-btn sf-btn-primary text-xs px-3 py-2">
-              Details
-            </Link>
-            {showCompareButton && (
-              <button type="button" onClick={toggleCompare} className="sf-btn sf-btn-ghost text-xs px-3 py-2" aria-pressed={comparing} aria-label={comparing ? 'Remove from compare' : 'Add to compare'}>
-                {comparing ? '✓' : '+'}
-              </button>
-            )}
-          </div>
+        <div className="mt-auto flex items-center justify-between gap-3 pt-4 pl-4">
+          <p className="sf-figure sf-faint min-w-0 truncate text-[var(--sf-text-xs)]">
+            {vehicle.color ? `${vehicle.color} · ` : ''}#{vehicle.stockNumber}
+          </p>
+          {compareButton && <div className="sf-track shrink-0">{compareButton}</div>}
         </div>
-        {compareFull && <p role="status" className="text-[var(--sf-text-xs)]" style={{ color: 'var(--sf-ink-2)' }}>You can compare up to 4 vehicles at a time.</p>}
-        <PhotoAttribution src={imageUrl} />
+        {compareFull && <p role="status" className="sf-muted mt-2 pl-4 text-[var(--sf-text-xs)]">Compare holds 4 vehicles.</p>}
+        <div className="pl-4"><PhotoAttribution src={imageUrl} /></div>
       </div>
     </article>
   )

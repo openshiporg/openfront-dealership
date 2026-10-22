@@ -1,12 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { ArrowRight, RefreshCw, Save } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -14,10 +12,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
-import { Calculator, Car, DollarSign, User, Save, AlertTriangle } from 'lucide-react'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
+import {
+  Code,
+  DeskHeader,
+  Notice,
+  Panel,
+  Pill,
+  Readout,
+  TitleLine,
+  Track,
+} from '@/features/platform/components/desk'
 import {
   createDealPencil,
   getDealSetupOptions,
@@ -32,6 +38,33 @@ type Lead = DealSetupLead
 interface User {
   id: string
   name: string
+}
+
+const fieldLabel = 'font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground'
+
+/** One numbered step of the form; the dot on the title line shows whether it is filled. */
+function Step({ index, title, done, optional, children }: { index: number; title: string; done: boolean; optional?: boolean; children: ReactNode }) {
+  return (
+    <section className="min-w-0" aria-labelledby={`deal-step-${index}`}>
+      <div className="flex min-w-0 items-baseline gap-3 border-b pb-2">
+        <span className="font-mono text-xs tabular-nums text-muted-foreground">{String(index).padStart(2, '0')}</span>
+        <TitleLine as="h2" tone={done ? 'ok' : 'idle'} status={done ? 'Complete' : 'Open'} className="text-sm font-semibold text-foreground">
+          <span id={`deal-step-${index}`}>{title}</span>
+        </TitleLine>
+        {optional && <span className="ml-auto text-xs text-muted-foreground">Optional</span>}
+      </div>
+      <div className="space-y-4 pt-4">{children}</div>
+    </section>
+  )
+}
+
+function SummaryRow({ label, value, emphasis, credit }: { label: string; value: string; emphasis?: boolean; credit?: boolean }) {
+  return (
+    <div className={`flex min-w-0 items-baseline justify-between gap-4 px-4 ${emphasis ? 'border-t-2 border-foreground/80 py-3 text-base font-semibold' : 'py-2 text-sm'}`}>
+      <dt className={emphasis ? 'text-foreground' : 'text-muted-foreground'}>{label}</dt>
+      <dd className={`shrink-0 text-right font-mono tabular-nums ${credit ? 'text-emerald-700 dark:text-emerald-400' : 'text-foreground'}`}>{value}</dd>
+    </div>
+  )
 }
 
 export function DealCreatePageClient({
@@ -173,106 +206,56 @@ export function DealCreatePageClient({
   ]
 
   const header = (
-    <div>
-      <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">New Deal</h1>
-      <p className="text-muted-foreground">Select a vehicle and customer to start a worksheet.</p>
-    </div>
+    <DeskHeader
+      eyebrow="Deals"
+      title="New deal"
+      meta={selectedVehicle ? `${selectedVehicle.year} ${selectedVehicle.make} ${selectedVehicle.model}${selectedLead ? ` · ${selectedLead.firstName} ${selectedLead.lastName}` : ''}` : 'Pencil worksheet'}
+      actions={
+        <Track>
+          <Pill asChild variant="plain">
+            <Link href={`${basePath}/platform/deals`}>Cancel</Link>
+          </Pill>
+        </Track>
+      }
+    />
   )
+
+  const frontGross = selectedVehicle ? formData.vehiclePrice - (selectedVehicle.purchasePrice || 0) : null
 
   return (
     <PageContainer title="New Deal" header={header} breadcrumbs={breadcrumbs}>
-    <div className="min-w-0 space-y-6 px-4 pb-6 md:px-6">
-
-      {loading ? (
-        <Card>
-          <CardContent className="flex min-h-[280px] items-center justify-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
-          </CardContent>
-        </Card>
-      ) : error ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <AlertTriangle className="mx-auto mb-4 h-12 w-12 text-destructive" />
+      <div className="min-w-0 max-w-full px-4 pb-10 md:px-6">
+        {loading ? (
+          <p role="status" className="py-16 text-center text-sm text-muted-foreground">Loading deal options</p>
+        ) : error ? (
+          <Notice tone="bad">
             <p className="font-medium">Unable to prepare a deal</p>
-            <p className="mt-1 text-sm text-muted-foreground">{error}</p>
-            <Button variant="outline" className="mt-4" onClick={loadData}>Retry</Button>
-          </CardContent>
-        </Card>
-      ) : vehicles.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Car className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-            <p className="font-medium">No available vehicles</p>
-            <Button asChild variant="outline" className="mt-4">
-              <Link href={`${basePath}/platform/vehicles`}>Open inventory</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Deal Details */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Vehicle Selection */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Car className="h-5 w-5" />
-                Vehicle Selection
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label>Select Vehicle</Label>
-                <Select value={formData.vehicleId} onValueChange={handleVehicleChange}>
-                  <SelectTrigger aria-label="Select vehicle">
-                    <SelectValue placeholder="Choose a vehicle" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {vehicles.map(v => (
-                      <SelectItem key={v.id} value={v.id}>
-                        {v.year} {v.make} {v.model} - Stock #{v.stockNumber} - {formatCurrency(v.price)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {selectedVehicle && (
-                <div className="bg-muted/50 rounded-lg p-4">
-                  <p className="font-medium">{selectedVehicle.year} {selectedVehicle.make} {selectedVehicle.model}</p>
-                  <p className="text-sm text-muted-foreground">Stock #{selectedVehicle.stockNumber}</p>
-                  <div className="flex gap-4 mt-2 text-sm">
-                    <span>MSRP: {formatCurrency(selectedVehicle.price)}</span>
-                    <span className="text-muted-foreground">Cost: {formatCurrency(selectedVehicle.purchasePrice || 0)}</span>
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <Label htmlFor="deal-negotiated-price">Negotiated Price</Label>
-                <Input
-                  id="deal-negotiated-price"
-                  type="number"
-                  value={formData.vehiclePrice || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, vehiclePrice: parseFloat(e.target.value) || 0 }))}
-                  placeholder="Enter sale price"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Customer & Sales Rep */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
-                Customer & Sales Rep
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <Label>Customer (Lead)</Label>
+            <p className="mt-0.5 text-muted-foreground">{error}</p>
+            <Track className="mt-2">
+              <Pill size="sm" onClick={loadData}>
+                <RefreshCw />
+                Retry
+              </Pill>
+            </Track>
+          </Notice>
+        ) : vehicles.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-16 text-center text-sm text-muted-foreground">
+            <p>No available vehicles</p>
+            <Track>
+              <Pill asChild>
+                <Link href={`${basePath}/platform/vehicles`}>
+                  Open inventory
+                  <ArrowRight />
+                </Link>
+              </Pill>
+            </Track>
+          </div>
+        ) : (
+          <div className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+            <div className="min-w-0 space-y-8">
+              <Step index={1} title="Customer" done={Boolean(formData.leadId)} optional>
+                <label className="grid min-w-0 gap-1.5">
+                  <span className={fieldLabel}>Customer (lead)</span>
                   <Select value={formData.leadId} onValueChange={(v) => setFormData(prev => ({ ...prev, leadId: v }))}>
                     <SelectTrigger aria-label="Customer">
                       <SelectValue placeholder="Select customer" />
@@ -285,9 +268,48 @@ export function DealCreatePageClient({
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-                <div>
-                  <Label>Sales Representative</Label>
+                </label>
+                {selectedLead && (
+                  <Panel className="px-4 py-3 text-sm">
+                    <p className="font-medium">{selectedLead.firstName} {selectedLead.lastName}</p>
+                    <p className="break-all text-muted-foreground">{selectedLead.email}</p>
+                    <p className="tabular-nums text-muted-foreground">{selectedLead.phone}</p>
+                  </Panel>
+                )}
+              </Step>
+
+              <Step index={2} title="Vehicle" done={Boolean(formData.vehicleId)}>
+                <label className="grid min-w-0 gap-1.5">
+                  <span className={fieldLabel}>Vehicle</span>
+                  <Select value={formData.vehicleId} onValueChange={handleVehicleChange}>
+                    <SelectTrigger aria-label="Select vehicle">
+                      <SelectValue placeholder="Choose a vehicle" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {vehicles.map(v => (
+                        <SelectItem key={v.id} value={v.id}>
+                          {v.year} {v.make} {v.model} · #{v.stockNumber} · {formatCurrency(v.price)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+
+                {selectedVehicle && (
+                  <Panel className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="font-medium">{selectedVehicle.year} {selectedVehicle.make} {selectedVehicle.model}</p>
+                      <Code>#{selectedVehicle.stockNumber}</Code>
+                    </div>
+                    <dl className="flex gap-4 font-mono text-xs tabular-nums">
+                      <div className="text-right"><dt className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">MSRP</dt><dd>{formatCurrency(selectedVehicle.price)}</dd></div>
+                      <div className="text-right"><dt className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Cost</dt><dd>{formatCurrency(selectedVehicle.purchasePrice || 0)}</dd></div>
+                    </dl>
+                  </Panel>
+                )}
+
+                <label className="grid min-w-0 gap-1.5">
+                  <span className={fieldLabel}>Sales rep</span>
                   <Select value={formData.salespersonId} onValueChange={(v) => setFormData(prev => ({ ...prev, salespersonId: v }))}>
                     <SelectTrigger aria-label="Sales representative">
                       <SelectValue placeholder="Select sales rep" />
@@ -300,125 +322,80 @@ export function DealCreatePageClient({
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-              </div>
+                </label>
+              </Step>
 
-              {selectedLead && (
-                <div className="bg-muted/50 rounded-lg p-4 text-sm">
-                  <p className="font-medium">{selectedLead.firstName} {selectedLead.lastName}</p>
-                  <p className="text-muted-foreground">{selectedLead.email}</p>
-                  <p className="text-muted-foreground">{selectedLead.phone}</p>
+              <Step index={3} title="Numbers" done={formData.vehiclePrice > 0}>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <label htmlFor="deal-negotiated-price" className="grid min-w-0 gap-1.5">
+                    <span className={fieldLabel}>Negotiated price</span>
+                    <Input
+                      id="deal-negotiated-price"
+                      type="number"
+                      className="text-right tabular-nums"
+                      value={formData.vehiclePrice || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, vehiclePrice: parseFloat(e.target.value) || 0 }))}
+                      placeholder="0"
+                    />
+                  </label>
+                  <label htmlFor="deal-trade-in-value" className="grid min-w-0 gap-1.5">
+                    <span className={fieldLabel}>Trade-in value</span>
+                    <Input
+                      id="deal-trade-in-value"
+                      type="number"
+                      min="0"
+                      className="text-right tabular-nums"
+                      value={formData.tradeInValue || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, tradeInValue: parseFloat(e.target.value) || 0 }))}
+                      placeholder="0"
+                    />
+                  </label>
+                  <label htmlFor="deal-down-payment" className="grid min-w-0 gap-1.5">
+                    <span className={fieldLabel}>Down payment</span>
+                    <Input
+                      id="deal-down-payment"
+                      type="number"
+                      min="0"
+                      className="text-right tabular-nums"
+                      value={formData.downPayment || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, downPayment: parseFloat(e.target.value) || 0 }))}
+                      placeholder="0"
+                    />
+                  </label>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </Step>
+            </div>
 
-          {/* Initial credits */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calculator className="h-5 w-5" />
-                Initial Credits
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <Label htmlFor="deal-trade-in-value">Trade-In Value</Label>
-                <Input
-                  id="deal-trade-in-value"
-                  type="number"
-                  min="0"
-                  value={formData.tradeInValue || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, tradeInValue: parseFloat(e.target.value) || 0 }))}
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <Label htmlFor="deal-down-payment">Down Payment</Label>
-                <Input
-                  id="deal-down-payment"
-                  type="number"
-                  min="0"
-                  value={formData.downPayment || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, downPayment: parseFloat(e.target.value) || 0 }))}
-                  placeholder="0"
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right Column - Summary */}
-        <div className="space-y-6">
-          <Card className="sticky top-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5" />
-                Deal Summary
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Vehicle Price</span>
-                  <span>{formatCurrency(formData.vehiclePrice)}</span>
-                </div>
-                {formData.tradeInValue > 0 && (
-                  <div className="flex justify-between text-green-600">
-                    <span>Trade-In Credit</span>
-                    <span>-{formatCurrency(formData.tradeInValue)}</span>
-                  </div>
+            <aside className="min-w-0 lg:sticky lg:top-6 lg:self-start">
+              <section aria-labelledby="deal-summary" className="min-w-0 space-y-3">
+                <h2 id="deal-summary" className="border-b pb-2 text-sm font-semibold text-foreground">Summary</h2>
+                <Panel className="overflow-hidden">
+                  <dl className="divide-y divide-border/60">
+                    <SummaryRow label="Vehicle price" value={formatCurrency(formData.vehiclePrice)} />
+                    {formData.tradeInValue > 0 && <SummaryRow label="Trade-in credit" value={`-${formatCurrency(formData.tradeInValue)}`} credit />}
+                    <SummaryRow label="Subtotal" value={formatCurrency(calculated.subtotal)} />
+                    <SummaryRow emphasis label="Working balance" value={formatCurrency(calculated.totalPrice)} />
+                    <SummaryRow label="Down payment" value={`-${formatCurrency(formData.downPayment)}`} credit />
+                    <SummaryRow label="Remaining balance" value={formatCurrency(calculated.remainingBalance)} />
+                  </dl>
+                </Panel>
+                {frontGross !== null && (
+                  <Panel>
+                    <Readout label="Front gross" value={formatCurrency(frontGross)} tone={frontGross > 0 ? 'ok' : frontGross < 0 ? 'bad' : 'idle'} />
+                  </Panel>
                 )}
-                <Separator />
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span>{formatCurrency(calculated.subtotal)}</span>
-                </div>
-                <div className="flex justify-between font-bold text-lg">
-                  <span>Working balance</span>
-                  <span>{formatCurrency(calculated.totalPrice)}</span>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Down Payment</span>
-                  <span className="text-green-600">-{formatCurrency(formData.downPayment)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Remaining balance</span>
-                  <span>{formatCurrency(calculated.remainingBalance)}</span>
-                </div>
-              </div>
-
-              {selectedVehicle && (
-                <div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">
-                  <p className="text-xs text-green-700">Front gross</p>
-                  <p className="text-lg font-bold text-green-700">
-                    {formatCurrency(formData.vehiclePrice - (selectedVehicle.purchasePrice || 0))}
-                  </p>
-                </div>
-              )}
-
-              <div className="space-y-2 pt-4">
-                {saveError && (
-                  <p role="alert" className="text-sm text-destructive">
-                    {saveError}
-                  </p>
-                )}
-                <Button onClick={handleSave} className="w-full" disabled={saving || !formData.vehicleId}>
-                  <Save className="h-4 w-4 mr-2" />
-                  {saving ? 'Creating…' : 'Create worksheet'}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                {saveError && <Notice tone="bad">{saveError}</Notice>}
+                <Track block>
+                  <Pill variant="primary" onClick={handleSave} disabled={saving || !formData.vehicleId}>
+                    <Save />
+                    {saving ? 'Creating…' : 'Create worksheet'}
+                  </Pill>
+                </Track>
+              </section>
+            </aside>
+          </div>
+        )}
       </div>
-      )}
-    </div>
     </PageContainer>
   )
 }

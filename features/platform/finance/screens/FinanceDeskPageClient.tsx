@@ -1,19 +1,31 @@
 'use client'
 
-import { useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, CheckCircle2, Circle, CreditCard, RefreshCw, Search, Square, Triangle, UserPlus, XCircle } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Plus, RefreshCw, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { EmptyState } from '@/components/ui/empty-state'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
 import { OperatorActionDialog, type OperatorActionField } from '@/features/platform/components/OperatorActionDialog'
+import {
+  Code,
+  DeskHeader,
+  DeskSection,
+  Facts,
+  Notice,
+  Panel,
+  Pill,
+  Readout,
+  ReadoutStrip,
+  Segmented,
+  TitleLine,
+  Track,
+  type DeskTone,
+} from '@/features/platform/components/desk'
 import { readFinanceEvidence } from '@/features/platform/deals/lib/financeEvidence'
 import { FinanceEvidenceHistory } from '@/features/platform/deals/components/FinanceEvidenceHistory'
+import { cn } from '@/lib/utils'
 import {
   configureFinanceProduct,
   decideFinanceMenu,
@@ -56,13 +68,13 @@ const statusLabels: Record<string, string> = {
   cancelled: 'Cancelled',
 }
 
-const statusClasses: Record<string, string> = {
-  pencil: 'bg-slate-100 text-slate-700 border-slate-200',
-  submitted: 'bg-blue-100 text-blue-700 border-blue-200',
-  approved: 'bg-green-100 text-green-700 border-green-200',
-  financed: 'bg-purple-100 text-purple-700 border-purple-200',
-  delivered: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  cancelled: 'bg-red-100 text-red-700 border-red-200',
+const statusTones: Record<string, DeskTone> = {
+  pencil: 'idle',
+  submitted: 'warn',
+  approved: 'info',
+  financed: 'info',
+  delivered: 'ok',
+  cancelled: 'bad',
 }
 
 const filterOptions = [
@@ -111,33 +123,35 @@ function getDealWarnings(deal: Deal) {
   return warnings
 }
 
-
-function StatusBadge({ status }: { status: string | null }) {
-  const value = status || 'pencil'
-  return (
-    <Badge variant="outline" className={statusClasses[value] || 'bg-slate-100 text-slate-700 border-slate-200'}>
-      {statusLabels[value] || value}
-    </Badge>
-  )
+/** Tone for free-form workflow states (applications, decisions, checks, packages, funding). */
+function stateTone(value: string | null | undefined): DeskTone {
+  const state = (value || '').toLowerCase()
+  if (['approved', 'accepted', 'completed', 'complete', 'signed', 'funded', 'clear-to-fund', 'ready', 'delivered'].includes(state)) return 'ok'
+  if (['declined', 'rejected', 'failed', 'expired', 'cancelled', 'void', 'denied', 'exception'].includes(state)) return 'bad'
+  if (['conditional', 'changes-requested', 'manual-review', 'requested', 'pending', 'presented', 'quoted', 'preparing', 'sent', 'viewed', 'queued', 'submitted', 'under-review', 'open'].includes(state)) return 'warn'
+  return 'idle'
 }
 
 function normalizeDeals(deals: Deal[] | undefined) {
   return (deals || []).map(deal => ({ ...deal, financeEvidence: readFinanceEvidence(deal.financeEvidence) }))
 }
 
-function EmptyStateDefault({ title, description }: { title: string; description: string }) {
-  return <EmptyState title={title} description={description} icons={[Triangle, Square, Circle]} />
+function Empty({ label, onReset }: { label: string; onReset?: () => void }) {
+  return (
+    <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-muted-foreground">
+      <p>{label}</p>
+      {onReset && (
+        <Track>
+          <Pill size="sm" onClick={onReset}>Reset filters</Pill>
+        </Track>
+      )}
+    </div>
+  )
 }
 
-function EmptyStateSearch({ onResetFilters }: { onResetFilters: () => void }) {
-  return (
-    <EmptyState
-      title="No results found"
-      description="Try adjusting your search or filters."
-      icons={[Search]}
-      action={{ label: 'Reset filters', onClick: onResetFilters }}
-    />
-  )
+function Ledger({ children, empty }: { children: ReactNode[]; empty: string }) {
+  if (children.length === 0) return <p className="py-3 text-sm text-muted-foreground">{empty}</p>
+  return <ul className="divide-y text-sm">{children}</ul>
 }
 
 export function FinanceDeskPageClient({
@@ -156,15 +170,16 @@ export function FinanceDeskPageClient({
   const [search, setSearch] = useState('')
   const [sortOrder, setSortOrder] = useState('recent')
   const [products, setProducts] = useState<FinanceProduct[]>(initialWorkspace?.products || [])
-  const [, setProductQuotes] = useState<ProductQuote[]>(initialWorkspace?.productQuotes || [])
-  const [, setProductCancellations] = useState<ProductCancellation[]>(initialWorkspace?.productCancellations || [])
+  const [productQuotes, setProductQuotes] = useState<ProductQuote[]>(initialWorkspace?.productQuotes || [])
+  const [productCancellations, setProductCancellations] = useState<ProductCancellation[]>(initialWorkspace?.productCancellations || [])
   const [menus, setMenus] = useState<FinanceMenu[]>(initialWorkspace?.menus || [])
-  const [, setComplianceChecks] = useState<ComplianceCheck[]>(initialWorkspace?.complianceChecks || [])
+  const [complianceChecks, setComplianceChecks] = useState<ComplianceCheck[]>(initialWorkspace?.complianceChecks || [])
   const [contractPackages, setContractPackages] = useState<ContractPackage[]>(initialWorkspace?.contractPackages || [])
   const [fundingCases, setFundingCases] = useState<FundingCase[]>(initialWorkspace?.fundingCases || [])
   const [task, setTask] = useState<FinanceTask | null>(null)
   const [taskError, setTaskError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const loadDeals = async () => {
     setLoading(true)
@@ -586,11 +601,28 @@ export function FinanceDeskPageClient({
   })
 
 
+
   const searchTerm = search.trim()
   const resetFilters = () => {
     setSearch('')
     setFilter('active')
   }
+
+  const stageCounts = useMemo(() => {
+    const count = (status: string) => deals.filter(deal => deal.status === status).length
+    return {
+      active: deals.filter(deal => ['submitted', 'approved', 'financed'].includes(deal.status || '')).length,
+      submitted: count('submitted'),
+      approved: count('approved'),
+      financed: count('financed'),
+      all: deals.length,
+    } as Record<string, number>
+  }, [deals])
+
+  const selectedDeal = filteredDeals.find(deal => deal.id === selectedId) ?? filteredDeals[0] ?? null
+  const activeFinanced = deals.filter(deal => ['submitted', 'approved', 'financed'].includes(deal.status || '')).reduce((sum, deal) => sum + (deal.financingAmount || 0), 0)
+  const presentedMenus = menus.filter(menu => menu.status === 'presented').length
+  const fundingExceptions = fundingCases.filter(item => item.status === 'exception').length
 
   const breadcrumbs = [
     { type: 'link' as const, label: 'Dashboard', href: basePath },
@@ -599,65 +631,380 @@ export function FinanceDeskPageClient({
   ]
 
   const header = (
-    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">Finance</h1>
-        <p className="text-muted-foreground">Review applications and lender decisions.</p>
-      </div>
-      <div className="flex gap-2">
-        <Button variant="outline" onClick={loadDeals} disabled={loading}>
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Refresh
-        </Button>
-        <Button asChild>
-          <Link href={`${basePath}/platform/deals/create`}>
-            <CreditCard className="h-4 w-4 mr-2" />
-            New Deal
-          </Link>
-        </Button>
-      </div>
-    </div>
+    <DeskHeader
+      title="Finance"
+      tone={error ? 'bad' : stageCounts.submitted > 0 ? 'warn' : 'ok'}
+      status={error ? 'Unavailable' : `${stageCounts.submitted} submitted`}
+      meta={error ? 'Unavailable' : `${stageCounts.active} in finance · ${openFinanceRequests.length} applications · ${products.length} products`}
+      actions={
+        <Track>
+          <Pill onClick={loadDeals} disabled={loading} aria-label="Refresh">
+            <RefreshCw className={loading ? 'animate-spin' : undefined} />
+            Refresh
+          </Pill>
+          <Pill onClick={configureProduct} disabled={updatingId === 'product'}>
+            Configure product
+          </Pill>
+          <Pill asChild variant="primary">
+            <Link href={`${basePath}/platform/deals/create`}>
+              <Plus />
+              New deal
+            </Link>
+          </Pill>
+        </Track>
+      }
+    />
   )
 
   if (error) {
     return (
       <PageContainer title="Finance" header={header} breadcrumbs={breadcrumbs}>
-        <div className="px-4 pb-6 md:px-6">
-          <Card>
-            <CardContent className="py-12 text-center">
-              <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-destructive" />
-              <p className="font-medium">Finance is unavailable</p>
-              <p className="mt-1 text-sm text-muted-foreground">{error}</p>
-              <Button className="mt-4" variant="outline" onClick={loadDeals}>
-                Retry
-              </Button>
-            </CardContent>
-          </Card>
+        <div className="space-y-3 px-4 pb-6 md:px-6">
+          <Notice tone="bad">
+            <p className="font-medium">Finance is unavailable</p>
+            <p className="mt-0.5 text-muted-foreground">{error}</p>
+          </Notice>
+          <Track>
+            <Pill onClick={loadDeals}>Retry</Pill>
+          </Track>
         </div>
       </PageContainer>
     )
   }
 
+  const renderDealDetail = (deal: Deal) => {
+    const warnings = getDealWarnings(deal)
+    const fundingCase = fundingCases.find(item => item.deal?.id === deal.id)
+    const evidence = deal.financeEvidence
+    const dealHref = `${basePath}/platform/deals/${deal.id}`
+    const workingStatus = ['submitted', 'approved', 'financed'].includes(deal.status || '')
+    const contractStatus = ['approved', 'financed'].includes(deal.status || '')
+    const hasPresentedMenu = menus.some(item => item.deal?.id === deal.id && item.status === 'presented')
+    const hasAcceptedMenu = menus.some(item => item.deal?.id === deal.id && item.status === 'accepted')
+    const dealMenus = menus.filter(item => item.deal?.id === deal.id)
+    const dealQuotes = productQuotes.filter(item => item.deal?.id === deal.id)
+    const dealCancellations = productCancellations.filter(item => item.deal?.id === deal.id)
+    const dealChecks = complianceChecks.filter(item => item.deal?.id === deal.id)
+    const contract = contractPackages.find(item => item.deal?.id === deal.id)
+    const lenderApplications = deal.lead ? applications.filter(application => application.lead?.id === deal.lead?.id) : []
+    const busy = updatingId === deal.id
+    const status = deal.status || 'pencil'
+    const openFundingExceptions = (fundingCase?.exceptions || []).filter(item => item.status === 'open').length
+
+    return (
+      <div className="min-w-0 space-y-6">
+        <div className="min-w-0 space-y-3">
+          <div className="flex min-w-0 items-start justify-between gap-3">
+            <div className="min-w-0">
+              <TitleLine as="h2" tone={statusTones[status] || 'idle'} status={statusLabels[status] || status} className="text-lg font-semibold tracking-tight">
+                {getCustomerName(deal)} · {getVehicleName(deal)}
+              </TitleLine>
+              <p className="mt-0.5 flex flex-wrap gap-x-2 pl-4 text-xs text-muted-foreground">
+                <span>{statusLabels[status] || status}</span>
+                <span>·</span>
+                <Code>#{deal.vehicle?.stockNumber || '-'}</Code>
+                {deal.vehicle?.vin && (<><span>·</span><Code>{deal.vehicle.vin}</Code></>)}
+                <span>·</span>
+                <span>Worksheet {deal.worksheetVersion}</span>
+                {deal.salesperson?.name && (<><span>·</span><span>{deal.salesperson.name}</span></>)}
+                {deal.rooftop?.name && (<><span>·</span><span>{deal.rooftop.name}</span></>)}
+              </p>
+            </div>
+            <Track className="shrink-0">
+              <Pill size="sm" asChild>
+                <Link href={dealHref}>Open</Link>
+              </Pill>
+            </Track>
+          </div>
+
+          <div className="flex min-w-0 flex-wrap gap-2">
+            {(deal.status === 'submitted' || (deal.status === 'approved' && evidence?.fundingCurrent) || deal.status === 'financed') && (
+              <Track>
+                {deal.status === 'submitted' && (
+                  <>
+                    <Pill size="sm" variant="primary" onClick={() => recordApprovalAndStatus(deal, 'approved', 'approved')} disabled={busy}>
+                      Approve
+                    </Pill>
+                    <Pill size="sm" variant="danger" onClick={() => recordApprovalAndStatus(deal, 'rejected', 'cancelled')} disabled={busy}>
+                      Reject
+                    </Pill>
+                  </>
+                )}
+                {deal.status === 'approved' && evidence?.fundingCurrent && (
+                  <Pill size="sm" variant="primary" onClick={() => updateDealStatus(deal, 'financed')} disabled={busy}>
+                    Mark financed
+                  </Pill>
+                )}
+                {deal.status === 'financed' && (
+                  <Pill size="sm" variant="primary" asChild>
+                    <Link href={`${basePath}/platform/delivery`}>Open delivery</Link>
+                  </Pill>
+                )}
+              </Track>
+            )}
+            {(workingStatus || hasPresentedMenu || hasAcceptedMenu) && (
+              <Track aria-label="Products and compliance">
+                {workingStatus && (
+                  <>
+                    <Pill size="sm" onClick={() => recordProductQuotes(deal)} disabled={busy}>Record quotes</Pill>
+                    <Pill size="sm" onClick={() => presentMenu(deal)} disabled={busy}>Present menu</Pill>
+                  </>
+                )}
+                {hasPresentedMenu && (
+                  <>
+                    <Pill size="sm" onClick={() => decideMenu(deal, true)} disabled={busy}>Accept products</Pill>
+                    <Pill size="sm" onClick={() => decideMenu(deal, false)} disabled={busy}>Decline products</Pill>
+                  </>
+                )}
+                {workingStatus && <Pill size="sm" onClick={() => recordCompliance(deal)} disabled={busy}>Record check</Pill>}
+                {hasAcceptedMenu && <Pill size="sm" onClick={() => recordCancellation(deal)} disabled={busy}>Product cancellation</Pill>}
+              </Track>
+            )}
+            {contractStatus && (
+              <Track aria-label="Contract and funding">
+                <Pill size="sm" onClick={() => advanceContract(deal)} disabled={busy}>Contract handoff</Pill>
+                <Pill
+                  size="sm"
+                  disabled={busy || !evidence?.prerequisites?.digest}
+                  onClick={() =>
+                    openFinanceTask({
+                      kind: 'prerequisite-review',
+                      deal,
+                      fields: { reviewReference: '', policyReference: '', policyVersion: '', reviewerAuthorityReference: '' },
+                    })
+                  }
+                >
+                  Review prerequisites
+                </Pill>
+                <Pill size="sm" onClick={() => updateFunding(deal)} disabled={busy}>Update funding</Pill>
+              </Track>
+            )}
+          </div>
+
+          {warnings.length > 0 && <Notice tone="warn">{warnings.join(' · ')}</Notice>}
+        </div>
+
+        <DeskSection title="Worksheet">
+          <Facts
+            items={[
+              { label: 'Contact', value: deal.lead?.phone || deal.lead?.email || 'No contact' },
+              { label: 'Vehicle price', value: formatCurrency(deal.vehiclePrice), mono: true },
+              { label: 'Trade-in', value: formatCurrency(deal.tradeInValue), mono: true },
+              { label: 'Down payment', value: formatCurrency(deal.downPayment), mono: true },
+              { label: 'Tax', value: formatCurrency(deal.taxAmount), mono: true },
+              { label: 'Total', value: formatCurrency(deal.totalPrice), mono: true },
+              { label: 'Amount financed', value: formatCurrency(deal.financingAmount), mono: true },
+              { label: 'APR · term', value: `${deal.apr || 0}% · ${deal.loanTerm || 0} mo`, mono: true },
+              { label: 'Payment', value: formatCurrency(deal.monthlyPayment), mono: true },
+              { label: 'Gross', value: formatCurrency(deal.profit), mono: true },
+              { label: 'Flags', value: warnings.length > 0 ? `${warnings.length}` : 'No flags' },
+            ]}
+          />
+        </DeskSection>
+
+        <DeskSection title="Lender" count={lenderApplications.length}>
+          <Ledger empty="No applications">
+            {lenderApplications.flatMap(application => [
+              ...application.submissions.map(submission => (
+                <li key={submission.id} className="flex min-w-0 items-start justify-between gap-4 py-2.5">
+                  <div className="min-w-0">
+                    <TitleLine as="p" tone={stateTone(submission.status)} status={submission.status} className="font-medium">
+                      Submitted · {submission.providerKey}
+                    </TitleLine>
+                    <p className="truncate pl-4 text-xs text-muted-foreground">
+                      {submission.status} · {submission.providerMode}{submission.externalReference ? ` · ${submission.externalReference}` : ''}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">{formatDate(submission.queuedAt)}</p>
+                </li>
+              )),
+              ...application.decisions.map(decision => (
+                <li key={decision.id} className="flex min-w-0 items-start justify-between gap-4 py-2.5">
+                  <div className="min-w-0">
+                    <TitleLine as="p" tone={stateTone(decision.decision)} status={decision.decision} className="font-medium capitalize">
+                      {decision.decision} · {decision.providerKey}
+                    </TitleLine>
+                    <p className="truncate pl-4 text-xs text-muted-foreground">
+                      {formatDate(decision.decidedAt)}{decision.reasonCodes.length > 0 ? ` · ${decision.reasonCodes.join(', ')}` : ''}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="font-medium tabular-nums">{decision.approvedAmountCents != null ? formatCurrency(decision.approvedAmountCents / 100) : '-'}</p>
+                    <p className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                      {decision.aprBasisPoints != null ? `${(decision.aprBasisPoints / 100).toFixed(2)}%` : '-'} · {decision.termMonths ?? '-'} mo
+                      {decision.monthlyPaymentCents != null ? ` · ${formatCurrency(decision.monthlyPaymentCents / 100)}` : ''}
+                    </p>
+                  </div>
+                </li>
+              )),
+            ])}
+          </Ledger>
+        </DeskSection>
+
+        <DeskSection title="Approvals" count={deal.approvals?.length || 0}>
+          <Ledger empty="None">
+            {(deal.approvals || []).map(approval => (
+              <li key={approval.id} className="flex min-w-0 items-start justify-between gap-4 py-2.5">
+                <div className="min-w-0">
+                  <TitleLine as="p" tone={stateTone(approval.decision)} status={approval.decision || undefined} className="font-medium capitalize">
+                    {approval.decision || 'Recorded'}
+                  </TitleLine>
+                  {(approval.approver?.name || approval.notes) && (
+                    <p className="pl-4 text-xs text-muted-foreground">{[approval.approver?.name, approval.notes].filter(Boolean).join(' · ')}</p>
+                  )}
+                </div>
+                <p className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{formatDate(approval.approvalDate)}</p>
+              </li>
+            ))}
+          </Ledger>
+        </DeskSection>
+
+        <DeskSection title="Products" count={dealMenus.length}>
+          <Ledger empty="No menu">
+            {[
+              ...dealMenus.map(menu => (
+                <li key={menu.id} className="flex min-w-0 items-start justify-between gap-4 py-2.5">
+                  <div className="min-w-0">
+                    <TitleLine as="p" tone={stateTone(menu.status)} status={menu.status} className="font-medium">
+                      Menu v{menu.version}
+                    </TitleLine>
+                    <p className="pl-4 text-xs text-muted-foreground">{(menu.optionsSnapshot || []).map(option => option.code).join(', ') || 'No options'}</p>
+                  </div>
+                  <p className="shrink-0 text-xs capitalize text-muted-foreground">{menu.status}</p>
+                </li>
+              )),
+              ...dealQuotes.map(quote => (
+                <li key={quote.id} className="flex min-w-0 items-center justify-between gap-4 py-2">
+                  <TitleLine as="p" tone={stateTone(quote.status)} status={quote.status}>
+                    Quote <Code>{quote.product?.code || '-'}</Code>
+                  </TitleLine>
+                  <p className="shrink-0 text-xs capitalize text-muted-foreground">{quote.status}</p>
+                </li>
+              )),
+              ...dealCancellations.map(cancellation => (
+                <li key={cancellation.id} className="flex min-w-0 items-center justify-between gap-4 py-2">
+                  <TitleLine as="p" tone={stateTone(cancellation.status)} status={cancellation.status}>
+                    Cancellation <Code>{cancellation.productCode}</Code>
+                  </TitleLine>
+                  <p className="shrink-0 text-xs capitalize text-muted-foreground">{cancellation.status}</p>
+                </li>
+              )),
+            ]}
+          </Ledger>
+        </DeskSection>
+
+        <DeskSection title="Compliance" count={dealChecks.length}>
+          <Ledger empty="No checks">
+            {dealChecks.map(check => (
+              <li key={check.id} className="flex min-w-0 items-center justify-between gap-4 py-2">
+                <TitleLine as="p" tone={stateTone(check.status)} status={check.status} className="capitalize">
+                  {check.checkType}
+                </TitleLine>
+                <p className="shrink-0 text-xs capitalize text-muted-foreground">{check.status}</p>
+              </li>
+            ))}
+          </Ledger>
+        </DeskSection>
+
+        <DeskSection title="Contract">
+          {contract ? (
+            <div className="space-y-2">
+              <TitleLine as="p" tone={stateTone(contract.status)} status={contract.status} className="text-sm font-medium capitalize">
+                {contract.status}
+              </TitleLine>
+              <Ledger empty="No documents">
+                {(contract.documentChecklist || []).map(item => (
+                  <li key={item.code} className="flex min-w-0 items-center justify-between gap-4 py-2">
+                    <Code className="text-foreground">{item.code}</Code>
+                    <TitleLine as="span" tone={stateTone(item.status)} className="shrink-0 text-xs capitalize text-muted-foreground">{item.status}</TitleLine>
+                  </li>
+                ))}
+              </Ledger>
+            </div>
+          ) : (
+            <p className="py-3 text-sm text-muted-foreground">No contract package</p>
+          )}
+        </DeskSection>
+
+        <DeskSection title="Funding">
+          <div className="space-y-3">
+            {evidence?.issue && <Notice tone="warn">{evidence.issue}</Notice>}
+            <Facts
+              items={[
+                { label: 'Funding', value: <TitleLine as="span" tone={stateTone(evidence?.fundingStatus)}>{evidence?.fundingStatus || 'not started'}</TitleLine> },
+                { label: 'Worksheet', value: evidence?.fundingCurrent ? 'current' : 'needs review' },
+                evidence?.fundingReference ? { label: 'Reference', value: evidence.fundingReference, mono: true } : null,
+                {
+                  label: 'Prerequisites',
+                  value: `${evidence?.prerequisites?.current ? 'Reviewed' : 'Review required'}${evidence?.prerequisites?.issue ? ` · ${evidence.prerequisites.issue}` : ''}`,
+                },
+                fundingCase ? { label: 'Funding case', value: fundingCase.status } : null,
+                fundingCase ? { label: 'Open exceptions', value: openFundingExceptions, mono: true } : null,
+              ]}
+            />
+            <div className="space-y-1 text-xs text-muted-foreground [&_summary]:cursor-pointer [&_summary]:font-medium [&_summary]:text-foreground">
+              {evidence?.prerequisites?.snapshot && (
+                <details>
+                  <summary>Prerequisite details</summary>
+                  <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-muted/50 p-2 font-mono text-xs">
+                    {JSON.stringify(evidence.prerequisites.snapshot, null, 2)}
+                  </pre>
+                </details>
+              )}
+              <FinanceEvidenceHistory dealId={deal.id} aggregateType="FinanceFundingCase" label="Funding history" />
+              {fundingCase?.immutableEvidence != null && (
+                <details className="mt-2">
+                  <summary>Funding details</summary>
+                  <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-muted/50 p-2 font-mono text-xs">
+                    {JSON.stringify(fundingCase.immutableEvidence, null, 2)}
+                  </pre>
+                </details>
+              )}
+            </div>
+          </div>
+        </DeskSection>
+      </div>
+    )
+  }
+
   return (
     <PageContainer title="Finance" header={header} breadcrumbs={breadcrumbs}>
-      <div className="min-w-0 space-y-6 px-4 pb-6 md:px-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-3">
-            <div>
-              <CardTitle className="text-lg">F&amp;I products and funding</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">Product menus, compliance checks, contracts, and funding exceptions.</p>
+      <div className="min-w-0 max-w-full space-y-8 px-4 pb-10 md:px-6">
+        {notice && (
+          <Notice tone={notice.startsWith('Unable') ? 'bad' : 'info'}>
+            <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
+              <p className="min-w-0">{notice}</p>
+              <Track>
+                <Pill size="sm" variant="plain" onClick={() => setNotice(null)}>Dismiss</Pill>
+              </Track>
             </div>
-            <Button variant="outline" onClick={configureProduct} disabled={updatingId === 'product'}>
-              Configure product
-            </Button>
-          </CardHeader>
-        </Card>
+          </Notice>
+        )}
 
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <div className="relative min-w-0 flex-1 lg:max-w-md">
+        <ReadoutStrip>
+          <Readout label="In finance" value={stageCounts.active} tone={stageCounts.active > 0 ? 'info' : 'idle'} sub={`${stageCounts.submitted} submitted`} />
+          <Readout label="Amount financed" value={formatCurrency(activeFinanced)} />
+          <Readout label="Applications" value={openFinanceRequests.length} tone={openFinanceRequests.length > 0 ? 'warn' : 'idle'} />
+          <Readout label="Menus presented" value={presentedMenus} />
+          <Readout label="Funding exceptions" value={fundingExceptions} tone={fundingExceptions > 0 ? 'bad' : 'ok'} />
+        </ReadoutStrip>
+
+        <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center">
+          <Segmented
+            label="Filter deals"
+            value={filter}
+            onChange={setFilter}
+            options={filterOptions.map(option => ({
+              value: option.value,
+              label: option.label,
+              count: stageCounts[option.value],
+              tone: option.value === 'all' || option.value === 'active' ? undefined : statusTones[option.value],
+            }))}
+          />
+          <div className="relative min-w-0 flex-1 lg:max-w-sm">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              className="pl-9"
+              className="rounded-full pl-9"
               value={search}
               onChange={event => setSearch(event.target.value)}
               placeholder="Search applicant, vehicle, stock, or reference"
@@ -665,7 +1012,7 @@ export function FinanceDeskPageClient({
             />
           </div>
           <Select value={sortOrder} onValueChange={setSortOrder}>
-            <SelectTrigger className="w-full lg:w-[190px]" aria-label="Sort deals">
+            <SelectTrigger className="w-full rounded-full lg:w-[180px]" aria-label="Sort deals">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -681,337 +1028,131 @@ export function FinanceDeskPageClient({
           )}
         </div>
 
-        {notice && (
-          <div role="status" className="flex items-start justify-between gap-3 rounded-md border bg-muted/40 px-4 py-3 text-sm">
-            <p>{notice}</p>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setNotice(null)}>
-              Dismiss
-            </Button>
-          </div>
-        )}
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <UserPlus className="h-5 w-5" />
-              Finance applications
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {openFinanceRequests.length === 0 ? (
-              searchTerm ? (
-                <EmptyStateSearch onResetFilters={resetFilters} />
-              ) : (
-                <EmptyStateDefault title="No finance applications" description="Finance applications will appear here." />
-              )
+        <div className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
+          <DeskSection title="Queue" count={filteredDeals.length}>
+            {filteredDeals.length === 0 ? (
+              searchTerm || filter !== 'active' ? <Empty label="No matching deals" onReset={resetFilters} /> : <Empty label="No deals in finance" />
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="text-left py-3 px-4 font-medium">Applicant</th>
-                      <th className="text-left py-3 px-4 font-medium">Vehicle</th>
-                      <th className="text-left py-3 px-4 font-medium">Submitted</th>
-                      <th className="text-left py-3 px-4 font-medium">Lender status</th>
-                      <th className="text-right py-3 px-4 font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {openFinanceRequests.map(application => {
-                      const lead = application.lead
-                      const openTask = lead?.tasks?.find(task => !task.completed)
-                      const applicantName = application.applicantName || [lead?.firstName, lead?.lastName].filter(Boolean).join(' ') || 'Finance applicant'
-                      const vehicle = application.vehicle || lead?.interestedVehicle
-                      const submission = application.submissions[0]
-                      const decision = application.decisions[0]
-                      return (
-                        <tr key={application.id} className="border-b last:border-0 hover:bg-muted/50">
-                          <td className="py-3 px-4">
-                            {lead ? (
-                              <Link href={`${basePath}/platform/crm/${lead.id}`} className="font-medium hover:underline">
-                                {applicantName}
-                              </Link>
-                            ) : (
-                              <span className="font-medium">{applicantName}</span>
-                            )}
-                            <div className="text-xs text-muted-foreground">
-                              {application.reference || application.id} · {application.status}
-                            </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            {vehicle ? `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.trim() : 'No vehicle selected'}
-                            <div className="text-xs text-muted-foreground">
-                              Stock #{vehicle?.stockNumber || '-'} · {formatCurrency((vehicle?.priceCents || 0) / 100)}
-                            </div>
-                          </td>
-                          <td className="py-3 px-4">{formatDate(application.submittedAt)}</td>
-                          <td className="py-3 px-4 space-y-1">
-                            {submission ? (
-                              <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                                {submission.status}
-                              </Badge>
-                            ) : openTask ? (
-                              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                {openTask.title || 'Open task'} · {formatDate(openTask.dueDate)}
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                                Not queued
-                              </Badge>
-                            )}
-                            {decision && <p className="text-xs font-medium">Latest decision: {decision.decision}</p>}
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="flex flex-wrap justify-end gap-2">
-                              {lead && !openTask && (
-                                <Button size="sm" variant="outline" onClick={() => startFinanceFollowUp(lead)} disabled={updatingId === lead.id}>
-                                  Create Task
-                                </Button>
-                              )}
-                              {!submission && (
-                                <Button size="sm" variant="outline" onClick={() => queueApplication(application)} disabled={updatingId === application.id}>
-                                  Queue for lender review
-                                </Button>
-                              )}
-                              {submission && ['under-review', 'submitted'].includes(application.status) && (
-                                <Button size="sm" onClick={() => recordApplicationDecision(application)} disabled={updatingId === application.id}>
-                                  Record decision
-                                </Button>
-                              )}
-                              {lead && (
-                                <Button asChild size="sm" variant="ghost">
-                                  <Link href={`${basePath}/platform/crm/${lead.id}`}>Open Lead</Link>
-                                </Button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <Panel className="divide-y overflow-hidden">
+                {filteredDeals.map(deal => {
+                  const warnings = getDealWarnings(deal)
+                  const status = deal.status || 'pencil'
+                  const selected = selectedDeal?.id === deal.id
+                  return (
+                    <button
+                      key={deal.id}
+                      type="button"
+                      onClick={() => setSelectedId(deal.id)}
+                      aria-pressed={selected}
+                      className={cn(
+                        'flex w-full min-w-0 items-start justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                        selected && 'bg-muted/60',
+                      )}
+                    >
+                      <div className="min-w-0">
+                        <TitleLine as="p" tone={statusTones[status] || 'idle'} status={statusLabels[status] || status} className="text-sm font-medium">
+                          {getCustomerName(deal)} · {getVehicleName(deal)}
+                        </TitleLine>
+                        <p className="truncate pl-4 text-xs text-muted-foreground">
+                          <Code>#{deal.vehicle?.stockNumber || '-'}</Code> · {statusLabels[status] || status}
+                          {deal.approvals?.[0] ? ` · ${deal.approvals[0].decision || 'recorded'} ${formatDate(deal.approvals[0].approvalDate)}` : ''}
+                          {warnings.length > 0 ? ` · ${warnings.join(', ')}` : ''}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-sm font-medium tabular-nums">{formatCurrency(deal.financingAmount)}</p>
+                        <p className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                          {deal.apr || 0}% · {deal.loanTerm || 0} mo
+                        </p>
+                        <p className="font-mono text-[11px] tabular-nums text-muted-foreground">{formatCurrency(deal.monthlyPayment)}/mo</p>
+                      </div>
+                    </button>
+                  )
+                })}
+              </Panel>
             )}
-          </CardContent>
-        </Card>
+          </DeskSection>
 
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Filter deals">
-          {filterOptions.map(option => (
-            <Button
-              key={option.value}
-              variant={filter === option.value ? 'secondary' : 'outline'}
-              size="sm"
-              aria-pressed={filter === option.value}
-              onClick={() => setFilter(option.value)}
-            >
-              {option.label}
-            </Button>
-          ))}
+          <div className="min-w-0">{selectedDeal ? renderDealDetail(selectedDeal) : <Empty label="No deal selected" />}</div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Finance Queue</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {filteredDeals.length === 0 ? (
-              searchTerm || filter !== 'active' ? (
-                <EmptyStateSearch onResetFilters={resetFilters} />
-              ) : (
-                <EmptyStateDefault title="No deals in finance" description="Deals submitted for financing will appear here." />
-              )
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="text-left py-3 px-4 font-medium">Deal</th>
-                      <th className="text-left py-3 px-4 font-medium">Customer</th>
-                      <th className="text-right py-3 px-4 font-medium">Amount Financed</th>
-                      <th className="text-right py-3 px-4 font-medium">Payment</th>
-                      <th className="text-left py-3 px-4 font-medium">Flags</th>
-                      <th className="text-center py-3 px-4 font-medium">Status</th>
-                      <th className="text-left py-3 px-4 font-medium">Last Approval</th>
-                      <th className="text-right py-3 px-4 font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredDeals.map(deal => {
-                      const warnings = getDealWarnings(deal)
-                      const lastApproval = deal.approvals?.[0]
-                      const fundingCase = fundingCases.find(item => item.deal?.id === deal.id)
-                      const evidence = deal.financeEvidence
-                      const dealHref = `${basePath}/platform/deals/${deal.id}`
-                      const workingStatus = ['submitted', 'approved', 'financed'].includes(deal.status || '')
-                      const contractStatus = ['approved', 'financed'].includes(deal.status || '')
-
-                      return (
-                        <tr key={deal.id} className="border-b last:border-0 hover:bg-muted/50">
-                          <td className="py-3 px-4">
-                            <Link href={dealHref} className="font-medium hover:underline">
-                              {getVehicleName(deal)}
+        <DeskSection title="Applications" count={openFinanceRequests.length}>
+          {openFinanceRequests.length === 0 ? (
+            searchTerm ? <Empty label="No matching applications" onReset={resetFilters} /> : <Empty label="No finance applications" />
+          ) : (
+            <Panel className="divide-y">
+              {openFinanceRequests.map(application => {
+                const lead = application.lead
+                const openTask = lead?.tasks?.find(task => !task.completed)
+                const applicantName = application.applicantName || [lead?.firstName, lead?.lastName].filter(Boolean).join(' ') || 'Finance applicant'
+                const vehicle = application.vehicle || lead?.interestedVehicle
+                const vehicleName = vehicle ? `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.trim() : 'No vehicle selected'
+                const submission = application.submissions[0]
+                const decision = application.decisions[0]
+                const busy = updatingId === application.id
+                const lenderState = submission ? submission.status : openTask ? `${openTask.title || 'Open task'} · ${formatDate(openTask.dueDate)}` : 'Not queued'
+                return (
+                  <div key={application.id} className="flex min-w-0 flex-col gap-3 px-4 py-3 md:flex-row md:items-start md:justify-between">
+                    <div className="flex min-w-0 flex-1 items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <TitleLine as="p" tone={stateTone(application.status)} status={application.status} className="text-sm font-medium">
+                          {lead ? (
+                            <Link href={`${basePath}/platform/crm/${lead.id}`} className="hover:underline">
+                              {applicantName}
                             </Link>
-                            <div className="text-xs text-muted-foreground">
-                              Stock #{deal.vehicle?.stockNumber || '-'} · worksheet {deal.worksheetVersion}
-                              <p className="mt-1">
-                                Funding: {evidence?.fundingStatus || 'not started'} · {evidence?.fundingCurrent ? 'current' : 'needs review'}
-                              </p>
-                              {evidence?.issue && <p className="mt-1 text-amber-700">{evidence.issue}</p>}
-                              <p className="mt-1">
-                                Prerequisites: {evidence?.prerequisites?.current ? 'Reviewed' : 'Review required'}
-                                {evidence?.prerequisites?.issue ? ` · ${evidence.prerequisites.issue}` : ''}
-                              </p>
-                              {evidence?.prerequisites?.snapshot && (
-                                <details>
-                                  <summary>Prerequisite details</summary>
-                                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs">
-                                    {JSON.stringify(evidence.prerequisites.snapshot, null, 2)}
-                                  </pre>
-                                </details>
-                              )}
-                              <FinanceEvidenceHistory dealId={deal.id} aggregateType="FinanceFundingCase" label="Funding history" />
-                              {fundingCase?.immutableEvidence != null && (
-                                <details className="mt-2">
-                                  <summary>Funding details</summary>
-                                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs">
-                                    {JSON.stringify(fundingCase.immutableEvidence, null, 2)}
-                                  </pre>
-                                </details>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="font-medium">{getCustomerName(deal)}</div>
-                            <div className="text-xs text-muted-foreground">{deal.lead?.phone || deal.lead?.email || 'No contact'}</div>
-                          </td>
-                          <td className="py-3 px-4 text-right font-medium">{formatCurrency(deal.financingAmount)}</td>
-                          <td className="py-3 px-4 text-right">
-                            <div className="font-medium">{formatCurrency(deal.monthlyPayment)}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {deal.apr || 0}% · {deal.loanTerm || 0} mo
-                            </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            {warnings.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {warnings.map(warning => (
-                                  <Badge key={warning} variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                                    <AlertTriangle className="h-3 w-3 mr-1" />
-                                    {warning}
-                                  </Badge>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="inline-flex items-center text-xs text-green-700">
-                                <CheckCircle2 className="h-3 w-3 mr-1" /> No flags
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3 px-4 text-center">
-                            <StatusBadge status={deal.status} />
-                          </td>
-                          <td className="py-3 px-4">
-                            {lastApproval ? (
-                              <div>
-                                <div className="capitalize font-medium">{lastApproval.decision}</div>
-                                <div className="text-xs text-muted-foreground">{formatDate(lastApproval.approvalDate)}</div>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground">None</span>
-                            )}
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="flex flex-wrap justify-end gap-2">
-                              {workingStatus && (
-                                <>
-                                  <Button size="sm" variant="outline" onClick={() => recordProductQuotes(deal)} disabled={updatingId === deal.id}>
-                                    Record Quotes
-                                  </Button>
-                                  <Button size="sm" variant="outline" onClick={() => presentMenu(deal)} disabled={updatingId === deal.id}>
-                                    Present Menu
-                                  </Button>
-                                </>
-                              )}
-                              {menus.some(item => item.deal?.id === deal.id && item.status === 'presented') && (
-                                <>
-                                  <Button size="sm" variant="outline" onClick={() => decideMenu(deal, true)} disabled={updatingId === deal.id}>
-                                    Accept Products
-                                  </Button>
-                                  <Button size="sm" variant="outline" onClick={() => decideMenu(deal, false)} disabled={updatingId === deal.id}>
-                                    Decline Products
-                                  </Button>
-                                </>
-                              )}
-                              {workingStatus && (
-                                <Button size="sm" variant="outline" onClick={() => recordCompliance(deal)} disabled={updatingId === deal.id}>
-                                  Record Check
-                                </Button>
-                              )}
-                              {menus.some(item => item.deal?.id === deal.id && item.status === 'accepted') && (
-                                <Button size="sm" variant="outline" onClick={() => recordCancellation(deal)} disabled={updatingId === deal.id}>
-                                  Product Cancellation
-                                </Button>
-                              )}
-                              {contractStatus && (
-                                <Button size="sm" variant="outline" onClick={() => advanceContract(deal)} disabled={updatingId === deal.id}>
-                                  Contract Handoff
-                                </Button>
-                              )}
-                              {contractStatus && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={updatingId === deal.id || !evidence?.prerequisites?.digest}
-                                  onClick={() =>
-                                    openFinanceTask({
-                                      kind: 'prerequisite-review',
-                                      deal,
-                                      fields: { reviewReference: '', policyReference: '', policyVersion: '', reviewerAuthorityReference: '' },
-                                    })
-                                  }
-                                >
-                                  Review prerequisites
-                                </Button>
-                              )}
-                              {contractStatus && (
-                                <Button size="sm" variant="outline" onClick={() => updateFunding(deal)} disabled={updatingId === deal.id}>
-                                  Update funding
-                                </Button>
-                              )}
-                              {deal.status === 'submitted' && (
-                                <>
-                                  <Button size="sm" variant="outline" onClick={() => recordApprovalAndStatus(deal, 'approved', 'approved')} disabled={updatingId === deal.id}>
-                                    <CheckCircle2 className="h-4 w-4 mr-1" /> Approve
-                                  </Button>
-                                  <Button size="sm" variant="destructive" onClick={() => recordApprovalAndStatus(deal, 'rejected', 'cancelled')} disabled={updatingId === deal.id}>
-                                    <XCircle className="h-4 w-4 mr-1" /> Reject
-                                  </Button>
-                                </>
-                              )}
-                              {deal.status === 'approved' && evidence?.fundingCurrent && (
-                                <Button size="sm" onClick={() => updateDealStatus(deal, 'financed')} disabled={updatingId === deal.id}>
-                                  Mark financed
-                                </Button>
-                              )}
-                              {deal.status === 'financed' && (
-                                <Button asChild size="sm">
-                                  <Link href={`${basePath}/platform/delivery`}>Open Delivery</Link>
-                                </Button>
-                              )}
-                              <Button asChild size="sm" variant="ghost">
-                                <Link href={dealHref}>Open</Link>
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                          ) : (
+                            applicantName
+                          )}
+                          {' · '}
+                          {vehicleName}
+                        </TitleLine>
+                        <p className="pl-4 text-xs text-muted-foreground">
+                          <Code>{application.reference || application.id}</Code> · {application.status} · Stock <Code>#{vehicle?.stockNumber || '-'}</Code> · {formatCurrency((vehicle?.priceCents || 0) / 100)}
+                        </p>
+                        <p className="pl-4 text-xs text-muted-foreground">
+                          Submitted {formatDate(application.submittedAt)} · {submission ? `${submission.providerKey} · ` : ''}{lenderState}
+                          {decision ? ` · Latest decision: ${decision.decision}` : ''}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-sm font-medium tabular-nums">
+                          {application.requestedAmountCents != null ? formatCurrency(application.requestedAmountCents / 100) : '-'}
+                        </p>
+                        {decision && (
+                          <p className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                            {decision.aprBasisPoints != null ? `${(decision.aprBasisPoints / 100).toFixed(2)}%` : '-'} · {decision.termMonths ?? '-'} mo
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <Track className="self-start md:shrink-0">
+                      {lead && !openTask && (
+                        <Pill size="sm" onClick={() => startFinanceFollowUp(lead)} disabled={updatingId === lead.id}>
+                          Create task
+                        </Pill>
+                      )}
+                      {!submission && (
+                        <Pill size="sm" onClick={() => queueApplication(application)} disabled={busy}>
+                          Queue for lender review
+                        </Pill>
+                      )}
+                      {submission && ['under-review', 'submitted'].includes(application.status) && (
+                        <Pill size="sm" variant="primary" onClick={() => recordApplicationDecision(application)} disabled={busy}>
+                          Record decision
+                        </Pill>
+                      )}
+                      {lead && (
+                        <Pill size="sm" variant="plain" asChild>
+                          <Link href={`${basePath}/platform/crm/${lead.id}`}>Open lead</Link>
+                        </Pill>
+                      )}
+                    </Track>
+                  </div>
+                )
+              })}
+            </Panel>
+          )}
+        </DeskSection>
 
         <OperatorActionDialog
           open={Boolean(task)}

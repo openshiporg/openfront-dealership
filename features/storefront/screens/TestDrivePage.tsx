@@ -1,21 +1,31 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Image from 'next/image'
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { fetchGraphQL } from '@/features/storefront/lib/data/graphql-client'
 import { GET_VEHICLE_BY_ID } from '@/features/storefront/lib/data/queries'
 import type { Vehicle } from '@/features/storefront/lib/types'
 import { submitStorefrontTestDrive } from '../actions/submissions'
-import { Button } from '../components/Button'
-import { Container } from '../components/Container'
 import { PageHeader } from '../components/PageHeader'
 import { useStorefrontBusiness } from '../components/StorefrontBusinessProvider'
-import { vehicleTitle } from '../lib/format'
-import { primaryVehicleImage, vehicleImageUrl } from '../lib/images'
 import { customerRequestReference } from '../lib/customerRequests'
 import { DEFAULT_TEST_DRIVE_SLOTS, dayAvailability, localDateString } from '../lib/bookingSlots'
-import { VehiclePhotoPlaceholder } from '../components/VehiclePhotoPlaceholder'
+import {
+  Field,
+  FormSection,
+  MobileSummary,
+  Notice,
+  PILL_TARGET,
+  RadioPills,
+  RequestLayout,
+  RequestReceived,
+  Sticker,
+  StickerVehicle,
+  formatRequestDate,
+} from '../components/forms/RequestForm'
+
+type TestDriveSummary = { name: string; email: string; phone: string; date: string; time: string }
 
 export function TestDrivePage() {
   const business = useStorefrontBusiness()
@@ -38,6 +48,7 @@ export function TestDrivePage() {
   const [requestReference, setRequestReference] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null)
+  const [submittedSummary, setSubmittedSummary] = useState<TestDriveSummary | null>(null)
 
   useEffect(() => {
     if (!vehicleId) {
@@ -68,6 +79,13 @@ export function TestDrivePage() {
         idempotencyKey,
       })
       if (!result.success) throw new Error(result.error)
+      setSubmittedSummary({
+        name: formData.customerName,
+        email: formData.customerEmail,
+        phone: formData.customerPhone,
+        date: formData.preferredDate,
+        time: formData.preferredTime,
+      })
       setRequestReference(customerRequestReference('test-drive', result.data.testDriveId))
       setSubmitStatus('success')
       setIdempotencyKey(crypto.randomUUID())
@@ -93,162 +111,161 @@ export function TestDrivePage() {
   const availability = dayAvailability(business, formData.preferredDate, DEFAULT_TEST_DRIVE_SLOTS)
 
   if (submitStatus === 'success') {
-    const selectedVehicleTitle = selectedVehicle ? vehicleTitle(selectedVehicle) : null
-
     return (
-      <>
-        <PageHeader
-          title="Request received"
-          description={`We'll contact you to confirm your test drive${selectedVehicleTitle ? ` of the ${selectedVehicleTitle}` : ''}.`}
-        />
-        <Container className="py-[var(--sf-space-2xl)]">
-          {requestReference && <p className="sf-eyebrow mb-6" role="status">Reference {requestReference}</p>}
-          <Button href={selectedVehicle ? `/inventory/${selectedVehicle.id}` : '/inventory'}>
-            {selectedVehicle ? 'Return to vehicle' : 'Browse inventory'}
-          </Button>
-        </Container>
-      </>
+      <RequestReceived
+        eyebrow="Test drive"
+        reference={requestReference}
+        summary={
+          <Sticker
+            title="Test drive"
+            meta={business.shortName || business.fullName}
+            rows={[
+              { label: 'Date', value: submittedSummary ? formatRequestDate(submittedSummary.date) : null },
+              { label: 'Time', value: submittedSummary?.time },
+              { label: 'Name', value: submittedSummary?.name },
+              { label: 'Email', value: submittedSummary?.email },
+              { label: 'Phone', value: submittedSummary?.phone },
+            ]}
+          >
+            {selectedVehicle && <StickerVehicle vehicle={selectedVehicle} label="Vehicle" />}
+          </Sticker>
+        }
+        actions={
+          <>
+            <Link
+              href={selectedVehicle ? `/inventory/${selectedVehicle.id}` : '/inventory'}
+              className={`sf-pill sf-pill-primary ${PILL_TARGET}`}
+            >
+              {selectedVehicle ? 'Return to vehicle' : 'Browse inventory'}
+            </Link>
+            <Link href="/financing" className={`sf-pill ${PILL_TARGET}`}>Financing</Link>
+            <Link href="/trade-in" className={`sf-pill ${PILL_TARGET}`}>Trade-in</Link>
+          </>
+        }
+      />
     )
   }
 
+  const summary = (
+    <Sticker
+      title="Test drive"
+      meta={business.shortName || business.fullName}
+      rows={[
+        { label: 'Date', value: formData.preferredDate ? formatRequestDate(formData.preferredDate) : null },
+        { label: 'Time', value: formData.preferredTime, strong: true },
+        { label: 'Name', value: formData.customerName },
+      ]}
+    >
+      {selectedVehicle ? (
+        <StickerVehicle vehicle={selectedVehicle} label="Vehicle" />
+      ) : (
+        <div className="flex items-center justify-between gap-3 border-b border-dashed px-4 py-3" style={{ borderColor: 'var(--sf-rule)' }}>
+          <span className="sf-eyebrow">Vehicle</span>
+          <Link href="/inventory" className="sf-link text-[var(--sf-text-sm)]">Choose from inventory</Link>
+        </div>
+      )}
+    </Sticker>
+  )
+
   return (
     <>
-      <PageHeader
-        eyebrow="Test drive"
-        title="Request test drive"
-      />
+      <PageHeader eyebrow="Test drive" title="Book a test drive" />
 
-      <Container className="py-[var(--sf-space-2xl)] max-w-2xl">
-        {selectedVehicle && (
-          <div className="sf-card mb-[var(--sf-space-md)] flex items-center gap-4 overflow-hidden p-3">
-            <div className="relative h-24 w-32 shrink-0 overflow-hidden bg-[var(--sf-paper-2)]">
-              {vehicleImageUrl(primaryVehicleImage(selectedVehicle.images)) ? (
-                <Image
-                  src={vehicleImageUrl(primaryVehicleImage(selectedVehicle.images))!}
-                  alt={vehicleTitle(selectedVehicle)}
-                  fill
-                  className="object-cover"
-                  sizes="128px"
-                  unoptimized
+      <RequestLayout summary={summary}>
+        <form onSubmit={handleSubmit} className="space-y-[var(--sf-space-xl)]">
+          <FormSection step="01" title="Date and time" first>
+            <div className="space-y-5">
+              <Field label="Date" htmlFor="preferredDate" className="sm:max-w-xs">
+                <input
+                  id="preferredDate"
+                  name="preferredDate"
+                  type="date"
+                  required
+                  min={minDate}
+                  value={formData.preferredDate}
+                  onChange={handleChange}
+                  className="sf-input"
                 />
+              </Field>
+
+              {availability.status === 'closed' ? (
+                <div className="sf-well p-4">
+                  <p role="alert" className="sf-title-line text-[var(--sf-text-sm)]">
+                    <span className="sf-dot" data-tone="bad" aria-hidden="true" />
+                    <span>Closed on this day. Choose another date.</span>
+                  </p>
+                </div>
               ) : (
-                <VehiclePhotoPlaceholder />
+                <RadioPills
+                  legend="Time"
+                  name="preferredTime"
+                  required
+                  variant="grid"
+                  className="grid-cols-3 sm:grid-cols-4 xl:grid-cols-5"
+                  value={formData.preferredTime}
+                  onChange={handleChange}
+                  options={availability.slots.map((slot) => ({
+                    value: slot,
+                    label: <span className="sf-figure">{slot}</span>,
+                  }))}
+                />
               )}
             </div>
-            <div className="min-w-0">
-              <p className="sf-eyebrow mb-1">Selected vehicle</p>
-              <p className="font-semibold">{vehicleTitle(selectedVehicle)}</p>
-              <p className="mt-1 text-[var(--sf-text-xs)] text-[var(--sf-ink-3)]">
-                Stock {selectedVehicle.stockNumber}
-              </p>
-            </div>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="sf-card p-[var(--sf-space-lg)] space-y-5">
-          <div>
-            <label htmlFor="customerName" className="sf-eyebrow block mb-2">
-              Full name
-            </label>
-            <input
-              id="customerName"
-              name="customerName"
-              type="text"
-              required
-              value={formData.customerName}
-              onChange={handleChange}
-              className="sf-input"
-            />
-          </div>
-
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="customerEmail" className="sf-eyebrow block mb-2">
-                Email
-              </label>
-              <input
-                id="customerEmail"
-                name="customerEmail"
-                type="email"
-                required
-                value={formData.customerEmail}
-                onChange={handleChange}
-                className="sf-input"
-              />
-            </div>
-            <div>
-              <label htmlFor="customerPhone" className="sf-eyebrow block mb-2">
-                Phone
-              </label>
-              <input
-                id="customerPhone"
-                name="customerPhone"
-                type="tel"
-                required
-                value={formData.customerPhone}
-                onChange={handleChange}
-                className="sf-input"
-              />
-            </div>
-          </div>
-
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="preferredDate" className="sf-eyebrow block mb-2">
-                Preferred date
-              </label>
-              <input
-                id="preferredDate"
-                name="preferredDate"
-                type="date"
-                required
-                min={minDate}
-                value={formData.preferredDate}
-                onChange={handleChange}
-                className="sf-input"
-              />
-              {availability.status === 'closed' && (
-                <p role="alert" className="mt-2 text-[var(--sf-text-xs)]">We&apos;re closed on this day. Choose another date.</p>
-              )}
-            </div>
-            <div>
-              <label htmlFor="preferredTime" className="sf-eyebrow block mb-2">
-                Preferred time
-              </label>
-              <select
-                id="preferredTime"
-                name="preferredTime"
-                required
-                value={formData.preferredTime}
-                onChange={handleChange}
-                className="sf-input"
-              >
-                <option value="">Select</option>
-                {availability.status === 'open' && availability.slots.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+          </FormSection>
 
           {vehicleId && <input type="hidden" name="vehicleId" value={formData.vehicleId} />}
 
-          <div>
-            <label htmlFor="message" className="sf-eyebrow block mb-2">
-              Notes
-            </label>
-            <textarea
-              id="message"
-              name="message"
-              rows={3}
-              value={formData.message}
-              onChange={handleChange}
-              className="sf-input resize-y"
-              placeholder="Vehicle of interest or special requests"
-            />
-          </div>
+          <FormSection step="02" title="Contact">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Full name" htmlFor="customerName" className="sm:col-span-2">
+                <input
+                  id="customerName"
+                  name="customerName"
+                  type="text"
+                  required
+                  autoComplete="name"
+                  value={formData.customerName}
+                  onChange={handleChange}
+                  className="sf-input"
+                />
+              </Field>
+              <Field label="Email" htmlFor="customerEmail">
+                <input
+                  id="customerEmail"
+                  name="customerEmail"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  value={formData.customerEmail}
+                  onChange={handleChange}
+                  className="sf-input"
+                />
+              </Field>
+              <Field label="Phone" htmlFor="customerPhone">
+                <input
+                  id="customerPhone"
+                  name="customerPhone"
+                  type="tel"
+                  required
+                  autoComplete="tel"
+                  value={formData.customerPhone}
+                  onChange={handleChange}
+                  className="sf-input"
+                />
+              </Field>
+              <Field label="Notes" htmlFor="message" optional className="sm:col-span-2">
+                <textarea
+                  id="message"
+                  name="message"
+                  rows={3}
+                  value={formData.message}
+                  onChange={handleChange}
+                  className="sf-input"
+                  placeholder="Vehicle of interest"
+                />
+              </Field>
+            </div>
+          </FormSection>
 
           <input
             type="text"
@@ -261,31 +278,39 @@ export function TestDrivePage() {
             aria-hidden="true"
           />
 
-          {submitStatus === 'error' && (
-            <p className="text-[var(--sf-text-sm)]" role="alert" style={{ color: 'oklch(0.45 0.15 25)' }}>
-              {submitError || 'We couldn’t send your request.'}{' '}
-              {business.phoneHref && business.phoneDisplay ? (
-                <>
-                  Call <a href={business.phoneHref} className="underline">{business.phoneDisplay}</a> to schedule directly.
-                </>
-              ) : business.salesEmail ? (
-                <>Please try again or email <a href={`mailto:${business.salesEmail}`} className="underline">{business.salesEmail}</a>.</>
-              ) : (
-                <>Please try again later.</>
-              )}
-            </p>
-          )}
+          <div className="space-y-4">
+            <MobileSummary>{summary}</MobileSummary>
 
-          <div className="flex flex-col sm:flex-row gap-3">
-            <button type="submit" disabled={isSubmitting || availability.status === 'closed'} className="sf-btn sf-btn-primary flex-1">
-              {isSubmitting ? 'Sending…' : 'Request test drive'}
-            </button>
-            <Button href="/inventory" variant="ghost" className="flex-1 sm:flex-none">
-              Cancel
-            </Button>
+            {submitStatus === 'error' && (
+              <Notice tone="bad">
+                {submitError || 'We couldn’t send your request.'}{' '}
+                {business.phoneHref && business.phoneDisplay ? (
+                  <>
+                    Call <a href={business.phoneHref} className="sf-link sf-figure">{business.phoneDisplay}</a> to schedule directly.
+                  </>
+                ) : business.salesEmail ? (
+                  <>Please try again or email <a href={`mailto:${business.salesEmail}`} className="sf-link break-all">{business.salesEmail}</a>.</>
+                ) : (
+                  <>Please try again later.</>
+                )}
+              </Notice>
+            )}
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <button
+                type="submit"
+                disabled={isSubmitting || availability.status === 'closed'}
+                className="sf-btn sf-btn-primary w-full sm:w-auto sm:min-w-56"
+              >
+                {isSubmitting ? 'Sending…' : 'Request test drive'}
+              </button>
+              <Link href="/inventory" className="sf-btn sf-btn-ghost w-full sm:w-auto">
+                Cancel
+              </Link>
+            </div>
           </div>
         </form>
-      </Container>
+      </RequestLayout>
     </>
   )
 }

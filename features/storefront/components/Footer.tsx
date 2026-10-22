@@ -1,14 +1,19 @@
 'use client'
 
 import Link from 'next/link'
+import { ArrowUpRight } from 'lucide-react'
 import { Container } from './Container'
 import { StoreLogo } from '@/features/platform/store-settings/components/StoreLogo'
 import { useStorefrontBusiness } from './StorefrontBusinessProvider'
 
-const LINKS = [
+const SHOP = [
   { href: '/inventory', label: 'Inventory' },
+  { href: '/compare', label: 'Compare' },
   { href: '/financing', label: 'Financing' },
   { href: '/trade-in', label: 'Trade-in' },
+]
+
+const VISIT = [
   { href: '/test-drive', label: 'Test drive' },
   { href: '/service', label: 'Service' },
   { href: '/contact', label: 'Contact' },
@@ -18,69 +23,92 @@ const LINKS = [
 export function Footer() {
   const year = new Date().getFullYear()
   const business = useStorefrontBusiness()
-  const hasHours = business.hoursMonFri || business.hoursSaturday || business.hoursSunday
-  const hasVisitDetails = business.addressLine1 || business.addressLine2 || business.phoneDisplay || business.salesEmail
+  const hours = [
+    { label: 'Mon–Fri', value: business.hoursMonFri },
+    { label: 'Sat', value: business.hoursSaturday },
+    { label: 'Sun', value: business.hoursSunday },
+  ].filter((row) => row.value)
+  const hasAddress = business.addressLine1 || business.addressLine2
 
   return (
-    <footer style={{ background: 'var(--sf-paper-3)', color: 'oklch(0.88 0.02 85)' }}>
-      <Container className="py-[var(--sf-space-2xl)]">
-        <div className="grid grid-cols-1 md:grid-cols-[1.4fr_1fr_1fr] gap-[var(--sf-space-xl)]">
-          <div>
-            <p className="sf-display flex items-center gap-3 text-[length:var(--sf-text-2xl)] mb-[var(--sf-space-sm)]">
-              <StoreLogo svg={business.logoIcon} color={business.logoColor} />
-              {business.fullName}
-            </p>
-          </div>
-
-          <div>
-            <p className="sf-eyebrow mb-[var(--sf-space-sm)]">Hours</p>
-            {hasHours ? (
-              <ul className="space-y-1 text-[var(--sf-text-sm)] opacity-90">
-                {business.hoursMonFri && <li>{business.hoursMonFri}</li>}
-                {business.hoursSaturday && <li>{business.hoursSaturday}</li>}
-                {business.hoursSunday && <li>{business.hoursSunday}</li>}
-              </ul>
-            ) : (
-              <p className="text-[var(--sf-text-sm)] opacity-75">Contact us for today’s hours.</p>
+    <footer className="sf-band">
+      <Container className="py-[var(--sf-space-xl)] md:py-[var(--sf-space-2xl)]">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-[1.5fr_1fr_1fr_1.2fr]">
+          <div className="col-span-2 min-w-0 md:col-span-1">
+            <Link href="/" className="flex items-center gap-3">
+              <StoreLogo svg={business.logoIcon} color={business.logoColor} className="size-8" />
+              <span className="sf-heading text-[length:var(--sf-text-xl)]">{business.fullName}</span>
+            </Link>
+            {hasAddress && (
+              <address className="mt-5 text-[var(--sf-text-sm)] not-italic" style={{ color: 'var(--sf-on-dark-2)' }}>
+                {business.addressLine1 && <div>{business.addressLine1}</div>}
+                {business.addressLine2 && <div>{business.addressLine2}</div>}
+              </address>
+            )}
+            {(business.phoneDisplay || business.directionsHref) && (
+              <div className="sf-track mt-5">
+                {business.phoneHref && business.phoneDisplay && (
+                  <a href={business.phoneHref} className="sf-pill" data-active="true">
+                    <span className="sf-figure">{business.phoneDisplay}</span>
+                  </a>
+                )}
+                {business.directionsHref && (
+                  <a href={business.directionsHref} target="_blank" rel="noreferrer" className="sf-pill">
+                    Directions
+                    <ArrowUpRight className="size-4" aria-hidden="true" />
+                  </a>
+                )}
+              </div>
             )}
           </div>
 
-          {hasVisitDetails && (
-            <div>
-              <p className="sf-eyebrow mb-[var(--sf-space-sm)]">Contact</p>
-              <address className="not-italic text-[var(--sf-text-sm)] opacity-90 space-y-1">
-                {business.addressLine1 && <div>{business.addressLine1}</div>}
-                {business.addressLine2 && <div>{business.addressLine2}</div>}
-                {business.phoneHref && business.phoneDisplay && (
-                  <div>
-                    <a href={business.phoneHref} className="hover:opacity-100 opacity-90 underline-offset-2 hover:underline">
-                      {business.phoneDisplay}
-                    </a>
+          <nav aria-label="Shop" className="min-w-0">
+            <p className="sf-eyebrow mb-4">Shop</p>
+            <ul className="space-y-2.5 text-[var(--sf-text-sm)]">
+              {SHOP.map((link) => (
+                <li key={link.href}>
+                  <Link href={link.href} className="transition-opacity hover:opacity-70">{link.label}</Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+
+          <nav aria-label="Visit" className="min-w-0">
+            <p className="sf-eyebrow mb-4">Visit</p>
+            <ul className="space-y-2.5 text-[var(--sf-text-sm)]">
+              {VISIT.map((link) => (
+                <li key={link.href}>
+                  <Link href={link.href} className="transition-opacity hover:opacity-70">{link.label}</Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+
+          <div className="col-span-2 min-w-0 md:col-span-1">
+            <p className="sf-eyebrow mb-4">Hours</p>
+            {hours.length > 0 ? (
+              <dl className="space-y-2 text-[var(--sf-text-sm)]">
+                {hours.map((row) => (
+                  <div key={row.label} className="flex gap-4">
+                    <dt className="sf-figure w-16 shrink-0" style={{ color: 'var(--sf-on-dark-2)' }}>{row.label}</dt>
+                    <dd className="min-w-0">{row.value}</dd>
                   </div>
-                )}
-                {business.salesEmail && (
-                  <div>
-                    <a href={`mailto:${business.salesEmail}`} className="hover:opacity-100 opacity-90 underline-offset-2 hover:underline break-all">
-                      {business.salesEmail}
-                    </a>
-                  </div>
-                )}
-              </address>
-            </div>
-          )}
+                ))}
+              </dl>
+            ) : (
+              <p className="text-[var(--sf-text-sm)]" style={{ color: 'var(--sf-on-dark-2)' }}>Hours not listed</p>
+            )}
+            {business.salesEmail && (
+              <a href={`mailto:${business.salesEmail}`} className="mt-4 block break-all text-[var(--sf-text-sm)] underline-offset-4 hover:underline">
+                {business.salesEmail}
+              </a>
+            )}
+          </div>
         </div>
 
-        <hr className="sf-rule my-[var(--sf-space-lg)] opacity-20" />
-
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-[var(--sf-text-xs)] opacity-70">
+        <div className="mt-12 flex flex-col gap-3 border-t pt-6 text-[var(--sf-text-xs)] sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--sf-rule-dark)', color: 'var(--sf-on-dark-2)' }}>
           <p>© {year} {business.fullName}</p>
-          <nav className="flex flex-wrap gap-x-5 gap-y-2">
-            {LINKS.map((link) => (
-              <Link key={link.href} href={link.href} className="hover:opacity-100 transition-opacity">
-                {link.label}
-              </Link>
-            ))}
-          </nav>
+          <Link href="/photo-credits" className="transition-opacity hover:opacity-70">Photo credits</Link>
         </div>
       </Container>
     </footer>

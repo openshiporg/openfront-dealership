@@ -1,60 +1,106 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { 
-  ChartContainer, 
-  ChartTooltip, 
-  ChartTooltipContent 
-} from '@/components/ui/chart'
-import { 
-  BarChart, 
-  Bar, 
-  LineChart, 
-  Line, 
-  PieChart, 
-  Pie, 
-  Cell, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid,
-  ResponsiveContainer 
-} from 'recharts'
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  DollarSign, 
-  Car, 
-  Users, 
-  Calendar,
-  ArrowRight,
-  Wrench,
-  AlertTriangle,
-  ClipboardList,
-  CheckCircle2
-} from 'lucide-react'
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
+import { Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from 'recharts'
+import { ArrowRight, RefreshCw } from 'lucide-react'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
+import {
+  Code,
+  DeskHeader,
+  DeskSection,
+  Notice,
+  Panel,
+  Pill,
+  Readout,
+  ReadoutStrip,
+  Segmented,
+  TitleLine,
+  Track,
+  type DeskTone,
+} from '@/features/platform/components/desk'
 import { getAnalyticsData, type AnalyticsData } from '../actions'
 
-const COLORS = ['#2563eb', '#16a34a', '#f59e0b', '#dc2626', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16']
+const ACCENT = '#0ea5e9'
 
 const chartConfig = {
-  revenue: { label: 'Revenue', color: '#2563eb' },
-  count: { label: 'Count', color: '#16a34a' },
-  sales: { label: 'Sales', color: '#f59e0b' },
+  revenue: { label: 'Revenue', color: 'var(--foreground)' },
+  count: { label: 'Count', color: 'var(--foreground)' },
 }
 
-function MetricCard({ title, value, change }: { title: string; value: string; change?: string; icon: React.ElementType; trend?: 'up' | 'down' | 'neutral' }) {
-  return <dl className="flex flex-wrap items-baseline justify-between gap-2 border-b py-3 text-sm"><dt>{title}</dt><dd className="font-medium tabular-nums">{value}{change && <span className="ml-2 text-xs text-muted-foreground">{change}</span>}</dd></dl>
+type Area = 'sales' | 'inventory' | 'service'
+type Period = '6' | '12' | 'all'
+
+const AREA_OPTIONS = [
+  { value: 'sales', label: 'Sales' },
+  { value: 'inventory', label: 'Inventory' },
+  { value: 'service', label: 'Service' },
+] as const
+
+const PERIOD_OPTIONS = [
+  { value: '6', label: '6M' },
+  { value: '12', label: '12M' },
+  { value: 'all', label: 'All' },
+] as const
+
+const statusTone: Record<string, DeskTone> = {
+  available: 'ok',
+  pending: 'warn',
+  hold: 'info',
+  service: 'idle',
+  sold: 'accent',
+}
+
+function Empty({ children }: { children: ReactNode }) {
+  return <p className="py-8 text-center text-sm text-muted-foreground">{children}</p>
+}
+
+function SectionLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link href={href} className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground">
+      {children}
+      <ArrowRight className="size-3" />
+    </Link>
+  )
+}
+
+/** Horizontal share bars as a row list: label, bar, figure. */
+function BarRows({
+  rows,
+  empty,
+}: {
+  rows: Array<{ key: string; label: ReactNode; value: number; figure?: ReactNode; tone?: DeskTone; accent?: boolean }>
+  empty: string
+}) {
+  if (!rows.length) return <Empty>{empty}</Empty>
+  const max = Math.max(1, ...rows.map(row => row.value))
+  return (
+    <ul className="space-y-2.5">
+      {rows.map(row => (
+        <li key={row.key} className="flex min-w-0 items-center gap-3 text-sm">
+          <TitleLine as="span" tone={row.tone} className="w-28 shrink-0 truncate capitalize text-muted-foreground sm:w-36">
+            {row.label}
+          </TitleLine>
+          <span className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+            <span
+              className="block h-full rounded-full"
+              style={{ width: `${(row.value / max) * 100}%`, background: row.accent ? ACCENT : 'color-mix(in oklab, var(--foreground) 80%, transparent)' }}
+            />
+          </span>
+          <span className="shrink-0 text-right font-mono text-xs tabular-nums">{row.figure ?? row.value}</span>
+        </li>
+      ))}
+    </ul>
+  )
 }
 
 export function AnalyticsDashboardPageClient({ initialData }: { initialData: AnalyticsData }) {
   const [data, setData] = useState<AnalyticsData>(initialData)
   const [loading, setLoading] = useState(false)
+  const [area, setArea] = useState<Area>('sales')
+  const [period, setPeriod] = useState<Period>('12')
 
   const loadData = async () => {
     setLoading(true)
@@ -75,514 +121,306 @@ export function AnalyticsDashboardPageClient({ initialData }: { initialData: Ana
     { type: 'page' as const, label: 'Analytics' },
   ]
 
+  const exceptions = operations?.exceptions?.total || 0
+
   const header = (
-    <div>
-      <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">Analytics</h1>
-      <p className="text-muted-foreground">Track sales, inventory, conversion, and operations metrics.</p>
-    </div>
+    <DeskHeader
+      title="Analytics"
+      tone={error ? 'bad' : exceptions > 0 ? 'warn' : 'ok'}
+      status={error ? 'Unavailable' : exceptions > 0 ? `${exceptions} open exceptions` : 'No open exceptions'}
+      meta={operations?.generatedAt ? `Updated ${new Date(operations.generatedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : undefined}
+      actions={
+        <Track>
+          <Pill onClick={loadData} disabled={loading} aria-label="Refresh">
+            <RefreshCw className={loading ? 'animate-spin' : undefined} />
+            {error ? 'Retry' : 'Refresh'}
+          </Pill>
+        </Track>
+      }
+    />
   )
 
   if (error) {
     return (
       <PageContainer title="Analytics" header={header} breadcrumbs={breadcrumbs}>
         <div className="px-4 pb-6 md:px-6">
-          <Card>
-            <CardContent className="py-12 text-center">
-              <AlertTriangle className="mx-auto mb-4 h-12 w-12 text-destructive" />
-              <p className="font-medium">Unable to load analytics</p>
-              <p className="mt-1 text-sm text-muted-foreground">{error}</p>
-              <Button variant="outline" className="mt-4" onClick={loadData} disabled={loading}>
-                Retry
-              </Button>
-            </CardContent>
-          </Card>
+          <Notice tone="bad">
+            <p className="font-medium">Unable to load analytics</p>
+            <p className="mt-0.5 text-muted-foreground">{error}</p>
+          </Notice>
         </div>
       </PageContainer>
     )
   }
 
+  const allMonths = salesMetrics?.salesByMonth || []
+  const months = period === 'all' ? allMonths : allMonths.slice(-Number(period))
+  const latestMonth = months[months.length - 1]?.month
+  const periodUnits = months.reduce((sum, month) => sum + month.count, 0)
+  const periodRevenue = months.reduce((sum, month) => sum + month.revenue, 0)
+  const slowMoving = (inventoryMetrics?.slowMoving || []).filter(v => v.daysInStock > 60)
+
+  const axis = { tickLine: false, axisLine: false, tick: { fontSize: 11 } } as const
+
   return (
     <PageContainer title="Analytics" header={header} breadcrumbs={breadcrumbs}>
-    <div className="min-w-0 space-y-6 overflow-x-hidden px-4 pb-6 md:px-6 [&_.grid>*]:min-w-0 [&_.recharts-responsive-container]:max-w-full">
+    <div className="min-w-0 max-w-full space-y-8 overflow-x-hidden px-4 pb-10 md:px-6 [&_.recharts-responsive-container]:max-w-full">
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard title="F&I product penetration" value={`${operations?.metrics?.financeProductPenetrationPercent || 0}%`} icon={ClipboardList} trend="neutral" />
-        <MetricCard title="Effective labor rate" value={formatCurrency((operations?.metrics?.service?.effectiveLaborRateCents || 0) / 100)} icon={Wrench} trend="neutral" />
-        <MetricCard title="Parts fill rate" value={`${operations?.metrics?.parts?.fillRatePercent || 0}%`} icon={CheckCircle2} trend="neutral" />
-        <MetricCard title="Open exceptions" value={String(operations?.exceptions?.total || 0)} change={`${operations?.exceptions?.accounting || 0} accounting · ${operations?.exceptions?.payments || 0} payments`} icon={AlertTriangle} trend={(operations?.exceptions?.total || 0) > 0 ? 'down' : 'neutral'} />
-      </div>
+      <DeskSection title="Operations">
+        <ReadoutStrip>
+          <Readout label="F&I penetration" value={`${operations?.metrics?.financeProductPenetrationPercent || 0}%`} />
+          <Readout label="Effective labor rate" value={formatCurrency((operations?.metrics?.service?.effectiveLaborRateCents || 0) / 100)} />
+          <Readout label="Parts fill rate" value={`${operations?.metrics?.parts?.fillRatePercent || 0}%`} />
+          <Readout
+            label="Open exceptions"
+            value={exceptions}
+            tone={exceptions > 0 ? 'bad' : 'ok'}
+            sub={`${operations?.exceptions?.accounting || 0} accounting · ${operations?.exceptions?.payments || 0} payments`}
+          />
+        </ReadoutStrip>
+      </DeskSection>
 
-      <Tabs defaultValue="sales" className="space-y-6">
-        <TabsList className="max-w-full justify-start overflow-x-auto">
-          <TabsTrigger value="sales">Sales</TabsTrigger>
-          <TabsTrigger value="inventory">Inventory</TabsTrigger>
-          <TabsTrigger value="service">Service</TabsTrigger>
-        </TabsList>
+      <Segmented label="Analytics area" value={area} onChange={setArea} options={AREA_OPTIONS} />
 
-        <TabsContent value="sales" className="space-y-6">
-          {/* Sales KPIs */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard
-              title="Delivered Sales"
-              value={salesMetrics?.totalSales.toString() || '0'}
-              icon={Car}
-              trend="neutral"
-            />
-            <MetricCard
-              title="Delivered Revenue"
-              value={formatCurrency(salesMetrics?.totalRevenue || 0)}
-              icon={DollarSign}
-              trend="up"
-            />
-            <MetricCard
-              title="Avg Deal Profit"
-              value={formatCurrency(salesMetrics?.avgDealProfit || 0)}
-              icon={TrendingUp}
-              trend="up"
-            />
-            <MetricCard
-              title="Sales Reps Active"
-              value={salesMetrics?.salesByRep.length.toString() || '0'}
-              icon={Users}
-              trend="neutral"
-            />
-          </div>
+      {area === 'sales' && (
+        <div className="space-y-8">
+          <ReadoutStrip>
+            <Readout label="Delivered sales" value={salesMetrics?.totalSales || 0} />
+            <Readout label="Delivered revenue" value={formatCurrency(salesMetrics?.totalRevenue || 0)} />
+            <Readout label="Avg deal profit" value={formatCurrency(salesMetrics?.avgDealProfit || 0)} />
+            <Readout label="Reps active" value={salesMetrics?.salesByRep.length || 0} />
+          </ReadoutStrip>
 
-          {/* Charts Row 1 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Sales Trend Chart */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Sales Trend</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer config={chartConfig} className="h-[300px]">
-                  <LineChart data={salesMetrics?.salesByMonth || []}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Line 
-                      type="monotone" 
-                      dataKey="count" 
-                      stroke="var(--color-count)" 
-                      strokeWidth={2}
-                      dot={{ fill: "var(--color-count)" }}
-                    />
-                  </LineChart>
-                </ChartContainer>
-              </CardContent>
-            </Card>
-
-            {/* Revenue by Month */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Revenue by Month</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer config={chartConfig} className="h-[300px]">
-                  <BarChart data={salesMetrics?.salesByMonth || []}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => compactCurrency.format(Number(v))} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ChartContainer>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Charts Row 2 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Sales by Rep */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Top Sales Reps</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer config={chartConfig} className="h-[300px]">
-                  <BarChart data={salesMetrics?.salesByRep.slice(0, 5) || []} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" tick={{ fontSize: 12 }} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={100} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="count" fill="var(--color-sales)" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ChartContainer>
-              </CardContent>
-            </Card>
-
-            {/* Vehicles Sold by Make */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Sales by Make</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer config={chartConfig} className="h-[300px]">
-                  <PieChart>
-                    <Pie
-                      data={salesMetrics?.vehiclesSold.slice(0, 8) || []}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
-                      paddingAngle={2}
-                      dataKey="count"
-                      nameKey="make"
-                      label={({ make, count }) => `${make}: ${count}`}
-                    >
-                      {(salesMetrics?.vehiclesSold || []).slice(0, 8).map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                  </PieChart>
-                </ChartContainer>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Top Vehicles Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Top Selling Vehicles</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-3 px-4 font-medium">Vehicle</th>
-                      <th className="text-right py-3 px-4 font-medium">Units Sold</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(salesMetrics?.topVehicles || []).map((vehicle, idx) => (
-                      <tr key={idx} className="border-b last:border-0">
-                        <td className="py-3 px-4">{vehicle.year} {vehicle.make} {vehicle.model}</td>
-                        <td className="py-3 px-4 text-right font-medium">{vehicle.count}</td>
-                      </tr>
-                    ))}
-                    {!salesMetrics?.topVehicles?.length && (
-                      <tr>
-                        <td colSpan={2} className="py-8 text-center text-muted-foreground">No sales data available</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+          <DeskSection
+            title="By month"
+            actions={<Segmented label="Period" size="sm" value={period} onChange={setPeriod} options={PERIOD_OPTIONS} />}
+          >
+            <div className="space-y-6">
+              <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+                <span className="text-muted-foreground">Units <span className="ml-1 font-semibold tabular-nums text-foreground">{periodUnits}</span></span>
+                <span className="text-muted-foreground">Revenue <span className="ml-1 font-semibold tabular-nums text-foreground">{formatCurrency(periodRevenue)}</span></span>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+              {months.length ? (
+                <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+                  <div className="min-w-0">
+                    <p className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Units delivered</p>
+                    <ChartContainer config={chartConfig} className="h-[220px] w-full">
+                      <BarChart data={months} margin={{ left: 0, right: 0, top: 8 }}>
+                        <CartesianGrid vertical={false} strokeDasharray="2 4" />
+                        <XAxis dataKey="month" {...axis} />
+                        <YAxis width={32} allowDecimals={false} {...axis} />
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <Bar dataKey="count" radius={[6, 6, 2, 2]} maxBarSize={36}>
+                          {months.map(month => <Cell key={month.month} fill={month.month === latestMonth ? ACCENT : 'var(--color-count)'} />)}
+                        </Bar>
+                      </BarChart>
+                    </ChartContainer>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Revenue</p>
+                    <ChartContainer config={chartConfig} className="h-[220px] w-full">
+                      <BarChart data={months} margin={{ left: 0, right: 0, top: 8 }}>
+                        <CartesianGrid vertical={false} strokeDasharray="2 4" />
+                        <XAxis dataKey="month" {...axis} />
+                        <YAxis width={56} {...axis} tickFormatter={(v) => compactCurrency.format(Number(v))} />
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <Bar dataKey="revenue" radius={[6, 6, 2, 2]} maxBarSize={36}>
+                          {months.map(month => <Cell key={month.month} fill={month.month === latestMonth ? ACCENT : 'var(--color-revenue)'} />)}
+                        </Bar>
+                      </BarChart>
+                    </ChartContainer>
+                  </div>
+                </div>
+              ) : (
+                <Empty>No deliveries</Empty>
+              )}
+            </div>
+          </DeskSection>
 
-        <TabsContent value="inventory" className="space-y-6">
-          {/* Inventory KPIs */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard
-              title="Total Vehicles"
-              value={inventoryMetrics?.totalVehicles.toString() || '0'}
-              icon={Car}
-              trend="neutral"
-            />
-            <MetricCard
-              title="Total Inventory Value"
-              value={formatCurrency(inventoryMetrics?.totalValue || 0)}
-              icon={DollarSign}
-              trend="neutral"
-            />
-            <MetricCard
-              title="Avg Days in Stock"
-              value={Math.round(inventoryMetrics?.avgDaysInStock || 0).toString()}
-              icon={Calendar}
-              trend={inventoryMetrics?.avgDaysInStock && inventoryMetrics.avgDaysInStock > 60 ? 'down' : 'up'}
-            />
-            <MetricCard
-              title="Available Units"
-              value={inventoryMetrics?.vehiclesByStatus.find(s => s.status === 'available')?.count.toString() || '0'}
-              icon={Car}
-              trend="neutral"
-            />
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+            <DeskSection title="Top sales reps" count={Math.min(5, salesMetrics?.salesByRep.length || 0)}>
+              <BarRows
+                empty="No delivered deals"
+                rows={(salesMetrics?.salesByRep || []).slice(0, 5).map((rep, index) => ({
+                  key: `${rep.name}-${index}`,
+                  label: rep.name,
+                  value: rep.count,
+                  accent: index === 0,
+                  figure: <>{rep.count} <span className="text-muted-foreground">· {compactCurrency.format(rep.revenue)}</span></>,
+                }))}
+              />
+            </DeskSection>
+
+            <DeskSection title="Sales by make" count={Math.min(8, salesMetrics?.vehiclesSold.length || 0)}>
+              <BarRows
+                empty="No delivered deals"
+                rows={(salesMetrics?.vehiclesSold || []).slice(0, 8).map((item, index) => ({ key: item.make, label: item.make, value: item.count, accent: index === 0 }))}
+              />
+            </DeskSection>
           </div>
 
-          {/* Inventory Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Status Distribution */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Inventory by Status</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer config={chartConfig} className="h-[300px]">
-                  <PieChart>
-                    <Pie
-                      data={inventoryMetrics?.vehiclesByStatus || []}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
-                      paddingAngle={2}
-                      dataKey="count"
-                      nameKey="status"
-                      label={({ status, count }) => `${status}: ${count}`}
-                    >
-                      {(inventoryMetrics?.vehiclesByStatus || []).map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                  </PieChart>
-                </ChartContainer>
-              </CardContent>
-            </Card>
+          <DeskSection title="Top selling vehicles" count={salesMetrics?.topVehicles?.length || 0}>
+            {salesMetrics?.topVehicles?.length ? (
+              <Panel className="divide-y">
+                {salesMetrics.topVehicles.map((vehicle, idx) => (
+                  <div key={idx} className="flex min-w-0 items-center gap-3 px-4 py-2.5 text-sm">
+                    <span className="w-5 shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{String(idx + 1).padStart(2, '0')}</span>
+                    <span className="min-w-0 flex-1 truncate">{vehicle.year} {vehicle.make} {vehicle.model}</span>
+                    <span className="shrink-0 font-mono text-xs tabular-nums">{vehicle.count} sold</span>
+                  </div>
+                ))}
+              </Panel>
+            ) : (
+              <Empty>No sales</Empty>
+            )}
+          </DeskSection>
+        </div>
+      )}
 
-            {/* Aging Analysis */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Inventory Aging</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer config={chartConfig} className="h-[300px]">
-                  <BarChart data={inventoryMetrics?.agingBreakdown || []}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="range" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
+      {area === 'inventory' && (
+        <div className="space-y-8">
+          <ReadoutStrip>
+            <Readout label="Total vehicles" value={inventoryMetrics?.totalVehicles || 0} />
+            <Readout label="Inventory value" value={formatCurrency(inventoryMetrics?.totalValue || 0)} />
+            <Readout
+              label="Avg days in stock"
+              value={Math.round(inventoryMetrics?.avgDaysInStock || 0)}
+              tone={inventoryMetrics?.avgDaysInStock && inventoryMetrics.avgDaysInStock > 60 ? 'warn' : undefined}
+            />
+            <Readout label="Available" value={inventoryMetrics?.vehiclesByStatus.find(s => s.status === 'available')?.count || 0} tone="ok" />
+          </ReadoutStrip>
+
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+            <DeskSection title="By status">
+              <BarRows
+                empty="No vehicles"
+                rows={(inventoryMetrics?.vehiclesByStatus || []).map(item => ({ key: item.status, label: item.status, value: item.count, tone: statusTone[item.status] || 'idle' }))}
+              />
+            </DeskSection>
+
+            <DeskSection title="Aging">
+              {inventoryMetrics?.agingBreakdown?.length ? (
+                <ChartContainer config={chartConfig} className="h-[220px] w-full">
+                  <BarChart data={inventoryMetrics.agingBreakdown} margin={{ left: 0, right: 0, top: 8 }}>
+                    <CartesianGrid vertical={false} strokeDasharray="2 4" />
+                    <XAxis dataKey="range" {...axis} />
+                    <YAxis width={32} allowDecimals={false} {...axis} />
                     <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                      {(inventoryMetrics?.agingBreakdown || []).map((entry, index) => (
-                        <Cell 
-                          key={`cell-${index}`} 
-                          fill={
-                            entry.range === '90+' ? '#dc2626' :
-                            entry.range === '61-90' ? '#f59e0b' :
-                            entry.range === '31-60' ? '#3b82f6' :
-                            '#22c55e'
-                          } 
-                        />
+                    <Bar dataKey="count" radius={[6, 6, 2, 2]} maxBarSize={48}>
+                      {inventoryMetrics.agingBreakdown.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.range === '90+' ? ACCENT : 'var(--color-count)'} />
                       ))}
                     </Bar>
                   </BarChart>
                 </ChartContainer>
-              </CardContent>
-            </Card>
+              ) : (
+                <Empty>No vehicles</Empty>
+              )}
+            </DeskSection>
           </div>
 
-          {/* Slow Moving Inventory */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg">Slow Moving Inventory (90+ Days)</CardTitle>
-              <Link href={`${basePath}/platform/vehicles`} className="text-sm text-primary flex items-center gap-1 hover:underline">
-                View All <ArrowRight className="h-4 w-4" />
-              </Link>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-3 px-4 font-medium">Stock #</th>
-                      <th className="text-left py-3 px-4 font-medium">Vehicle</th>
-                      <th className="text-right py-3 px-4 font-medium">Days in Stock</th>
-                      <th className="text-right py-3 px-4 font-medium">Price</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(inventoryMetrics?.slowMoving || [])
-                      .filter(v => v.daysInStock > 60)
-                      .map((vehicle) => (
-                        <tr key={vehicle.id} className="border-b last:border-0">
-                          <td className="py-3 px-4 font-mono text-xs">{vehicle.stockNumber}</td>
-                          <td className="py-3 px-4">{vehicle.year} {vehicle.make} {vehicle.model}</td>
-                          <td className="py-3 px-4 text-right">
-                            <span className={`font-medium ${vehicle.daysInStock > 90 ? 'text-red-600' : 'text-amber-600'}`}>
-                              {vehicle.daysInStock} days
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-right font-medium">{formatCurrency(vehicle.price)}</td>
-                        </tr>
-                      ))}
-                    {!inventoryMetrics?.slowMoving?.filter(v => v.daysInStock > 60).length && (
-                      <tr>
-                        <td colSpan={4} className="py-8 text-center text-muted-foreground">No slow-moving inventory</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Condition Breakdown */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Inventory by Condition</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {(inventoryMetrics?.vehiclesByCondition || []).map((item, idx) => (
-                  <div key={idx} className="bg-muted/50 rounded-lg p-4 text-center">
-                    <p className="text-2xl font-bold">{item.count}</p>
-                    <p className="text-sm text-muted-foreground capitalize">{item.condition}</p>
+          <DeskSection title="Slow moving" count={slowMoving.length} actions={<SectionLink href={`${basePath}/platform/vehicles`}>Inventory</SectionLink>}>
+            {slowMoving.length ? (
+              <Panel className="divide-y">
+                {slowMoving.map(vehicle => (
+                  <div key={vehicle.id} className="flex min-w-0 items-start justify-between gap-4 px-4 py-3">
+                    <div className="min-w-0">
+                      <TitleLine as="p" tone={vehicle.daysInStock > 90 ? 'bad' : 'warn'} status={vehicle.daysInStock > 90 ? '90+ days' : '61-90 days'} className="text-sm font-medium">
+                        {vehicle.year} {vehicle.make} {vehicle.model}
+                      </TitleLine>
+                      <p className="pl-4"><Code>{vehicle.stockNumber}</Code></p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-medium tabular-nums">{formatCurrency(vehicle.price)}</p>
+                      <p className={`font-mono text-xs tabular-nums ${vehicle.daysInStock > 90 ? 'text-red-600 dark:text-red-400' : 'text-amber-700 dark:text-amber-300'}`}>{vehicle.daysInStock} days</p>
+                    </div>
                   </div>
                 ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+              </Panel>
+            ) : (
+              <Empty>No slow-moving inventory</Empty>
+            )}
+          </DeskSection>
 
-        <TabsContent value="service" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard
-              title="Today's Appointments"
-              value={serviceMetrics?.todayAppointments.toString() || '0'}
-              icon={Calendar}
-              trend="neutral"
-            />
-            <MetricCard
-              title="Active Repair Orders"
-              value={serviceMetrics?.activeRepairOrders.toString() || '0'}
-              icon={ClipboardList}
-              trend="neutral"
-            />
-            <MetricCard
-              title="Settled RO Revenue"
-              value={formatCurrency(serviceMetrics?.serviceRevenue || 0)}
-              icon={DollarSign}
-              trend="up"
-            />
-            <MetricCard
-              title="Avg Settled Repair Order"
-              value={formatCurrency(serviceMetrics?.avgRepairOrder || 0)}
-              icon={Wrench}
-              trend="neutral"
-            />
-          </div>
+          <DeskSection title="By condition">
+            {inventoryMetrics?.vehiclesByCondition?.length ? (
+              <ReadoutStrip>
+                {inventoryMetrics.vehiclesByCondition.map((item, idx) => (
+                  <Readout key={idx} label={item.condition} value={item.count} />
+                ))}
+              </ReadoutStrip>
+            ) : (
+              <Empty>No vehicles</Empty>
+            )}
+          </DeskSection>
+        </div>
+      )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Appointments by Status</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer config={chartConfig} className="h-[300px]">
-                  <PieChart>
-                    <Pie
-                      data={serviceMetrics?.appointmentsByStatus || []}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
-                      paddingAngle={2}
-                      dataKey="count"
-                      nameKey="status"
-                      label={({ status, count }) => `${status}: ${count}`}
-                    >
-                      {(serviceMetrics?.appointmentsByStatus || []).map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
+      {area === 'service' && (
+        <div className="space-y-8">
+          <ReadoutStrip>
+            <Readout label="Today's appointments" value={serviceMetrics?.todayAppointments || 0} tone={serviceMetrics?.todayAppointments ? 'info' : undefined} />
+            <Readout label="Active ROs" value={serviceMetrics?.activeRepairOrders || 0} />
+            <Readout label="Settled RO revenue" value={formatCurrency(serviceMetrics?.serviceRevenue || 0)} />
+            <Readout label="Avg settled RO" value={formatCurrency(serviceMetrics?.avgRepairOrder || 0)} />
+          </ReadoutStrip>
+
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+            <DeskSection title="Appointments by status">
+              <BarRows
+                empty="No appointments"
+                rows={(serviceMetrics?.appointmentsByStatus || []).map(item => ({ key: item.status, label: item.status, value: item.count }))}
+              />
+            </DeskSection>
+
+            <DeskSection title="Repair orders by status">
+              {serviceMetrics?.repairOrdersByStatus?.length ? (
+                <ChartContainer config={chartConfig} className="h-[220px] w-full">
+                  <BarChart data={serviceMetrics.repairOrdersByStatus} margin={{ left: 0, right: 0, top: 8 }}>
+                    <CartesianGrid vertical={false} strokeDasharray="2 4" />
+                    <XAxis dataKey="status" {...axis} />
+                    <YAxis width={32} allowDecimals={false} {...axis} />
                     <ChartTooltip content={<ChartTooltipContent />} />
-                  </PieChart>
-                </ChartContainer>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Repair Orders by Status</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer config={chartConfig} className="h-[300px]">
-                  <BarChart data={serviceMetrics?.repairOrdersByStatus || []}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="status" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="count" fill="var(--color-count)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="count" fill="var(--color-count)" radius={[6, 6, 2, 2]} maxBarSize={48} />
                   </BarChart>
                 </ChartContainer>
-              </CardContent>
-            </Card>
+              ) : (
+                <Empty>No repair orders</Empty>
+              )}
+            </DeskSection>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Service Mix</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-3 px-4 font-medium">Service Type</th>
-                        <th className="text-right py-3 px-4 font-medium">Appointments</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(serviceMetrics?.serviceTypeBreakdown || []).map((item) => (
-                        <tr key={item.serviceType} className="border-b last:border-0">
-                          <td className="py-3 px-4 capitalize">{item.serviceType}</td>
-                          <td className="py-3 px-4 text-right font-medium">{item.count}</td>
-                        </tr>
-                      ))}
-                      {!serviceMetrics?.serviceTypeBreakdown?.length && (
-                        <tr>
-                          <td colSpan={2} className="py-8 text-center text-muted-foreground">No service appointment data</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+            <DeskSection title="Service mix">
+              <BarRows
+                empty="No appointments"
+                rows={(serviceMetrics?.serviceTypeBreakdown || []).map(item => ({ key: item.serviceType, label: item.serviceType, value: item.count }))}
+              />
+            </DeskSection>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-lg">Low Stock Parts</CardTitle>
-                <Link href={`${basePath}/platform/service`} className="text-sm text-primary flex items-center gap-1 hover:underline">
-                  Service <ArrowRight className="h-4 w-4" />
-                </Link>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-3 px-4 font-medium">Part</th>
-                        <th className="text-right py-3 px-4 font-medium">Qty</th>
-                        <th className="text-right py-3 px-4 font-medium">Min</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(serviceMetrics?.lowStockParts || []).map((part) => (
-                        <tr key={part.id} className="border-b last:border-0">
-                          <td className="py-3 px-4">
-                            <div className="flex items-start gap-2">
-                              <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
-                              <div>
-                                <p className="font-medium">{part.description}</p>
-                                <p className="text-xs text-muted-foreground">#{part.partNumber}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 text-right font-medium text-red-600">{part.quantity}</td>
-                          <td className="py-3 px-4 text-right">{part.minimumQuantity}</td>
-                        </tr>
-                      ))}
-                      {!serviceMetrics?.lowStockParts?.length && (
-                        <tr>
-                          <td colSpan={3} className="py-8 text-center text-muted-foreground">No low-stock parts</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
+            <DeskSection title="Low stock parts" count={serviceMetrics?.lowStockParts?.length || 0} actions={<SectionLink href={`${basePath}/platform/service`}>Service</SectionLink>}>
+              {serviceMetrics?.lowStockParts?.length ? (
+                <Panel className="divide-y">
+                  {serviceMetrics.lowStockParts.map(part => (
+                    <div key={part.id} className="flex min-w-0 items-start justify-between gap-4 px-4 py-3">
+                      <div className="min-w-0">
+                        <TitleLine as="p" tone="bad" status="Low stock" className="text-sm font-medium">{part.description}</TitleLine>
+                        <p className="pl-4"><Code>#{part.partNumber}</Code></p>
+                      </div>
+                      <div className="shrink-0 text-right font-mono text-xs tabular-nums">
+                        <p className="text-sm font-semibold text-red-600 dark:text-red-400">{part.quantity}</p>
+                        <p className="text-muted-foreground">min {part.minimumQuantity}</p>
+                      </div>
+                    </div>
+                  ))}
+                </Panel>
+              ) : (
+                <Empty>No low-stock parts</Empty>
+              )}
+            </DeskSection>
           </div>
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
     </div>
     </PageContainer>
   )

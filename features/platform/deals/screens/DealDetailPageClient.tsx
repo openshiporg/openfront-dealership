@@ -1,26 +1,27 @@
 'use client'
 
-import { useState, useEffect, useRef, type FormEvent } from 'react'
+import { useState, useEffect, useRef, type FormEvent, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { ArrowRight, Check, Pencil, Save, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import {
-  Car,
-  DollarSign,
-  User,
-  Calendar,
-  Edit,
-  CheckCircle,
-  XCircle,
-  Clock,
-  FileText
-} from 'lucide-react'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
+import {
+  Code,
+  DeskHeader,
+  DeskSection,
+  Facts,
+  Meter,
+  Notice,
+  Panel,
+  Pill,
+  Readout,
+  ReadoutStrip,
+  Segmented,
+  TitleLine,
+  Track,
+  type DeskTone,
+} from '@/features/platform/components/desk'
 import {
   acceptDealWorksheet,
   getDealLenderOffers,
@@ -37,6 +38,7 @@ import { calculateDealPrice, assertValidDealPrice, normalizeMoneyLines, sumMoney
 import { WorksheetLines } from '../components/WorksheetLines'
 import { readFinanceEvidence, type FinanceEvidence } from '../lib/financeEvidence'
 import { FinanceEvidenceHistory } from '../components/FinanceEvidenceHistory'
+import { labelForDeal, toneForDeal } from '../lib/dealStatus'
 import { OperatorActionDialog } from '@/features/platform/components/OperatorActionDialog'
 
 type LenderOffer = DealLenderOffer
@@ -91,13 +93,27 @@ interface Deal {
   }[]
 }
 
-const statusConfig: Record<string, { color: string; icon: React.ElementType; label: string }> = {
-  pencil: { color: 'bg-slate-100 text-slate-700', icon: FileText, label: 'Pencil (Draft)' },
-  submitted: { color: 'bg-blue-100 text-blue-700', icon: Clock, label: 'Pending Approval' },
-  approved: { color: 'bg-green-100 text-green-700', icon: CheckCircle, label: 'Approved' },
-  financed: { color: 'bg-purple-100 text-purple-700', icon: DollarSign, label: 'Financed' },
-  delivered: { color: 'bg-emerald-100 text-emerald-700', icon: Car, label: 'Delivered' },
-  cancelled: { color: 'bg-red-100 text-red-700', icon: XCircle, label: 'Cancelled' },
+const fieldLabel = 'font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground'
+
+function lineCents(line: MoneyLine) {
+  const value = Number(line.amountCents ?? Math.round(Number((line as { amount?: unknown }).amount || 0) * 100))
+  return Number.isFinite(value) ? value : 0
+}
+
+/** One row of the deal jacket ledger. */
+function LedgerRow({ label, value, emphasis, sub, indent }: { label: ReactNode; value: ReactNode; emphasis?: 'subtotal' | 'total'; sub?: boolean; indent?: boolean }) {
+  return (
+    <div
+      className={[
+        'flex min-w-0 items-baseline justify-between gap-4 px-4',
+        emphasis === 'total' ? 'border-t-2 border-foreground/80 py-3 text-base font-semibold text-foreground' : emphasis === 'subtotal' ? 'border-t py-2.5 text-sm font-medium text-foreground' : sub ? 'py-1 text-xs text-muted-foreground' : 'py-2 text-sm text-foreground',
+        indent ? 'pl-8' : '',
+      ].join(' ')}
+    >
+      <dt className={`min-w-0 break-words ${emphasis || sub ? '' : 'text-muted-foreground'}`}>{label}</dt>
+      <dd className="shrink-0 text-right font-mono tabular-nums">{value}</dd>
+    </div>
+  )
 }
 
 export function DealDetailPageClient({ id }: { id: string }) {
@@ -398,10 +414,9 @@ export function DealDetailPageClient({ id }: { id: string }) {
 
   if (loading && !deal) {
     return (
-      <PageContainer title="Deal" breadcrumbs={breadcrumbs('Deal')}>
-        <div className="px-4 md:px-6 flex items-center justify-center min-h-[400px]" role="status">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" aria-hidden="true"></div>
-          <span className="sr-only">Loading deal</span>
+      <PageContainer title="Deal" header={<DeskHeader eyebrow="Deal" title="Loading deal" tone="idle" />} breadcrumbs={breadcrumbs('Deal')}>
+        <div className="flex min-h-[320px] items-center justify-center px-4 md:px-6" role="status">
+          <span className="text-sm text-muted-foreground">Loading deal</span>
         </div>
       </PageContainer>
     )
@@ -409,19 +424,32 @@ export function DealDetailPageClient({ id }: { id: string }) {
 
   if (!deal) {
     return (
-      <PageContainer title="Deal" breadcrumbs={breadcrumbs('Deal')}>
-        <div className="px-4 py-6 md:px-6 text-center">
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">Deal unavailable</h1>
-          <p className="mt-2 text-sm text-muted-foreground">{error || 'The deal was not found.'}</p>
-          <Button asChild variant="outline" className="mt-4">
-            <Link href={`${basePath}/platform/deals`}>Back to Deals</Link>
-          </Button>
+      <PageContainer
+        title="Deal"
+        header={
+          <DeskHeader
+            eyebrow="Deal"
+            title="Deal unavailable"
+            tone="bad"
+            status="Unavailable"
+            actions={
+              <Track>
+                <Pill asChild>
+                  <Link href={`${basePath}/platform/deals`}>Back to deals</Link>
+                </Pill>
+              </Track>
+            }
+          />
+        }
+        breadcrumbs={breadcrumbs('Deal')}
+      >
+        <div className="px-4 pb-6 md:px-6">
+          <Notice tone="bad">{error || 'The deal was not found.'}</Notice>
         </div>
       </PageContainer>
     )
   }
 
-  const status = statusConfig[deal.status] || statusConfig.pencil
   const dealChecklist = [
     { label: 'Customer lead attached', complete: Boolean(deal.lead), detail: deal.lead ? `${deal.lead.firstName} ${deal.lead.lastName}` : 'Attach customer before contracting' },
     { label: 'Vehicle selected', complete: Boolean(deal.vehicle), detail: deal.vehicle ? `${deal.vehicle.stockNumber} · ${deal.vehicle.vin}` : 'Attach vehicle and VIN' },
@@ -435,349 +463,422 @@ export function DealDetailPageClient({ id }: { id: string }) {
   const checklistComplete = dealChecklist.filter(item => item.complete).length
 
   const dealTitle = deal.vehicle ? `${deal.vehicle.year} ${deal.vehicle.make} ${deal.vehicle.model}` : 'Deal'
+  const customerName = deal.lead ? `${deal.lead.firstName} ${deal.lead.lastName}` : 'No customer'
+  const statusLabel = labelForDeal(deal.status)
+  const finance = deal.financeEvidence
+
+  // The one next step a desk manager takes from pencil; it renders as the primary pill.
+  const pencilNext = worksheetDirty || deal.worksheetVersion === 0
+    ? 'save'
+    : !deal.presentedAt
+      ? 'present'
+      : !deal.acceptedAt
+        ? 'accept'
+        : 'submit'
+
+  const statusActions = (
+    <Track aria-label="Deal actions">
+      {deal.status === 'pencil' && (
+        <>
+          <Pill variant={pencilNext === 'save' ? 'primary' : 'raised'} onClick={saveWorksheetVersion} disabled={updating}>
+            <Save />
+            Save worksheet version
+          </Pill>
+          {deal.worksheetVersion > 0 && !deal.presentedAt && <Pill variant={pencilNext === 'present' ? 'primary' : 'raised'} onClick={() => recordWorksheetDecision('present')} disabled={updating || worksheetDirty}>Present structure</Pill>}
+          {deal.presentedAt && !deal.acceptedAt && <Pill variant={pencilNext === 'accept' ? 'primary' : 'raised'} onClick={() => recordWorksheetDecision('accept')} disabled={updating || worksheetDirty}>Record acceptance</Pill>}
+          {deal.acceptedAt && <Pill variant={pencilNext === 'submit' ? 'primary' : 'raised'} onClick={() => updateStatus('submitted', 'pending')} disabled={updating || worksheetDirty}>Submit for approval</Pill>}
+        </>
+      )}
+      {deal.status === 'submitted' && (
+        <>
+          <Pill variant="primary" onClick={() => updateStatus('approved', 'approved')} disabled={updating}>
+            <Check />
+            Approve
+          </Pill>
+          <Pill variant="danger" onClick={() => updateStatus('cancelled', 'rejected')} disabled={updating}>
+            <X />
+            Reject
+          </Pill>
+        </>
+      )}
+      {['submitted', 'approved'].includes(deal.status) && (
+        <Pill onClick={reopenWorksheet} disabled={updating}>
+          <Pencil />
+          Reopen worksheet
+        </Pill>
+      )}
+      {deal.status === 'approved' && (
+        <Pill asChild variant="primary">
+          <Link href={`${basePath}/platform/finance`}>
+            Open finance
+            <ArrowRight />
+          </Link>
+        </Pill>
+      )}
+      {deal.status === 'financed' && (
+        <Pill asChild variant="primary">
+          <Link href={`${basePath}/platform/delivery`}>
+            Open delivery
+            <ArrowRight />
+          </Link>
+        </Pill>
+      )}
+    </Track>
+  )
+  const hasStatusActions = ['pencil', 'submitted', 'approved', 'financed'].includes(deal.status)
+
+  const header = (
+    <DeskHeader
+      eyebrow={deal.vehicle ? `Deal · Stock #${deal.vehicle.stockNumber}` : 'Deal'}
+      title={dealTitle}
+      tone={toneForDeal(deal.status)}
+      status={statusLabel}
+      meta={
+        <span className="flex flex-wrap gap-x-2">
+          <span className="text-foreground">{statusLabel}</span>
+          <span>· {customerName}</span>
+          <span>· {deal.salesperson?.name || 'Unassigned'}</span>
+          <span>· Created {formatDate(deal.createdAt)}</span>
+        </span>
+      }
+      actions={hasStatusActions ? statusActions : undefined}
+    />
+  )
+
+  const lineGroups = ([
+    ['fees', 'Fees', 'feesCents', 1],
+    ['products', 'Products', 'productsCents', 1],
+    ['rebates', 'Rebates', 'rebatesCents', -1],
+  ] as const)
+
+  const offerTone = (offer: LenderOffer): DeskTone => (offer.selected && finance?.selectedOfferCurrent ? 'ok' : offer.selected ? 'warn' : offer.decision === 'approved' ? 'info' : 'idle')
 
   return (
-    <PageContainer title={dealTitle} breadcrumbs={breadcrumbs(dealTitle)}>
-    <div className="min-w-0 space-y-6 px-4 pb-6 md:px-6">
-      {error && <div role="alert" className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 text-sm">{error}</div>}
-      {worksheetDirty && <p role="status" className="rounded-lg border bg-muted/40 p-3 text-sm">Unsaved worksheet changes</p>}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-center gap-4">
-          <div>
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">{dealTitle}</h1>
-              <Badge className={status.color}>
-                {status.label}
-              </Badge>
-            </div>
-            <p className="text-muted-foreground">
-              Deal created {formatDate(deal.createdAt)}
-            </p>
+    <PageContainer title={dealTitle} header={header} breadcrumbs={breadcrumbs(dealTitle)}>
+      <div className="min-w-0 max-w-full space-y-8 px-4 pb-10 md:px-6">
+        {(error || worksheetDirty) && (
+          <div className="space-y-2">
+            {error && <Notice tone="bad">{error}</Notice>}
+            {worksheetDirty && <Notice tone="warn" role="status">Unsaved worksheet changes</Notice>}
           </div>
-        </div>
-        <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-          {deal.status === 'pencil' && (
-            <>
-              <Button variant="outline" onClick={saveWorksheetVersion} disabled={updating}>Save Worksheet Version</Button>
-              {deal.worksheetVersion > 0 && !deal.presentedAt && <Button variant="outline" onClick={() => recordWorksheetDecision('present')} disabled={updating || worksheetDirty}>Present Structure</Button>}
-              {deal.presentedAt && !deal.acceptedAt && <Button variant="outline" onClick={() => recordWorksheetDecision('accept')} disabled={updating || worksheetDirty}>Record Acceptance</Button>}
-              {deal.acceptedAt && <Button variant="outline" onClick={() => updateStatus('submitted', 'pending')} disabled={updating || worksheetDirty}>Submit for Approval</Button>}
-            </>
-          )}
-          {['submitted', 'approved'].includes(deal.status) && <Button variant="outline" onClick={reopenWorksheet} disabled={updating}><Edit className="h-4 w-4 mr-2" />Reopen Worksheet</Button>}
-          {deal.status === 'submitted' && (
-            <>
-              <Button variant="outline" onClick={() => updateStatus('approved', 'approved')} disabled={updating}>
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Approve
-              </Button>
-              <Button variant="destructive" onClick={() => updateStatus('cancelled', 'rejected')} disabled={updating}>
-                <XCircle className="h-4 w-4 mr-2" />
-                Reject
-              </Button>
-            </>
-          )}
-          {deal.status === 'approved' && (
-            <Button asChild>
-              <Link href={`${basePath}/platform/finance`}>Open Finance</Link>
-            </Button>
-          )}
-          {deal.status === 'financed' && (
-            <Button asChild>
-              <Link href={`${basePath}/platform/delivery`}>
-                <Car className="h-4 w-4 mr-2" />
-                Open Delivery
-              </Link>
-            </Button>
-          )}
-        </div>
-      </div>
+        )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column */}
-        <div className="lg:col-span-2 space-y-6">
-          {deal.structureType !== 'cash' && (
-            <Card>
-              <CardHeader><CardTitle>Lender offers · worksheet {deal.worksheetVersion}</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                {!deal.financeEvidence?.selectedOfferCurrent && <p role="status" className="text-sm text-amber-700">{deal.financeEvidence?.issue || 'Select or reconfirm an offer for this saved worksheet.'}</p>}
-                {lenderOffers.length === 0 ? <p className="text-sm text-muted-foreground">No approved or conditional lender decisions</p> : lenderOffers.map(offer => (
-                  <div key={offer.id} className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div><p className="font-medium">{offer.providerKey} · {offer.decision}</p><p className="text-sm text-muted-foreground">{formatCurrency((offer.approvedAmountCents || 0) / 100)} · {((offer.aprBasisPoints || 0) / 100).toFixed(2)}% APR · {offer.termMonths || '-'} mo · {formatCurrency((offer.monthlyPaymentCents || 0) / 100)}/mo</p></div>
-                    <Button size="sm" variant={offer.selected ? 'default' : 'outline'} disabled={updating || worksheetDirty || (offer.selected && Boolean(deal.financeEvidence?.selectedOfferCurrent)) || deal.status !== 'pencil'} onClick={() => selectLenderOffer(offer.id)}>{offer.selected && deal.financeEvidence?.selectedOfferCurrent ? 'Current selection' : offer.selected ? 'Reconfirm offer' : 'Select offer'}</Button>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
+        {savedPricing && (
+          <ReadoutStrip>
+            <Readout label="Total price" value={formatCurrency(savedPricing.totalPriceCents / 100)} sub={`Worksheet v${deal.worksheetVersion}`} />
+            <Readout label="Amount due" value={formatCurrency(savedPricing.cashPayableCents / 100)} sub="Due at signing" tone={savedPricing.cashPayableCents > 0 ? 'warn' : 'idle'} />
+            {savedPricing.loanTerm > 0 ? (
+              <Readout label="Payment" value={`${formatCurrency(savedPricing.monthlyPaymentCents / 100)}/mo`} sub={`${savedPricing.apr}% APR · ${savedPricing.loanTerm} mo`} />
+            ) : (
+              <Readout label="Amount financed" value={formatCurrency(savedPricing.financingAmountCents / 100)} sub={deal.structureType === 'cash' ? 'Cash' : undefined} />
+            )}
+            <Readout label="Deal jacket" value={`${checklistComplete}/${dealChecklist.length}`} sub={checklistComplete === dealChecklist.length ? 'Ready' : 'Incomplete'} tone={checklistComplete === dealChecklist.length ? 'ok' : 'warn'} />
+          </ReadoutStrip>
+        )}
 
-          {/* Vehicle Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Car className="h-5 w-5" />
-                Vehicle Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {deal.vehicle ? (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Vehicle</p>
-                    <p className="font-medium">{deal.vehicle.year} {deal.vehicle.make} {deal.vehicle.model}</p>
-                    {deal.vehicle.trim && <p className="text-sm text-muted-foreground">{deal.vehicle.trim}</p>}
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Stock Number</p>
-                    <p className="font-medium">{deal.vehicle.stockNumber}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">VIN</p>
-                    <p className="font-mono text-sm">{deal.vehicle.vin}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Color</p>
-                    <p className="font-medium">{deal.vehicle.color || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">MSRP</p>
-                    <p className="font-medium">{formatCurrency(deal.vehicle.price)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Cost</p>
-                    <Link href={`${basePath}/platform/vehicles`} className="font-medium text-primary hover:underline">See inventory</Link>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-muted-foreground">No vehicle attached</p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Customer Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
-                Customer Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {deal.lead ? (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Name</p>
-                    <p className="font-medium">{deal.lead.firstName} {deal.lead.lastName}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">CRM relationship</p>
-                    <Link href={`${basePath}/platform/crm/${deal.lead.id}`} className="font-medium text-primary hover:underline">Open customer record</Link>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Sales Rep</p>
-                    <p className="font-medium">{deal.salesperson?.name || 'Unassigned'}</p>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-muted-foreground">No customer attached</p>
-              )}
-            </CardContent>
-          </Card>
-
-          {deal.status === 'pencil' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Worksheet terms</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Structure</Label>
-                  <Select disabled={updating} value={deal.structureType || 'cash'} onValueChange={(structureType) => { setWorksheetDirty(true); setDeal(current => current ? { ...current, structureType, ...(structureType === 'cash' ? { loanTerm: 0, apr: 0, financingAmount: 0, monthlyPayment: 0 } : {}) } : current) }}>
-                    <SelectTrigger aria-label="Deal structure"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="cash">Cash</SelectItem><SelectItem value="finance">Finance</SelectItem></SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {[
-                    ['Negotiated vehicle price', 'vehiclePrice'],
-                    ['Trade-in credit', 'tradeInValue'],
-                    ['Down payment', 'downPayment'],
-                  ].map(([label, field]) => (
-                    <div key={field} className="space-y-2">
-                      <Label>{label}</Label>
-                      <Input disabled={updating} aria-label={label} type="number" min="0" step="0.01" value={Number(deal[field as keyof Deal] || 0)} onChange={(event) => { setWorksheetDirty(true); setDeal(current => current ? { ...current, [field]: Number(event.target.value) } : current) }} />
+        <div className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+          <div className="min-w-0 space-y-8">
+            <DeskSection
+              title="Deal jacket"
+              actions={<span className="font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground">Saved v{deal.worksheetVersion}</span>}
+            >
+              {savedPricing ? (
+                <Panel className="overflow-hidden">
+                  <dl className="divide-y divide-border/60">
+                    <LedgerRow label="Vehicle price" value={formatCurrency(savedPricing.vehiclePriceCents / 100)} />
+                    {lineGroups.map(([field, title, key, sign]) => (
+                      <div key={field}>
+                        <LedgerRow label={title} value={formatCurrency((sign * savedPricing[key]) / 100)} />
+                        {!worksheetDirty && deal[field].map((line, index) => (
+                          <LedgerRow key={`${field}-${index}`} sub indent label={line.name || line.code} value={formatCurrency((sign * lineCents(line)) / 100)} />
+                        ))}
+                      </div>
+                    ))}
+                    <LedgerRow emphasis="subtotal" label="Subtotal before tax / trade" value={formatCurrency(savedPricing.subtotalCents / 100)} />
+                    <div>
+                      <LedgerRow label="Tax" value={formatCurrency(savedPricing.taxAmountCents / 100)} />
+                      {!worksheetDirty && deal.taxLines.map((line, index) => (
+                        <LedgerRow key={`tax-${index}`} sub indent label={line.name || line.code} value={formatCurrency(lineCents(line) / 100)} />
+                      ))}
                     </div>
-                  ))}
-                  {deal.structureType === 'finance' && (
-                    <>
-                      <div className="space-y-2"><Label>APR (%)</Label><Input disabled={updating} aria-label="APR percentage" type="number" min="0" max="100" step="0.01" value={deal.apr || 0} onChange={(event) => { setWorksheetDirty(true); setDeal(current => current ? { ...current, apr: Number(event.target.value) } : current) }} /></div>
-                      <div className="space-y-2"><Label>Term (months)</Label><Input disabled={updating} aria-label="Term in months" type="number" min="1" max="120" step="1" value={deal.loanTerm || 0} onChange={(event) => { setWorksheetDirty(true); setDeal(current => current ? { ...current, loanTerm: Number(event.target.value) } : current) }} /></div>
-                    </>
+                    <LedgerRow label="Trade-in credit" value={formatCurrency(-savedPricing.tradeInValueCents / 100)} />
+                    <LedgerRow emphasis="total" label="Total price" value={formatCurrency(savedPricing.totalPriceCents / 100)} />
+                    <LedgerRow label="Planned down payment" value={formatCurrency(savedPricing.downPaymentCents / 100)} />
+                    <LedgerRow label="Amount financed" value={formatCurrency(savedPricing.financingAmountCents / 100)} />
+                    <LedgerRow emphasis="subtotal" label="Cash payable · due at signing" value={formatCurrency(savedPricing.cashPayableCents / 100)} />
+                  </dl>
+                  {(savedPricing.loanTerm > 0 || deal.saleDate) && (
+                    <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t bg-muted/40 px-4 py-3">
+                      {savedPricing.loanTerm > 0 && (
+                        <>
+                          <span className="text-xs text-muted-foreground">{savedPricing.apr}% APR · {savedPricing.loanTerm} months · estimated payment</span>
+                          <span className="font-mono text-lg font-semibold tabular-nums">{formatCurrency(savedPricing.monthlyPaymentCents / 100)}/mo</span>
+                        </>
+                      )}
+                      {deal.saleDate && <span className="w-full text-xs text-muted-foreground">Sale completed {formatDate(deal.saleDate)}</span>}
+                    </div>
+                  )}
+                </Panel>
+              ) : (
+                <p className="py-6 text-center text-sm text-muted-foreground">No saved worksheet</p>
+              )}
+            </DeskSection>
+
+            {deal.status === 'pencil' && (
+              <DeskSection title="Worksheet terms">
+                <div className="space-y-5">
+                  <div className="space-y-1.5">
+                    <p className={fieldLabel}>Structure</p>
+                    <Segmented
+                      label="Deal structure"
+                      size="sm"
+                      value={deal.structureType === 'finance' ? 'finance' : 'cash'}
+                      onChange={(structureType) => { setWorksheetDirty(true); setDeal(current => current ? { ...current, structureType, ...(structureType === 'cash' ? { loanTerm: 0, apr: 0, financingAmount: 0, monthlyPayment: 0 } : {}) } : current) }}
+                      options={[{ value: 'cash', label: 'Cash', disabled: updating }, { value: 'finance', label: 'Finance', disabled: updating }]}
+                    />
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    {[
+                      ['Negotiated vehicle price', 'vehiclePrice'],
+                      ['Trade-in credit', 'tradeInValue'],
+                      ['Down payment', 'downPayment'],
+                    ].map(([label, field]) => (
+                      <label key={field} className="grid min-w-0 gap-1.5">
+                        <span className={fieldLabel}>{label}</span>
+                        <Input disabled={updating} aria-label={label} className="text-right tabular-nums" type="number" min="0" step="0.01" value={Number(deal[field as keyof Deal] || 0)} onChange={(event) => { setWorksheetDirty(true); setDeal(current => current ? { ...current, [field]: Number(event.target.value) } : current) }} />
+                      </label>
+                    ))}
+                    {deal.structureType === 'finance' && (
+                      <>
+                        <label className="grid min-w-0 gap-1.5"><span className={fieldLabel}>APR (%)</span><Input disabled={updating} aria-label="APR percentage" className="text-right tabular-nums" type="number" min="0" max="100" step="0.01" value={deal.apr || 0} onChange={(event) => { setWorksheetDirty(true); setDeal(current => current ? { ...current, apr: Number(event.target.value) } : current) }} /></label>
+                        <label className="grid min-w-0 gap-1.5"><span className={fieldLabel}>Term (months)</span><Input disabled={updating} aria-label="Term in months" className="text-right tabular-nums" type="number" min="1" max="120" step="1" value={deal.loanTerm || 0} onChange={(event) => { setWorksheetDirty(true); setDeal(current => current ? { ...current, loanTerm: Number(event.target.value) } : current) }} /></label>
+                      </>
+                    )}
+                  </div>
+                  <Panel className="space-y-3 p-3">
+                    {([['fees', 'Fees', 'fee'], ['products', 'Products', 'product'], ['rebates', 'Rebates', 'rebate'], ['taxLines', 'Tax', 'tax']] as const).map(([field, title, category]) => <WorksheetLines key={field} title={title} category={category} lines={deal[field]} disabled={updating} onChange={lines => { setWorksheetDirty(true); setDeal(current => current ? { ...current, [field]: lines } : current) }} />)}
+                  </Panel>
+                  <Track>
+                    <Pill variant={worksheetDirty ? 'primary' : 'raised'} onClick={saveWorksheetVersion} disabled={updating}>
+                      <Save />
+                      Save worksheet version
+                    </Pill>
+                  </Track>
+                </div>
+              </DeskSection>
+            )}
+
+            {deal.structureType !== 'cash' && (
+              <DeskSection title={`Lender offers · worksheet ${deal.worksheetVersion}`} count={lenderOffers.length}>
+                <div className="space-y-3">
+                  {!finance?.selectedOfferCurrent && <Notice tone="warn" role="status">{finance?.issue || 'Select or reconfirm an offer for this saved worksheet.'}</Notice>}
+                  {lenderOffers.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">No approved or conditional lender decisions</p>
+                  ) : (
+                    <Panel className="divide-y">
+                      {lenderOffers.map(offer => (
+                        <div key={offer.id} className="flex min-w-0 flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <TitleLine as="p" tone={offerTone(offer)} status={offer.decision} className="text-sm font-medium">
+                              {offer.providerKey}
+                            </TitleLine>
+                            <p className="pl-4 text-xs capitalize text-muted-foreground">{offer.decision}{offer.selected ? ' · selected' : ''}</p>
+                          </div>
+                          <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:justify-end">
+                            <dl className="grid grid-cols-3 gap-x-4 text-right font-mono text-xs tabular-nums">
+                              <div><dt className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Amount</dt><dd>{formatCurrency((offer.approvedAmountCents || 0) / 100)}</dd></div>
+                              <div><dt className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">APR · term</dt><dd>{((offer.aprBasisPoints || 0) / 100).toFixed(2)}% · {offer.termMonths || '-'} mo</dd></div>
+                              <div><dt className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Payment</dt><dd>{formatCurrency((offer.monthlyPaymentCents || 0) / 100)}/mo</dd></div>
+                            </dl>
+                            <Track>
+                              <Pill size="sm" variant={offer.selected ? 'primary' : 'raised'} disabled={updating || worksheetDirty || (offer.selected && Boolean(finance?.selectedOfferCurrent)) || deal.status !== 'pencil'} onClick={() => selectLenderOffer(offer.id)}>
+                                {offer.selected && finance?.selectedOfferCurrent ? 'Current selection' : offer.selected ? 'Reconfirm offer' : 'Select offer'}
+                              </Pill>
+                            </Track>
+                          </div>
+                        </div>
+                      ))}
+                    </Panel>
                   )}
                 </div>
-                {([['fees', 'Fees', 'fee'], ['products', 'Products', 'product'], ['rebates', 'Rebates', 'rebate'], ['taxLines', 'Tax', 'tax']] as const).map(([field, title, category]) => <WorksheetLines key={field} title={title} category={category} lines={deal[field]} disabled={updating} onChange={lines => { setWorksheetDirty(true); setDeal(current => current ? { ...current, [field]: lines } : current) }} />)}
-                <p className="text-xs text-muted-foreground">Tax · front gross</p>
-              </CardContent>
-            </Card>
-          )}
+              </DeskSection>
+            )}
 
-          {/* Deal Jacket Checklist */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
+            <DeskSection
+              title="Checklist"
+              actions={
                 <span className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Deal Jacket Checklist
+                  <Meter value={checklistComplete / dealChecklist.length} segments={dealChecklist.length} tone={checklistComplete === dealChecklist.length ? 'ok' : 'warn'} label="Deal jacket checklist progress" />
+                  <span className="font-mono text-xs tabular-nums text-muted-foreground">{checklistComplete}/{dealChecklist.length} ready</span>
                 </span>
-                <Badge variant="outline">{checklistComplete}/{dealChecklist.length} ready</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+              }
+            >
               <div className="space-y-3">
-                {dealChecklist.map((item) => (
-                  <div key={item.label} className="flex items-start gap-3 rounded-lg border p-3">
-                    <div className={`mt-0.5 h-5 w-5 rounded-full flex items-center justify-center ${item.complete ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                      {item.complete ? <CheckCircle className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-medium">{item.label}</p>
-                      <p className="text-sm text-muted-foreground">{item.detail}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {deal.status !== 'delivered' && checklistComplete < dealChecklist.length && (
-                <p className="mt-4 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  Incomplete deal jacket
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Worksheet history</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <FinanceEvidenceHistory dealId={deal.id} aggregateType="Deal" label="Deal history" />
-              <p className="text-sm">
-                F&I documents: {deal.financeEvidence?.prerequisites?.current ? 'Current' : 'Review required'}.{' '}
-                {deal.financeEvidence?.prerequisites?.issue}{' '}
-                <Link className="underline" href={`${basePath}/platform/finance`}>Open Finance</Link>
-              </p>
-              <p className="text-sm">
-                Funding: {deal.financeEvidence?.fundingCurrent ? 'Current' : 'Reconfirmation required'} · worksheet version {deal.financeEvidence?.fundingWorksheetVersion ?? 'none'}
-              </p>
-              {worksheetHistory.length === 0 ? <p className="text-sm text-muted-foreground">No worksheet history.</p> : worksheetHistory.map(entry => <details key={entry.id} className="rounded border p-3 text-sm"><summary>Version {entry.snapshot?.terms?.worksheetVersion} · {formatDate(entry.occurredAt)}</summary><pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(entry.snapshot, null, 2)}</pre></details>)}
-            </CardContent>
-          </Card>
-          {/* Approvals Timeline */}
-          {deal.approvals && deal.approvals.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Approval History</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {deal.approvals.map((approval) => (
-                    <div key={approval.id} className="flex gap-4 items-start">
-                      <div className={`h-8 w-8 rounded-full flex items-center justify-center ${
-                        approval.decision === 'approved' ? 'bg-green-100' : 'bg-red-100'
-                      }`}>
-                        {approval.decision === 'approved' ? (
-                          <CheckCircle className="h-4 w-4 text-green-600" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-red-600" />
-                        )}
+                <Panel className="divide-y">
+                  {dealChecklist.map(item => (
+                    <div key={item.label} className="flex min-w-0 items-start justify-between gap-4 px-4 py-2.5">
+                      <div className="min-w-0">
+                        <TitleLine as="p" tone={item.complete ? 'ok' : 'warn'} status={item.complete ? 'Complete' : 'Open'} className="text-sm font-medium">
+                          {item.label}
+                        </TitleLine>
+                        <p className="break-words pl-4 text-xs text-muted-foreground">{item.detail}</p>
                       </div>
-                      <div>
-                        <p className="font-medium capitalize">{approval.decision}</p>
-                        <p className="text-sm text-muted-foreground">
-                          by {approval.approver?.name || 'Unknown'} on {formatDate(approval.approvalDate)}
-                        </p>
-                        {approval.notes && <p className="text-sm mt-1">{approval.notes}</p>}
-                      </div>
+                      <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground">{item.complete ? 'Done' : 'Open'}</span>
                     </div>
                   ))}
+                </Panel>
+                {deal.status !== 'delivered' && checklistComplete < dealChecklist.length && <Notice tone="warn" role="status">Incomplete deal jacket</Notice>}
+              </div>
+            </DeskSection>
+
+            {deal.approvals && deal.approvals.length > 0 && (
+              <DeskSection title="Approval history" count={deal.approvals.length}>
+                <Panel className="divide-y">
+                  {deal.approvals.map(approval => (
+                    <div key={approval.id} className="min-w-0 px-4 py-3">
+                      <TitleLine as="p" tone={approval.decision === 'approved' ? 'ok' : 'bad'} className="text-sm font-medium capitalize">
+                        {approval.decision}
+                      </TitleLine>
+                      <p className="pl-4 text-xs text-muted-foreground">
+                        {approval.approver?.name || 'Unknown'} · {formatDate(approval.approvalDate)}
+                      </p>
+                      {approval.notes && <p className="mt-1 break-words pl-4 text-sm">{approval.notes}</p>}
+                    </div>
+                  ))}
+                </Panel>
+              </DeskSection>
+            )}
+
+            <DeskSection title="Worksheet versions" count={worksheetHistory.length}>
+              {worksheetHistory.length === 0 ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">No worksheet history</p>
+              ) : (
+                <Panel className="divide-y">
+                  {worksheetHistory.map(entry => (
+                    <details key={entry.id} className="min-w-0 text-sm">
+                      <summary className="flex cursor-pointer list-none items-baseline justify-between gap-4 px-4 py-2.5 [&::-webkit-details-marker]:hidden">
+                        <span className="font-medium">Version {entry.snapshot?.terms?.worksheetVersion}</span>
+                        <span className="text-xs tabular-nums text-muted-foreground">{formatDate(entry.occurredAt)}</span>
+                      </summary>
+                      <pre className="mx-4 mb-3 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/50 p-2 font-mono text-[11px] text-muted-foreground">{JSON.stringify(entry.snapshot, null, 2)}</pre>
+                    </details>
+                  ))}
+                </Panel>
+              )}
+            </DeskSection>
+          </div>
+
+          <aside className="min-w-0 space-y-8 lg:sticky lg:top-6 lg:self-start">
+            <DeskSection
+              title="Customer"
+              actions={deal.lead ? <Link href={`${basePath}/platform/crm/${deal.lead.id}`} className="text-xs font-medium text-muted-foreground hover:text-foreground">Open customer record</Link> : undefined}
+            >
+              {deal.lead ? (
+                <Facts items={[
+                  { label: 'Name', value: `${deal.lead.firstName} ${deal.lead.lastName}` },
+                  { label: 'Sales rep', value: deal.salesperson?.name || 'Unassigned' },
+                ]} />
+              ) : (
+                <p className="py-2 text-sm text-muted-foreground">No customer attached</p>
+              )}
+            </DeskSection>
+
+            <DeskSection
+              title="Vehicle"
+              actions={<Link href={`${basePath}/platform/vehicles`} className="text-xs font-medium text-muted-foreground hover:text-foreground">See inventory</Link>}
+            >
+              {deal.vehicle ? (
+                <Facts items={[
+                  { label: 'Vehicle', value: `${deal.vehicle.year} ${deal.vehicle.make} ${deal.vehicle.model}` },
+                  deal.vehicle.trim ? { label: 'Trim', value: deal.vehicle.trim } : null,
+                  { label: 'Stock #', value: <Code className="text-foreground">{deal.vehicle.stockNumber}</Code> },
+                  { label: 'VIN', value: <Code className="break-all text-foreground">{deal.vehicle.vin}</Code> },
+                  { label: 'Color', value: deal.vehicle.color || '-' },
+                  { label: 'MSRP', value: formatCurrency(deal.vehicle.price), mono: true },
+                ]} />
+              ) : (
+                <p className="py-2 text-sm text-muted-foreground">No vehicle attached</p>
+              )}
+            </DeskSection>
+
+            <DeskSection title="Trade and down">
+              {savedPricing ? (
+                <Facts items={[
+                  { label: 'Trade-in credit', value: formatCurrency(savedPricing.tradeInValueCents / 100), mono: true },
+                  { label: 'Planned down payment', value: formatCurrency(savedPricing.downPaymentCents / 100), mono: true },
+                  { label: 'Structure', value: <span className="capitalize">{deal.structureType || 'cash'}</span> },
+                ]} />
+              ) : (
+                <p className="py-2 text-sm text-muted-foreground">No saved worksheet</p>
+              )}
+            </DeskSection>
+
+            <DeskSection
+              title="Finance evidence"
+              actions={<Link href={`${basePath}/platform/finance`} className="text-xs font-medium text-muted-foreground hover:text-foreground">Open finance</Link>}
+            >
+              <div className="space-y-3">
+                <div className="divide-y text-sm">
+                  <div className="py-2">
+                    <TitleLine as="p" tone={finance?.prerequisites?.current ? 'ok' : 'warn'} className="font-medium">
+                      F&I documents · {finance?.prerequisites?.current ? 'Current' : 'Review required'}
+                    </TitleLine>
+                    {finance?.prerequisites?.issue && <p className="break-words pl-4 text-xs text-muted-foreground">{finance.prerequisites.issue}</p>}
+                  </div>
+                  <div className="py-2">
+                    <TitleLine as="p" tone={finance?.fundingCurrent ? 'ok' : 'warn'} className="font-medium">
+                      Funding · {finance?.fundingCurrent ? 'Current' : 'Reconfirmation required'}
+                    </TitleLine>
+                    <p className="pl-4 text-xs text-muted-foreground">Worksheet version {finance?.fundingWorksheetVersion ?? 'none'}</p>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          )}
+                <div className="border-t pt-1">
+                  <FinanceEvidenceHistory dealId={deal.id} aggregateType="Deal" label="Deal history" />
+                </div>
+              </div>
+            </DeskSection>
+          </aside>
         </div>
 
-        {/* Right Column - Deal Summary */}
-        <div>
-          <Card className="sticky top-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5" />
-                Deal Summary
-              </CardTitle>
-            </CardHeader>
-            {savedPricing && <CardContent className="space-y-4">
-              <p className="text-xs text-muted-foreground">Saved worksheet version {deal.worksheetVersion}</p>
-              <dl className="space-y-2 text-sm">
-                {([
-                  ['Vehicle price', savedPricing.vehiclePriceCents],
-                  ['Fees', savedPricing.feesCents],
-                  ['Products', savedPricing.productsCents],
-                  ['Rebates', -savedPricing.rebatesCents],
-                  ['Subtotal before tax / trade', savedPricing.subtotalCents],
-                  ['Tax', savedPricing.taxAmountCents],
-                  ['Trade-in credit', -savedPricing.tradeInValueCents],
-                ] as const).map(([label, cents]) => <div key={label} className="flex justify-between gap-3"><dt className="text-muted-foreground">{label}</dt><dd className="tabular-nums">{formatCurrency(cents / 100)}</dd></div>)}
-                <div className="flex justify-between gap-3 border-t pt-3 text-base font-semibold"><dt>Total price</dt><dd>{formatCurrency(savedPricing.totalPriceCents / 100)}</dd></div>
-                <div className="flex justify-between gap-3"><dt>Planned down payment</dt><dd>{formatCurrency(savedPricing.downPaymentCents / 100)}</dd></div>
-                <div className="flex justify-between gap-3"><dt>Amount financed</dt><dd>{formatCurrency(savedPricing.financingAmountCents / 100)}</dd></div>
-                <div className="flex justify-between gap-3"><dt>Cash payable</dt><dd>{formatCurrency(savedPricing.cashPayableCents / 100)}</dd></div>
-              </dl>
-              <p className="text-xs text-muted-foreground">Due at signing</p>
-              {savedPricing.loanTerm > 0 && <div className="rounded-lg bg-muted p-4">
-                <p className="text-sm text-muted-foreground">{savedPricing.apr}% APR · {savedPricing.loanTerm} months · estimated payment</p>
-                <p className="text-2xl font-semibold tabular-nums">{formatCurrency(savedPricing.monthlyPaymentCents / 100)}/mo</p>
-              </div>}
-              {deal.saleDate && <p className="text-sm">Sale completed {formatDate(deal.saleDate)}</p>}
-            </CardContent>}
-          </Card>
-        </div>
+        <OperatorActionDialog
+          open={acceptanceDialogOpen}
+          title="Record customer acceptance"
+          description="Record how the customer accepted the presented worksheet."
+          fields={[{ name: 'acknowledgment', label: 'Acceptance method or reference', required: true, maxLength: 1000, placeholder: 'For example: in-person verbal acknowledgment or signed document reference' }]}
+          values={acceptanceValues}
+          error={acceptanceError}
+          busy={updating}
+          submitLabel="Record acceptance"
+          onValuesChange={values => setAcceptanceValues({ acknowledgment: values.acknowledgment || '' })}
+          onSubmit={submitWorksheetAcceptance}
+          onOpenChange={handleAcceptanceDialogOpenChange}
+        />
+        <OperatorActionDialog
+          open={Boolean(approvalIntent)}
+          title={approvalIntent?.title || 'Update deal'}
+          fields={[{ name: 'notes', label: 'Approval notes (optional)', type: 'textarea', required: false, placeholder: 'Optional notes for the deal record' }]}
+          values={{ notes: approvalIntent?.notes || '' }}
+          error={approvalError}
+          busy={updating}
+          submitLabel={approvalIntent?.submitLabel || 'Confirm transition'}
+          onValuesChange={values => setApprovalIntent(current => current ? { ...current, notes: values.notes || '' } : current)}
+          onSubmit={submitApprovalNotes}
+          onOpenChange={handleApprovalNotesOpenChange}
+        />
+        <OperatorActionDialog
+          open={reopenDialogOpen}
+          title="Reopen worksheet"
+          description="The deal returns to pencil and its lender selection is cleared."
+          fields={[{ name: 'reason', label: 'Reopen reason', required: true, maxLength: 1000, placeholder: 'Why does this worksheet need to be reopened?' }]}
+          values={reopenValues}
+          error={reopenError}
+          busy={updating}
+          submitLabel="Reopen worksheet"
+          onValuesChange={values => setReopenValues({ reason: values.reason || '' })}
+          onSubmit={submitReopenWorksheet}
+          onOpenChange={handleReopenDialogOpenChange}
+        />
       </div>
-      <OperatorActionDialog
-        open={acceptanceDialogOpen}
-        title="Record customer acceptance"
-        description="Record how the customer accepted the presented worksheet."
-        fields={[{ name: 'acknowledgment', label: 'Acceptance method or reference', required: true, maxLength: 1000, placeholder: 'For example: in-person verbal acknowledgment or signed document reference' }]}
-        values={acceptanceValues}
-        error={acceptanceError}
-        busy={updating}
-        submitLabel="Record acceptance"
-        onValuesChange={values => setAcceptanceValues({ acknowledgment: values.acknowledgment || '' })}
-        onSubmit={submitWorksheetAcceptance}
-        onOpenChange={handleAcceptanceDialogOpenChange}
-      />
-      <OperatorActionDialog
-        open={Boolean(approvalIntent)}
-        title={approvalIntent?.title || 'Update deal'}
-        fields={[{ name: 'notes', label: 'Approval notes (optional)', type: 'textarea', required: false, placeholder: 'Optional notes for the deal record' }]}
-        values={{ notes: approvalIntent?.notes || '' }}
-        error={approvalError}
-        busy={updating}
-        submitLabel={approvalIntent?.submitLabel || 'Confirm transition'}
-        onValuesChange={values => setApprovalIntent(current => current ? { ...current, notes: values.notes || '' } : current)}
-        onSubmit={submitApprovalNotes}
-        onOpenChange={handleApprovalNotesOpenChange}
-      />
-      <OperatorActionDialog
-        open={reopenDialogOpen}
-        title="Reopen worksheet"
-        description="The deal returns to pencil and its lender selection is cleared."
-        fields={[{ name: 'reason', label: 'Reopen reason', required: true, maxLength: 1000, placeholder: 'Why does this worksheet need to be reopened?' }]}
-        values={reopenValues}
-        error={reopenError}
-        busy={updating}
-        submitLabel="Reopen worksheet"
-        onValuesChange={values => setReopenValues({ reason: values.reason || '' })}
-        onSubmit={submitReopenWorksheet}
-        onOpenChange={handleReopenDialogOpenChange}
-      />
-    </div>
     </PageContainer>
   )
 }

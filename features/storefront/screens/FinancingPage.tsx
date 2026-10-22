@@ -1,24 +1,33 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { ChevronDown } from 'lucide-react'
 import { fetchGraphQL } from '@/features/storefront/lib/data/graphql-client'
 import { GET_VEHICLE_BY_ID } from '@/features/storefront/lib/data/queries'
 import type { Vehicle } from '@/features/storefront/lib/types'
 import { submitStorefrontFinancing } from '../actions/submissions'
-import { Button } from '../components/Button'
 import { Container } from '../components/Container'
 import { PageHeader } from '../components/PageHeader'
 import { useStorefrontBusiness } from '../components/StorefrontBusinessProvider'
 import { currencySymbol, formatPrice, storefrontCurrency, vehicleTitle } from '../lib/format'
-import { primaryVehicleImage, vehicleImageUrl } from '../lib/images'
-import { VehiclePhotoPlaceholder } from '../components/VehiclePhotoPlaceholder'
 import { customerRequestReference } from '../lib/customerRequests'
 import { FINANCING_ANNUAL_INCOME_INPUT, isFinancingSubmitDisabled } from '../lib/financingForm'
 import { buildAmortizationSchedule, calculateFinancingEstimate, parseFinancingAmount } from '../lib/data/financing-calculator'
 import { classifyVehicleDetailResponse } from '../lib/data/vehicle-detail-response'
+import {
+  Field,
+  FormSection,
+  MobileSummary,
+  Notice,
+  PILL_TARGET,
+  RequestLayout,
+  WRAP_TRACK,
+  Sticker,
+  StickerVehicle,
+  type StickerRowData,
+} from '../components/forms/RequestForm'
 
 type SelectedVehicleLookup =
   | { status: 'none' }
@@ -28,6 +37,7 @@ type SelectedVehicleLookup =
 const LOAN_TERMS = [36, 48, 60, 72, 84]
 const DEFAULT_INTEREST_RATE = 7.5
 const DEFAULT_DOWN_PAYMENT_PERCENT = 10
+const DOWN_PAYMENT_PRESETS = [0, 10, 15, 20, 25]
 
 function FinancingContent() {
   const business = useStorefrontBusiness()
@@ -211,192 +221,247 @@ function FinancingContent() {
     }
   }
 
+  const setDownPaymentPercent = (percent: number) => {
+    setFormData((prev) => {
+      const price = parseFinancingAmount(prev.vehiclePrice)
+      return {
+        ...prev,
+        downPaymentPercent: percent,
+        ...(price.status === 'valid' && price.value > 0
+          ? { downPayment: ((price.value * percent) / 100).toFixed(2) }
+          : {}),
+      }
+    })
+  }
+
+  const estimateReadout = calculation.status === 'ready' && calculatedResults ? (
+    <div className="px-4 pb-4 pt-5">
+      <p className="sf-eyebrow">Monthly payment</p>
+      <p className="sf-price mt-2 text-[length:var(--sf-text-display)]" aria-live="polite">
+        {money(calculatedResults.monthlyPayment)}
+      </p>
+      <p className="sf-figure sf-muted mt-2 text-[var(--sf-text-sm)]">
+        {formData.loanTerm} mo / {formData.interestRate}% APR
+      </p>
+    </div>
+  ) : (
+    <div className="px-4 py-5">
+      <p className="sf-eyebrow">Monthly payment</p>
+      {calculation.status === 'no-loan' ? (
+        <p role="status" className="sf-title-line mt-3 text-[var(--sf-text-sm)]">
+          <span className="sf-dot" data-tone="ok" aria-hidden="true" />
+          <span>Down payment and trade-in cover the full price.</span>
+        </p>
+      ) : calculation.status === 'invalid-price' || calculation.status === 'invalid-input' ? (
+        <p role="alert" className="sf-title-line mt-3 text-[var(--sf-text-sm)]">
+          <span className="sf-dot" data-tone="bad" aria-hidden="true" />
+          <span>Check the amounts entered.</span>
+        </p>
+      ) : (
+        <p role="status" className="sf-faint mt-3 text-[var(--sf-text-sm)]">Enter a vehicle price.</p>
+      )}
+    </div>
+  )
+
+  const estimateRows: StickerRowData[] = calculatedResults && (calculation.status === 'ready' || calculation.status === 'no-loan')
+    ? [
+        { label: 'Vehicle price', value: wholeMoney(calculatedResults.vehiclePrice) },
+        { label: 'Down payment', value: `−${wholeMoney(calculatedResults.downPayment)}` },
+        ...(calculatedResults.tradeInValue > 0
+          ? [{ label: 'Trade-in', value: `−${wholeMoney(calculatedResults.tradeInValue)}` }]
+          : []),
+        { label: 'Loan amount', value: wholeMoney(calculatedResults.loanAmount), strong: true },
+        ...(calculation.status === 'ready'
+          ? [
+              { label: 'Total interest', value: `+${money(calculatedResults.totalInterest)}` },
+              { label: 'Total payment', value: money(calculatedResults.totalPayment), strong: true },
+            ]
+          : []),
+      ]
+    : []
+
+  const summary = (
+    <Sticker
+      title="Payment estimate"
+      meta={`${formData.loanTerm} mo`}
+      rows={estimateRows}
+      footer={<p className="sf-faint text-[var(--sf-text-xs)]">Estimate. Actual rates and terms may differ.</p>}
+    >
+      {selectedVehicle && <StickerVehicle vehicle={selectedVehicle} label={`Vehicle / ${selectedPriceLabel}`} />}
+      <div className={estimateRows.length ? 'border-b border-dashed' : undefined} style={{ borderColor: 'var(--sf-rule)' }}>
+        {estimateReadout}
+      </div>
+    </Sticker>
+  )
+
+  const roundedPercent = Math.round(formData.downPaymentPercent * 10) / 10
+
   return (
     <>
-      <PageHeader
-        eyebrow="Financing"
-        title="Estimate your monthly payment"
-        description="Adjust the loan terms to see how price, down payment, and term affect your monthly cost and total interest."
-      />
+      <PageHeader eyebrow="Financing" title="Payment estimate" />
 
-      <Container className="py-[var(--sf-space-2xl)]">
-        {vehicleId && currentVehicleLookup.status === 'loading' && (
-          <p role="status" className="mb-[var(--sf-space-md)]">Loading vehicle…</p>
-        )}
-        {vehicleId && currentVehicleLookup.status === 'not-found' && (
-          <p role="status" className="sf-card p-4 mb-[var(--sf-space-md)]">
-            This vehicle is no longer available. <Link href="/inventory" className="underline underline-offset-2">Browse inventory</Link>
-          </p>
-        )}
-        {vehicleId && currentVehicleLookup.status === 'error' && (
-          <div role="alert" className="sf-card p-4 mb-[var(--sf-space-md)]">
-            <p>This vehicle couldn&apos;t be loaded.</p>
-            <button type="button" onClick={retryVehicleLookup} className="sf-btn sf-btn-ghost mt-3">Retry</button>
-          </div>
-        )}
-        {selectedVehicle && (
-          <div className="sf-card mb-[var(--sf-space-lg)] grid overflow-hidden sm:grid-cols-[13rem_1fr]">
-            <div className="relative min-h-44 bg-[var(--sf-paper-2)]">
-              {vehicleImageUrl(primaryVehicleImage(selectedVehicle.images)) ? (
-                <Image
-                  src={vehicleImageUrl(primaryVehicleImage(selectedVehicle.images))!}
-                  alt={vehicleTitle(selectedVehicle)}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 640px) 100vw, 208px"
-                  priority
-                  unoptimized
-                />
-              ) : (
-                <VehiclePhotoPlaceholder />
-              )}
-            </div>
-            <div className="p-[var(--sf-space-md)]">
-              <p className="sf-eyebrow mb-2">Financing this vehicle</p>
-              <h2 className="sf-display text-[length:var(--sf-text-xl)]">{vehicleTitle(selectedVehicle)}</h2>
-              <p className="mt-2 text-[var(--sf-text-sm)] text-[var(--sf-ink-2)]">
-                Stock {selectedVehicle.stockNumber} · {selectedPriceLabel}
-              </p>
-              <Link href={`/inventory/${selectedVehicle.id}`} className="mt-4 inline-block text-sm font-semibold text-[var(--sf-accent)]">
-                Review vehicle details →
+      <RequestLayout summary={summary}>
+        <div className="space-y-[var(--sf-space-xl)]">
+          {vehicleId && currentVehicleLookup.status === 'loading' && (
+            <Notice role="status">Loading vehicle…</Notice>
+          )}
+          {vehicleId && currentVehicleLookup.status === 'not-found' && (
+            <Notice tone="warn" role="status">
+              This vehicle is no longer available.{' '}
+              <Link href="/inventory" className="sf-link">Browse inventory</Link>
+            </Notice>
+          )}
+          {vehicleId && currentVehicleLookup.status === 'error' && (
+            <Notice tone="bad">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span>This vehicle couldn&apos;t be loaded.</span>
+                <span className="sf-track">
+                  <button type="button" onClick={retryVehicleLookup} className={`sf-pill sf-pill-raised ${PILL_TARGET}`}>Retry</button>
+                </span>
+              </div>
+            </Notice>
+          )}
+
+          <FormSection
+            step="01"
+            title="Loan"
+            first
+            aside={selectedVehicle ? (
+              <Link href={`/inventory/${selectedVehicle.id}`} className="sf-link shrink-0 text-[var(--sf-text-sm)]">
+                Vehicle details
               </Link>
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-[var(--sf-space-xl)]">
-          <div className="space-y-[var(--sf-space-lg)]">
-            <div className="sf-card p-[var(--sf-space-lg)]">
-              <h2 className="sf-display text-[length:var(--sf-text-xl)] mb-5">Loan details</h2>
-
-              <div className="mb-4">
-                <label htmlFor="financing-vehicle-price" className="sf-eyebrow block mb-2">Vehicle price</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2.5" style={{ color: 'var(--sf-ink-3)' }}>{symbol}</span>
-                  <input
-                    id="financing-vehicle-price"
-                    type="number"
-                    value={formData.vehiclePrice}
-                    onChange={(e) => {
-                      const value = e.target.value
-                      const amount = parseFinancingAmount(value)
-                      setFormData((prev) => ({
-                        ...prev,
-                        vehiclePrice: value,
-                        ...(amount.status === 'valid' && amount.value > 0
-                          ? { downPayment: ((amount.value * prev.downPaymentPercent) / 100).toFixed(2) }
-                          : {}),
-                      }))
-                    }}
-                    className="sf-input pl-7"
-                    placeholder="35000"
-                    step="0.01"
-                    min="0"
-                  />
-                </div>
-                {invalidPriceFromLink && (
-                  <p role="alert" className="text-[var(--sf-text-xs)] mt-2">
-                    Enter a vehicle price.
-                  </p>
-                )}
+            ) : undefined}
+          >
+            <div className="space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Vehicle price" htmlFor="financing-vehicle-price">
+                  <div className="relative">
+                    <span className="sf-figure sf-faint pointer-events-none absolute left-3 top-1/2 -translate-y-1/2">{symbol}</span>
+                    <input
+                      id="financing-vehicle-price"
+                      type="number"
+                      inputMode="decimal"
+                      value={formData.vehiclePrice}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        const amount = parseFinancingAmount(value)
+                        setFormData((prev) => ({
+                          ...prev,
+                          vehiclePrice: value,
+                          ...(amount.status === 'valid' && amount.value > 0
+                            ? { downPayment: ((amount.value * prev.downPaymentPercent) / 100).toFixed(2) }
+                            : {}),
+                        }))
+                      }}
+                      className="sf-input sf-figure pl-8"
+                      placeholder="35000"
+                      step="0.01"
+                      min="0"
+                      aria-invalid={invalidPriceFromLink || undefined}
+                    />
+                  </div>
+                  {invalidPriceFromLink && (
+                    <p role="alert" className="sf-error">Enter a vehicle price.</p>
+                  )}
+                </Field>
+                <Field label="APR" htmlFor="financing-apr">
+                  <div className="relative">
+                    <input
+                      id="financing-apr"
+                      type="number"
+                      inputMode="decimal"
+                      value={formData.interestRate}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, interestRate: parseFloat(e.target.value) || 0 }))}
+                      className="sf-input sf-figure pr-8"
+                      placeholder="7.5"
+                      step="0.1"
+                      min="0"
+                      max="30"
+                    />
+                    <span className="sf-figure sf-faint pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">%</span>
+                  </div>
+                </Field>
               </div>
 
-              <div className="mb-4">
-                <div className="flex justify-between mb-2">
-                  <label htmlFor="financing-down-payment" className="sf-eyebrow">Down payment</label>
-                  <span className="text-[var(--sf-text-sm)]" style={{ color: 'var(--sf-ink-2)' }}>
-                    {formData.downPaymentPercent.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="relative mb-2">
-                  <span className="absolute left-3 top-2.5" style={{ color: 'var(--sf-ink-3)' }}>{symbol}</span>
-                  <input
-                    id="financing-down-payment"
-                    type="number"
-                    value={formData.downPayment}
-                    onChange={(e) => handleDownPaymentChange(e.target.value)}
-                    className="sf-input pl-7"
-                    placeholder="3500"
-                    step="100"
-                    min="0"
-                  />
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="50"
-                  step="1"
-                  value={formData.downPaymentPercent}
-                  onChange={(e) => {
-                    const percent = parseFloat(e.target.value)
-                    setFormData((prev) => {
-                      const price = parseFinancingAmount(prev.vehiclePrice)
-                      return {
-                        ...prev,
-                        downPaymentPercent: percent,
-                        ...(price.status === 'valid' && price.value > 0
-                          ? { downPayment: ((price.value * percent) / 100).toFixed(2) }
-                          : {}),
-                      }
-                    })
-                  }}
-                  className="w-full"
-                  aria-label="Down payment percentage"
-                />
-                <div className="flex justify-between text-[var(--sf-text-xs)] mt-1" style={{ color: 'var(--sf-ink-3)' }}>
-                  <span>0%</span>
-                  <span>50%</span>
-                </div>
-              </div>
-
-              <div className="mb-4">
-                <label htmlFor="financing-apr" className="sf-eyebrow block mb-2">Interest rate (APR)</label>
-                <div className="relative">
-                  <input
-                    id="financing-apr"
-                    type="number"
-                    value={formData.interestRate}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, interestRate: parseFloat(e.target.value) || 0 }))}
-                    className="sf-input pr-8"
-                    placeholder="7.5"
-                    step="0.1"
-                    min="0"
-                    max="30"
-                  />
-                  <span className="absolute right-3 top-2.5" style={{ color: 'var(--sf-ink-3)' }}>%</span>
-                </div>
-              </div>
-
-              <div className="mb-4">
-                <p id="financing-loan-term" className="sf-eyebrow block mb-2">Loan term</p>
-                <div role="group" aria-labelledby="financing-loan-term" className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+              <div>
+                <p id="financing-loan-term" className="sf-label">Term</p>
+                <div role="group" aria-labelledby="financing-loan-term" className="sf-track sf-track-block">
                   {LOAN_TERMS.map((term) => (
                     <button
                       key={term}
                       type="button"
                       onClick={() => setFormData((prev) => ({ ...prev, loanTerm: term }))}
-                      className={`sf-btn text-sm flex-col py-3 ${
-                        formData.loanTerm === term ? 'sf-btn-primary' : 'sf-btn-ghost'
-                      }`}
+                      className="sf-pill min-h-12 gap-1 px-2"
                       aria-pressed={formData.loanTerm === term}
                     >
-                      <span className="font-semibold">{term}</span>
-                      <span className="text-[10px] opacity-75">mos</span>
+                      <span className="sf-figure text-[var(--sf-text-lg)]">{term}</span>
+                      <span className="sf-eyebrow tracking-[0.06em] max-[379px]:hidden">mo</span>
                     </button>
                   ))}
                 </div>
               </div>
 
               <div>
-                <label htmlFor="financing-trade-in" className="sf-eyebrow block mb-2">Your estimated trade-in amount</label>
+                <div className="flex items-baseline justify-between gap-3">
+                  <label htmlFor="financing-down-payment" className="sf-label">Down payment</label>
+                  <span className="sf-figure sf-muted text-[var(--sf-text-sm)]">{formData.downPaymentPercent.toFixed(1)}%</span>
+                </div>
+                <div role="group" aria-label="Down payment share" className="sf-track sf-track-block mb-3">
+                  {DOWN_PAYMENT_PRESETS.map((percent) => (
+                    <button
+                      key={percent}
+                      type="button"
+                      onClick={() => setDownPaymentPercent(percent)}
+                      className="sf-pill min-h-12 px-2"
+                      aria-pressed={roundedPercent === percent}
+                    >
+                      <span className="sf-figure text-[var(--sf-text-lg)]">{percent}</span>
+                      <span className="sf-figure sf-faint text-[var(--sf-text-xs)]">%</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,14rem)_1fr] sm:items-center">
+                  <div className="relative">
+                    <span className="sf-figure sf-faint pointer-events-none absolute left-3 top-1/2 -translate-y-1/2">{symbol}</span>
+                    <input
+                      id="financing-down-payment"
+                      type="number"
+                      inputMode="decimal"
+                      value={formData.downPayment}
+                      onChange={(e) => handleDownPaymentChange(e.target.value)}
+                      className="sf-input sf-figure pl-8"
+                      placeholder="3500"
+                      step="100"
+                      min="0"
+                    />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="sf-figure sf-faint text-[var(--sf-text-xs)]">0%</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="50"
+                      step="1"
+                      value={formData.downPaymentPercent}
+                      onChange={(e) => setDownPaymentPercent(parseFloat(e.target.value))}
+                      className="h-11 w-full min-w-0 accent-[var(--sf-accent)]"
+                      aria-label="Down payment percentage"
+                    />
+                    <span className="sf-figure sf-faint text-[var(--sf-text-xs)]">50%</span>
+                  </div>
+                </div>
+              </div>
+
+              <Field label="Trade-in amount" htmlFor="financing-trade-in" className="sm:max-w-sm">
                 <div className="relative">
-                  <span className="absolute left-3 top-2.5" style={{ color: 'var(--sf-ink-3)' }}>{symbol}</span>
+                  <span className="sf-figure sf-faint pointer-events-none absolute left-3 top-1/2 -translate-y-1/2">{symbol}</span>
                   <input
                     id="financing-trade-in"
                     type="number"
+                    inputMode="decimal"
                     value={formData.tradeInValue}
                     onChange={(e) => setFormData((prev) => ({ ...prev, tradeInValue: e.target.value }))}
-                    className="sf-input pl-7"
+                    className="sf-input sf-figure pl-8"
                     placeholder="5000"
                     step="100"
                     min="0"
@@ -404,204 +469,187 @@ function FinancingContent() {
                 </div>
                 <Link
                   href={selectedVehicle ? `/trade-in?vehicleId=${selectedVehicle.id}` : '/trade-in'}
-                  className="text-[var(--sf-text-sm)] mt-1 inline-block hover:text-[var(--sf-accent)] transition-colors"
-                  style={{ color: 'var(--sf-accent)' }}
+                  className="sf-link mt-1 inline-flex min-h-11 items-center text-[var(--sf-text-sm)]"
                 >
-                  Request a trade-in review →
+                  Request a trade-in review
                 </Link>
-              </div>
+              </Field>
             </div>
+          </FormSection>
 
-            {calculation.status === 'ready' && calculatedResults && calculatedResults.loanAmount > 0 && (
-              <div className="sf-card p-[var(--sf-space-lg)]">
-                <button
-                  onClick={() => setShowAmortization(!showAmortization)}
-                  className="w-full flex justify-between items-center text-left"
-                >
-                  <h2 className="sf-display text-[length:var(--sf-text-xl)]">Amortization schedule</h2>
-                  <svg
-                    className={`w-5 h-5 transition-transform ${showAmortization ? 'rotate-180' : ''}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
+          <MobileSummary>{summary}</MobileSummary>
 
-                {showAmortization && (
-                  <div className="mt-4 overflow-x-auto">
-                    <table className="w-full text-[var(--sf-text-sm)]">
-                      <thead>
-                        <tr style={{ color: 'var(--sf-ink-3)' }}>
-                          <th className="p-2 text-left sf-eyebrow">Month</th>
-                          <th className="p-2 text-right sf-eyebrow">Payment</th>
-                          <th className="p-2 text-right sf-eyebrow">Principal</th>
-                          <th className="p-2 text-right sf-eyebrow">Interest</th>
-                          <th className="p-2 text-right sf-eyebrow">Balance</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {amortizationSchedule.map((row, idx) => {
-                          if (row.separator) {
-                            return (
-                              <tr key={idx}>
-                                <td colSpan={5} className="p-2 text-center" style={{ color: 'var(--sf-ink-3)' }}>
-                                  …
-                                </td>
-                              </tr>
-                            )
-                          }
+          {calculation.status === 'ready' && calculatedResults && calculatedResults.loanAmount > 0 && (
+            <section className="border-t pt-[var(--sf-space-md)]" style={{ borderColor: 'var(--sf-rule)' }}>
+              <button
+                type="button"
+                onClick={() => setShowAmortization(!showAmortization)}
+                aria-expanded={showAmortization}
+                className="flex min-h-11 w-full items-center justify-between gap-4 text-left"
+              >
+                <span className="flex items-baseline gap-3">
+                  <span className="sf-figure sf-faint text-[var(--sf-text-sm)]">02</span>
+                  <span className="sf-heading text-[length:var(--sf-text-xl)]">Amortization</span>
+                </span>
+                <ChevronDown
+                  className={`size-5 shrink-0 transition-transform ${showAmortization ? 'rotate-180' : ''}`}
+                  aria-hidden="true"
+                />
+              </button>
+
+              {showAmortization && (
+                <div className="sf-well mt-4 overflow-x-auto">
+                  <table className="sf-figure w-full min-w-[30rem] text-[var(--sf-text-sm)]">
+                    <thead>
+                      <tr>
+                        <th className="sf-eyebrow px-3 py-2.5 text-left font-medium">Month</th>
+                        <th className="sf-eyebrow px-3 py-2.5 text-right font-medium">Payment</th>
+                        <th className="sf-eyebrow px-3 py-2.5 text-right font-medium">Principal</th>
+                        <th className="sf-eyebrow px-3 py-2.5 text-right font-medium">Interest</th>
+                        <th className="sf-eyebrow px-3 py-2.5 text-right font-medium">Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {amortizationSchedule.map((row, idx) => {
+                        if (row.separator) {
                           return (
                             <tr key={idx} className="border-t" style={{ borderColor: 'var(--sf-rule)' }}>
-                              <td className="p-2">{row.month}</td>
-                              <td className="p-2 text-right">{money(row.payment)}</td>
-                              <td className="p-2 text-right">{money(row.principal)}</td>
-                              <td className="p-2 text-right">{money(row.interest)}</td>
-                              <td className="p-2 text-right">{money(row.balance)}</td>
+                              <td colSpan={5} className="sf-faint px-3 py-1.5 text-center">…</td>
                             </tr>
                           )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-[var(--sf-space-lg)]">
-            <div className="sf-card p-[var(--sf-space-lg)]">
-              <p className="sf-eyebrow mb-2">Estimated monthly payment</p>
-              {calculation.status === 'ready' && calculatedResults ? (
-                <>
-                  <div className="sf-display text-[length:var(--sf-text-display)]" style={{ color: 'var(--sf-accent)' }}>
-                    {money(calculatedResults.monthlyPayment)}
-                  </div>
-                  <p className="text-[var(--sf-text-sm)] mt-2" style={{ color: 'var(--sf-ink-3)' }}>
-                    per month for {formData.loanTerm} months
-                  </p>
-                </>
-              ) : calculation.status === 'no-loan' ? (
-                <p role="status" className="text-[var(--sf-text-sm)]">Your down payment and trade-in cover the full price.</p>
-              ) : calculation.status === 'zero-price' ? (
-                <p role="status" className="text-[var(--sf-text-sm)]">Enter a vehicle price to see a payment.</p>
-              ) : calculation.status === 'invalid-price' || calculation.status === 'invalid-input' ? (
-                <p role="alert" className="text-[var(--sf-text-sm)]">Check the amounts entered.</p>
-              ) : (
-                <p role="status" className="text-[var(--sf-text-sm)]">Enter a vehicle price to see a payment.</p>
+                        }
+                        return (
+                          <tr key={idx} className="border-t" style={{ borderColor: 'var(--sf-rule)' }}>
+                            <td className="px-3 py-2">{row.month}</td>
+                            <td className="px-3 py-2 text-right">{money(row.payment)}</td>
+                            <td className="px-3 py-2 text-right">{money(row.principal)}</td>
+                            <td className="px-3 py-2 text-right">{money(row.interest)}</td>
+                            <td className="px-3 py-2 text-right">{money(row.balance)}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
-            </div>
+            </section>
+          )}
 
-            {calculation.status === 'ready' && calculatedResults && (
-              <div className="sf-card p-[var(--sf-space-lg)]">
-                <h3 className="font-semibold mb-4">Payment breakdown</h3>
-                <div className="space-y-3 text-[var(--sf-text-sm)]">
-                  <Row label="Vehicle price" value={wholeMoney(calculatedResults.vehiclePrice)} />
-                  <Row
-                    label="Down payment"
-                    value={`−${wholeMoney(calculatedResults.downPayment)}`}
-                    accent="good"
-                  />
-                  {calculatedResults.tradeInValue > 0 && (
-                    <Row
-                      label="Trade-in value"
-                      value={`−${wholeMoney(calculatedResults.tradeInValue)}`}
-                      accent="good"
-                    />
-                  )}
-                  <Row label="Loan amount" value={wholeMoney(calculatedResults.loanAmount)} />
-                  <Row
-                    label="Total interest"
-                    value={`+${money(calculatedResults.totalInterest)}`}
-                    accent="bad"
-                  />
-                  <hr className="sf-rule" />
-                  <div className="flex justify-between">
-                    <span className="font-semibold">Total payment</span>
-                    <span className="font-bold text-[var(--sf-text-lg)]">
-                      {money(calculatedResults.totalPayment)}
-                    </span>
+          <FormSection step="03" title="Financing request">
+            {applicationStatus === 'success' ? (
+              <div className="space-y-5">
+                <p role="status" className="sf-title-line">
+                  <span className="sf-dot" data-tone="ok" aria-hidden="true" />
+                  <span className="sf-heading text-[length:var(--sf-text-2xl)]">Request received</span>
+                </p>
+                <dl className="sf-spec">
+                  <div>
+                    <dt>Dealer</dt>
+                    <dd>{business.fullName}</dd>
                   </div>
-                </div>
+                  {applicationReference && (
+                    <div>
+                      <dt>Reference</dt>
+                      <dd className="sf-figure">{applicationReference}</dd>
+                    </div>
+                  )}
+                  {selectedVehicle && (
+                    <div>
+                      <dt>Vehicle</dt>
+                      <dd>{vehicleTitle(selectedVehicle)}</dd>
+                    </div>
+                  )}
+                </dl>
+                <nav aria-label="Next" className={`sf-track ${WRAP_TRACK}`}>
+                  <Link
+                    href={selectedVehicle ? `/inventory/${selectedVehicle.id}` : '/inventory'}
+                    className={`sf-pill sf-pill-primary ${PILL_TARGET}`}
+                  >
+                    {selectedVehicle ? 'Return to vehicle' : 'Browse inventory'}
+                  </Link>
+                  <Link
+                    href={selectedVehicle ? `/test-drive?vehicleId=${selectedVehicle.id}` : '/test-drive'}
+                    className={`sf-pill ${PILL_TARGET}`}
+                  >
+                    Test drive
+                  </Link>
+                  <Link href="/account" className={`sf-pill ${PILL_TARGET}`}>Account</Link>
+                </nav>
               </div>
-            )}
-
-            <div className="p-[var(--sf-space-lg)]" style={{ background: 'var(--sf-paper-3)', color: 'var(--sf-accent-ink)' }}>
-              <h3 className="sf-display text-[length:var(--sf-text-xl)] mb-4">Send a financing request</h3>
-
-              {applicationStatus === 'success' ? (
-                <div className="border p-4 text-[var(--sf-text-sm)]" style={{ borderColor: 'rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.08)' }}>
-                  <p className="font-semibold" role="status">Request received by {business.fullName}.</p>
-                  {applicationReference && <p className="mt-1 font-semibold">Reference {applicationReference}</p>}
-                  <p className="mt-1 opacity-85">
-                    A finance manager will review your numbers{selectedVehicle ? ` for the ${vehicleTitle(selectedVehicle)}` : ''} and contact you shortly.
-                  </p>
-                </div>
-              ) : (
-                <form onSubmit={handleApplicationSubmit} className="space-y-3">
+            ) : (
+              <form onSubmit={handleApplicationSubmit} className="grid gap-4 sm:grid-cols-2">
+                <Field label="Full name" htmlFor="financing-full-name" className="sm:col-span-2">
                   <input
+                    id="financing-full-name"
                     type="text"
                     required
+                    autoComplete="name"
                     value={applicationForm.fullName}
                     onChange={(e) => setApplicationForm((prev) => ({ ...prev, fullName: e.target.value }))}
                     className="sf-input"
-                    placeholder="Full name"
-                      aria-label="Full name"
                   />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                </Field>
+                <Field label="Email" htmlFor="financing-email">
+                  <input
+                    id="financing-email"
+                    type="email"
+                    required
+                    autoComplete="email"
+                    value={applicationForm.email}
+                    onChange={(e) => setApplicationForm((prev) => ({ ...prev, email: e.target.value }))}
+                    className="sf-input"
+                  />
+                </Field>
+                <Field label="Phone" htmlFor="financing-phone">
+                  <input
+                    id="financing-phone"
+                    type="tel"
+                    required
+                    autoComplete="tel"
+                    value={applicationForm.phone}
+                    onChange={(e) => setApplicationForm((prev) => ({ ...prev, phone: e.target.value }))}
+                    className="sf-input"
+                  />
+                </Field>
+                <Field label="Employment status" htmlFor="financing-employment">
+                  <select
+                    id="financing-employment"
+                    required
+                    value={applicationForm.employmentStatus}
+                    onChange={(e) => setApplicationForm((prev) => ({ ...prev, employmentStatus: e.target.value }))}
+                    className="sf-input"
+                  >
+                    <option value="">Select</option>
+                    <option value="employed">Employed</option>
+                    <option value="self-employed">Self-employed</option>
+                    <option value="retired">Retired</option>
+                    <option value="student">Student</option>
+                    <option value="other">Other</option>
+                  </select>
+                </Field>
+                <Field label="Annual income" htmlFor="financing-income">
+                  <div className="relative">
+                    <span className="sf-figure sf-faint pointer-events-none absolute left-3 top-1/2 -translate-y-1/2">{symbol}</span>
                     <input
-                      type="email"
-                      required
-                      value={applicationForm.email}
-                      onChange={(e) => setApplicationForm((prev) => ({ ...prev, email: e.target.value }))}
-                      className="sf-input"
-                      placeholder="Email"
-                      aria-label="Email"
-                    />
-                    <input
-                      type="tel"
-                      required
-                      value={applicationForm.phone}
-                      onChange={(e) => setApplicationForm((prev) => ({ ...prev, phone: e.target.value }))}
-                      className="sf-input"
-                      placeholder="Phone"
-                      aria-label="Phone"
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <select
-                      required
-                      value={applicationForm.employmentStatus}
-                      onChange={(e) => setApplicationForm((prev) => ({ ...prev, employmentStatus: e.target.value }))}
-                      className="sf-input"
-                      aria-label="Employment status"
-                    >
-                      <option value="">Employment status</option>
-                      <option value="employed">Employed</option>
-                      <option value="self-employed">Self-employed</option>
-                      <option value="retired">Retired</option>
-                      <option value="student">Student</option>
-                      <option value="other">Other</option>
-                    </select>
-                    <input
+                      id="financing-income"
                       type="number"
+                      inputMode="numeric"
                       required
                       value={applicationForm.annualIncome}
                       onChange={(e) => setApplicationForm((prev) => ({ ...prev, annualIncome: e.target.value }))}
-                      className="sf-input"
-                      placeholder="Annual income"
-                      aria-label="Annual income"
+                      className="sf-input sf-figure pl-8"
                       min={FINANCING_ANNUAL_INCOME_INPUT.min}
                       step={FINANCING_ANNUAL_INCOME_INPUT.step}
                     />
                   </div>
+                </Field>
+                <Field label="Credit range" htmlFor="financing-credit" className="sm:col-span-2">
                   <select
+                    id="financing-credit"
                     required
                     value={applicationForm.creditTier}
                     onChange={(e) => setApplicationForm((prev) => ({ ...prev, creditTier: e.target.value }))}
                     className="sf-input"
-                    aria-label="Credit range"
                   >
                     <option value="">Self-reported credit range</option>
                     <option value="excellent-720-plus">Excellent (720+)</option>
@@ -610,73 +658,61 @@ function FinancingContent() {
                     <option value="rebuilding-under-620">Rebuilding (&lt;620)</option>
                     <option value="unknown">Not sure</option>
                   </select>
-                  <label className="flex items-start gap-2 text-[var(--sf-text-xs)] opacity-85">
-                    <input
-                      type="checkbox"
-                      required
-                      checked={applicationForm.consent}
-                      onChange={(e) => setApplicationForm((prev) => ({ ...prev, consent: e.target.checked }))}
-                      className="mt-0.5"
-                    />
-                    <span>
-                      I agree to be contacted about financing options.
-                    </span>
-                  </label>
+                </Field>
+                <label className="sf-muted flex min-h-11 cursor-pointer items-start gap-3 text-[var(--sf-text-sm)] sm:col-span-2">
                   <input
-                    type="text"
-                    name="website"
-                    value={applicationForm.website}
-                    onChange={(e) => setApplicationForm((prev) => ({ ...prev, website: e.target.value }))}
-                    tabIndex={-1}
-                    autoComplete="off"
-                    className="hidden"
-                    aria-hidden="true"
+                    type="checkbox"
+                    required
+                    checked={applicationForm.consent}
+                    onChange={(e) => setApplicationForm((prev) => ({ ...prev, consent: e.target.checked }))}
+                    className="mt-0.5 size-5 shrink-0 accent-[var(--sf-accent)]"
                   />
-                  {applicationStatus === 'error' && (
-                    <p className="text-[var(--sf-text-sm)] opacity-90" role="alert">
+                  <span>I agree to be contacted about financing options.</span>
+                </label>
+                <input
+                  type="text"
+                  name="website"
+                  value={applicationForm.website}
+                  onChange={(e) => setApplicationForm((prev) => ({ ...prev, website: e.target.value }))}
+                  tabIndex={-1}
+                  autoComplete="off"
+                  className="hidden"
+                  aria-hidden="true"
+                />
+                {applicationStatus === 'error' && (
+                  <div className="sm:col-span-2">
+                    <Notice tone="bad">
                       {applicationError || 'We could not submit your request. Please try again or contact the dealership.'}
-                    </p>
-                  )}
+                    </Notice>
+                  </div>
+                )}
+                <div className="sm:col-span-2">
                   <button
                     type="submit"
                     disabled={isFinancingSubmitDisabled(isApplying)}
-                    className="sf-btn sf-btn-secondary w-full"
+                    className="sf-btn sf-btn-primary w-full sm:w-auto sm:min-w-56"
                   >
                     {isApplying ? 'Sending…' : 'Send financing request'}
                   </button>
-                </form>
-              )}
-            </div>
-
-            <p className="text-[var(--sf-text-xs)] leading-relaxed" style={{ color: 'var(--sf-ink-3)' }}>
-              Payments shown are estimates. Actual rates and terms may differ.
-            </p>
-          </div>
+                </div>
+              </form>
+            )}
+          </FormSection>
         </div>
-      </Container>
+      </RequestLayout>
     </>
-  )
-}
-
-function Row({ label, value, accent }: { label: string; value: string; accent?: 'good' | 'bad' }) {
-  const color =
-    accent === 'good' ? 'oklch(0.5 0.12 145)' : accent === 'bad' ? 'oklch(0.45 0.15 25)' : 'var(--sf-ink)'
-  return (
-    <div className="flex justify-between">
-      <span style={{ color: 'var(--sf-ink-2)' }}>{label}</span>
-      <span className="font-semibold" style={{ color }}>
-        {value}
-      </span>
-    </div>
   )
 }
 
 function FinancingFallback() {
   return (
     <>
-      <PageHeader eyebrow="Financing" title="Estimate your monthly payment" />
-      <Container className="py-[var(--sf-space-2xl)]">
-        <div className="sf-skeleton h-96 rounded-[var(--sf-radius-md)]" />
+      <PageHeader eyebrow="Financing" title="Payment estimate" />
+      <Container className="sf-section">
+        <div className="grid gap-[var(--sf-space-xl)] lg:grid-cols-[minmax(0,1fr)_23rem]">
+          <div className="sf-skeleton h-96" />
+          <div className="sf-skeleton hidden h-80 lg:block" />
+        </div>
       </Container>
     </>
   )

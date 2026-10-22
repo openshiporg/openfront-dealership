@@ -12,10 +12,11 @@ export async function AccountProfilePage() {
 
   return (
     <section>
-      <header className="mb-8 border-b pb-6" style={{ borderColor: 'var(--sf-rule)' }}>
-        <h1 className="sf-display text-[length:var(--sf-text-2xl)]">Profile</h1>
+      <header className="border-b pb-[var(--sf-space-md)]" style={{ borderColor: 'var(--sf-rule)' }}>
+        <p className="sf-eyebrow">Account</p>
+        <h1 className="sf-display mt-3 text-[length:var(--sf-text-display)]">Profile</h1>
       </header>
-      <div className="space-y-4">
+      <div>
         <ProfileName customer={customer} />
         <ProfileEmail customer={customer} />
         <ProfilePhone customer={customer} />

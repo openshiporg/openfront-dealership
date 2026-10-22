@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react'
 import { CheckCircle2, Code2, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
@@ -13,6 +12,7 @@ import {
 } from '@/components/ui/select'
 import { sanitizeStoreLogoSvg } from '@/features/lib/sanitize-store-logo'
 import { LOGO_ICONS } from '@/features/platform/store-settings/lib/icon-registry'
+import { Pill, Track } from '@/features/platform/components/desk'
 
 interface LogoPickerProps {
   value: string
@@ -20,7 +20,7 @@ interface LogoPickerProps {
   onChange: (svg: string) => void
 }
 
-const triggerClassName = 'h-9 w-full justify-between border-0 bg-transparent px-0 py-0 text-sm font-semibold shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:size-3.5 [&>svg]:opacity-40'
+const triggerClassName = 'mt-1.5 h-9 w-full justify-between rounded-full bg-card px-3 text-sm font-medium [&>svg]:size-3.5 [&>svg]:opacity-40'
 
 export function LogoPicker({ value, hue, onChange }: LogoPickerProps) {
   const selectedIcon = useMemo(
@@ -48,7 +48,7 @@ export function LogoPicker({ value, hue, onChange }: LogoPickerProps) {
 
   return (
     <div className="min-w-0">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Logo</p>
+      <p className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Logo</p>
       <Select value={selectedIcon?.id || 'custom'} onValueChange={selectLogo}>
         <SelectTrigger className={triggerClassName} aria-label="Choose a logo">
           <SelectValue />
@@ -79,20 +79,20 @@ export function LogoPicker({ value, hue, onChange }: LogoPickerProps) {
       </Select>
 
       <div className="mt-2 flex items-center gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-xs text-muted-foreground"
-          onClick={() => {
-            setDraft(value)
-            setIsEditingCustom((open) => !open)
-          }}
-          aria-expanded={isEditingCustom}
-        >
-          <Code2 className="mr-1.5 size-3.5" />
-          {selectedIcon ? 'Edit SVG' : 'Custom SVG'}
-        </Button>
+        <Track>
+          <Pill
+            size="sm"
+            variant={isEditingCustom ? undefined : 'plain'}
+            onClick={() => {
+              setDraft(value)
+              setIsEditingCustom((open) => !open)
+            }}
+            aria-expanded={isEditingCustom}
+          >
+            <Code2 />
+            {selectedIcon ? 'Edit SVG' : 'Custom SVG'}
+          </Pill>
+        </Track>
         {!selectedIcon ? (
           <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
             <CheckCircle2 className="size-3" /> Custom
@@ -101,24 +101,19 @@ export function LogoPicker({ value, hue, onChange }: LogoPickerProps) {
       </div>
 
       {isEditingCustom ? (
-        <div className="mt-3 rounded-md border border-border bg-muted/15 p-3">
+        <div className="mt-3 rounded-xl border bg-card p-3">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold">Custom SVG</p>
+              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Custom SVG</p>
               <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
-                Paste a complete SVG. Scripts, links, styles, event handlers, and external assets are rejected.
+                No scripts, links, styles, event handlers or external assets.
               </p>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-7 shrink-0"
-              onClick={() => setIsEditingCustom(false)}
-              aria-label="Close custom SVG editor"
-            >
-              <X className="size-3.5" />
-            </Button>
+            <Track className="shrink-0">
+              <Pill size="sm" variant="plain" className="px-1.5" onClick={() => setIsEditingCustom(false)} aria-label="Close custom SVG editor">
+                <X />
+              </Pill>
+            </Track>
           </div>
 
           <Textarea
@@ -139,21 +134,22 @@ export function LogoPicker({ value, hue, onChange }: LogoPickerProps) {
                 aria-hidden="true"
               />
               <span className={`truncate text-[11px] ${hasValidDraft ? 'text-muted-foreground' : 'text-destructive'}`}>
-                {hasValidDraft ? 'Safe preview' : 'Enter a valid, safe SVG document'}
+                {hasValidDraft ? 'Preview' : 'Invalid SVG'}
               </span>
             </div>
-            <Button
-              type="button"
-              size="sm"
-              className="h-7 shrink-0 px-3 text-xs"
-              disabled={!hasValidDraft || !hasDraftChanges}
-              onClick={() => {
-                onChange(safeDraft)
-                setIsEditingCustom(false)
-              }}
-            >
-              Apply SVG
-            </Button>
+            <Track className="shrink-0">
+              <Pill
+                size="sm"
+                variant="primary"
+                disabled={!hasValidDraft || !hasDraftChanges}
+                onClick={() => {
+                  onChange(safeDraft)
+                  setIsEditingCustom(false)
+                }}
+              >
+                Apply SVG
+              </Pill>
+            </Track>
           </div>
         </div>
       ) : null}

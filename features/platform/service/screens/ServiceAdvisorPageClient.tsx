@@ -2,17 +2,29 @@
 
 import { useMemo, useState, type FormEvent } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Circle, RefreshCw, Search, Square, Triangle, Wrench } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { EmptyState } from '@/components/ui/empty-state'
+import { RefreshCw, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
 import { SERVICE_APPOINTMENT_TRANSITIONS } from '@/features/keystone/lifecycle/serviceAppointmentTransitions'
 import { OperatorActionDialog } from '@/features/platform/components/OperatorActionDialog'
+import {
+  Code,
+  DeskHeader,
+  DeskSection,
+  Facts,
+  Notice,
+  Panel,
+  Pill,
+  Readout,
+  ReadoutStrip,
+  Segmented,
+  TitleLine,
+  Track,
+  type DeskTone,
+} from '@/features/platform/components/desk'
+import { cn } from '@/lib/utils'
 import {
   addServiceOrderLineItem,
   configurePart,
@@ -27,6 +39,7 @@ import {
 } from '../actions'
 import { serviceTaskFields, serviceTaskRequest, type ServiceChoice, type ServiceTask, type ServiceTaskOperation } from '../lib/serviceTasks'
 import type { FixedOpsWorkspace } from '../lib/types'
+
 
 const serviceTaskActions: Record<ServiceTaskOperation, (data: Record<string, unknown>) => Promise<{ success: boolean; error?: string }>> = {
   recordServiceOrderEvidence,
@@ -125,18 +138,6 @@ const orderStatusLabels: Record<string, string> = {
   paid: 'Settled',
 }
 
-const badgeClasses: Record<string, string> = {
-  scheduled: 'bg-blue-100 text-blue-700 border-blue-200',
-  'checked-in': 'bg-cyan-100 text-cyan-700 border-cyan-200',
-  estimate: 'bg-slate-100 text-slate-700 border-slate-200',
-  approved: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  'in-progress': 'bg-amber-100 text-amber-700 border-amber-200',
-  'waiting-parts': 'bg-orange-100 text-orange-700 border-orange-200',
-  completed: 'bg-green-100 text-green-700 border-green-200',
-  invoiced: 'bg-purple-100 text-purple-700 border-purple-200',
-  paid: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  cancelled: 'bg-red-100 text-red-700 border-red-200',
-}
 
 function formatDateTime(value: string | null) {
   if (!value) return 'Unscheduled'
@@ -191,27 +192,51 @@ function toRooftops(workspace: FixedOpsWorkspace | null | undefined): ServiceCho
   return (workspace?.serviceRooftops || []).map(item => ({ value: item.id, label: item.name }))
 }
 
-function EmptyStateDefault({ title, description }: { title: string; description: string }) {
-  return <EmptyState title={title} description={description} icons={[Triangle, Square, Circle]} />
+const statusTones: Record<string, DeskTone> = {
+  scheduled: 'info',
+  'checked-in': 'info',
+  estimate: 'idle',
+  approved: 'info',
+  'in-progress': 'warn',
+  'waiting-parts': 'warn',
+  completed: 'ok',
+  invoiced: 'info',
+  paid: 'ok',
+  cancelled: 'bad',
 }
 
-function EmptyStateSearch({ onResetFilters }: { onResetFilters: () => void }) {
-  return (
-    <EmptyState
-      title="No results found"
-      description="Try adjusting your search or filters."
-      icons={[Search]}
-      action={{ label: 'Reset filters', onClick: onResetFilters }}
-    />
-  )
+const laborTones: Record<string, DeskTone> = {
+  open: 'idle',
+  dispatched: 'info',
+  'in-progress': 'warn',
+  paused: 'warn',
+  completed: 'ok',
+  cancelled: 'bad',
 }
 
-function StatusBadge({ value, labels }: { value: string | null; labels: Record<string, string> }) {
-  const status = value || 'unknown'
+const appointmentFilters = [
+  { value: 'open', label: 'Open' },
+  { value: 'today', label: 'Today' },
+  { value: 'waiting-parts', label: 'Waiting parts' },
+  { value: 'all', label: 'All' },
+]
+
+const orderFilters = ['all', 'estimate', 'approved', 'in-progress', 'completed', 'invoiced', 'paid']
+
+function shortId(id: string) {
+  return id.slice(0, 8)
+}
+
+function Empty({ label, onReset }: { label: string; onReset?: () => void }) {
   return (
-    <Badge variant="outline" className={badgeClasses[status] || 'bg-slate-100 text-slate-700 border-slate-200'}>
-      {labels[status] || status}
-    </Badge>
+    <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-muted-foreground">
+      <p>{label}</p>
+      {onReset && (
+        <Track>
+          <Pill size="sm" onClick={onReset}>Reset filters</Pill>
+        </Track>
+      )}
+    </div>
   )
 }
 
@@ -236,6 +261,8 @@ export function ServiceAdvisorPageClient({
   const [notice, setNotice] = useState<string | null>(null)
   const [serviceRooftops, setServiceRooftops] = useState<ServiceChoice[]>(toRooftops(initialWorkspace))
   const [staff, setStaff] = useState<ServiceChoice[]>([])
+  const [orderFilter, setOrderFilter] = useState('all')
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
 
   const openTask = (next: Omit<ServiceTask, 'idempotencyKey'>) => {
     setTaskError(null)
@@ -426,70 +453,210 @@ export function ServiceAdvisorPageClient({
     { type: 'page' as const, label: 'Service' },
   ]
 
+  const orderCounts: Record<string, number> = { all: visibleOrders.length }
+  for (const order of visibleOrders) orderCounts[order.status || ''] = (orderCounts[order.status || ''] || 0) + 1
+  const shownOrders = (orderFilter === 'all' ? visibleOrders : visibleOrders.filter(order => order.status === orderFilter)).slice(0, 25)
+  const selectedOrder = shownOrders.find(order => order.id === selectedOrderId) ?? shownOrders[0] ?? null
+  const appointmentForOrder = (orderId: string) => appointments.find(appointment => appointment.serviceOrder?.id === orderId)
+
+  const appointmentCounts: Record<string, number> = {
+    open: appointments.filter(appointment => !['completed', 'cancelled'].includes(appointment.status || '')).length,
+    today: appointments.filter(appointment => isToday(appointment.appointmentDate)).length,
+    'waiting-parts': appointments.filter(appointment => appointment.status === 'waiting-parts').length,
+    all: appointments.length,
+  }
+  const workingOrders = orders.filter(order => ['estimate', 'approved', 'in-progress', 'completed'].includes(order.status || ''))
+  const workingValue = workingOrders.reduce((sum, order) => sum + (order.grandTotal || 0), 0)
+  const lowStock = parts.filter(part => (part.minimumQuantity ?? 0) > 0 && (part.quantity ?? 0) <= (part.minimumQuantity ?? 0)).length
+
   const header = (
-    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">Service</h1>
-        <p className="text-muted-foreground">Coordinate service appointments and repair work.</p>
-      </div>
-      <div className="flex gap-2">
-        <Button variant="outline" onClick={configurePartRecord} disabled={updatingId === 'part' || !serviceRooftops.length}>
-          Configure Part
-        </Button>
-        <Button variant="outline" onClick={loadServiceData} disabled={loading}>
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Refresh
-        </Button>
-      </div>
-    </div>
+    <DeskHeader
+      title="Service"
+      tone={error ? 'bad' : appointmentCounts['waiting-parts'] > 0 ? 'warn' : 'ok'}
+      status={error ? 'Unavailable' : `${appointmentCounts['waiting-parts']} waiting parts`}
+      meta={error ? 'Unavailable' : `${appointmentCounts.today} appointments today · ${workingOrders.length} open ROs`}
+      actions={
+        <Track>
+          <Pill onClick={loadServiceData} disabled={loading} aria-label="Refresh">
+            <RefreshCw className={loading ? 'animate-spin' : undefined} />
+            Refresh
+          </Pill>
+          <Pill onClick={configurePartRecord} disabled={updatingId === 'part' || !serviceRooftops.length}>
+            Configure part
+          </Pill>
+        </Track>
+      }
+    />
   )
 
   if (error) {
     return (
       <PageContainer title="Service" header={header} breadcrumbs={breadcrumbs}>
-        <div className="px-4 pb-6 md:px-6">
-          <Card>
-            <CardContent className="py-12 text-center">
-              <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-destructive" />
-              <p className="font-medium">Service is unavailable</p>
-              <p className="mt-1 text-sm text-muted-foreground">{error}</p>
-              <Button className="mt-4" variant="outline" onClick={loadServiceData}>
-                Retry
-              </Button>
-            </CardContent>
-          </Card>
+        <div className="space-y-3 px-4 pb-6 md:px-6">
+          <Notice tone="bad">
+            <p className="font-medium">Service is unavailable</p>
+            <p className="mt-0.5 text-muted-foreground">{error}</p>
+          </Notice>
+          <Track>
+            <Pill onClick={loadServiceData}>Retry</Pill>
+          </Track>
         </div>
       </PageContainer>
     )
   }
 
+  const renderOrderDetail = (order: ServiceOrder) => {
+    const nextStatus = order.status ? nextOrderStatus[order.status] : undefined
+    const appointment = appointmentForOrder(order.id)
+    const customer = appointment?.lead
+    const working = Boolean(order.status && ['estimate', 'approved', 'in-progress'].includes(order.status))
+    const busy = updatingId === order.id
+    const status = order.status || 'unknown'
+    return (
+      <div className="min-w-0 space-y-6">
+        <div className="min-w-0 space-y-3">
+          <div className="min-w-0">
+            <TitleLine as="h2" tone={statusTones[status] || 'idle'} status={orderStatusLabels[status] || status} className="text-lg font-semibold tracking-tight">
+              <Code className="text-base text-foreground">RO #{shortId(order.id)}</Code> {order.appointment?.customerVehicleDescription || 'Vehicle not set'}
+            </TitleLine>
+            <p className="mt-0.5 pl-4 text-xs text-muted-foreground">
+              {[
+                orderStatusLabels[status] || status,
+                customer ? [customer.firstName, customer.lastName].filter(Boolean).join(' ') || customer.email || 'Customer' : null,
+                order.rooftop?.name,
+                order.appointment?.assignedTech?.name || 'Unassigned',
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+          </div>
+          {(working || order.status === 'invoiced' || nextStatus) && (
+            <Track>
+              {working && (
+                <>
+                  <Pill size="sm" onClick={() => recordRepairEvidence(order)} disabled={busy}>CCC & authorization</Pill>
+                  <Pill size="sm" onClick={() => addLaborLine(order)} disabled={busy}>Add labor line</Pill>
+                  <Pill size="sm" onClick={() => manageLabor(order)} disabled={busy}>Labor</Pill>
+                </>
+              )}
+              {order.status === 'invoiced' ? (
+                <Pill size="sm" variant="primary" asChild>
+                  <Link href={`${basePath}/platform/accounting`}>Payments</Link>
+                </Pill>
+              ) : (
+                nextStatus && (
+                  <Pill size="sm" variant="primary" onClick={() => updateOrderStatus(order.id, nextStatus)} disabled={busy}>
+                    {orderStatusLabels[nextStatus]}
+                  </Pill>
+                )
+              )}
+            </Track>
+          )}
+        </div>
+
+        <DeskSection title="Repair">
+          <Facts
+            items={[
+              { label: 'Appointment', value: formatDateTime(order.appointment?.appointmentDate || null) },
+              { label: 'Service', value: <span className="capitalize">{order.appointment?.serviceType || 'service'}</span> },
+              customer?.phone ? { label: 'Phone', value: customer.phone, mono: true } : null,
+              { label: 'Concern', value: order.concern || '-' },
+              { label: 'Cause', value: order.cause || '-' },
+              { label: 'Correction', value: order.correction || '-' },
+              { label: 'Pay type', value: <span className="capitalize">{order.payType || '-'}</span> },
+              {
+                label: 'Authorization',
+                value: (
+                  <TitleLine as="span" tone={order.authorizationStatus === 'approved' ? 'ok' : order.authorizationStatus === 'declined' ? 'bad' : 'warn'} className="justify-end capitalize">
+                    {order.authorizationStatus || 'pending'}
+                  </TitleLine>
+                ),
+              },
+              order.authorizationEvidence?.reference ? { label: 'Authorization ref', value: order.authorizationEvidence.reference, mono: true } : null,
+              order.invoiceNumber ? { label: 'Invoice', value: order.invoiceNumber, mono: true } : null,
+              order.completedAt ? { label: 'Completed', value: formatDateTime(order.completedAt) } : null,
+            ]}
+          />
+        </DeskSection>
+
+        <DeskSection title="Labor operations" count={order.laborOperations.length}>
+          {order.laborOperations.length === 0 ? (
+            <p className="py-3 text-sm text-muted-foreground">No labor operations</p>
+          ) : (
+            <ul className="divide-y text-sm">
+              {order.laborOperations.map(operation => (
+                <li key={operation.id} className="flex min-w-0 items-start justify-between gap-4 py-2.5">
+                  <div className="min-w-0">
+                    <TitleLine as="p" tone={laborTones[operation.status] || 'idle'} status={operation.status} className="font-medium">
+                      <Code className="text-foreground">{operation.operationCode}</Code> {operation.description}
+                    </TitleLine>
+                    <p className="pl-4 text-xs text-muted-foreground">{operation.technician?.name || 'Unassigned'}</p>
+                  </div>
+                  <p className="shrink-0 text-xs capitalize text-muted-foreground">{operation.status}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </DeskSection>
+
+        <DeskSection title="Totals">
+          <dl className="divide-y text-sm">
+            {[
+              ['Labor', order.laborTotal],
+              ['Parts', order.partsTotal],
+              ['Tax', order.tax],
+            ].map(([label, amount]) => (
+              <div key={label as string} className="flex items-baseline justify-between gap-4 py-2">
+                <dt className="text-muted-foreground">{label}</dt>
+                <dd className="font-mono text-[13px] tabular-nums">{formatCurrency(amount as number | null)}</dd>
+              </div>
+            ))}
+            <div className="flex items-baseline justify-between gap-4 border-t border-foreground/20 py-2.5">
+              <dt className="font-semibold">Total</dt>
+              <dd className="font-mono text-sm font-semibold tabular-nums">{formatCurrency(order.grandTotal)}</dd>
+            </div>
+          </dl>
+        </DeskSection>
+      </div>
+    )
+  }
+
   return (
     <PageContainer title="Service" header={header} breadcrumbs={breadcrumbs}>
-      <div className="min-w-0 space-y-6 px-4 pb-6 md:px-6">
+      <div className="min-w-0 max-w-full space-y-8 px-4 pb-10 md:px-6">
         {notice && (
-          <p role="status" className="rounded-lg border p-3 text-sm">
-            {notice}
-          </p>
+          <Notice tone={notice.startsWith('Unable') ? 'bad' : notice === 'Saved' ? 'ok' : 'info'}>
+            <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
+              <p className="min-w-0">{notice}</p>
+              <Track>
+                <Pill size="sm" variant="plain" onClick={() => setNotice(null)}>Dismiss</Pill>
+              </Track>
+            </div>
+          </Notice>
         )}
-        {!serviceRooftops.length && (
-          <p role="status" className="text-sm text-muted-foreground">
-            No active service locations
-          </p>
-        )}
+        {!serviceRooftops.length && <Notice tone="warn">No active service locations</Notice>}
 
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <div className="relative min-w-0 flex-1 lg:max-w-md">
+        <ReadoutStrip>
+          <Readout label="Today" value={appointmentCounts.today} tone={appointmentCounts.today > 0 ? 'info' : 'idle'} sub="Appointments" />
+          <Readout label="Open ROs" value={workingOrders.length} tone={workingOrders.length > 0 ? 'warn' : 'idle'} />
+          <Readout label="Open RO value" value={formatCurrency(workingValue)} />
+          <Readout label="Waiting parts" value={appointmentCounts['waiting-parts']} tone={appointmentCounts['waiting-parts'] > 0 ? 'warn' : 'ok'} />
+          <Readout label="Low stock" value={lowStock} tone={lowStock > 0 ? 'bad' : 'ok'} sub={`${parts.length} parts`} />
+        </ReadoutStrip>
+
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative min-w-0 flex-1 sm:max-w-md">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               aria-label="Search service records"
-              className="pl-9"
+              className="rounded-full pl-9"
               value={search}
               onChange={event => setSearch(event.target.value)}
               placeholder="Search customer, vehicle, concern, RO, or invoice"
             />
           </div>
           <Select value={sortOrder} onValueChange={setSortOrder}>
-            <SelectTrigger aria-label="Sort service records" className="w-full lg:w-[190px]">
+            <SelectTrigger aria-label="Sort service records" className="w-full rounded-full sm:w-[190px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -504,236 +671,182 @@ export function ServiceAdvisorPageClient({
           )}
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <Card className="xl:col-span-2">
-            <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Wrench className="h-5 w-5" />
-                Appointments
-              </CardTitle>
-              <div className="flex flex-wrap gap-1 rounded-full bg-muted p-1" role="group" aria-label="Filter appointments">
-                {['open', 'today', 'waiting-parts', 'all'].map(filter => (
-                  <Button
-                    key={filter}
-                    variant="ghost"
-                    className={`rounded-full ${appointmentFilter === filter ? 'bg-background shadow-sm' : ''}`}
-                    aria-pressed={appointmentFilter === filter}
-                    size="sm"
-                    onClick={() => setAppointmentFilter(filter)}
-                  >
-                    {filter === 'waiting-parts' ? 'Waiting Parts' : filter.charAt(0).toUpperCase() + filter.slice(1)}
-                  </Button>
-                ))}
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              {filteredAppointments.length === 0 ? (
-                searchTerm || appointmentFilter !== 'open' ? (
-                  <EmptyStateSearch onResetFilters={resetFilters} />
-                ) : (
-                  <EmptyStateDefault title="No service appointments" description="Service appointments will appear here." />
-                )
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/50">
-                      <tr>
-                        <th className="text-left py-3 px-4 font-medium">Time</th>
-                        <th className="text-left py-3 px-4 font-medium">Vehicle / Concern</th>
-                        <th className="text-left py-3 px-4 font-medium">Technician</th>
-                        <th className="text-center py-3 px-4 font-medium">Status</th>
-                        <th className="text-right py-3 px-4 font-medium">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredAppointments.map(appointment => (
-                        <tr key={appointment.id} className="border-b last:border-0 hover:bg-muted/50">
-                          <td className="py-3 px-4 whitespace-nowrap">
-                            <div className="font-medium">{formatDateTime(appointment.appointmentDate)}</div>
-                            <div className="text-xs text-muted-foreground capitalize">{appointment.serviceType || 'Service request'}</div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <p className="font-medium">{appointment.customerVehicleDescription || 'Vehicle not set'}</p>
-                            <p className="text-xs text-muted-foreground line-clamp-2">{appointment.description || 'No concern recorded.'}</p>
-                            {appointment.lead && (
-                              <Link href={`${basePath}/platform/crm/${appointment.lead.id}`} className="text-xs text-primary hover:underline">
-                                {[appointment.lead.firstName, appointment.lead.lastName].filter(Boolean).join(' ') || appointment.lead.email || 'Customer'}
-                                {appointment.lead.phone ? ` · ${appointment.lead.phone}` : ''}
-                              </Link>
-                            )}
-                            {appointment.serviceOrder && (
-                              <p className="font-mono text-xs text-muted-foreground">
-                                RO #{appointment.serviceOrder.id.slice(0, 8)} · {formatCurrency(appointment.serviceOrder.grandTotal)}
-                              </p>
-                            )}
-                          </td>
-                          <td className="py-3 px-4">
-                            {appointment.assignedTech?.name || <span className="text-muted-foreground">Unassigned</span>}
-                          </td>
-                          <td className="py-3 px-4 text-center">
-                            <StatusBadge value={appointment.status} labels={appointmentStatusLabels} />
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="flex flex-wrap justify-end gap-2">
-                              {!appointment.serviceOrder && (
-                                <Button size="sm" variant="outline" onClick={() => createRepairOrder(appointment)} disabled={updatingId === appointment.id}>
-                                  Open RO
-                                </Button>
-                              )}
-                              {appointmentStatuses
-                                .filter(status => (SERVICE_APPOINTMENT_TRANSITIONS[appointment.status || ''] || []).includes(status))
-                                .slice(0, 3)
-                                .map(status => (
-                                  <Button
-                                    key={status}
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => updateAppointmentStatus(appointment.id, status)}
-                                    disabled={updatingId === appointment.id}
-                                  >
-                                    {appointmentStatusLabels[status]}
-                                  </Button>
-                                ))}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <AlertTriangle className="h-5 w-5" />
-                Parts inventory
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {parts.length === 0 ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Wrench className="h-4 w-4" />
-                  No parts configured.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {parts.map(part => (
-                    <div key={part.id} className="rounded-lg border p-3 hover:bg-muted/50">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-medium">{part.description || part.partNumber}</p>
-                          <p className="text-xs text-muted-foreground">
-                            #{part.partNumber} · {part.supplier || 'No supplier'}
-                          </p>
-                        </div>
-                        <Badge
-                          variant="outline"
-                          className={
-                            (part.minimumQuantity ?? 0) > 0 && (part.quantity ?? 0) <= (part.minimumQuantity ?? 0)
-                              ? 'bg-red-50 text-red-700 border-red-200'
-                              : 'bg-muted'
-                          }
-                        >
-                          {part.quantity ?? 0} left
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Reorder at {part.minimumQuantity ?? 0} · Retail {formatCurrency(part.price)}
-                      </p>
-                      <Button size="sm" variant="outline" className="mt-2" onClick={() => receivePart(part)}>
-                        Receive stock
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Open Repair Orders</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {visibleOrders.length === 0 ? (
-              searchTerm ? (
-                <EmptyStateSearch onResetFilters={resetFilters} />
-              ) : (
-                <EmptyStateDefault title="No repair orders" description="Repair orders you open will appear here." />
-              )
+        <DeskSection
+          title="Repair orders"
+          count={visibleOrders.length}
+          actions={
+            <Segmented
+              label="Filter repair orders"
+              size="sm"
+              value={orderFilter}
+              onChange={setOrderFilter}
+              options={orderFilters.map(value => ({
+                value,
+                label: value === 'all' ? 'All' : orderStatusLabels[value],
+                count: orderCounts[value] || 0,
+                tone: value === 'all' ? undefined : statusTones[value],
+              }))}
+            />
+          }
+        >
+          {shownOrders.length === 0 ? (
+            searchTerm || orderFilter !== 'all' ? (
+              <Empty label="No matching repair orders" onReset={() => { resetFilters(); setOrderFilter('all') }} />
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="text-left py-3 px-4 font-medium">Repair Order</th>
-                      <th className="text-left py-3 px-4 font-medium">Vehicle</th>
-                      <th className="text-left py-3 px-4 font-medium">Appointment</th>
-                      <th className="text-right py-3 px-4 font-medium">Total</th>
-                      <th className="text-center py-3 px-4 font-medium">Status</th>
-                      <th className="text-right py-3 px-4 font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visibleOrders.slice(0, 25).map(order => {
-                      const nextStatus = order.status ? nextOrderStatus[order.status] : undefined
-                      return (
-                        <tr key={order.id} className="border-b last:border-0 hover:bg-muted/50">
-                          <td className="py-3 px-4">
-                            <span className="font-mono text-xs">#{order.id.slice(0, 8)}</span>
-                          </td>
-                          <td className="py-3 px-4">
-                            {order.appointment?.customerVehicleDescription || <span className="text-muted-foreground">Vehicle not set</span>}
-                          </td>
-                          <td className="py-3 px-4">
-                            <div>{formatDateTime(order.appointment?.appointmentDate || null)}</div>
-                            <div className="text-xs text-muted-foreground capitalize">{order.appointment?.serviceType || 'service'}</div>
-                          </td>
-                          <td className="py-3 px-4 text-right font-medium">{formatCurrency(order.grandTotal)}</td>
-                          <td className="py-3 px-4 text-center">
-                            <StatusBadge value={order.status} labels={orderStatusLabels} />
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="flex flex-wrap justify-end gap-2">
-                              {order.status && ['estimate', 'approved', 'in-progress'].includes(order.status) && (
-                                <>
-                                  <Button size="sm" variant="outline" onClick={() => recordRepairEvidence(order)} disabled={updatingId === order.id}>
-                                    CCC & Authorization
-                                  </Button>
-                                  <Button size="sm" variant="outline" onClick={() => addLaborLine(order)} disabled={updatingId === order.id}>
-                                    Add labor line
-                                  </Button>
-                                  <Button size="sm" variant="outline" onClick={() => manageLabor(order)} disabled={updatingId === order.id}>
-                                    Labor
-                                  </Button>
-                                </>
-                              )}
-                              {order.status === 'invoiced' ? (
-                                <Button asChild variant="outline" size="sm">
-                                  <Link href={`${basePath}/platform/accounting`}>Payments</Link>
-                                </Button>
-                              ) : (
-                                nextStatus && (
-                                  <Button size="sm" variant="ghost" onClick={() => updateOrderStatus(order.id, nextStatus)} disabled={updatingId === order.id}>
-                                    {orderStatusLabels[nextStatus]}
-                                  </Button>
-                                )
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <Empty label="No repair orders" />
+            )
+          ) : (
+            <div className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+              <Panel className="divide-y self-start overflow-hidden">
+                {shownOrders.map(order => {
+                  const appointment = appointmentForOrder(order.id)
+                  const customer = appointment?.lead
+                  const status = order.status || 'unknown'
+                  const selected = selectedOrder?.id === order.id
+                  return (
+                    <button
+                      key={order.id}
+                      type="button"
+                      onClick={() => setSelectedOrderId(order.id)}
+                      aria-pressed={selected}
+                      className={cn(
+                        'flex w-full min-w-0 items-start justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                        selected && 'bg-muted/60',
+                      )}
+                    >
+                      <div className="min-w-0">
+                        <TitleLine as="p" tone={statusTones[status] || 'idle'} status={orderStatusLabels[status] || status} className="text-sm font-medium">
+                          <Code className="text-foreground">#{shortId(order.id)}</Code>{' '}
+                          {customer ? `${[customer.firstName, customer.lastName].filter(Boolean).join(' ') || 'Customer'} · ` : ''}
+                          {order.appointment?.customerVehicleDescription || 'Vehicle not set'}
+                        </TitleLine>
+                        <p className="truncate pl-4 text-xs text-muted-foreground">
+                          {orderStatusLabels[status] || status} · {formatDateTime(order.appointment?.appointmentDate || null)} ·{' '}
+                          <span className="capitalize">{order.appointment?.serviceType || 'service'}</span>
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-sm font-medium tabular-nums">{formatCurrency(order.grandTotal)}</p>
+                        <p className="font-mono text-[11px] tabular-nums text-muted-foreground">{order.laborOperations.length} ops</p>
+                      </div>
+                    </button>
+                  )
+                })}
+              </Panel>
+              <div className="min-w-0">{selectedOrder && renderOrderDetail(selectedOrder)}</div>
+            </div>
+          )}
+        </DeskSection>
+
+        <div className="grid min-w-0 grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+          <DeskSection
+            title="Appointments"
+            count={filteredAppointments.length}
+            actions={
+              <Segmented
+                label="Filter appointments"
+                size="sm"
+                value={appointmentFilter}
+                onChange={setAppointmentFilter}
+                options={appointmentFilters.map(option => ({ ...option, count: appointmentCounts[option.value] }))}
+              />
+            }
+          >
+            {filteredAppointments.length === 0 ? (
+              searchTerm || appointmentFilter !== 'open' ? <Empty label="No matching appointments" onReset={resetFilters} /> : <Empty label="No service appointments" />
+            ) : (
+              <Panel className="divide-y">
+                {filteredAppointments.map(appointment => {
+                  const status = appointment.status || 'unknown'
+                  const customerName = appointment.lead
+                    ? [appointment.lead.firstName, appointment.lead.lastName].filter(Boolean).join(' ') || appointment.lead.email || 'Customer'
+                    : null
+                  const transitions = appointmentStatuses
+                    .filter(next => (SERVICE_APPOINTMENT_TRANSITIONS[appointment.status || ''] || []).includes(next))
+                    .slice(0, 3)
+                  const busy = updatingId === appointment.id
+                  return (
+                    <div key={appointment.id} className="flex min-w-0 flex-col gap-2.5 px-4 py-3">
+                      <div className="flex min-w-0 items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <TitleLine as="p" tone={statusTones[status] || 'idle'} status={appointmentStatusLabels[status] || status} className="text-sm font-medium">
+                            {customerName && appointment.lead ? (
+                              <Link href={`${basePath}/platform/crm/${appointment.lead.id}`} className="hover:underline">
+                                {customerName}
+                              </Link>
+                            ) : null}
+                            {customerName ? ' · ' : ''}
+                            {appointment.customerVehicleDescription || 'Vehicle not set'}
+                          </TitleLine>
+                          <p className="pl-4 text-xs text-muted-foreground">
+                            {appointmentStatusLabels[status] || status} · <span className="capitalize">{appointment.serviceType || 'Service request'}</span> ·{' '}
+                            {appointment.assignedTech?.name || 'Unassigned'}
+                            {appointment.lead?.phone ? ` · ${appointment.lead.phone}` : ''}
+                          </p>
+                          <p className="line-clamp-2 pl-4 text-xs text-muted-foreground">{appointment.description || 'No concern recorded.'}</p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="whitespace-nowrap font-mono text-xs tabular-nums">{formatDateTime(appointment.appointmentDate)}</p>
+                          {appointment.serviceOrder && (
+                            <p className="mt-0.5 font-mono text-[11px] tabular-nums text-muted-foreground">
+                              RO #{shortId(appointment.serviceOrder.id)} · {formatCurrency(appointment.serviceOrder.grandTotal)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      {(!appointment.serviceOrder || transitions.length > 0) && (
+                        <Track className="self-start">
+                          {!appointment.serviceOrder && (
+                            <Pill size="sm" variant="primary" onClick={() => createRepairOrder(appointment)} disabled={busy}>
+                              Open RO
+                            </Pill>
+                          )}
+                          {transitions.map(next => (
+                            <Pill key={next} size="sm" onClick={() => updateAppointmentStatus(appointment.id, next)} disabled={busy}>
+                              {appointmentStatusLabels[next]}
+                            </Pill>
+                          ))}
+                        </Track>
+                      )}
+                    </div>
+                  )
+                })}
+              </Panel>
             )}
-          </CardContent>
-        </Card>
+          </DeskSection>
+
+          <DeskSection title="Parts" count={parts.length}>
+            {parts.length === 0 ? (
+              <Empty label="No parts configured" />
+            ) : (
+              <Panel className="divide-y">
+                {parts.map(part => {
+                  const low = (part.minimumQuantity ?? 0) > 0 && (part.quantity ?? 0) <= (part.minimumQuantity ?? 0)
+                  return (
+                    <div key={part.id} className="flex min-w-0 items-start justify-between gap-4 px-4 py-3">
+                      <div className="min-w-0">
+                        <TitleLine as="p" tone={low ? 'bad' : 'ok'} status={low ? 'Low stock' : 'In stock'} className="text-sm font-medium">
+                          {part.description || part.partNumber}
+                        </TitleLine>
+                        <p className="truncate pl-4 text-xs text-muted-foreground">
+                          <Code>#{part.partNumber}</Code> · {part.supplier || 'No supplier'}
+                        </p>
+                        <Track className="ml-4 mt-2">
+                          <Pill size="sm" onClick={() => receivePart(part)}>Receive stock</Pill>
+                        </Track>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className={cn('text-sm font-semibold tabular-nums', low && 'text-red-600 dark:text-red-400')}>{part.quantity ?? 0} left</p>
+                        <p className="font-mono text-[11px] tabular-nums text-muted-foreground">Reorder at {part.minimumQuantity ?? 0}</p>
+                        <p className="font-mono text-[11px] tabular-nums text-muted-foreground">Retail {formatCurrency(part.price)}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </Panel>
+            )}
+          </DeskSection>
+        </div>
 
         <OperatorActionDialog
           open={Boolean(task)}

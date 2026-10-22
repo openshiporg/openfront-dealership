@@ -6,8 +6,10 @@ import { ProfileField } from './ProfileField'
 export function ProfilePhone({ customer }: { customer: CustomerProfile }) {
   return (
     <ProfileField title="Phone number" action={updateCustomerPhone}>
-      <label htmlFor="profile-phone" className="sf-eyebrow block">Phone</label>
-      <input id="profile-phone" name="phone" type="tel" autoComplete="tel" defaultValue={customer.phone || ''} className="sf-input min-h-11" />
+      <div>
+        <label htmlFor="profile-phone" className="sf-label">Phone</label>
+        <input id="profile-phone" name="phone" type="tel" autoComplete="tel" defaultValue={customer.phone || ''} className="sf-input" />
+      </div>
     </ProfileField>
   )
 }

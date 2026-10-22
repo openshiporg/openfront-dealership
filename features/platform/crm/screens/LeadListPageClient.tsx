@@ -2,9 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { RefreshCw, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -13,24 +11,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  RefreshCw,
-  Search,
-  Filter,
-  Users,
-  Phone,
-  Mail,
-  LayoutGrid,
-  List,
-  ChevronRight,
-  AlertTriangle,
-  Triangle,
-  Square,
-  Circle,
-} from 'lucide-react'
-import { EmptyState } from '@/components/ui/empty-state'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
+import {
+  DeskHeader,
+  DeskSection,
+  Notice,
+  Panel,
+  Pill,
+  Readout,
+  ReadoutStrip,
+  Segmented,
+  TitleLine,
+  Track,
+  type DeskTone,
+} from '@/features/platform/components/desk'
 import { type CrmLeadSummary, getCrmLeads } from '../actions'
 
 interface Lead {
@@ -55,52 +50,34 @@ function toLead(lead: CrmLeadSummary): Lead {
   return { ...rest, assignedTo: assignedSalesperson }
 }
 
-function EmptyStateDefault() {
-  return (
-    <EmptyState
-      title="No leads"
-      description="Leads you capture will appear here."
-      icons={[Triangle, Square, Circle]}
-    />
-  )
-}
-
-function EmptyStateSearch({ onResetFilters }: { onResetFilters: () => void }) {
-  return (
-    <EmptyState
-      title="No results found"
-      description="Try adjusting your search or filters."
-      icons={[Search]}
-      action={{ label: 'Reset filters', onClick: onResetFilters }}
-    />
-  )
-}
-
-const statusStages = [
-  { value: 'new', label: 'New', color: 'bg-blue-100 text-blue-700 border-blue-200' },
-  { value: 'contacted', label: 'Contacted', color: 'bg-purple-100 text-purple-700 border-purple-200' },
-  { value: 'test-drive-scheduled', label: 'Test Drive', color: 'bg-cyan-100 text-cyan-700 border-cyan-200' },
-  { value: 'negotiating', label: 'Negotiating', color: 'bg-orange-100 text-orange-700 border-orange-200' },
-  { value: 'closed-won', label: 'Closed Won', color: 'bg-green-100 text-green-700 border-green-200' },
-  { value: 'closed-lost', label: 'Closed Lost', color: 'bg-red-100 text-red-700 border-red-200' },
+const statusStages: ReadonlyArray<{ value: string; label: string; tone: DeskTone }> = [
+  { value: 'new', label: 'New', tone: 'info' },
+  { value: 'contacted', label: 'Contacted', tone: 'accent' },
+  { value: 'test-drive-scheduled', label: 'Test drive', tone: 'info' },
+  { value: 'negotiating', label: 'Negotiating', tone: 'warn' },
+  { value: 'closed-won', label: 'Closed won', tone: 'ok' },
+  { value: 'closed-lost', label: 'Closed lost', tone: 'bad' },
 ]
 
-const temperatureColors: Record<string, string> = {
-  immediately: 'bg-red-500',
-  'this-week': 'bg-orange-500',
-  'this-month': 'bg-blue-500',
-  'just-looking': 'bg-slate-400',
+const temperatureLabels: Record<string, string> = {
+  immediately: 'Hot',
+  'this-week': 'This week',
+  'this-month': 'This month',
+  'just-looking': 'Just looking',
 }
 
 const sourceLabels: Record<string, string> = {
   website: 'Website',
   phone: 'Phone',
-  'walk-in': 'Walk-In',
+  'walk-in': 'Walk-in',
   referral: 'Referral',
   ad: 'Advertisement',
-  social: 'Social Media',
-  'third-party': '3rd Party',
+  social: 'Social',
+  'third-party': '3rd party',
 }
+
+const isOverdue = (lead: Lead) =>
+  !lead.firstResponseAt && Boolean(lead.firstResponseDueAt) && new Date(lead.firstResponseDueAt as string).getTime() < Date.now()
 
 export function LeadListPageClient({
   initialLeads,
@@ -112,7 +89,8 @@ export function LeadListPageClient({
   const [leads, setLeads] = useState<Lead[]>(() => initialLeads.map(toLead))
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(initialError)
-  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
+  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('list')
+  const [statusFilter, setStatusFilter] = useState<string>('open')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [sortOrder, setSortOrder] = useState<string>('newest')
   const [searchQuery, setSearchQuery] = useState('')
@@ -149,6 +127,12 @@ export function LeadListPageClient({
   })
 
   const getLeadsByStatus = (status: string) => filteredLeads.filter(l => l.status === status)
+  const isClosed = (status: string) => ['closed-won', 'closed-lost'].includes(status)
+  const queueLeads = statusFilter === 'all'
+    ? filteredLeads
+    : statusFilter === 'open'
+      ? filteredLeads.filter(l => !isClosed(l.status))
+      : getLeadsByStatus(statusFilter)
 
   const formatDate = (date: string) => {
     const d = new Date(date)
@@ -161,42 +145,66 @@ export function LeadListPageClient({
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 
-  const activeLeads = filteredLeads.filter(l => !['closed-won', 'closed-lost'].includes(l.status)).length
-  const hotLeads = filteredLeads.filter(l => l.temperature === 'immediately' && !['closed-won', 'closed-lost'].includes(l.status)).length
-  const convertedCount = filteredLeads.filter(l => l.status === 'closed-won').length
-  const overdueCount = filteredLeads.filter(l => !l.firstResponseAt && l.firstResponseDueAt && new Date(l.firstResponseDueAt).getTime() < Date.now()).length
+  const formatDue = (date: string) =>
+    new Date(date).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 
-  const LeadCard = ({ lead }: { lead: Lead }) => (
-    <Link href={`${basePath}/platform/crm/${lead.id}`}>
-      <Card className="mb-2 hover:shadow-md transition-shadow cursor-pointer">
-        <CardContent className="p-3">
-          <div className="flex items-start justify-between mb-2">
-            <div>
-              <p className="font-medium text-sm">{lead.firstName} {lead.lastName}</p>
-              {lead.interestedVehicle && (
-                <p className="text-xs text-muted-foreground">
-                  {lead.interestedVehicle.year} {lead.interestedVehicle.make} {lead.interestedVehicle.model}
-                </p>
-              )}
-            </div>
-            {lead.temperature && (
-              <div className={`h-2 w-2 rounded-full ${temperatureColors[lead.temperature]}`} title={lead.temperature} />
+  const activeLeads = filteredLeads.filter(l => !isClosed(l.status)).length
+  const hotLeads = filteredLeads.filter(l => l.temperature === 'immediately' && !isClosed(l.status)).length
+  const convertedCount = filteredLeads.filter(l => l.status === 'closed-won').length
+  const overdueCount = filteredLeads.filter(isOverdue).length
+
+  const statusOptions = [
+    { value: 'open', label: 'Open', count: activeLeads },
+    ...statusStages.map(stage => ({ value: stage.value, label: stage.label, count: getLeadsByStatus(stage.value).length, tone: stage.tone })),
+    { value: 'all', label: 'All', count: filteredLeads.length },
+  ]
+
+  const nextStep = (lead: Lead): { label: string; tone?: 'bad' } => {
+    if (isClosed(lead.status)) return { label: statusStages.find(s => s.value === lead.status)?.label ?? lead.status }
+    if (isOverdue(lead)) return { label: 'Response overdue', tone: 'bad' }
+    if (!lead.firstResponseAt && lead.firstResponseDueAt) return { label: `Respond by ${formatDue(lead.firstResponseDueAt)}` }
+    if (!lead.firstResponseAt) return { label: 'First response' }
+    return { label: 'Follow up' }
+  }
+
+  const LeadRow = ({ lead, compact }: { lead: Lead; compact?: boolean }) => {
+    const stage = statusStages.find(s => s.value === lead.status) || statusStages[0]
+    const step = nextStep(lead)
+    const vehicle = lead.interestedVehicle
+      ? `${lead.interestedVehicle.year} ${lead.interestedVehicle.make} ${lead.interestedVehicle.model}`
+      : null
+    const activity = lead.lastContact ? `Contacted ${formatDate(lead.lastContact)}` : `Created ${formatDate(lead.createdAt)}`
+    return (
+      <Link
+        href={`${basePath}/platform/crm/${lead.id}`}
+        className={`flex min-w-0 flex-col gap-1.5 px-4 py-3 transition-colors hover:bg-muted/40 ${compact ? '' : 'sm:flex-row sm:items-start sm:justify-between sm:gap-6'}`}
+      >
+        <div className="min-w-0">
+          <TitleLine as="p" tone={stage.tone} status={stage.label} className="text-sm font-medium text-foreground">
+            {lead.firstName} {lead.lastName}
+            {lead.temperature === 'immediately' && !isClosed(lead.status) && (
+              <span className="ml-2 font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-red-600 dark:text-red-400">Hot</span>
             )}
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Badge variant="outline" className="text-xs py-0">
-              {sourceLabels[lead.source] || lead.source}
-            </Badge>
-            <span>{formatDate(lead.createdAt)}</span>
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span>{lead.assignedTo ? `→ ${lead.assignedTo.name}` : 'Unassigned'}</span>
-            {!lead.firstResponseAt && lead.firstResponseDueAt && new Date(lead.firstResponseDueAt).getTime() < Date.now() && <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">Response overdue</Badge>}
-          </div>
-        </CardContent>
-      </Card>
-    </Link>
-  )
+          </TitleLine>
+          <p className="break-words pl-4 text-xs text-muted-foreground">
+            {[sourceLabels[lead.source] || lead.source, vehicle, activity].filter(Boolean).join(' · ')}
+          </p>
+          {!compact && (
+            <p className="truncate pl-4 text-xs text-muted-foreground">
+              {[lead.email, lead.phone].filter(Boolean).join(' · ')}
+              {lead.temperature && lead.temperature !== 'immediately' && ` · ${temperatureLabels[lead.temperature] || lead.temperature}`}
+            </p>
+          )}
+        </div>
+        <div className={`min-w-0 pl-4 text-xs ${compact ? '' : 'sm:shrink-0 sm:pl-0 sm:text-right'}`}>
+          <p className={lead.assignedTo ? 'font-medium text-foreground' : 'text-muted-foreground'}>
+            {lead.assignedTo?.name || 'Unassigned'}
+          </p>
+          <p className={step.tone === 'bad' ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}>{step.label}</p>
+        </div>
+      </Link>
+    )
+  }
 
   const breadcrumbs = [
     { type: 'link' as const, label: 'Dashboard', href: basePath },
@@ -205,261 +213,146 @@ export function LeadListPageClient({
   ]
 
   const header = (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">CRM</h1>
-        <p className="text-muted-foreground">Manage leads, contacts, follow-up, and sales opportunities.</p>
-      </div>
-      <Button variant="outline" onClick={loadLeads} disabled={loading}>
-        <RefreshCw className="h-4 w-4 mr-2" /> Refresh
-      </Button>
-    </div>
+    <DeskHeader
+      title="Leads"
+      tone={error ? 'bad' : overdueCount > 0 ? 'warn' : 'ok'}
+      status={error ? 'Unavailable' : overdueCount > 0 ? `${overdueCount} response overdue` : 'No overdue responses'}
+      meta={`${activeLeads} open · ${overdueCount} response overdue`}
+      actions={
+        <Track>
+          <Pill onClick={loadLeads} disabled={loading}>
+            <RefreshCw className={loading ? 'animate-spin' : undefined} />
+            Refresh
+          </Pill>
+        </Track>
+      }
+    />
   )
 
   return (
     <PageContainer title="CRM" header={header} breadcrumbs={breadcrumbs}>
-    <div className="min-w-0 space-y-6 px-4 pb-6 md:px-6">
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                <Users className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Active Leads</p>
-                <p className="text-xl font-bold">{activeLeads}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-red-100 flex items-center justify-center">
-                <span className="text-lg">🔥</span>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Hot Leads</p>
-                <p className="text-xl font-bold">{hotLeads}</p>
-                <p className="text-xs text-muted-foreground">{overdueCount} response overdue</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
-                <span className="text-lg">✓</span>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Converted</p>
-                <p className="text-xl font-bold">{convertedCount}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                <span className="text-lg">%</span>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Conversion Rate</p>
-                <p className="text-xl font-bold">
-                  {filteredLeads.length > 0 ? Math.round((convertedCount / filteredLeads.length) * 100) : 0}%
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <div className="min-w-0 max-w-full space-y-6 px-4 pb-10 md:px-6">
+        <ReadoutStrip>
+          <Readout label="Open" value={activeLeads} />
+          <Readout label="Hot" value={hotLeads} tone={hotLeads > 0 ? 'bad' : 'idle'} sub={`${overdueCount} response overdue`} />
+          <Readout label="Converted" value={convertedCount} tone={convertedCount > 0 ? 'ok' : 'idle'} />
+          <Readout
+            label="Conversion"
+            value={`${filteredLeads.length > 0 ? Math.round((convertedCount / filteredLeads.length) * 100) : 0}%`}
+          />
+        </ReadoutStrip>
 
-      {/* Filters & View Toggle */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center lg:flex-1">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search leads..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-              aria-label="Search leads"
+        <div className="space-y-3">
+          <Segmented label="Lead status" value={statusFilter} onChange={setStatusFilter} options={statusOptions} size="sm" />
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative min-w-0 sm:max-w-sm sm:flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search leads"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+                aria-label="Search leads"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:flex">
+              <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                <SelectTrigger className="w-full sm:w-[150px]" aria-label="Filter by source">
+                  <SelectValue placeholder="Source" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All sources</SelectItem>
+                  <SelectItem value="website">Website</SelectItem>
+                  <SelectItem value="phone">Phone</SelectItem>
+                  <SelectItem value="walk-in">Walk-in</SelectItem>
+                  <SelectItem value="referral">Referral</SelectItem>
+                  <SelectItem value="third-party">3rd party</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={sortOrder} onValueChange={setSortOrder}>
+                <SelectTrigger className="w-full sm:w-[170px]" aria-label="Sort leads">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">Newest first</SelectItem>
+                  <SelectItem value="oldest">Oldest first</SelectItem>
+                  <SelectItem value="sla">Response due first</SelectItem>
+                  <SelectItem value="last-contact">Recent contact</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Segmented
+              label="View"
+              value={viewMode}
+              onChange={setViewMode}
+              size="sm"
+              className="sm:ml-auto"
+              options={[
+                { value: 'list', label: 'List' },
+                { value: 'kanban', label: 'Board' },
+              ]}
             />
           </div>
-          <Select value={sourceFilter} onValueChange={setSourceFilter}>
-            <SelectTrigger className="w-full sm:w-[180px]" aria-label="Filter by source">
-              <Filter className="h-4 w-4 mr-2" />
-              <SelectValue placeholder="Filter by source" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Sources</SelectItem>
-              <SelectItem value="website">Website</SelectItem>
-              <SelectItem value="phone">Phone</SelectItem>
-              <SelectItem value="walk-in">Walk-In</SelectItem>
-              <SelectItem value="referral">Referral</SelectItem>
-              <SelectItem value="third-party">3rd Party</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={sortOrder} onValueChange={setSortOrder}>
-            <SelectTrigger className="w-full sm:w-[180px]" aria-label="Sort leads">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="newest">Newest first</SelectItem>
-              <SelectItem value="oldest">Oldest first</SelectItem>
-              <SelectItem value="sla">Response due first</SelectItem>
-              <SelectItem value="last-contact">Recent contact</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
-        <div className="flex w-fit items-center rounded-md border">
-          <Button
-            variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => setViewMode('kanban')}
-            className="rounded-r-none"
-            aria-label="Board view"
-            aria-pressed={viewMode === 'kanban'}
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => setViewMode('list')}
-            className="rounded-l-none"
-            aria-label="List view"
-            aria-pressed={viewMode === 'list'}
-          >
-            <List className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
 
-      {/* Content */}
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      ) : error ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <AlertTriangle className="mx-auto mb-4 h-12 w-12 text-destructive" />
+        {loading ? (
+          <Panel className="divide-y" aria-busy="true">
+            {Array.from({ length: 4 }, (_, index) => (
+              <div key={index} className="space-y-2 px-4 py-3">
+                <div className="h-3.5 w-40 animate-pulse rounded bg-muted" />
+                <div className="h-3 w-64 max-w-full animate-pulse rounded bg-muted" />
+              </div>
+            ))}
+          </Panel>
+        ) : error ? (
+          <Notice tone="bad">
             <p className="font-medium">Unable to load leads</p>
-            <p className="mt-1 text-sm text-muted-foreground">{error}</p>
-            <Button variant="outline" className="mt-4" onClick={loadLeads}>Retry</Button>
-          </CardContent>
-        </Card>
-      ) : filteredLeads.length === 0 ? (
-        isFiltered ? <EmptyStateSearch onResetFilters={resetFilters} /> : <EmptyStateDefault />
-      ) : viewMode === 'kanban' ? (
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          {statusStages.filter(s => !['closed-won', 'closed-lost'].includes(s.value)).map(stage => (
-            <div key={stage.value} className="flex-shrink-0 w-72">
-              <div className={`rounded-t-lg px-3 py-2 border ${stage.color}`}>
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-sm">{stage.label}</span>
-                  <Badge variant="secondary" className="text-xs">
-                    {getLeadsByStatus(stage.value).length}
-                  </Badge>
-                </div>
-              </div>
-              <div className="bg-muted/50 rounded-b-lg p-2 min-h-[400px]">
-                {getLeadsByStatus(stage.value).map(lead => (
-                  <LeadCard key={lead.id} lead={lead} />
-                ))}
-                {getLeadsByStatus(stage.value).length === 0 && (
-                  <p className="text-center text-muted-foreground text-sm py-8">No leads</p>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="text-left py-3 px-4 font-medium">Name</th>
-                    <th className="text-left py-3 px-4 font-medium">Contact</th>
-                    <th className="text-left py-3 px-4 font-medium">Vehicle Interest</th>
-                    <th className="text-left py-3 px-4 font-medium">Source</th>
-                    <th className="text-center py-3 px-4 font-medium">Status</th>
-                    <th className="text-left py-3 px-4 font-medium">Assigned To</th>
-                    <th className="text-left py-3 px-4 font-medium">Created</th>
-                    <th className="text-right py-3 px-4 font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredLeads.map((lead) => {
-                    const stage = statusStages.find(s => s.value === lead.status) || statusStages[0]
-                    return (
-                      <tr key={lead.id} className="border-b last:border-0 hover:bg-muted/50">
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
-                            {lead.temperature && (
-                              <div className={`h-2 w-2 rounded-full ${temperatureColors[lead.temperature]}`} />
-                            )}
-                            <span className="font-medium">{lead.firstName} {lead.lastName}</span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1 text-xs">
-                              <Mail className="h-3 w-3" />
-                              {lead.email}
-                            </div>
-                            <div className="flex items-center gap-1 text-xs">
-                              <Phone className="h-3 w-3" />
-                              {lead.phone}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          {lead.interestedVehicle ? (
-                            <span className="text-sm">
-                              {lead.interestedVehicle.year} {lead.interestedVehicle.make} {lead.interestedVehicle.model}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4">
-                          <Badge variant="outline">{sourceLabels[lead.source] || lead.source}</Badge>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <Badge className={stage.color}>{stage.label}</Badge>
-                        </td>
-                        <td className="py-3 px-4">
-                          {lead.assignedTo?.name || <span className="text-muted-foreground">Unassigned</span>}
-                        </td>
-                        <td className="py-3 px-4 text-muted-foreground text-sm">
-                          {formatDate(lead.createdAt)}
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <Button asChild variant="ghost" size="sm">
-                            <Link href={`${basePath}/platform/crm/${lead.id}`}>
-                              View <ChevronRight className="h-4 w-4 ml-1" />
-                            </Link>
-                          </Button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+            <p className="mt-0.5 text-muted-foreground">{error}</p>
+            <Track className="mt-2">
+              <Pill size="sm" onClick={loadLeads}>Retry</Pill>
+            </Track>
+          </Notice>
+        ) : filteredLeads.length === 0 ? (
+          <Panel className="flex flex-col items-center gap-3 px-4 py-12 text-center">
+            <p className="text-sm text-muted-foreground">{isFiltered ? 'No matching leads' : 'No leads'}</p>
+            {isFiltered && (
+              <Track>
+                <Pill size="sm" onClick={resetFilters}>Reset filters</Pill>
+              </Track>
+            )}
+          </Panel>
+        ) : viewMode === 'kanban' ? (
+          <div className="grid min-w-0 grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+            {statusStages
+              .filter(s => !isClosed(s.value))
+              .filter(s => statusFilter === 'all' || statusFilter === 'open' || statusFilter === s.value)
+              .map(stage => {
+                const stageLeads = getLeadsByStatus(stage.value)
+                return (
+                  <DeskSection
+                    key={stage.value}
+                    title={<TitleLine as="span" tone={stage.tone}>{stage.label}</TitleLine>}
+                    count={stageLeads.length}
+                  >
+                    {stageLeads.length > 0 ? (
+                      <Panel className="divide-y">
+                        {stageLeads.map(lead => <LeadRow key={lead.id} lead={lead} compact />)}
+                      </Panel>
+                    ) : (
+                      <p className="py-6 text-center text-sm text-muted-foreground">No leads</p>
+                    )}
+                  </DeskSection>
+                )
+              })}
+          </div>
+        ) : queueLeads.length === 0 ? (
+          <Panel className="px-4 py-12 text-center text-sm text-muted-foreground">No leads</Panel>
+        ) : (
+          <Panel className="divide-y">
+            {queueLeads.map(lead => <LeadRow key={lead.id} lead={lead} />)}
+          </Panel>
+        )}
+      </div>
     </PageContainer>
   )
 }

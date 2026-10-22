@@ -2,16 +2,25 @@
 
 import { useRef, useState, type FormEvent } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Calendar, Car, CheckCircle2, ClipboardList, Mail, MessageSquare, Phone, Plus, RefreshCw, Route, UserRound } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { CalendarPlus, Check, Mail, Phone, RefreshCw, Route } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { OperatorActionDialog } from '@/features/platform/components/OperatorActionDialog'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
+import {
+  Code,
+  DeskHeader,
+  DeskSection,
+  Facts,
+  Notice,
+  Panel,
+  Pill,
+  TitleLine,
+  Track,
+  type DeskTone,
+} from '@/features/platform/components/desk'
 import {
   type LeadDetail,
   advanceLeadCadence,
@@ -39,14 +48,32 @@ const lostReasonOptions = [
   { value: 'other', label: 'Other' },
 ]
 
-const leadStatuses = [
-  { value: 'new', label: 'New', className: 'bg-blue-100 text-blue-700 border-blue-200' },
-  { value: 'contacted', label: 'Contacted', className: 'bg-purple-100 text-purple-700 border-purple-200' },
-  { value: 'test-drive-scheduled', label: 'Test Drive', className: 'bg-cyan-100 text-cyan-700 border-cyan-200' },
-  { value: 'negotiating', label: 'Negotiating', className: 'bg-orange-100 text-orange-700 border-orange-200' },
-  { value: 'closed-won', label: 'Closed Won', className: 'bg-green-100 text-green-700 border-green-200' },
-  { value: 'closed-lost', label: 'Closed Lost', className: 'bg-red-100 text-red-700 border-red-200' },
+const leadStatuses: ReadonlyArray<{ value: string; label: string; tone: DeskTone }> = [
+  { value: 'new', label: 'New', tone: 'info' },
+  { value: 'contacted', label: 'Contacted', tone: 'accent' },
+  { value: 'test-drive-scheduled', label: 'Test drive', tone: 'info' },
+  { value: 'negotiating', label: 'Negotiating', tone: 'warn' },
+  { value: 'closed-won', label: 'Closed won', tone: 'ok' },
+  { value: 'closed-lost', label: 'Closed lost', tone: 'bad' },
 ]
+
+const visitTone: Record<string, DeskTone> = {
+  scheduled: 'info',
+  arrived: 'warn',
+  'manager-turn': 'warn',
+  completed: 'ok',
+  cancelled: 'bad',
+  'no-show': 'bad',
+}
+
+const dealTone: Record<string, DeskTone> = {
+  pencil: 'idle',
+  submitted: 'warn',
+  approved: 'info',
+  financed: 'info',
+  delivered: 'ok',
+  cancelled: 'bad',
+}
 
 function formatDate(value: string | null | undefined) {
   if (!value) return '-'
@@ -61,14 +88,20 @@ function leadName(lead: Lead) {
   return [lead.firstName, lead.lastName].filter(Boolean).join(' ') || 'Unnamed lead'
 }
 
-function vehicleName(vehicle: Lead['interestedVehicle']) {
-  if (!vehicle) return 'No vehicle selected'
+function vehicleName(vehicle: { year: number | null; make: string | null; model: string | null } | null) {
+  if (!vehicle) return 'No vehicle'
   return [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(' ')
 }
 
 function statusConfig(status: string | null | undefined) {
   return leadStatuses.find(item => item.value === status) || leadStatuses[0]
 }
+
+function consentLabel(suppressed: boolean | null | undefined, consent: boolean | null | undefined) {
+  return suppressed ? 'Suppressed' : consent ? 'Consented' : 'Not consented'
+}
+
+const label = (value: string | null | undefined) => (value ? value.replaceAll('-', ' ') : '-')
 
 export function LeadDetailPageClient({
   id,
@@ -334,8 +367,10 @@ export function LeadDetailPageClient({
   if (loading) {
     return (
       <PageContainer title="CRM" breadcrumbs={breadcrumbs}>
-        <div className="flex min-h-[400px] items-center justify-center p-6" role="status" aria-label="Loading lead">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        <div className="space-y-3 px-4 pb-6 md:px-6" role="status" aria-label="Loading lead">
+          <div className="h-7 w-56 max-w-full animate-pulse rounded bg-muted" />
+          <div className="h-4 w-72 max-w-full animate-pulse rounded bg-muted" />
+          <div className="h-48 animate-pulse rounded-xl bg-muted" />
         </div>
       </PageContainer>
     )
@@ -343,23 +378,19 @@ export function LeadDetailPageClient({
 
   if (!lead) {
     return (
-      <PageContainer title="CRM" breadcrumbs={breadcrumbs}>
-        <div className="px-4 pb-6 md:px-6">
-          <Card>
-            <CardContent className="py-12 text-center">
-              <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-destructive" />
-              <h1 className="text-xl font-semibold">Lead unavailable</h1>
-              <p className="mt-1 text-sm text-muted-foreground">{error || 'This lead was not found.'}</p>
-              <div className="mt-4 flex justify-center gap-2">
-                <Button variant="outline" onClick={loadLead}>
-                  Retry
-                </Button>
-                <Button asChild variant="outline">
-                  <Link href={`${basePath}/platform/crm`}>Back to CRM</Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+      <PageContainer
+        title="CRM"
+        breadcrumbs={breadcrumbs}
+        header={<DeskHeader title="Lead unavailable" tone="bad" status="Unavailable" />}
+      >
+        <div className="space-y-3 px-4 pb-6 md:px-6">
+          <Notice tone="bad">{error || 'This lead was not found.'}</Notice>
+          <Track>
+            <Pill onClick={loadLead}>Retry</Pill>
+            <Pill asChild>
+              <Link href={`${basePath}/platform/crm`}>Back to CRM</Link>
+            </Pill>
+          </Track>
         </div>
       </PageContainer>
     )
@@ -368,218 +399,152 @@ export function LeadDetailPageClient({
   const currentStatus = statusConfig(lead.status)
   const openTasks = lead.tasks.filter(task => !task.completed)
   const completedTasks = lead.tasks.filter(task => task.completed)
+  const responseOverdue = Boolean(lead.firstResponseDueAt && !lead.firstResponseAt && new Date(lead.firstResponseDueAt).getTime() < Date.now())
+  const isClosed = ['closed-won', 'closed-lost'].includes(lead.status || '')
 
   const header = (
-    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-      <div>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">{leadName(lead)}</h1>
-          <Badge variant="outline" className={currentStatus.className}>
-            {currentStatus.label}
-          </Badge>
-        </div>
-        <p className="text-muted-foreground">
-          Created {formatDate(lead.createdAt)} · Last contact {formatDate(lead.lastContact)}
-        </p>
-      </div>
-      <div className="flex gap-2">
-        <Button variant="outline" onClick={loadLead}>
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Refresh
-        </Button>
-      </div>
-    </div>
+    <DeskHeader
+      title={leadName(lead)}
+      tone={currentStatus.tone}
+      status={currentStatus.label}
+      meta={
+        <span>
+          {currentStatus.label} · Created {formatDate(lead.createdAt)} · Last contact {formatDate(lead.lastContact)}
+        </span>
+      }
+      actions={
+        <Track>
+          {lead.phone && (
+            <Pill asChild>
+              <a href={`tel:${lead.phone}`}><Phone />Call</a>
+            </Pill>
+          )}
+          {lead.email && (
+            <Pill asChild>
+              <a href={`mailto:${lead.email}`}><Mail />Email</a>
+            </Pill>
+          )}
+          <Pill onClick={() => manageVisit('schedule')} disabled={saving}>
+            <CalendarPlus />Schedule in 1h
+          </Pill>
+          <Pill asChild variant="primary">
+            <Link href={`${basePath}/platform/deals/create`}>Start deal</Link>
+          </Pill>
+          <Pill onClick={loadLead} aria-label="Refresh">
+            <RefreshCw />
+          </Pill>
+        </Track>
+      }
+    />
   )
+
+  const selectSm = 'h-9'
 
   return (
     <PageContainer title="CRM" header={header} breadcrumbs={breadcrumbs}>
-    <div className="min-w-0 space-y-6 px-4 pb-6 md:px-6">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><UserRound className="h-5 w-5" />Customer Profile</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div><p className="text-muted-foreground">Email</p><p className="font-medium flex items-center gap-2"><Mail className="h-4 w-4" />{lead.email || '-'}</p></div>
-              <div><p className="text-muted-foreground">Phone</p><p className="font-medium flex items-center gap-2"><Phone className="h-4 w-4" />{lead.phone || '-'}</p></div>
-              <div><p className="text-muted-foreground">Source</p><p className="font-medium capitalize">{lead.source || '-'}</p></div>
-              <div><p className="text-muted-foreground">Timeframe</p><p className="font-medium capitalize">{lead.timeframe?.replaceAll('-', ' ') || '-'}</p></div>
-              <div><p className="text-muted-foreground">Budget</p><p className="font-medium">{lead.budgetRange || '-'}</p></div>
-              <div><p className="text-muted-foreground">Assigned Salesperson</p><p className="font-medium">{lead.assignedSalesperson?.name || 'Unassigned'}</p></div>
-              <div><p className="text-muted-foreground">First response due</p><p className="font-medium">{lead.firstResponseAt ? `Responded ${formatDate(lead.firstResponseAt)}` : lead.firstResponseDueAt ? formatDate(lead.firstResponseDueAt) : 'Not assigned'}</p></div>
-              <div><p className="text-muted-foreground">Customer record</p><p className="font-medium">{lead.customer ? 'Linked' : 'Not linked'}{duplicateCount > 0 ? ` · ${duplicateCount} possible duplicate${duplicateCount === 1 ? '' : 's'}` : ''}</p></div>
-              <div className="md:col-span-2"><p className="text-muted-foreground">Notes</p><p className="whitespace-pre-line">{lead.notes || 'No notes.'}</p></div>
-            </CardContent>
-          </Card>
+      <div className="min-w-0 max-w-full px-4 pb-10 md:px-6">
+        {responseOverdue && <Notice tone="warn" className="mb-6">First response overdue · due {formatDate(lead.firstResponseDueAt)}</Notice>}
 
-          <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><Car className="h-5 w-5" />Vehicle Interest</CardTitle></CardHeader>
-            <CardContent>
-              {lead.interestedVehicle ? (
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="font-medium">{vehicleName(lead.interestedVehicle)}</p>
-                    <p className="text-sm text-muted-foreground">Stock #{lead.interestedVehicle.stockNumber} · {formatCurrency(lead.interestedVehicle.price)}</p>
-                  </div>
-                  <Button asChild variant="outline">
-                    <Link href={`/inventory/${lead.interestedVehicle.id}`}>View listing</Link>
-                  </Button>
+        <div className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
+          {/* Main column */}
+          <div className="min-w-0 space-y-8">
+            <DeskSection title="Activity" count={lead.interactions.length}>
+              <Panel className="space-y-2 p-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <Select value={interaction.interactionType} onValueChange={(value) => setInteraction(prev => ({ ...prev, interactionType: value }))}>
+                    <SelectTrigger className={selectSm} aria-label="Interaction type"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="phone">Phone</SelectItem>
+                      <SelectItem value="email">Email</SelectItem>
+                      <SelectItem value="sms">Text</SelectItem>
+                      <SelectItem value="visit">Visit</SelectItem>
+                      <SelectItem value="test-drive">Test drive</SelectItem>
+                      <SelectItem value="video">Video</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={interaction.outcome} onValueChange={(value) => setInteraction(prev => ({ ...prev, outcome: value }))}>
+                    <SelectTrigger className={selectSm} aria-label="Interaction outcome"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="positive">Positive</SelectItem>
+                      <SelectItem value="neutral">Neutral</SelectItem>
+                      <SelectItem value="negative">Negative</SelectItem>
+                      <SelectItem value="no-answer">No answer</SelectItem>
+                      <SelectItem value="voicemail">Voicemail</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-              ) : <p className="text-muted-foreground">No vehicle selected.</p>}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><MessageSquare className="h-5 w-5" />Interaction Timeline</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              {lead.interactions.length === 0 ? <p className="text-muted-foreground">No interactions yet.</p> : lead.interactions.map(item => (
-                <div key={item.id} className="border rounded-lg p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="font-medium capitalize">{item.interactionType}</p>
-                    <p className="text-xs text-muted-foreground">{formatDate(item.date)}</p>
-                  </div>
-                  <p className="text-sm text-muted-foreground capitalize">Outcome: {item.outcome || '-'}</p>
-                  {item.notes && <p className="mt-2 text-sm whitespace-pre-line">{item.notes}</p>}
-                  {item.followUpDate && <p className="mt-2 text-xs text-blue-700">Follow up: {formatDate(item.followUpDate)}</p>}
+                <Textarea
+                  aria-label="Interaction notes"
+                  value={interaction.notes}
+                  onChange={(event) => setInteraction(prev => ({ ...prev, notes: event.target.value }))}
+                  placeholder="Notes"
+                  className="min-h-20"
+                />
+                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <label className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                    Follow up
+                    <Input
+                      aria-label="Follow-up date"
+                      type="datetime-local"
+                      value={interaction.followUpDate}
+                      onChange={(event) => setInteraction(prev => ({ ...prev, followUpDate: event.target.value }))}
+                      className="h-9 min-w-0 flex-1 sm:w-56"
+                    />
+                  </label>
+                  <Track className="self-end">
+                    <Pill variant="primary" onClick={logInteraction} disabled={saving}>Log activity</Pill>
+                  </Track>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
+              </Panel>
 
-        <div className="space-y-6">
-          <Card>
-            <CardHeader><CardTitle>Status</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              {!lead.assignedSalesperson && (
-                <Button variant="outline" className="w-full" onClick={applyRoutingRule} disabled={saving}>
-                  <Route className="mr-2 h-4 w-4" />Apply routing rule
-                </Button>
+              {lead.interactions.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">No activity</p>
+              ) : (
+                <ol className="mt-4 space-y-0">
+                  {lead.interactions.map(item => (
+                    <li key={item.id} className="relative border-l pb-4 pl-5 last:pb-0">
+                      <span className="absolute -left-[4px] top-1.5 size-2 rounded-full bg-muted-foreground/50" aria-hidden="true" />
+                      <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3">
+                        <p className="text-sm font-medium capitalize">
+                          {label(item.interactionType)}
+                          <span className="font-normal text-muted-foreground"> · {label(item.outcome)}</span>
+                        </p>
+                        <p className="font-mono text-[11px] tabular-nums text-muted-foreground">{formatDate(item.date)}</p>
+                      </div>
+                      {item.performedBy?.name && <p className="text-xs text-muted-foreground">{item.performedBy.name}</p>}
+                      {item.notes && <p className="mt-1 whitespace-pre-line break-words text-sm">{item.notes}</p>}
+                      {item.followUpDate && <p className="mt-1 text-xs text-sky-700 dark:text-sky-300">Follow up {formatDate(item.followUpDate)}</p>}
+                    </li>
+                  ))}
+                </ol>
               )}
-              {lead.firstResponseDueAt && !lead.firstResponseAt && new Date(lead.firstResponseDueAt).getTime() < Date.now() && (
-                <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />First response is overdue.
-                </div>
+            </DeskSection>
+
+            <DeskSection title="Tasks" count={openTasks.length}>
+              {openTasks.length > 0 && (
+                <Panel className="mb-3 divide-y">
+                  {openTasks.map(item => (
+                    <div key={item.id} className="flex min-w-0 items-start justify-between gap-3 px-4 py-3">
+                      <div className="min-w-0">
+                        <TitleLine as="p" tone={item.priority === 'urgent' || item.priority === 'high' ? 'warn' : 'idle'} status={item.priority || undefined} className="text-sm font-medium">
+                          {item.title}
+                        </TitleLine>
+                        <p className="pl-4 text-xs text-muted-foreground">Due {formatDate(item.dueDate)} · <span className="capitalize">{item.priority}</span></p>
+                        {item.description && <p className="mt-0.5 break-words pl-4 text-xs text-muted-foreground">{item.description}</p>}
+                      </div>
+                      <Track className="shrink-0">
+                        <Pill size="sm" onClick={() => completeTask(item.id)} disabled={saving} aria-label={`Complete ${item.title || 'task'}`}>
+                          <Check />Done
+                        </Pill>
+                      </Track>
+                    </div>
+                  ))}
+                </Panel>
               )}
-              <Select value={lead.status || 'new'} onValueChange={updateLeadStatus} disabled={saving}>
-                <SelectTrigger aria-label="Lead status"><SelectValue /></SelectTrigger>
-                <SelectContent>{leadStatuses.map(status => <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>)}</SelectContent>
-              </Select>
-            </CardContent>
-          </Card>
+              {openTasks.length === 0 && <p className="pb-3 text-sm text-muted-foreground">No open tasks</p>}
+              {completedTasks.length > 0 && <p className="pb-3 text-xs text-muted-foreground">{completedTasks.length} completed</p>}
 
-          <Card>
-            <CardHeader><CardTitle>Consent &amp; suppression</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <Select value={contactChannel} onValueChange={setContactChannel} disabled={!lead.customer || saving}>
-                <SelectTrigger aria-label="Preferred channel"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No preferred channel</SelectItem>
-                  <SelectItem value="email">Email</SelectItem>
-                  <SelectItem value="sms">SMS</SelectItem>
-                  <SelectItem value="phone">Phone</SelectItem>
-                </SelectContent>
-              </Select>
-              <div className="text-xs text-muted-foreground">
-                Email {lead.customer?.emailSuppressed ? 'suppressed' : lead.customer?.emailConsent ? 'consented' : 'not consented'} · SMS {lead.customer?.smsSuppressed ? 'suppressed' : lead.customer?.smsConsent ? 'consented' : 'not consented'} · Phone {lead.customer?.phoneSuppressed ? 'suppressed' : lead.customer?.phoneConsent ? 'consented' : 'not consented'}
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" onClick={() => saveContactPreference(false)} disabled={!lead.customer || saving}>Save preference</Button>
-                <Button variant="outline" onClick={() => saveContactPreference(true)} disabled={!lead.customer || contactChannel === 'none' || saving}>Suppress channel</Button>
-              </div>
-              {lead.customer?.household && <p className="text-xs text-muted-foreground">Household: {lead.customer.household.displayName}</p>}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Campaign &amp; cadence</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <Input
-                aria-label="Campaign"
-                value={cadence.campaignKey}
-                onChange={(event) => setCadence(prev => ({ ...prev, campaignKey: event.target.value }))}
-                placeholder="Campaign"
-              />
-              <Select value={cadence.cadenceKey} onValueChange={(value) => setCadence(prev => ({ ...prev, cadenceKey: value }))}>
-                <SelectTrigger aria-label="Follow-up cadence"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="internet-lead-first-response">Internet first response</SelectItem>
-                  <SelectItem value="showroom-follow-up">Showroom follow-up</SelectItem>
-                  <SelectItem value="unsold-follow-up">Unsold follow-up</SelectItem>
-                </SelectContent>
-              </Select>
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" onClick={enrollCadence} disabled={saving || ['closed-won', 'closed-lost'].includes(lead.status || '')}>Enroll</Button>
-                <Button variant="outline" onClick={advanceCadence} disabled={saving || lead.cadenceStatus !== 'active'}>Advance</Button>
-              </div>
-              <p className="text-xs text-muted-foreground">{lead.cadenceStatus || 'none'}{lead.cadenceStep ? ` · ${lead.cadenceStep}` : ''}{lead.cadenceDueAt ? ` · due ${formatDate(lead.cadenceDueAt)}` : ''}</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Appointment &amp; showroom</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <Button className="w-full" variant="outline" onClick={() => manageVisit('schedule')} disabled={saving}>Schedule one hour out</Button>
-              {lead.salesVisits.slice(0, 3).map(visit => (
-                <div key={visit.id} className="rounded-lg border p-3 text-sm space-y-2">
-                  <p className="font-medium capitalize">{visit.kind} · {visit.status}</p>
-                  <p className="text-xs text-muted-foreground">{formatDate(visit.scheduledAt)}{visit.manager?.name ? ` · Manager ${visit.manager.name}` : ''}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {visit.status === 'scheduled' && <Button size="sm" variant="outline" onClick={() => manageVisit('arrive', visit)}>Arrive</Button>}
-                    {visit.status === 'arrived' && <Button size="sm" variant="outline" onClick={() => manageVisit('manager-turn', visit)}>Manager turn</Button>}
-                    {['arrived', 'manager-turn'].includes(visit.status || '') && <Button size="sm" variant="outline" onClick={() => manageVisit('complete', visit)}>Complete</Button>}
-                  </div>
-                </div>
-              ))}
-              {lead.salesVisits.length === 0 && <p className="text-sm text-muted-foreground">No sales visits recorded.</p>}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><Plus className="h-5 w-5" />Log Interaction</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                <Select value={interaction.interactionType} onValueChange={(value) => setInteraction(prev => ({ ...prev, interactionType: value }))}>
-                  <SelectTrigger aria-label="Interaction type"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="phone">Phone</SelectItem>
-                    <SelectItem value="email">Email</SelectItem>
-                    <SelectItem value="sms">Text</SelectItem>
-                    <SelectItem value="visit">Visit</SelectItem>
-                    <SelectItem value="test-drive">Test Drive</SelectItem>
-                    <SelectItem value="video">Video</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={interaction.outcome} onValueChange={(value) => setInteraction(prev => ({ ...prev, outcome: value }))}>
-                  <SelectTrigger aria-label="Interaction outcome"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="positive">Positive</SelectItem>
-                    <SelectItem value="neutral">Neutral</SelectItem>
-                    <SelectItem value="negative">Negative</SelectItem>
-                    <SelectItem value="no-answer">No Answer</SelectItem>
-                    <SelectItem value="voicemail">Voicemail</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Textarea
-                aria-label="Interaction notes"
-                value={interaction.notes}
-                onChange={(event) => setInteraction(prev => ({ ...prev, notes: event.target.value }))}
-                placeholder="What happened?"
-              />
-              <Input
-                aria-label="Follow-up date"
-                type="datetime-local"
-                value={interaction.followUpDate}
-                onChange={(event) => setInteraction(prev => ({ ...prev, followUpDate: event.target.value }))}
-              />
-              <Button className="w-full" onClick={logInteraction} disabled={saving}>Log Activity</Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><ClipboardList className="h-5 w-5" />Follow-Up Tasks</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
+              <Panel className="space-y-2 p-3">
                 <Input
                   aria-label="Task title"
                   value={task.title}
@@ -590,17 +555,19 @@ export function LeadDetailPageClient({
                   aria-label="Task details"
                   value={task.description}
                   onChange={(event) => setTask(prev => ({ ...prev, description: event.target.value }))}
-                  placeholder="Task details"
+                  placeholder="Details"
+                  className="min-h-16"
                 />
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                   <Input
                     aria-label="Task due date"
                     type="datetime-local"
                     value={task.dueDate}
                     onChange={(event) => setTask(prev => ({ ...prev, dueDate: event.target.value }))}
+                    className="h-9 min-w-0"
                   />
                   <Select value={task.priority} onValueChange={(value) => setTask(prev => ({ ...prev, priority: value }))}>
-                    <SelectTrigger aria-label="Task priority"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className={selectSm} aria-label="Task priority"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="low">Low</SelectItem>
                       <SelectItem value="medium">Medium</SelectItem>
@@ -608,62 +575,222 @@ export function LeadDetailPageClient({
                       <SelectItem value="urgent">Urgent</SelectItem>
                     </SelectContent>
                   </Select>
+                  <Select value={task.communicationChannel} onValueChange={(value) => setTask(prev => ({ ...prev, communicationChannel: value }))}>
+                    <SelectTrigger className={selectSm} aria-label="Task channel"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="internal">Internal</SelectItem>
+                      <SelectItem value="email">Email</SelectItem>
+                      <SelectItem value="sms">SMS</SelectItem>
+                      <SelectItem value="phone">Phone</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Select value={task.communicationChannel} onValueChange={(value) => setTask(prev => ({ ...prev, communicationChannel: value }))}>
-                  <SelectTrigger aria-label="Task channel"><SelectValue /></SelectTrigger>
+                <div className="flex justify-end">
+                  <Track>
+                    <Pill onClick={createTask} disabled={saving}>Create task</Pill>
+                  </Track>
+                </div>
+              </Panel>
+            </DeskSection>
+
+            <DeskSection title="Notes">
+              <p className="whitespace-pre-line break-words text-sm">{lead.notes || <span className="text-muted-foreground">No notes</span>}</p>
+            </DeskSection>
+          </div>
+
+          {/* Side column */}
+          <div className="min-w-0 space-y-8">
+            <DeskSection title="Status">
+              <div className="space-y-3">
+                <Select value={lead.status || 'new'} onValueChange={updateLeadStatus} disabled={saving}>
+                  <SelectTrigger aria-label="Lead status"><SelectValue /></SelectTrigger>
+                  <SelectContent>{leadStatuses.map(status => <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>)}</SelectContent>
+                </Select>
+                {lead.status === 'closed-lost' && (lead.lostReasonCode || lead.lostReason) && (
+                  <Facts items={[
+                    !!lead.lostReasonCode && { label: 'Lost reason', value: <span className="capitalize">{label(lead.lostReasonCode)}</span> },
+                    !!lead.lostReason && { label: 'Details', value: lead.lostReason },
+                  ]} />
+                )}
+                {!lead.assignedSalesperson && (
+                  <Track>
+                    <Pill onClick={applyRoutingRule} disabled={saving}><Route />Apply routing rule</Pill>
+                  </Track>
+                )}
+              </div>
+            </DeskSection>
+
+            <DeskSection title="Contact">
+              <Facts items={[
+                { label: 'Email', value: lead.email || '-' },
+                { label: 'Phone', value: lead.phone || '-', mono: true },
+                { label: 'Source', value: <span className="capitalize">{label(lead.source)}</span> },
+                { label: 'Timeframe', value: <span className="capitalize">{label(lead.timeframe)}</span> },
+                { label: 'Salesperson', value: lead.assignedSalesperson?.name || 'Unassigned' },
+                { label: 'First response', value: lead.firstResponseAt ? `Responded ${formatDate(lead.firstResponseAt)}` : lead.firstResponseDueAt ? `Due ${formatDate(lead.firstResponseDueAt)}` : 'Not assigned' },
+                { label: 'Customer', value: `${lead.customer ? 'Linked' : 'Not linked'}${duplicateCount > 0 ? ` · ${duplicateCount} possible duplicate${duplicateCount === 1 ? '' : 's'}` : ''}` },
+                lead.customer?.household && { label: 'Household', value: lead.customer.household.displayName || '-' },
+              ]} />
+            </DeskSection>
+
+            <DeskSection title="Vehicle of interest">
+              {lead.interestedVehicle ? (
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{vehicleName(lead.interestedVehicle)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      <Code>#{lead.interestedVehicle.stockNumber}</Code> · <span className="tabular-nums">{formatCurrency(lead.interestedVehicle.price)}</span>
+                    </p>
+                  </div>
+                  <Track className="shrink-0">
+                    <Pill size="sm" asChild>
+                      <Link href={`/inventory/${lead.interestedVehicle.id}`}>Listing</Link>
+                    </Pill>
+                  </Track>
+                </div>
+              ) : <p className="text-sm text-muted-foreground">No vehicle</p>}
+            </DeskSection>
+
+            <DeskSection title="Trade and finance">
+              <Facts items={[
+                { label: 'Trade-in', value: lead.tradeInVehicle || '-' },
+                { label: 'Budget', value: lead.budgetRange || '-' },
+              ]} />
+              {lead.deals.length > 0 && (
+                <Panel className="mt-3 divide-y">
+                  {lead.deals.map(deal => (
+                    <Link key={deal.id} href={`${basePath}/platform/deals/${deal.id}`} className="flex min-w-0 items-start justify-between gap-3 px-3 py-2.5 transition-colors hover:bg-muted/40">
+                      <div className="min-w-0">
+                        <TitleLine as="p" tone={dealTone[deal.status || ''] ?? 'idle'} status={deal.status || undefined} className="text-sm font-medium">
+                          {vehicleName(deal.vehicle)}
+                        </TitleLine>
+                        <p className="pl-4 text-xs capitalize text-muted-foreground">{deal.status}</p>
+                      </div>
+                      <div className="shrink-0 text-right tabular-nums">
+                        <p className="text-sm font-medium">{formatCurrency(deal.vehiclePrice)}</p>
+                        <p className="text-xs text-muted-foreground">{formatCurrency(deal.monthlyPayment)}/mo</p>
+                      </div>
+                    </Link>
+                  ))}
+                </Panel>
+              )}
+              {lead.deals.length === 0 && <p className="mt-2 text-sm text-muted-foreground">No deals</p>}
+            </DeskSection>
+
+            <DeskSection title="Test drives" count={lead.testDrives.length}>
+              {lead.testDrives.length > 0 ? (
+                <Panel className="divide-y">
+                  {lead.testDrives.map(testDrive => (
+                    <div key={testDrive.id} className="flex min-w-0 items-baseline justify-between gap-3 px-3 py-2.5">
+                      <TitleLine as="p" tone={testDrive.completed ? 'ok' : 'info'} status={testDrive.completed ? 'Completed' : 'Pending'} className="text-sm">
+                        {vehicleName(testDrive.vehicle)}
+                      </TitleLine>
+                      <span className="shrink-0 text-right text-xs text-muted-foreground">
+                        <span className="font-mono tabular-nums">{formatDate(testDrive.scheduledTime)}</span> · {testDrive.completed ? 'Completed' : 'Pending'}
+                      </span>
+                    </div>
+                  ))}
+                </Panel>
+              ) : <p className="text-sm text-muted-foreground">No test drives</p>}
+            </DeskSection>
+
+            <DeskSection title="Showroom visits" count={lead.salesVisits.length}>
+              {lead.salesVisits.length > 0 ? (
+                <Panel className="divide-y">
+                  {lead.salesVisits.slice(0, 3).map(visit => (
+                    <div key={visit.id} className="space-y-2 px-3 py-2.5">
+                      <div className="min-w-0">
+                        <TitleLine as="p" tone={visitTone[visit.status || ''] ?? 'idle'} status={visit.status || undefined} className="text-sm font-medium capitalize">
+                          {label(visit.kind)} · {label(visit.status)}
+                        </TitleLine>
+                        <p className="pl-4 text-xs text-muted-foreground">
+                          <span className="font-mono tabular-nums">{formatDate(visit.scheduledAt)}</span>
+                          {visit.manager?.name ? ` · Manager ${visit.manager.name}` : ''}
+                        </p>
+                      </div>
+                      {(visit.status === 'scheduled' || ['arrived', 'manager-turn'].includes(visit.status || '')) && (
+                        <Track className="ml-4">
+                          {visit.status === 'scheduled' && <Pill size="sm" onClick={() => manageVisit('arrive', visit)}>Arrive</Pill>}
+                          {visit.status === 'arrived' && <Pill size="sm" onClick={() => manageVisit('manager-turn', visit)}>Manager turn</Pill>}
+                          {['arrived', 'manager-turn'].includes(visit.status || '') && <Pill size="sm" onClick={() => manageVisit('complete', visit)}>Complete</Pill>}
+                        </Track>
+                      )}
+                    </div>
+                  ))}
+                </Panel>
+              ) : <p className="text-sm text-muted-foreground">No visits</p>}
+            </DeskSection>
+
+            <DeskSection title="Consent">
+              <div className="space-y-3">
+                <Facts items={[
+                  { label: 'Email', value: consentLabel(lead.customer?.emailSuppressed, lead.customer?.emailConsent) },
+                  { label: 'SMS', value: consentLabel(lead.customer?.smsSuppressed, lead.customer?.smsConsent) },
+                  { label: 'Phone', value: consentLabel(lead.customer?.phoneSuppressed, lead.customer?.phoneConsent) },
+                ]} />
+                <Select value={contactChannel} onValueChange={setContactChannel} disabled={!lead.customer || saving}>
+                  <SelectTrigger aria-label="Preferred channel"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="internal">Internal task</SelectItem>
-                    <SelectItem value="email">Email follow-up</SelectItem>
-                    <SelectItem value="sms">SMS follow-up</SelectItem>
-                    <SelectItem value="phone">Phone follow-up</SelectItem>
+                    <SelectItem value="none">No preferred channel</SelectItem>
+                    <SelectItem value="email">Email</SelectItem>
+                    <SelectItem value="sms">SMS</SelectItem>
+                    <SelectItem value="phone">Phone</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button className="w-full" variant="outline" onClick={createTask} disabled={saving}>Create Task</Button>
+                <Track block>
+                  <Pill size="sm" onClick={() => saveContactPreference(false)} disabled={!lead.customer || saving}>Save preference</Pill>
+                  <Pill size="sm" onClick={() => saveContactPreference(true)} disabled={!lead.customer || contactChannel === 'none' || saving}>Suppress</Pill>
+                </Track>
               </div>
-              <div className="space-y-2">
-                {openTasks.map(item => (
-                  <div key={item.id} className="rounded-lg border p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div><p className="font-medium">{item.title}</p><p className="text-xs text-muted-foreground">Due {formatDate(item.dueDate)} · {item.priority}</p></div>
-                      <Button size="sm" variant="ghost" onClick={() => completeTask(item.id)} disabled={saving} aria-label={`Complete ${item.title || 'task'}`}>
-                        <CheckCircle2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-                {openTasks.length === 0 && <p className="text-sm text-muted-foreground">No open tasks.</p>}
-                {completedTasks.length > 0 && <p className="text-xs text-muted-foreground">{completedTasks.length} completed task(s)</p>}
-              </div>
-            </CardContent>
-          </Card>
+            </DeskSection>
 
-          <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><Calendar className="h-5 w-5" />Test Drives & Deals</CardTitle></CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              {lead.testDrives.map(testDrive => <p key={testDrive.id}>{formatDate(testDrive.scheduledTime)} · {testDrive.completed ? 'Completed' : 'Pending'}</p>)}
-              {lead.deals.map(deal => <Link key={deal.id} href={`${basePath}/platform/deals/${deal.id}`} className="block text-primary hover:underline">{deal.status} · {formatCurrency(deal.vehiclePrice)} · {formatCurrency(deal.monthlyPayment)}/mo</Link>)}
-              {lead.testDrives.length === 0 && lead.deals.length === 0 && <p className="text-muted-foreground">No test drives or deals yet.</p>}
-            </CardContent>
-          </Card>
+            <DeskSection title="Cadence">
+              <div className="space-y-3">
+                <Facts items={[
+                  { label: 'Status', value: <span className="capitalize">{lead.cadenceStatus || 'none'}</span> },
+                  !!lead.cadenceStep && { label: 'Step', value: lead.cadenceStep },
+                  !!lead.cadenceDueAt && { label: 'Due', value: formatDate(lead.cadenceDueAt), mono: true },
+                ]} />
+                <Input
+                  aria-label="Campaign"
+                  value={cadence.campaignKey}
+                  onChange={(event) => setCadence(prev => ({ ...prev, campaignKey: event.target.value }))}
+                  placeholder="Campaign"
+                />
+                <Select value={cadence.cadenceKey} onValueChange={(value) => setCadence(prev => ({ ...prev, cadenceKey: value }))}>
+                  <SelectTrigger aria-label="Follow-up cadence"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="internet-lead-first-response">Internet first response</SelectItem>
+                    <SelectItem value="showroom-follow-up">Showroom follow-up</SelectItem>
+                    <SelectItem value="unsold-follow-up">Unsold follow-up</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Track block>
+                  <Pill size="sm" onClick={enrollCadence} disabled={saving || isClosed}>Enroll</Pill>
+                  <Pill size="sm" onClick={advanceCadence} disabled={saving || lead.cadenceStatus !== 'active'}>Advance</Pill>
+                </Track>
+              </div>
+            </DeskSection>
+          </div>
         </div>
+
+        <OperatorActionDialog
+          open={lostReasonDialogOpen}
+          title="Close lead as lost"
+          description="Choose a reason."
+          fields={[
+            { name: 'lostReasonCode', label: 'Lost reason', type: 'select', placeholder: 'Select a reason', options: lostReasonOptions },
+            { name: 'lostReasonDetails', label: 'Additional details', type: 'textarea', required: false, maxLength: 2000, placeholder: 'Optional' },
+          ]}
+          values={lostReasonValues}
+          error={lostReasonError}
+          busy={saving}
+          submitLabel="Close as lost"
+          onValuesChange={values => setLostReasonValues({ lostReasonCode: values.lostReasonCode || '', lostReasonDetails: values.lostReasonDetails || '' })}
+          onSubmit={submitLostLeadTransition}
+          onOpenChange={handleLostReasonDialogOpenChange}
+        />
       </div>
-      <OperatorActionDialog
-        open={lostReasonDialogOpen}
-        title="Close lead as lost"
-        description="Choose a reason and add any details."
-        fields={[
-          { name: 'lostReasonCode', label: 'Lost reason', type: 'select', placeholder: 'Select a reason', options: lostReasonOptions },
-          { name: 'lostReasonDetails', label: 'Additional details', type: 'textarea', required: false, maxLength: 2000, placeholder: 'Optional context' },
-        ]}
-        values={lostReasonValues}
-        error={lostReasonError}
-        busy={saving}
-        submitLabel="Close as lost"
-        onValuesChange={values => setLostReasonValues({ lostReasonCode: values.lostReasonCode || '', lostReasonDetails: values.lostReasonDetails || '' })}
-        onSubmit={submitLostLeadTransition}
-        onOpenChange={handleLostReasonDialogOpenChange}
-      />
-    </div>
     </PageContainer>
   )
 }

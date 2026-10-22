@@ -2,24 +2,27 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Circle, RefreshCw, Search, Square, Triangle } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { EmptyState } from '@/components/ui/empty-state'
+import { RefreshCw, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
+import { Code, DeskHeader, Notice, Panel, Pill, Segmented, StatusDot, TitleLine, Track, type DeskTone } from '@/features/platform/components/desk'
 import { type TradeIn, getTradeIns, recordTradeInAppraisal } from '../actions'
 
 type QueueFilter = 'open' | 'all' | 'attached'
 
-const conditionClasses: Record<string, string> = {
-  excellent: 'bg-green-100 text-green-700 border-green-200',
-  good: 'bg-blue-100 text-blue-700 border-blue-200',
-  fair: 'bg-amber-100 text-amber-700 border-amber-200',
-  poor: 'bg-red-100 text-red-700 border-red-200',
+const conditionTone: Record<string, DeskTone> = {
+  excellent: 'ok',
+  good: 'info',
+  fair: 'warn',
+  poor: 'bad',
+}
+
+function appraisalState(tradeIn: TradeIn): { tone: DeskTone; label: string } {
+  if (tradeIn.deal) return { tone: 'ok', label: 'On deal' }
+  if (tradeIn.offerAmount) return { tone: 'info', label: 'Offered' }
+  return { tone: 'warn', label: 'Needs appraisal' }
 }
 
 function formatCurrency(value: number | null | undefined) {
@@ -53,27 +56,6 @@ function preliminaryWholesaleEstimate(referenceValue: number, condition: string 
 
 function offerDraftsFor(tradeIns: TradeIn[]) {
   return Object.fromEntries(tradeIns.map(tradeIn => [tradeIn.id, String(tradeIn.offerAmount || '')]))
-}
-
-function EmptyStateDefault() {
-  return (
-    <EmptyState
-      title="No trade-ins"
-      description="Trade-in appraisals will appear here."
-      icons={[Triangle, Square, Circle]}
-    />
-  )
-}
-
-function EmptyStateSearch({ onResetFilters }: { onResetFilters: () => void }) {
-  return (
-    <EmptyState
-      title="No results found"
-      description="Try adjusting your search or filters."
-      icons={[Search]}
-      action={{ label: 'Reset filters', onClick: onResetFilters }}
-    />
-  )
 }
 
 export function TradeInDeskPageClient({
@@ -165,6 +147,13 @@ export function TradeInDeskPageClient({
     setFilter('all')
   }
 
+  const counts = {
+    open: tradeIns.filter(tradeIn => !tradeIn.deal).length,
+    attached: tradeIns.filter(tradeIn => tradeIn.deal).length,
+    all: tradeIns.length,
+  }
+  const awaiting = tradeIns.filter(tradeIn => !tradeIn.deal && !tradeIn.offerAmount).length
+
   const breadcrumbs = [
     { type: 'link' as const, label: 'Dashboard', href: basePath },
     { type: 'page' as const, label: 'Platform' },
@@ -172,189 +161,182 @@ export function TradeInDeskPageClient({
   ]
 
   const header = (
-    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">Trade-Ins</h1>
-        <p className="text-muted-foreground">Appraise trade-ins and record offers.</p>
-      </div>
-      <Button className="self-start" variant="outline" onClick={loadTradeIns} disabled={loading}>
-        <RefreshCw className="h-4 w-4 mr-2" />
-        Refresh
-      </Button>
-    </div>
+    <DeskHeader
+      title="Trade-ins"
+      tone={error ? 'bad' : awaiting > 0 ? 'warn' : 'ok'}
+      status={error ? 'Unavailable' : `${awaiting} need appraisal`}
+      meta={`${counts.open} open · ${awaiting} need appraisal · ${counts.attached} on deals`}
+      actions={
+        <Track>
+          <Pill onClick={loadTradeIns} disabled={loading}>
+            <RefreshCw className={loading ? 'animate-spin' : undefined} />
+            Refresh
+          </Pill>
+        </Track>
+      }
+    />
   )
 
   return (
     <PageContainer title="Trade-Ins" header={header} breadcrumbs={breadcrumbs}>
-      <div className="space-y-6 px-4 pb-6 md:px-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row">
-            <div className="relative w-full sm:max-w-sm">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="pl-9"
-                value={search}
-                onChange={event => setSearch(event.target.value)}
-                placeholder="Search vehicle, customer, or VIN"
-                aria-label="Search trade-ins"
-              />
-            </div>
-            <Select value={sortOrder} onValueChange={setSortOrder}>
-              <SelectTrigger className="w-full sm:w-[170px]" aria-label="Sort trade-ins">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="vehicle">Vehicle</SelectItem>
-                <SelectItem value="offer-desc">Highest offer</SelectItem>
-                <SelectItem value="mileage">Lowest mileage</SelectItem>
-              </SelectContent>
-            </Select>
+      <div className="min-w-0 max-w-full space-y-4 px-4 pb-10 md:px-6">
+        <Segmented<QueueFilter>
+          label="Filter trade-ins"
+          value={filter}
+          onChange={setFilter}
+          size="sm"
+          options={[
+            { value: 'open', label: 'Open', count: counts.open },
+            { value: 'attached', label: 'On deal', count: counts.attached },
+            { value: 'all', label: 'All', count: counts.all },
+          ]}
+        />
+        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative min-w-0 sm:max-w-sm sm:flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="pl-9"
+              value={search}
+              onChange={event => setSearch(event.target.value)}
+              placeholder="Vehicle, customer or VIN"
+              aria-label="Search trade-ins"
+            />
           </div>
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Filter trade-ins">
-            {([
-              { value: 'open', label: 'Open' },
-              { value: 'attached', label: 'Attached' },
-              { value: 'all', label: 'All' },
-            ] as const).map(option => (
-              <Button
-                key={option.value}
-                variant={filter === option.value ? 'secondary' : 'outline'}
-                size="sm"
-                aria-pressed={filter === option.value}
-                onClick={() => setFilter(option.value)}
-              >
-                {option.label}
-              </Button>
-            ))}
-          </div>
+          <Select value={sortOrder} onValueChange={setSortOrder}>
+            <SelectTrigger className="w-full sm:w-[160px]" aria-label="Sort trade-ins">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="vehicle">Vehicle</SelectItem>
+              <SelectItem value="offer-desc">Highest offer</SelectItem>
+              <SelectItem value="mileage">Lowest mileage</SelectItem>
+            </SelectContent>
+          </Select>
+          {loading && (
+            <span className="text-xs text-muted-foreground" role="status">
+              Refreshing…
+            </span>
+          )}
         </div>
 
-        {loading && (
-          <span className="text-sm text-muted-foreground" role="status">
-            Refreshing…
-          </span>
-        )}
-
         {error ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-destructive" />
-              <p className="font-medium">Trade-ins are unavailable</p>
-              <p className="mt-1 text-sm text-muted-foreground">{error}</p>
-              <Button className="mt-4" variant="outline" onClick={loadTradeIns}>
-                Retry
-              </Button>
-            </CardContent>
-          </Card>
+          <Notice tone="bad">
+            <p className="font-medium">Trade-ins unavailable</p>
+            <p className="mt-0.5 text-muted-foreground">{error}</p>
+            <Track className="mt-2">
+              <Pill size="sm" onClick={loadTradeIns}>Retry</Pill>
+            </Track>
+          </Notice>
+        ) : filteredTradeIns.length === 0 ? (
+          <Panel className="flex flex-col items-center gap-3 px-4 py-12 text-center">
+            <p className="text-sm text-muted-foreground">
+              {tradeIns.length > 0 && isFiltered ? 'No matching trade-ins' : 'No trade-ins'}
+            </p>
+            {tradeIns.length > 0 && isFiltered && (
+              <Track>
+                <Pill size="sm" onClick={resetFilters}>Reset filters</Pill>
+              </Track>
+            )}
+          </Panel>
         ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Appraisal queue</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {filteredTradeIns.length === 0 ? (
-                tradeIns.length > 0 && isFiltered ? (
-                  <EmptyStateSearch onResetFilters={resetFilters} />
-                ) : (
-                  <EmptyStateDefault />
-                )
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/50">
-                      <tr>
-                        <th className="text-left py-3 px-4 font-medium">Vehicle</th>
-                        <th className="text-left py-3 px-4 font-medium">Customer</th>
-                        <th className="text-center py-3 px-4 font-medium">Condition</th>
-                        <th className="text-right py-3 px-4 font-medium">Reference value</th>
-                        <th className="text-right py-3 px-4 font-medium">Estimate</th>
-                        <th className="text-left py-3 px-4 font-medium">Offer</th>
-                        <th className="text-left py-3 px-4 font-medium">Deal</th>
-                        <th className="text-right py-3 px-4 font-medium">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredTradeIns.map(tradeIn => {
-                        const wholesale = preliminaryWholesaleEstimate(tradeIn.referenceValue || 0, tradeIn.condition, tradeIn.mileage)
-                        const spread = (tradeIn.referenceValue || 0) - Number(offerDrafts[tradeIn.id] || tradeIn.offerAmount || 0)
+          <Panel className="divide-y">
+            {filteredTradeIns.map(tradeIn => {
+              const wholesale = preliminaryWholesaleEstimate(tradeIn.referenceValue || 0, tradeIn.condition, tradeIn.mileage)
+              const spread = (tradeIn.referenceValue || 0) - Number(offerDrafts[tradeIn.id] || tradeIn.offerAmount || 0)
+              const state = appraisalState(tradeIn)
+              const customer = tradeIn.lead
+                ? [tradeIn.lead.firstName, tradeIn.lead.lastName].filter(Boolean).join(' ') || 'Customer'
+                : null
 
-                        return (
-                          <tr key={tradeIn.id} className="border-b last:border-0 hover:bg-muted/50">
-                            <td className="py-3 px-4">
-                              <p className="font-medium">{vehicleLabel(tradeIn)}</p>
-                              <div className="text-xs text-muted-foreground">
-                                {formatMileage(tradeIn.mileage)} mi · VIN {tradeIn.vin || 'not entered'}
-                              </div>
-                              {tradeIn.mechanicalIssues && (
-                                <div className="mt-1 inline-flex items-center gap-1 text-xs text-amber-700">
-                                  <AlertTriangle className="h-3 w-3" /> Mechanical notes
-                                </div>
-                              )}
-                            </td>
-                            <td className="py-3 px-4 max-w-[260px]">
-                              {tradeIn.lead ? (
-                                <Link href={`${basePath}/platform/crm/${tradeIn.lead.id}`} className="font-medium hover:underline">
-                                  {[tradeIn.lead.firstName, tradeIn.lead.lastName].filter(Boolean).join(' ') || 'Customer'}
-                                </Link>
-                              ) : (
-                                <p className="font-medium">No customer</p>
-                              )}
-                              <p className="text-xs text-muted-foreground line-clamp-2">
-                                {tradeIn.lead?.phone || tradeIn.lead?.email || 'No contact'}
-                              </p>
-                              {tradeIn.interiorCondition && (
-                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{tradeIn.interiorCondition}</p>
-                              )}
-                            </td>
-                            <td className="py-3 px-4 text-center">
-                              <Badge variant="outline" className={conditionClasses[tradeIn.condition || 'good'] || conditionClasses.good}>
-                                {tradeIn.condition || 'unknown'}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-4 text-right font-medium">{formatCurrency(tradeIn.referenceValue)}</td>
-                            <td className="py-3 px-4 text-right">{formatCurrency(wholesale)}</td>
-                            <td className="py-3 px-4 min-w-[180px]">
-                              <Input
-                                type="number"
-                                value={offerDrafts[tradeIn.id] || ''}
-                                onChange={event => setOfferDrafts(prev => ({ ...prev, [tradeIn.id]: event.target.value }))}
-                                className="h-8"
-                                aria-label={`Offer for ${vehicleLabel(tradeIn)}`}
-                              />
-                              <p className={`text-xs mt-1 ${spread < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
-                                Spread: {formatCurrency(spread)}
-                              </p>
-                            </td>
-                            <td className="py-3 px-4">
-                              {tradeIn.deal ? (
-                                <Link href={`${basePath}/platform/deals/${tradeIn.deal.id}`} className="text-primary hover:underline">
-                                  {tradeIn.deal.vehicle
-                                    ? `${tradeIn.deal.vehicle.year} ${tradeIn.deal.vehicle.make} ${tradeIn.deal.vehicle.model}`
-                                    : 'Deal'}
-                                </Link>
-                              ) : (
-                                <span className="text-muted-foreground">Not attached</span>
-                              )}
-                            </td>
-                            <td className="py-3 px-4">
-                              <div className="flex justify-end gap-2">
-                                <Button size="sm" variant="ghost" onClick={() => applyWholesaleEstimate(tradeIn)}>
-                                  Use estimate
-                                </Button>
-                                <Button size="sm" onClick={() => updateOffer(tradeIn)} disabled={updatingId === tradeIn.id}>
-                                  Save offer
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+              return (
+                <div key={tradeIn.id} className="space-y-3 px-4 py-3">
+                  <div className="flex min-w-0 items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <TitleLine as="p" tone={state.tone} status={state.label} className="text-sm font-medium">
+                        {vehicleLabel(tradeIn)}
+                        {tradeIn.condition && (
+                          <span className="ml-2 inline-flex items-baseline gap-1 text-xs font-normal capitalize text-muted-foreground">
+                            <span className="sr-only">Condition: </span>
+                            <StatusDot tone={conditionTone[tradeIn.condition] ?? 'idle'} className="size-1.5 -translate-y-px shadow-none" />
+                            {tradeIn.condition}
+                          </span>
+                        )}
+                      </TitleLine>
+                      <p className="break-words pl-4 text-xs text-muted-foreground">
+                        <span className="tabular-nums">{formatMileage(tradeIn.mileage)} mi</span>
+                        {' · VIN '}
+                        <Code>{tradeIn.vin || 'not entered'}</Code>
+                        {' · '}
+                        {state.label}
+                      </p>
+                      <p className="break-words pl-4 text-xs text-muted-foreground">
+                        {tradeIn.lead ? (
+                          <Link href={`${basePath}/platform/crm/${tradeIn.lead.id}`} className="text-foreground hover:underline">
+                            {customer}
+                          </Link>
+                        ) : (
+                          'No customer'
+                        )}
+                        {' · '}
+                        {tradeIn.lead?.phone || tradeIn.lead?.email || 'No contact'}
+                        {tradeIn.appraisedBy?.name ? ` · Appraised by ${tradeIn.appraisedBy.name}` : ''}
+                      </p>
+                      {tradeIn.interiorCondition && (
+                        <p className="break-words pl-4 text-xs text-muted-foreground">{tradeIn.interiorCondition}</p>
+                      )}
+                      {tradeIn.mechanicalIssues && (
+                        <p className="break-words pl-4 text-xs text-amber-700 dark:text-amber-300" title={tradeIn.mechanicalIssues}>
+                          Mechanical notes
+                        </p>
+                      )}
+                      <p className="break-words pl-4 text-xs text-muted-foreground">
+                        {tradeIn.deal ? (
+                          <Link href={`${basePath}/platform/deals/${tradeIn.deal.id}`} className="text-foreground hover:underline">
+                            Deal ·{' '}
+                            {tradeIn.deal.vehicle
+                              ? `${tradeIn.deal.vehicle.year} ${tradeIn.deal.vehicle.make} ${tradeIn.deal.vehicle.model}`
+                              : 'Deal'}
+                          </Link>
+                        ) : (
+                          'Not attached'
+                        )}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-semibold tabular-nums">{tradeIn.offerAmount ? formatCurrency(tradeIn.offerAmount) : '-'}</p>
+                      <p className="text-[11px] text-muted-foreground">Offer</p>
+                      <p className="mt-1 text-xs tabular-nums text-muted-foreground">Ref {formatCurrency(tradeIn.referenceValue)}</p>
+                      <p className="text-xs tabular-nums text-muted-foreground">Est {formatCurrency(wholesale)}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex min-w-0 flex-col gap-2 pl-4 sm:flex-row sm:items-center sm:justify-end">
+                    <div className="flex min-w-0 items-center gap-2 sm:mr-auto">
+                      <Input
+                        type="number"
+                        value={offerDrafts[tradeIn.id] || ''}
+                        onChange={event => setOfferDrafts(prev => ({ ...prev, [tradeIn.id]: event.target.value }))}
+                        className="h-8 w-full min-w-0 tabular-nums sm:w-36"
+                        placeholder="Offer"
+                        aria-label={`Offer for ${vehicleLabel(tradeIn)}`}
+                      />
+                      <p className={`shrink-0 text-xs tabular-nums ${spread < 0 ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>
+                        Spread {formatCurrency(spread)}
+                      </p>
+                    </div>
+                    <Track className="self-end sm:self-auto">
+                      <Pill size="sm" onClick={() => applyWholesaleEstimate(tradeIn)}>
+                        Use estimate
+                      </Pill>
+                      <Pill size="sm" variant="primary" onClick={() => updateOffer(tradeIn)} disabled={updatingId === tradeIn.id}>
+                        Save offer
+                      </Pill>
+                    </Track>
+                  </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              )
+            })}
+          </Panel>
         )}
       </div>
     </PageContainer>

@@ -1,17 +1,32 @@
+@layer components {
 .storefront {
+  /* Merchant logo hue (Store Settings) rotates the brand accent. 262 is the library default mark's blue. */
   --sf-logo-hue: 0;
-  --sf-brand-hue: calc(55 + var(--sf-logo-hue));
+  --sf-brand-hue: calc(262 + var(--sf-logo-hue));
 
-  --sf-paper: oklch(0.97 0.008 85);
-  --sf-paper-2: oklch(0.94 0.01 80);
-  --sf-paper-3: oklch(0.18 0.012 75);
-  --sf-ink: oklch(0.16 0.015 75);
-  --sf-ink-2: oklch(0.42 0.02 75);
-  --sf-ink-3: oklch(0.62 0.015 80);
-  --sf-rule: oklch(0.88 0.012 85);
-  --sf-accent: oklch(0.52 0.11 var(--sf-brand-hue));
-  --sf-accent-ink: oklch(0.98 0.01 85);
-  --sf-focus: oklch(0.48 0.14 var(--sf-brand-hue));
+  /* Showroom: white floor, concrete panels, tarmac bands */
+  --sf-paper: oklch(0.987 0.002 255);
+  --sf-paper-2: oklch(0.958 0.004 255);
+  --sf-paper-3: oklch(0.205 0.012 262);
+  --sf-paper-4: oklch(0.255 0.013 262);
+  --sf-ink: oklch(0.18 0.014 262);
+  --sf-ink-2: oklch(0.43 0.016 262);
+  --sf-ink-3: oklch(0.6 0.012 262);
+  --sf-on-dark: oklch(0.97 0.004 255);
+  --sf-on-dark-2: oklch(0.76 0.012 262);
+  --sf-rule: oklch(0.905 0.005 255);
+  --sf-rule-dark: oklch(0.33 0.012 262);
+
+  --sf-accent: oklch(0.53 0.2 var(--sf-brand-hue));
+  --sf-accent-hover: oklch(0.47 0.2 var(--sf-brand-hue));
+  --sf-accent-soft: oklch(0.95 0.035 var(--sf-brand-hue));
+  --sf-accent-ink: oklch(0.99 0.005 255);
+  --sf-focus: oklch(0.55 0.2 var(--sf-brand-hue));
+
+  --sf-ok: oklch(0.63 0.15 152);
+  --sf-warn: oklch(0.74 0.15 72);
+  --sf-bad: oklch(0.58 0.2 27);
+  --sf-idle: oklch(0.7 0.01 262);
 
   --sf-space-3xs: 0.25rem;
   --sf-space-2xs: 0.5rem;
@@ -25,23 +40,29 @@
 
   --sf-text-xs: 0.75rem;
   --sf-text-sm: 0.875rem;
-  --sf-text-md: 1.0625rem;
-  --sf-text-lg: 1.25rem;
-  --sf-text-xl: 1.625rem;
-  --sf-text-2xl: 2.125rem;
-  --sf-text-display: clamp(2.25rem, 5vw, 3.75rem);
+  --sf-text-md: 1rem;
+  --sf-text-lg: 1.1875rem;
+  --sf-text-xl: 1.5rem;
+  --sf-text-2xl: clamp(1.625rem, 3vw, 2.125rem);
+  --sf-text-display: clamp(2.25rem, 6vw, 4.25rem);
 
-  --sf-radius-sm: 2px;
-  --sf-radius-md: 4px;
+  --sf-radius-sm: 8px;
+  --sf-radius-md: 14px;
+  --sf-radius-lg: 22px;
+
+  --sf-shadow-raised: 0 1px 2px oklch(0.2 0.02 262 / 0.12), 0 1px 0 oklch(1 0 0 / 0.7) inset;
+  --sf-shadow-recessed: inset 0 1px 2px oklch(0.2 0.02 262 / 0.1), inset 0 0 0 1px oklch(0.2 0.02 262 / 0.04);
+  --sf-shadow-float: 0 18px 40px -18px oklch(0.2 0.03 262 / 0.35), 0 2px 6px oklch(0.2 0.03 262 / 0.08);
 
   --sf-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --sf-dur-short: 180ms;
+  --sf-dur-short: 160ms;
 
-  --sf-font-display: var(--font-storefront-display), "Iowan Old Style", "Palatino Linotype", serif;
+  --sf-font-display: var(--font-storefront-display), "Helvetica Neue", Arial, sans-serif;
   --sf-font-body: var(--font-storefront-body), system-ui, sans-serif;
   --sf-font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
   color: var(--sf-ink);
   background: var(--sf-paper);
   font-family: var(--sf-font-body);
+}
 }

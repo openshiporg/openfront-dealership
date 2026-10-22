@@ -1,16 +1,25 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
-import { AlertTriangle, Circle, CreditCard, FileLock2, Landmark, RefreshCw, RotateCcw, Search, Square, Triangle } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { EmptyState } from '@/components/ui/empty-state'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { FileLock2, RefreshCw, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
+import {
+  Code,
+  DeskHeader,
+  DeskSection,
+  Notice,
+  Panel,
+  Pill,
+  Readout,
+  ReadoutStrip,
+  Segmented,
+  TitleLine,
+  Track,
+  type DeskTone,
+} from '@/features/platform/components/desk'
 import {
   type AccountingBatch,
   type AccountingWorkspace,
@@ -33,35 +42,59 @@ function firstRooftopId(workspace: AccountingWorkspace) {
   return workspace.mappings[0]?.rooftop.id || workspace.payments[0]?.rooftop.id || workspace.batches[0]?.rooftop.id || ''
 }
 
-function Summary({ title, value, detail, icon: Icon }: { title: string; value: string; detail: string; icon: React.ElementType }) {
+const batchFilters = [
+  { value: 'open', label: 'Open work' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'posted', label: 'Posted' },
+  { value: 'reconciled', label: 'Reconciled' },
+  { value: 'locked', label: 'Locked' },
+  { value: 'all', label: 'All' },
+]
+
+const paymentFilters = [
+  { value: 'all', label: 'All' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'captured', label: 'Captured' },
+  { value: 'partially-refunded', label: 'Partially refunded' },
+  { value: 'refunded', label: 'Refunded' },
+  { value: 'failed', label: 'Failed' },
+]
+
+const sourceTypes = ['deal', 'service', 'parts', 'payment']
+
+function stateTone(status: string): DeskTone {
+  if (['failed', 'cancelled', 'rejected'].includes(status)) return 'bad'
+  if (['posting', 'creating', 'pending', 'staged', 'requested', 'partially-refunded'].includes(status)) return 'warn'
+  if (['posted', 'captured', 'completed', 'succeeded'].includes(status)) return 'info'
+  if (['reconciled', 'locked', 'refunded'].includes(status)) return 'ok'
+  return 'idle'
+}
+
+function Empty({ label, onReset }: { label: string; onReset?: () => void }) {
   return (
-    <Card>
-      <CardContent className="flex items-center justify-between gap-3 p-4">
-        <div>
-          <p className="text-sm text-muted-foreground">{title}</p>
-          <p className="mt-1 text-2xl font-semibold">{value}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
-        </div>
-        <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
-      </CardContent>
-    </Card>
+    <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-muted-foreground">
+      <p>{label}</p>
+      {onReset && (
+        <Track>
+          <Pill size="sm" onClick={onReset}>Reset filters</Pill>
+        </Track>
+      )}
+    </div>
   )
 }
 
-function EmptyStateDefault({ title, description }: { title: string; description: string }) {
-  return <EmptyState title={title} description={description} icons={[Triangle, Square, Circle]} />
-}
-
-function EmptyStateSearch({ onResetFilters }: { onResetFilters: () => void }) {
+function Field({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
   return (
-    <EmptyState
-      title="No results found"
-      description="Try adjusting your search or filters."
-      icons={[Search]}
-      action={{ label: 'Reset filters', onClick: onResetFilters }}
-    />
+    <div className={`grid min-w-0 gap-1.5 text-sm ${className || ''}`}>
+      <span className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">{label}</span>
+      {children}
+    </div>
   )
 }
+
+const LABEL = 'font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground'
+const TH = 'px-4 py-2 font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground'
+const NUM = 'px-4 py-2.5 text-right font-mono text-[13px] tabular-nums whitespace-nowrap'
 
 export function AccountingWorkspacePageClient({
   initialWorkspace,
@@ -91,6 +124,7 @@ export function AccountingWorkspacePageClient({
   const [stage, setStage] = useState({ sourceType: 'payment', sourceId: '', providerKey: 'operator-recorded' })
   const [payment, setPayment] = useState({ sourceType: 'service', sourceId: '', amountCents: '', providerKey: paymentProviders[0]?.code || '' })
   const [refund, setRefund] = useState({ transactionId: '', amountCents: '', reason: '' })
+  const [view, setView] = useState<'batches' | 'payments' | 'mapping' | 'stage'>('batches')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -169,67 +203,178 @@ export function AccountingWorkspacePageClient({
     { type: 'page' as const, label: 'Accounting' },
   ]
 
+  const unposted = workspace.batches.filter(batch => !['posted', 'reconciled', 'locked'].includes(batch.status)).length
+  const captured = workspace.payments.reduce((total, item) => total + item.capturedCents, 0)
+  const refunded = workspace.payments.reduce((total, item) => total + item.refundedCents, 0)
+  const exceptionBatches = workspace.batches.filter(batch => ['failed', 'posting'].includes(batch.status))
+  const exceptionPayments = workspace.payments.filter(item => ['failed', 'creating'].includes(item.status))
+
+  const batchSearchMatches = workspace.batches.filter(
+    batch => !term || `${batch.sourceType} ${batch.sourceId} ${batch.rooftop.name} ${batch.externalReference || ''} ${batch.lastErrorCode || ''}`.toLowerCase().includes(term)
+  )
+  const batchCounts: Record<string, number> = {
+    open: batchSearchMatches.filter(batch => !['posted', 'reconciled', 'locked'].includes(batch.status)).length,
+    all: batchSearchMatches.length,
+  }
+  for (const option of ['failed', 'posted', 'reconciled', 'locked']) batchCounts[option] = batchSearchMatches.filter(batch => batch.status === option).length
+
+  const paymentSearchMatches = workspace.payments.filter(
+    item => !term || `${item.sourceType} ${item.id} ${item.rooftop.name} ${item.providerKey} ${item.reconciliationReference || ''}`.toLowerCase().includes(term)
+  )
+  const paymentCounts: Record<string, number> = { all: paymentSearchMatches.length }
+  for (const option of paymentFilters) if (option.value !== 'all') paymentCounts[option.value] = paymentSearchMatches.filter(item => item.status === option.value).length
+
+  const shownDebit = batches.reduce((total, batch) => total + batch.totalDebitCents, 0)
+  const shownCredit = batches.reduce((total, batch) => total + batch.totalCreditCents, 0)
+
+  const queuePost = (batch: AccountingBatch) =>
+    run(
+      batch.id,
+      () => manageAccountingBatch({ batchId: batch.id, action: 'queue-post', idempotencyKey: nonce('accounting-queue') }),
+      'Batch queued for posting.'
+    )
+
+  const batchActions = (batch: AccountingBatch) =>
+    ['staged', 'failed', 'posted', 'reconciled'].includes(batch.status) ? (
+      <Track>
+        {['staged', 'failed'].includes(batch.status) && (
+          <Pill size="sm" variant="primary" disabled={busy === batch.id} onClick={() => queuePost(batch)}>
+            Queue for posting
+          </Pill>
+        )}
+        {batch.status === 'posted' && (
+          <Pill size="sm" disabled={busy === batch.id} onClick={() => reconcile(batch)}>
+            Record reconciliation
+          </Pill>
+        )}
+        {batch.status === 'reconciled' && (
+          <Pill
+            size="sm"
+            disabled={busy === batch.id}
+            onClick={() =>
+              run(
+                batch.id,
+                () => manageAccountingBatch({ batchId: batch.id, action: 'lock', idempotencyKey: nonce('accounting-lock') }),
+                'Batch locked.'
+              )
+            }
+          >
+            <FileLock2 />
+            Lock
+          </Pill>
+        )}
+      </Track>
+    ) : null
+
   const header = (
-    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">Accounting</h1>
-        <p className="text-muted-foreground">Export journal batches, reconcile payments and refunds, and close periods.</p>
-      </div>
-      <Button className="self-start" variant="outline" onClick={load} disabled={loading}>
-        <RefreshCw className="mr-2 h-4 w-4" />
-        Refresh
-      </Button>
-    </div>
+    <DeskHeader
+      title="Accounting"
+      tone={error ? 'bad' : exceptions > 0 ? 'warn' : 'ok'}
+      status={error ? 'Unavailable' : exceptions > 0 ? `${exceptions} exceptions` : 'No exceptions'}
+      meta={error ? 'Unavailable' : `${unposted} unposted · ${workspace.payments.length} payments · ${workspace.mappings.length} mappings`}
+      actions={
+        <Track>
+          <Pill onClick={load} disabled={loading} aria-label="Refresh">
+            <RefreshCw className={loading ? 'animate-spin' : undefined} />
+            Refresh
+          </Pill>
+        </Track>
+      }
+    />
   )
 
   return (
     <PageContainer title="Accounting" header={header} breadcrumbs={breadcrumbs}>
-      <div className="min-w-0 space-y-6 px-4 pb-6 md:px-6">
+      <div className="min-w-0 max-w-full space-y-8 px-4 pb-10 md:px-6">
         {message && (
-          <div role="status" className="rounded-md border bg-muted/40 p-3 text-sm">
-            {message}
-          </div>
+          <Notice tone="info">
+            <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
+              <p className="min-w-0">{message}</p>
+              <Track>
+                <Pill size="sm" variant="plain" onClick={() => setMessage(null)}>Dismiss</Pill>
+              </Track>
+            </div>
+          </Notice>
         )}
         {error ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-destructive" />
+          <div className="space-y-3">
+            <Notice tone="bad">
               <p className="font-medium">Accounting is unavailable</p>
-              <p className="mt-1 text-sm text-muted-foreground">{error}</p>
-              <Button className="mt-4" variant="outline" onClick={load}>
-                Retry
-              </Button>
-            </CardContent>
-          </Card>
+              <p className="mt-0.5 text-muted-foreground">{error}</p>
+            </Notice>
+            <Track>
+              <Pill onClick={load}>Retry</Pill>
+            </Track>
+          </div>
         ) : (
           <>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <Summary
-                title="Unposted batches"
-                value={String(workspace.batches.filter(batch => !['posted', 'reconciled', 'locked'].includes(batch.status)).length)}
-                detail="Staged or failed"
-                icon={Landmark}
+            <ReadoutStrip>
+              <Readout
+                label="Exceptions"
+                value={exceptions}
+                tone={exceptions > 0 ? 'bad' : 'ok'}
+                sub={`${exceptionBatches.length} posting · ${exceptionPayments.length} payment`}
               />
-              <Summary
-                title="Captured"
-                value={money(workspace.payments.reduce((total, item) => total + item.capturedCents, 0))}
-                detail="Payments captured"
-                icon={CreditCard}
-              />
-              <Summary
-                title="Refunded"
-                value={money(workspace.payments.reduce((total, item) => total + item.refundedCents, 0))}
-                detail="Payments refunded"
-                icon={RotateCcw}
-              />
-              <Summary title="Exceptions" value={String(exceptions)} detail="Posting or payment issues" icon={AlertTriangle} />
-            </div>
+              <Readout label="Unposted batches" value={unposted} tone={unposted > 0 ? 'warn' : 'idle'} sub="Staged or failed" />
+              <Readout label="Captured" value={money(captured)} />
+              <Readout label="Refunded" value={money(refunded)} sub={`${workspace.refunds.length} refunds`} />
+            </ReadoutStrip>
 
-            <div className="flex flex-col gap-3 md:flex-row md:items-center">
-              <div className="relative min-w-0 flex-1 md:max-w-md">
+            <DeskSection title="Exceptions" count={exceptions}>
+              {exceptions === 0 ? (
+                <p className="py-3 text-sm text-muted-foreground">No exceptions</p>
+              ) : (
+                <Panel className="divide-y">
+                  {exceptionBatches.map(batch => (
+                    <div key={batch.id} className="flex min-w-0 flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <TitleLine as="p" tone={stateTone(batch.status)} status={batch.status} className="text-sm font-medium">
+                          Batch · {batch.sourceType} · {batch.rooftop.name}
+                        </TitleLine>
+                        <p className="break-all pl-4 text-xs text-muted-foreground">
+                          {batch.status} · <Code>{batch.sourceId}</Code> · {batch.attemptCount} attempts
+                          {batch.lastErrorCode ? ` · error ${batch.lastErrorCode}` : ''} · {dateTime(batch.updatedAt)}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3 pl-4 sm:pl-0">
+                        <span className="font-mono text-[13px] tabular-nums">{money(batch.totalDebitCents)}</span>
+                        {batchActions(batch)}
+                      </div>
+                    </div>
+                  ))}
+                  {exceptionPayments.map(item => (
+                    <div key={item.id} className="flex min-w-0 items-start justify-between gap-4 px-4 py-3">
+                      <div className="min-w-0">
+                        <TitleLine as="p" tone={stateTone(item.status)} status={item.status} className="text-sm font-medium">
+                          Payment · {item.sourceType} · {item.rooftop.name}
+                        </TitleLine>
+                        <p className="break-all pl-4 text-xs text-muted-foreground">
+                          {item.status} · {item.providerKey} · <Code>{item.id}</Code> · {dateTime(item.updatedAt)}
+                        </p>
+                      </div>
+                      <span className="shrink-0 font-mono text-[13px] tabular-nums">{money(item.amountCents)}</span>
+                    </div>
+                  ))}
+                </Panel>
+              )}
+            </DeskSection>
+
+            <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-center">
+              <Segmented
+                label="Accounting view"
+                value={view}
+                onChange={setView}
+                options={[
+                  { value: 'batches', label: 'Posting queue', count: workspace.batches.length },
+                  { value: 'payments', label: 'Payments', count: workspace.payments.length },
+                  { value: 'mapping', label: 'Account mapping', count: workspace.mappings.length },
+                  { value: 'stage', label: 'Stage export' },
+                ]}
+              />
+              <div className="relative min-w-0 flex-1 md:max-w-sm">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  className="pl-9"
+                  className="rounded-full pl-9"
                   value={search}
                   onChange={event => setSearch(event.target.value)}
                   placeholder="Search source, rooftop, provider, or reference"
@@ -243,227 +388,200 @@ export function AccountingWorkspacePageClient({
               )}
             </div>
 
-            <Tabs defaultValue="batches">
-              <TabsList className="max-w-full justify-start overflow-x-auto">
-                <TabsTrigger value="batches">Posting queue</TabsTrigger>
-                <TabsTrigger value="payments">Payments</TabsTrigger>
-                <TabsTrigger value="mapping">Account mapping</TabsTrigger>
-                <TabsTrigger value="stage">Stage export</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="batches" className="space-y-4">
-                <Select value={batchFilter} onValueChange={setBatchFilter}>
-                  <SelectTrigger className="w-full sm:w-[190px]" aria-label="Filter batches">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="open">Open work</SelectItem>
-                    <SelectItem value="failed">Failed</SelectItem>
-                    <SelectItem value="posted">Posted</SelectItem>
-                    <SelectItem value="reconciled">Reconciled</SelectItem>
-                    <SelectItem value="locked">Locked</SelectItem>
-                    <SelectItem value="all">All states</SelectItem>
-                  </SelectContent>
-                </Select>
+            {view === 'batches' && (
+              <DeskSection
+                title="Posting queue"
+                count={batches.length}
+                actions={
+                  <Segmented
+                    label="Filter batches"
+                    size="sm"
+                    value={batchFilter}
+                    onChange={setBatchFilter}
+                    options={batchFilters.map(option => ({ ...option, count: batchCounts[option.value] }))}
+                  />
+                }
+              >
                 {batches.length === 0 ? (
-                  batchesFiltered ? (
-                    <EmptyStateSearch onResetFilters={resetFilters} />
-                  ) : (
-                    <EmptyStateDefault title="No batches" description="Accounting batches you stage will appear here." />
-                  )
+                  batchesFiltered ? <Empty label="No matching batches" onReset={resetFilters} /> : <Empty label="No batches" />
                 ) : (
-                  <div className="grid gap-3 xl:grid-cols-2">
-                    {batches.map(batch => (
-                      <Card key={batch.id} className="min-w-0">
-                        <CardContent className="space-y-4 p-4">
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <strong className="break-words">
+                  <Panel className="overflow-x-auto">
+                    <table className="w-full min-w-[760px] text-sm">
+                      <thead className="border-b">
+                        <tr className="text-left">
+                          <th className={TH}>Source</th>
+                          <th className={TH}>Reference</th>
+                          <th className={`${TH} text-right`}>Attempts</th>
+                          <th className={`${TH} text-right`}>Debit</th>
+                          <th className={`${TH} text-right`}>Credit</th>
+                          <th className={`${TH} text-right`}>
+                            <span className="sr-only">Actions</span>
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {batches.map(batch => (
+                          <tr key={batch.id} className="align-top hover:bg-muted/30">
+                            <td className="max-w-[18rem] px-4 py-2.5">
+                              <TitleLine as="p" tone={stateTone(batch.status)} status={batch.status} className="font-medium">
                                 {batch.sourceType} · {batch.rooftop.name}
-                              </strong>
-                              <p className="break-all font-mono text-xs text-muted-foreground">Source {batch.sourceId}</p>
-                            </div>
-                            <Badge variant="outline">{batch.status}</Badge>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3 text-sm">
-                            <div>
-                              <p className="text-muted-foreground">Debit / credit</p>
-                              <p className="font-medium">
-                                {money(batch.totalDebitCents)} / {money(batch.totalCreditCents)}
+                              </TitleLine>
+                              <p className="break-all pl-4 text-xs text-muted-foreground">
+                                {batch.status} · <Code>{batch.sourceId}</Code>
                               </p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Attempts / updated</p>
-                              <p className="font-medium">
-                                {batch.attemptCount} · {dateTime(batch.updatedAt)}
-                              </p>
-                            </div>
-                            <div className="col-span-2">
-                              <p className="text-muted-foreground">External reference</p>
-                              <p className="break-all font-medium">
-                                {batch.externalReference || 'None'}
-                                {batch.lastErrorCode ? ` · error ${batch.lastErrorCode}` : ''}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {['staged', 'failed'].includes(batch.status) && (
-                              <Button
-                                size="sm"
-                                disabled={busy === batch.id}
-                                onClick={() =>
-                                  run(
-                                    batch.id,
-                                    () => manageAccountingBatch({ batchId: batch.id, action: 'queue-post', idempotencyKey: nonce('accounting-queue') }),
-                                    'Batch queued for posting.'
-                                  )
-                                }
-                              >
-                                Queue for posting
-                              </Button>
-                            )}
-                            {batch.status === 'posted' && (
-                              <Button size="sm" variant="outline" disabled={busy === batch.id} onClick={() => reconcile(batch)}>
-                                Record reconciliation
-                              </Button>
-                            )}
-                            {batch.status === 'reconciled' && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={busy === batch.id}
-                                onClick={() =>
-                                  run(
-                                    batch.id,
-                                    () => manageAccountingBatch({ batchId: batch.id, action: 'lock', idempotencyKey: nonce('accounting-lock') }),
-                                    'Batch locked.'
-                                  )
-                                }
-                              >
-                                <FileLock2 className="mr-1 h-4 w-4" />
-                                Lock
-                              </Button>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </TabsContent>
-
-              <TabsContent value="payments" className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Create checkout</CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                    <Select value={payment.sourceType} onValueChange={sourceType => setPayment(value => ({ ...value, sourceType }))}>
-                      <SelectTrigger aria-label="Payment source">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="service">Service invoice</SelectItem>
-                        <SelectItem value="deal">Deal balance</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select value={payment.providerKey} onValueChange={providerKey => setPayment(value => ({ ...value, providerKey }))}>
-                      <SelectTrigger aria-label="Payment provider">
-                        <SelectValue placeholder="No payment providers installed" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {paymentProviders.map(provider => (
-                          <SelectItem key={provider.code} value={provider.code}>
-                            {provider.name}
-                          </SelectItem>
+                            </td>
+                            <td className="px-4 py-2.5 text-xs">
+                              <p className="break-all">{batch.externalReference || 'None'}</p>
+                              {batch.lastErrorCode && <p className="text-red-600 dark:text-red-400">error {batch.lastErrorCode}</p>}
+                              <p className="text-muted-foreground">{dateTime(batch.updatedAt)}</p>
+                            </td>
+                            <td className={NUM}>{batch.attemptCount}</td>
+                            <td className={NUM}>{money(batch.totalDebitCents)}</td>
+                            <td className={NUM}>{money(batch.totalCreditCents)}</td>
+                            <td className="px-4 py-2 text-right">{batchActions(batch)}</td>
+                          </tr>
                         ))}
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      aria-label="Payment source ID"
-                      placeholder="Source ID"
-                      value={payment.sourceId}
-                      onChange={event => setPayment(value => ({ ...value, sourceId: event.target.value }))}
+                      </tbody>
+                      <tfoot className="border-t border-foreground/20">
+                        <tr>
+                          <td className="px-4 py-2.5 font-semibold" colSpan={3}>
+                            Total
+                          </td>
+                          <td className={`${NUM} font-semibold`}>{money(shownDebit)}</td>
+                          <td className={`${NUM} font-semibold`}>{money(shownCredit)}</td>
+                          <td />
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </Panel>
+                )}
+              </DeskSection>
+            )}
+
+            {view === 'payments' && (
+              <div className="space-y-8">
+                <DeskSection title="Create checkout">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto] xl:items-end">
+                    <Field label="Source">
+                      <Select value={payment.sourceType} onValueChange={sourceType => setPayment(value => ({ ...value, sourceType }))}>
+                        <SelectTrigger aria-label="Payment source">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="service">Service invoice</SelectItem>
+                          <SelectItem value="deal">Deal balance</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field label="Provider">
+                      <Select value={payment.providerKey} onValueChange={providerKey => setPayment(value => ({ ...value, providerKey }))}>
+                        <SelectTrigger aria-label="Payment provider">
+                          <SelectValue placeholder="No payment providers installed" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {paymentProviders.map(provider => (
+                            <SelectItem key={provider.code} value={provider.code}>
+                              {provider.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field label="Source ID">
+                      <Input
+                        aria-label="Payment source ID"
+                        placeholder="Source ID"
+                        value={payment.sourceId}
+                        onChange={event => setPayment(value => ({ ...value, sourceId: event.target.value }))}
+                      />
+                    </Field>
+                    <Field label="Amount (cents)">
+                      <Input
+                        aria-label="Payment amount in cents"
+                        inputMode="numeric"
+                        placeholder="Amount in cents"
+                        value={payment.amountCents}
+                        onChange={event => setPayment(value => ({ ...value, amountCents: event.target.value }))}
+                      />
+                    </Field>
+                    <Track className="self-end">
+                      <Pill
+                        variant="primary"
+                        disabled={busy === 'checkout' || !payment.providerKey || !payment.sourceId.trim() || !Number.isInteger(Number(payment.amountCents)) || Number(payment.amountCents) <= 0}
+                        onClick={() =>
+                          run(
+                            'checkout',
+                            () => createPaymentCheckout({ ...payment, amountCents: Number(payment.amountCents), idempotencyKey: nonce('payment-checkout') }),
+                            'Checkout created.'
+                          )
+                        }
+                      >
+                        Create checkout
+                      </Pill>
+                    </Track>
+                  </div>
+                </DeskSection>
+
+                <DeskSection
+                  title="Payments"
+                  count={payments.length}
+                  actions={
+                    <Segmented
+                      label="Filter payments"
+                      size="sm"
+                      value={paymentFilter}
+                      onChange={setPaymentFilter}
+                      options={paymentFilters.map(option => ({ ...option, count: paymentCounts[option.value] }))}
                     />
-                    <Input
-                      aria-label="Payment amount in cents"
-                      inputMode="numeric"
-                      placeholder="Amount in cents"
-                      value={payment.amountCents}
-                      onChange={event => setPayment(value => ({ ...value, amountCents: event.target.value }))}
-                    />
-                    <Button
-                      disabled={busy === 'checkout' || !payment.providerKey || !payment.sourceId.trim() || !Number.isInteger(Number(payment.amountCents)) || Number(payment.amountCents) <= 0}
-                      onClick={() =>
-                        run(
-                          'checkout',
-                          () => createPaymentCheckout({ ...payment, amountCents: Number(payment.amountCents), idempotencyKey: nonce('payment-checkout') }),
-                          'Checkout created.'
-                        )
-                      }
-                    >
-                      Create checkout
-                    </Button>
-                  </CardContent>
-                </Card>
-                <Select value={paymentFilter} onValueChange={setPaymentFilter}>
-                  <SelectTrigger className="w-full sm:w-[190px]" aria-label="Filter payments">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All payment states</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="captured">Captured</SelectItem>
-                    <SelectItem value="partially-refunded">Partially refunded</SelectItem>
-                    <SelectItem value="refunded">Refunded</SelectItem>
-                    <SelectItem value="failed">Failed</SelectItem>
-                  </SelectContent>
-                </Select>
-                {payments.length === 0 ? (
-                  paymentsFiltered ? (
-                    <EmptyStateSearch onResetFilters={resetFilters} />
+                  }
+                >
+                  {payments.length === 0 ? (
+                    paymentsFiltered ? <Empty label="No matching payments" onReset={resetFilters} /> : <Empty label="No payments" />
                   ) : (
-                    <EmptyStateDefault title="No payments" description="Payments you collect will appear here." />
-                  )
-                ) : (
-                  <div className="grid gap-3 xl:grid-cols-2">
-                    {payments.map(item => (
-                      <Card key={item.id}>
-                        <CardContent className="space-y-4 p-4">
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div>
-                              <strong>{money(item.amountCents)}</strong>
-                              <p className="text-xs text-muted-foreground">
-                                {item.sourceType} · {item.rooftop.name} · {item.providerKey}
+                    <Panel className="divide-y">
+                      <div className="hidden grid-cols-[minmax(0,1fr)_7rem_7rem_7rem] gap-4 px-4 py-2 sm:grid">
+                        <span className={LABEL}>Payment</span>
+                        <span className={`${LABEL} text-right`}>Amount</span>
+                        <span className={`${LABEL} text-right`}>Captured</span>
+                        <span className={`${LABEL} text-right`}>Refunded</span>
+                      </div>
+                      {payments.map(item => (
+                        <div key={item.id} className="min-w-0 space-y-2.5 px-4 py-3">
+                          <div className="grid min-w-0 grid-cols-3 gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,1fr)_7rem_7rem_7rem]">
+                            <div className="col-span-3 min-w-0 sm:col-span-1">
+                              <TitleLine as="p" tone={stateTone(item.status)} status={item.status} className="text-sm font-medium">
+                                {item.sourceType} · {item.rooftop.name}
+                              </TitleLine>
+                              <p className="break-all pl-4 text-xs text-muted-foreground">
+                                {item.status} · {item.providerKey}
+                                {item.serviceOrder?.invoiceNumber ? ` · Invoice ${item.serviceOrder.invoiceNumber}` : ''}
                               </p>
-                            </div>
-                            <Badge variant="outline">{item.status}</Badge>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3 text-sm">
-                            <div>
-                              <p className="text-muted-foreground">Captured</p>
-                              <p className="font-medium">{money(item.capturedCents)}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Refunded</p>
-                              <p className="font-medium">{money(item.refundedCents)}</p>
-                            </div>
-                            <div className="col-span-2">
-                              <p className="text-muted-foreground">Reconciliation</p>
-                              <p className="break-all font-medium">
+                              <p className="break-all pl-4 text-xs text-muted-foreground">
                                 {item.reconciliationReference || 'Not reconciled'} · updated {dateTime(item.updatedAt)}
                               </p>
                             </div>
+                            {[
+                              ['Amount', item.amountCents],
+                              ['Captured', item.capturedCents],
+                              ['Refunded', item.refundedCents],
+                            ].map(([label, cents]) => (
+                              <div key={label as string} className="text-right">
+                                <p className="text-[11px] text-muted-foreground sm:hidden">{label}</p>
+                                <p className="font-mono text-[13px] tabular-nums">{money(cents as number)}</p>
+                              </div>
+                            ))}
                           </div>
                           {item.checkoutUrl && item.status === 'pending' && (
-                            <Button asChild size="sm">
-                              <a href={item.checkoutUrl} target="_blank" rel="noreferrer">
-                                Open checkout
-                              </a>
-                            </Button>
+                            <Track className="ml-4">
+                              <Pill size="sm" variant="primary" asChild>
+                                <a href={item.checkoutUrl} target="_blank" rel="noreferrer">
+                                  Open checkout
+                                </a>
+                              </Pill>
+                            </Track>
                           )}
                           {['captured', 'partially-refunded'].includes(item.status) && (
-                            <div className="grid gap-2 sm:grid-cols-3">
+                            <div className="grid gap-2 pl-4 sm:grid-cols-[8rem_minmax(0,1fr)_auto]">
                               <Input
                                 aria-label={`Refund amount in cents for ${item.id}`}
                                 placeholder="Refund cents"
@@ -476,123 +594,197 @@ export function AccountingWorkspacePageClient({
                                 value={refund.transactionId === item.id ? refund.reason : ''}
                                 onChange={event => setRefund(value => ({ ...value, transactionId: item.id, reason: event.target.value }))}
                               />
-                              <Button
-                                variant="outline"
-                                disabled={busy === `refund-${item.id}` || refund.transactionId !== item.id || !refund.reason.trim() || Number(refund.amountCents) <= 0}
-                                onClick={() =>
-                                  run(
-                                    `refund-${item.id}`,
-                                    () =>
-                                      requestPaymentRefund({
-                                        ...refund,
-                                        transactionId: item.id,
-                                        amountCents: Number(refund.amountCents),
-                                        idempotencyKey: nonce('payment-refund'),
-                                      }),
-                                    'Refund requested.'
-                                  )
-                                }
-                              >
-                                Request refund
-                              </Button>
+                              <Track className="self-start">
+                                <Pill
+                                  size="sm"
+                                  disabled={busy === `refund-${item.id}` || refund.transactionId !== item.id || !refund.reason.trim() || Number(refund.amountCents) <= 0}
+                                  onClick={() =>
+                                    run(
+                                      `refund-${item.id}`,
+                                      () =>
+                                        requestPaymentRefund({
+                                          ...refund,
+                                          transactionId: item.id,
+                                          amountCents: Number(refund.amountCents),
+                                          idempotencyKey: nonce('payment-refund'),
+                                        }),
+                                      'Refund requested.'
+                                    )
+                                  }
+                                >
+                                  Request refund
+                                </Pill>
+                              </Track>
                             </div>
                           )}
-                        </CardContent>
-                      </Card>
-                    ))}
+                        </div>
+                      ))}
+                    </Panel>
+                  )}
+                </DeskSection>
+
+                <DeskSection title="Refunds" count={workspace.refunds.length}>
+                  {workspace.refunds.length === 0 ? (
+                    <p className="py-3 text-sm text-muted-foreground">No refunds</p>
+                  ) : (
+                    <Panel className="divide-y">
+                      {workspace.refunds.map(item => (
+                        <div key={item.id} className="flex min-w-0 items-start justify-between gap-4 px-4 py-3">
+                          <div className="min-w-0">
+                            <TitleLine as="p" tone={stateTone(item.status)} status={item.status} className="text-sm font-medium">
+                              {item.reason}
+                            </TitleLine>
+                            <p className="break-all pl-4 text-xs text-muted-foreground">
+                              {item.status} · <Code>{item.transaction.id}</Code>
+                              {item.providerRefundId ? ` · ${item.providerRefundId}` : ''} · {dateTime(item.updatedAt)}
+                            </p>
+                          </div>
+                          <span className="shrink-0 font-mono text-[13px] tabular-nums">{money(item.amountCents)}</span>
+                        </div>
+                      ))}
+                    </Panel>
+                  )}
+                </DeskSection>
+              </div>
+            )}
+
+            {view === 'mapping' && (
+              <div className="space-y-8">
+                <DeskSection title="Account mapping">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <Field label="Rooftop ID">
+                      <Input
+                        aria-label="Rooftop ID"
+                        placeholder="Rooftop ID"
+                        value={mapping.rooftopId}
+                        onChange={event => setMapping(value => ({ ...value, rooftopId: event.target.value }))}
+                      />
+                    </Field>
+                    <Field label="Source type">
+                      <Select value={mapping.sourceType} onValueChange={sourceType => setMapping(value => ({ ...value, sourceType }))}>
+                        <SelectTrigger aria-label="Mapping source type">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {sourceTypes.map(value => (
+                            <SelectItem key={value} value={value}>
+                              {value}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field label="Source code">
+                      <Input
+                        aria-label="Source code"
+                        placeholder="Source code"
+                        value={mapping.sourceCode}
+                        onChange={event => setMapping(value => ({ ...value, sourceCode: event.target.value }))}
+                      />
+                    </Field>
+                    <Field label="Debit account">
+                      <Input
+                        aria-label="Debit account"
+                        placeholder="Debit account"
+                        value={mapping.debitAccount}
+                        onChange={event => setMapping(value => ({ ...value, debitAccount: event.target.value }))}
+                      />
+                    </Field>
+                    <Field label="Credit account">
+                      <Input
+                        aria-label="Credit account"
+                        placeholder="Credit account"
+                        value={mapping.creditAccount}
+                        onChange={event => setMapping(value => ({ ...value, creditAccount: event.target.value }))}
+                      />
+                    </Field>
+                    <Track className="self-end">
+                      <Pill
+                        variant="primary"
+                        disabled={busy === 'mapping' || !mapping.rooftopId || !mapping.debitAccount || !mapping.creditAccount}
+                        onClick={() =>
+                          run('mapping', () => configureAccountingMapping({ ...mapping, idempotencyKey: nonce('accounting-mapping') }), 'Mapping saved.')
+                        }
+                      >
+                        Save mapping
+                      </Pill>
+                    </Track>
                   </div>
-                )}
-              </TabsContent>
+                </DeskSection>
 
-              <TabsContent value="mapping">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Account mapping</CardTitle>
-                    <p className="text-sm text-muted-foreground">Account codes used for exports.</p>
-                  </CardHeader>
-                  <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    <Input
-                      aria-label="Rooftop ID"
-                      placeholder="Rooftop ID"
-                      value={mapping.rooftopId}
-                      onChange={event => setMapping(value => ({ ...value, rooftopId: event.target.value }))}
-                    />
-                    <Select value={mapping.sourceType} onValueChange={sourceType => setMapping(value => ({ ...value, sourceType }))}>
-                      <SelectTrigger aria-label="Mapping source type">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {['deal', 'service', 'parts', 'payment'].map(value => (
-                          <SelectItem key={value} value={value}>
-                            {value}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      aria-label="Source code"
-                      placeholder="Source code"
-                      value={mapping.sourceCode}
-                      onChange={event => setMapping(value => ({ ...value, sourceCode: event.target.value }))}
-                    />
-                    <Input
-                      aria-label="Debit account"
-                      placeholder="Debit account"
-                      value={mapping.debitAccount}
-                      onChange={event => setMapping(value => ({ ...value, debitAccount: event.target.value }))}
-                    />
-                    <Input
-                      aria-label="Credit account"
-                      placeholder="Credit account"
-                      value={mapping.creditAccount}
-                      onChange={event => setMapping(value => ({ ...value, creditAccount: event.target.value }))}
-                    />
-                    <Button
-                      disabled={busy === 'mapping' || !mapping.rooftopId || !mapping.debitAccount || !mapping.creditAccount}
-                      onClick={() =>
-                        run('mapping', () => configureAccountingMapping({ ...mapping, idempotencyKey: nonce('accounting-mapping') }), 'Mapping saved.')
-                      }
-                    >
-                      Save mapping
-                    </Button>
-                  </CardContent>
-                </Card>
-              </TabsContent>
+                <DeskSection title="Mappings" count={workspace.mappings.length}>
+                  {workspace.mappings.length === 0 ? (
+                    <p className="py-3 text-sm text-muted-foreground">No mappings</p>
+                  ) : (
+                    <Panel className="overflow-x-auto">
+                      <table className="w-full min-w-[600px] text-sm">
+                        <thead className="border-b">
+                          <tr className="text-left">
+                            <th className={TH}>Source</th>
+                            <th className={TH}>Rooftop</th>
+                            <th className={`${TH} text-right`}>Debit</th>
+                            <th className={`${TH} text-right`}>Credit</th>
+                            <th className={TH}>Provider</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {workspace.mappings.map(item => (
+                            <tr key={item.id} className="hover:bg-muted/30">
+                              <td className="px-4 py-2.5">
+                                <p className="font-medium">{item.sourceType}</p>
+                                <Code>{item.sourceCode}</Code>
+                              </td>
+                              <td className="px-4 py-2.5 text-muted-foreground">{item.rooftop.name}</td>
+                              <td className={NUM}>{item.debitAccount}</td>
+                              <td className={NUM}>{item.creditAccount}</td>
+                              <td className="px-4 py-2.5 text-xs text-muted-foreground">{item.providerKey}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </Panel>
+                  )}
+                </DeskSection>
+              </div>
+            )}
 
-              <TabsContent value="stage">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Stage export</CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid gap-3 md:grid-cols-3">
+            {view === 'stage' && (
+              <DeskSection title="Stage export">
+                <div className="grid gap-3 sm:grid-cols-[12rem_minmax(0,1fr)_auto] sm:items-end">
+                  <Field label="Source type">
                     <Select value={stage.sourceType} onValueChange={sourceType => setStage(value => ({ ...value, sourceType }))}>
                       <SelectTrigger aria-label="Export source type">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {['deal', 'service', 'parts', 'payment'].map(value => (
+                        {sourceTypes.map(value => (
                           <SelectItem key={value} value={value}>
                             {value}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                  </Field>
+                  <Field label="Source ID">
                     <Input
                       aria-label="Export source ID"
                       placeholder="Source ID"
                       value={stage.sourceId}
                       onChange={event => setStage(value => ({ ...value, sourceId: event.target.value }))}
                     />
-                    <Button
+                  </Field>
+                  <Track className="self-end">
+                    <Pill
+                      variant="primary"
                       disabled={busy === 'stage' || !stage.sourceId.trim()}
                       onClick={() => run('stage', () => stageAccountingBatch({ ...stage, idempotencyKey: nonce('accounting-stage') }), 'Batch staged.')}
                     >
                       Stage batch
-                    </Button>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
+                    </Pill>
+                  </Track>
+                </div>
+              </DeskSection>
+            )}
           </>
         )}
       </div>

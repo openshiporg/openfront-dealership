@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { LoaderCircle, X } from 'lucide-react'
 import { Vehicle } from '@/features/storefront/lib/types'
 import {
   dialogFocusableElements,
@@ -114,116 +115,154 @@ export function LeadCaptureModal({
     'get-quote': 'Request a price quote',
   }
 
+  const fieldId = (name: string) => `lead-${name}`
+
   return (
     <div
       ref={overlayRef}
       className="fixed inset-0 z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4"
-      style={{ background: 'oklch(0.12 0.01 75 / 0.55)' }}
+      style={{ background: 'oklch(0.16 0.012 262 / 0.6)', backdropFilter: 'blur(2px)' }}
       tabIndex={-1}
       onKeyDown={handleDialogKeyDown}
       data-storefront-dialog-overlay
     >
       <div
-        className="sf-card max-h-[90vh] w-full overflow-y-auto p-[var(--sf-space-lg)] sm:max-w-md"
+        className="flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[var(--sf-radius-lg)] sm:max-h-[90vh] sm:max-w-lg sm:rounded-[var(--sf-radius-lg)]"
+        style={{ background: 'var(--sf-paper)', boxShadow: 'var(--sf-shadow-float)' }}
         role="dialog"
         aria-modal="true"
         aria-labelledby="lead-modal-title"
       >
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div>
-            <p className="sf-eyebrow mb-1">{vehicleTitle(vehicle)}</p>
-            <h2 id="lead-modal-title" className="sf-display text-[length:var(--sf-text-xl)]">
+        <div className="flex items-start justify-between gap-4 border-b px-5 pb-4 pt-5 sm:px-6" style={{ borderColor: 'var(--sf-rule)' }}>
+          <div className="min-w-0">
+            <p className="sf-eyebrow truncate">
+              {vehicleTitle(vehicle)}
+              {vehicle.stockNumber && <span className="sf-figure"> · #{vehicle.stockNumber}</span>}
+            </p>
+            <h2 id="lead-modal-title" className="sf-heading mt-1.5 text-[var(--sf-text-xl)]">
               {titles[intent]}
             </h2>
           </div>
-          <button type="button" onClick={onClose} disabled={isSubmitting} className="p-1 text-[var(--sf-ink-3)] hover:text-[var(--sf-ink)] disabled:opacity-50" aria-label="Close">
-            ×
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="-mr-2 -mt-1 grid size-11 shrink-0 place-items-center rounded-full transition-colors hover:bg-[var(--sf-paper-2)] disabled:opacity-50"
+            aria-label="Close"
+          >
+            <X className="size-5" aria-hidden="true" />
           </button>
         </div>
 
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6" style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}>
         {feedback.status === 'success' ? (
-          <div className="space-y-4" role="status" aria-live="polite">
-            <p className="font-semibold">Request received</p>
-            <p className="text-[var(--sf-text-sm)]" style={{ color: 'var(--sf-ink-2)' }}>
-              {feedback.message}
-            </p>
-            {feedback.reference && <p className="sf-eyebrow">Reference {feedback.reference}</p>}
+          <div className="space-y-5" role="status" aria-live="polite">
+            <div className="sf-notice" data-tone="ok">
+              <p className="sf-title-line font-semibold">
+                <span className="sf-dot" data-tone="ok" aria-hidden="true" />
+                Request received
+              </p>
+              <p className="sf-muted mt-1 pl-4">{feedback.message}</p>
+            </div>
+            {feedback.reference && (
+              <dl className="sf-sticker">
+                <div className="sf-sticker-row">
+                  <dt>Reference</dt>
+                  <dd>{feedback.reference}</dd>
+                </div>
+              </dl>
+            )}
             <button type="button" onClick={onClose} className="sf-btn sf-btn-primary w-full" data-dialog-initial-focus>Done</button>
           </div>
         ) : (
-        <form onSubmit={onSubmit} className="space-y-3">
+        <form onSubmit={onSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <div><label htmlFor="lead-first-name" className="sf-eyebrow block mb-1">First name</label><input
-              id="lead-first-name"
-              type="text"
-              placeholder="First name"
-              value={formData.firstName}
-              onChange={(e) => setFormData((p) => ({ ...p, firstName: e.target.value }))}
-              className="sf-input"
-              required
-              data-dialog-initial-focus
-            /></div>
-            <div><label htmlFor="lead-last-name" className="sf-eyebrow block mb-1">Last name</label><input
-              id="lead-last-name"
-              type="text"
-              placeholder="Last name"
-              value={formData.lastName}
-              onChange={(e) => setFormData((p) => ({ ...p, lastName: e.target.value }))}
-              className="sf-input"
-              required
-            /></div>
+            <div className="min-w-0">
+              <label htmlFor={fieldId('first-name')} className="sf-label">First name</label>
+              <input
+                id={fieldId('first-name')}
+                type="text"
+                autoComplete="given-name"
+                value={formData.firstName}
+                onChange={(e) => setFormData((p) => ({ ...p, firstName: e.target.value }))}
+                className="sf-input"
+                required
+                data-dialog-initial-focus
+              />
+            </div>
+            <div className="min-w-0">
+              <label htmlFor={fieldId('last-name')} className="sf-label">Last name</label>
+              <input
+                id={fieldId('last-name')}
+                type="text"
+                autoComplete="family-name"
+                value={formData.lastName}
+                onChange={(e) => setFormData((p) => ({ ...p, lastName: e.target.value }))}
+                className="sf-input"
+                required
+              />
+            </div>
           </div>
-          <label htmlFor="lead-email" className="sf-eyebrow block mb-1">Email</label><input
-            id="lead-email"
-            type="email"
-            placeholder="Email"
-            value={formData.email}
-            onChange={(e) => setFormData((p) => ({ ...p, email: e.target.value }))}
-            className="sf-input"
-            required
-          />
-          <label htmlFor="lead-phone" className="sf-eyebrow block mb-1">Phone</label><input
-            id="lead-phone"
-            type="tel"
-            placeholder="Phone"
-            value={formData.phone}
-            onChange={(e) => setFormData((p) => ({ ...p, phone: e.target.value }))}
-            className="sf-input"
-            required
-          />
+          <div className="grid gap-4 sm:grid-cols-2 sm:gap-3">
+            <div className="min-w-0">
+              <label htmlFor={fieldId('email')} className="sf-label">Email</label>
+              <input
+                id={fieldId('email')}
+                type="email"
+                autoComplete="email"
+                value={formData.email}
+                onChange={(e) => setFormData((p) => ({ ...p, email: e.target.value }))}
+                className="sf-input"
+                required
+              />
+            </div>
+            <div className="min-w-0">
+              <label htmlFor={fieldId('phone')} className="sf-label">Phone</label>
+              <input
+                id={fieldId('phone')}
+                type="tel"
+                autoComplete="tel"
+                value={formData.phone}
+                onChange={(e) => setFormData((p) => ({ ...p, phone: e.target.value }))}
+                className="sf-input sf-figure"
+                required
+              />
+            </div>
+          </div>
 
           {intent === 'test-drive' && (
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="lead-preferred-date" className="sf-eyebrow block mb-1">Date</label>
+              <div className="min-w-0">
+                <label htmlFor={fieldId('preferred-date')} className="sf-label">Date</label>
                 <input
-                  id="lead-preferred-date"
+                  id={fieldId('preferred-date')}
                   type="date"
                   value={formData.preferredDate}
                   onChange={(e) => setFormData((p) => ({ ...p, preferredDate: e.target.value, preferredTime: '' }))}
-                  className="sf-input"
+                  className="sf-input sf-figure"
                   required
                   min={localDateString(new Date(), business.timezone)}
                 />
               </div>
-              <div>
-                <label htmlFor="lead-preferred-time" className="sf-eyebrow block mb-1">Time</label>
+              <div className="min-w-0">
+                <label htmlFor={fieldId('preferred-time')} className="sf-label">Time</label>
                 <select
-                  id="lead-preferred-time"
+                  id={fieldId('preferred-time')}
                   value={formData.preferredTime}
                   onChange={(e) => setFormData((p) => ({ ...p, preferredTime: e.target.value }))}
-                  className="sf-input"
+                  className="sf-input sf-figure"
                   required
+                  aria-invalid={availability.status === 'closed' && formData.preferredDate ? true : undefined}
                 >
                   <option value="">Select</option>
                   {availability.status === 'open' && availability.slots.map((slot) => (
                     <option key={slot} value={slot}>{slot}</option>
                   ))}
                 </select>
-                {availability.status === 'closed' && formData.preferredDate && (
-                  <p role="alert" className="mt-1 text-[var(--sf-text-xs)]">We&apos;re closed on this day.</p>
-                )}
               </div>
+              {availability.status === 'closed' && formData.preferredDate && (
+                <p role="alert" className="sf-error col-span-2 mt-0">Closed on this day.</p>
+              )}
             </div>
           )}
 
@@ -238,27 +277,34 @@ export function LeadCaptureModal({
             aria-hidden="true"
           />
 
-          <label htmlFor="lead-message" className="sf-eyebrow block mb-1">{intent === 'contact' ? 'Vehicle question' : 'Message'}</label><textarea
-            id="lead-message"
-            placeholder={intent === 'contact' ? 'What would you like to know?' : 'Message (optional)'}
-            value={formData.message}
-            onChange={(e) => setFormData((p) => ({ ...p, message: e.target.value }))}
-            rows={3}
-            className="sf-input resize-y"
-            required={intent === 'contact'}
-          />
+          <div>
+            <label htmlFor={fieldId('message')} className="sf-label">
+              {intent === 'contact' ? 'Vehicle question' : 'Message'}
+              {intent !== 'contact' && <span className="sf-faint normal-case tracking-normal"> · Optional</span>}
+            </label>
+            <textarea
+              id={fieldId('message')}
+              value={formData.message}
+              onChange={(e) => setFormData((p) => ({ ...p, message: e.target.value }))}
+              rows={3}
+              className="sf-input resize-y"
+              required={intent === 'contact'}
+            />
+          </div>
 
           {feedback.status === 'error' && (
-            <p role="alert" className="text-[var(--sf-text-sm)]" style={{ color: 'oklch(0.45 0.15 25)' }}>
+            <p role="alert" className="sf-notice" data-tone="bad">
               {feedback.message || 'Something went wrong. Please try again.'}
             </p>
           )}
 
-          <button type="submit" disabled={isSubmitting} className="sf-btn sf-btn-primary w-full">
-            {isSubmitting ? 'Sending…' : 'Submit request'}
+          <button type="submit" disabled={isSubmitting} className="sf-btn sf-btn-primary w-full" aria-busy={isSubmitting || undefined}>
+            {isSubmitting && <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+            {isSubmitting ? 'Sending' : 'Submit request'}
           </button>
         </form>
         )}
+        </div>
       </div>
     </div>
   )

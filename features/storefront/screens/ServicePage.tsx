@@ -1,16 +1,29 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
+import { Check, X } from 'lucide-react'
 import { fetchGraphQL } from '@/features/storefront/lib/data/graphql-client'
 import { submitStorefrontService } from '../actions/submissions'
-import { Button } from '../components/Button'
-import { Container } from '../components/Container'
 import { PageHeader } from '../components/PageHeader'
 import { useStorefrontBusiness } from '../components/StorefrontBusinessProvider'
 import { formatServicePackagePrice } from '../lib/servicePackagePrice'
 import { readServiceMenu, type ServiceMenuState } from '../lib/serviceMenuState'
 import { customerRequestReference } from '../lib/customerRequests'
 import { DEFAULT_SERVICE_SLOTS, dayAvailability, localDateString } from '../lib/bookingSlots'
+import {
+  Field,
+  FormSection,
+  MobileSummary,
+  Notice,
+  PILL_TARGET,
+  RadioPills,
+  RequestLayout,
+  RequestReceived,
+  Sticker,
+  formatRequestDate,
+  type StickerRowData,
+} from '../components/forms/RequestForm'
 
 const GET_SERVICE_PACKAGES = `
   query GetServicePackages {
@@ -51,6 +64,14 @@ const EMPTY = {
   website: '',
 }
 
+function formatDuration(minutes: number | null) {
+  const total = Number(minutes)
+  if (!(total > 0)) return null
+  const hours = Math.floor(total / 60)
+  const rest = total % 60
+  return `${hours > 0 ? `${hours}h ` : ''}${rest > 0 ? `${rest}m` : ''}`.trim()
+}
+
 export function ServicePage() {
   const business = useStorefrontBusiness()
   const [formData, setFormData] = useState(EMPTY)
@@ -63,6 +84,7 @@ export function ServicePage() {
   const formRef = useRef<HTMLDivElement>(null)
   const [serviceMenu, setServiceMenu] = useState<ServiceMenuState>({ kind: 'loading' })
   const [serviceMenuRequest, setServiceMenuRequest] = useState(0)
+  const [submittedRows, setSubmittedRows] = useState<StickerRowData[] | null>(null)
 
   useEffect(() => {
     let active = true
@@ -96,11 +118,28 @@ export function ServicePage() {
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  const selectedPackagePrice = serviceMenu.kind === 'ready' && selectedPackage
+    ? formatServicePackagePrice(serviceMenu.packages.find((pkg) => pkg.name === selectedPackage)?.price, business.currencyCode)
+    : null
+  const serviceTypeLabel = SERVICE_TYPES.find((type) => type.value === formData.serviceType)?.label ?? null
+  const vehicleLabel = [formData.vehicleYear, formData.vehicleMake, formData.vehicleModel].filter(Boolean).join(' ')
+
+  const summaryRows = (): StickerRowData[] => [
+    { label: 'Package', value: selectedPackage },
+    ...(selectedPackagePrice ? [{ label: 'Price', value: selectedPackagePrice, strong: true }] : []),
+    { label: 'Service', value: serviceTypeLabel },
+    { label: 'Date', value: formData.appointmentDate ? formatRequestDate(formData.appointmentDate) : null },
+    { label: 'Time', value: formData.appointmentTime },
+    { label: 'Vehicle', value: vehicleLabel },
+    ...(formData.vehicleVin ? [{ label: 'VIN', value: formData.vehicleVin }] : []),
+  ]
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
     setSubmitStatus('idle')
     setSubmitError(null)
+    const rows = summaryRows()
     try {
       const result = await submitStorefrontService({
         ...formData,
@@ -112,6 +151,7 @@ export function ServicePage() {
         idempotencyKey,
       })
       if (!result.success) throw new Error(result.error)
+      setSubmittedRows(rows)
       setRequestReference(customerRequestReference('service', result.data.serviceAppointmentId))
       setSubmitStatus('success')
       setIdempotencyKey(crypto.randomUUID())
@@ -130,295 +170,317 @@ export function ServicePage() {
 
   if (submitStatus === 'success') {
     return (
-      <>
-        <PageHeader eyebrow="Service" title="Request received" />
-        <Container className="py-[var(--sf-space-2xl)] max-w-lg text-center">
-          <p className="text-[var(--sf-text-md)] mb-3" style={{ color: 'var(--sf-ink-2)' }}>
-            The service team will contact you to confirm your appointment.
-          </p>
-          {requestReference && <p className="sf-eyebrow mb-6" role="status">Reference {requestReference}</p>}
-          <Button href="/">Back to home</Button>
-        </Container>
-      </>
+      <RequestReceived
+        eyebrow="Service"
+        reference={requestReference}
+        summary={<Sticker title="Service appointment" meta={business.shortName || business.fullName} rows={submittedRows ?? []} />}
+        actions={
+          <>
+            <Link href="/" className={`sf-pill sf-pill-primary ${PILL_TARGET}`}>Back to home</Link>
+            <Link href="/inventory" className={`sf-pill ${PILL_TARGET}`}>Inventory</Link>
+            <Link href="/account" className={`sf-pill ${PILL_TARGET}`}>Account</Link>
+          </>
+        }
+      />
     )
   }
 
+  const summary = (
+    <Sticker
+      title="Service appointment"
+      meta={business.shortName || business.fullName}
+      rows={summaryRows()}
+      footer={selectedPackage ? (
+        <button type="button" onClick={() => setSelectedPackage(null)} className="sf-link inline-flex min-h-11 items-center gap-1.5 text-[var(--sf-text-sm)]">
+          <X className="size-4" aria-hidden="true" />
+          Remove package
+        </button>
+      ) : undefined}
+    />
+  )
+
   return (
     <>
-      <PageHeader
-        eyebrow="Service"
-        title="Service department"
-      />
+      <PageHeader eyebrow="Service" title="Book service" />
 
-      <Container className="py-[var(--sf-space-2xl)]">
-        <p className="sf-eyebrow mb-3">Service</p>
-        <h2 className="sf-display text-[length:var(--sf-text-2xl)] mb-[var(--sf-space-lg)]">Service menu</h2>
-
-        {serviceMenu.kind === 'loading' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[var(--sf-space-md)]" aria-label="Loading service menu">
-            {Array.from({ length: 3 }).map((_, index) => (
-              <div key={index} className="sf-card h-40 sf-skeleton" aria-hidden />
-            ))}
-          </div>
-        ) : serviceMenu.kind === 'ready' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[var(--sf-space-md)]">
-            {serviceMenu.packages.map((pkg) => (
-              <article key={pkg.id} className="sf-card p-[var(--sf-space-lg)] flex flex-col gap-3">
-                <div className="flex items-baseline justify-between gap-3">
-                  <h3 className="font-semibold text-[var(--sf-text-md)]">{pkg.name}</h3>
-                  <span className="sf-display text-[length:var(--sf-text-lg)] shrink-0" style={{ color: 'var(--sf-accent)' }}>
-                    {formatServicePackagePrice(pkg.price, business.currencyCode) ?? 'Price unavailable'}
+      <RequestLayout summary={summary}>
+        <div className="space-y-[var(--sf-space-xl)]">
+          <FormSection step="01" title="Service menu" first>
+            {serviceMenu.kind === 'loading' ? (
+              <div className="space-y-2" aria-label="Loading service menu">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div key={index} className="sf-skeleton h-20" aria-hidden />
+                ))}
+              </div>
+            ) : serviceMenu.kind === 'ready' ? (
+              <ul className="border-t" style={{ borderColor: 'var(--sf-rule)' }}>
+                {serviceMenu.packages.map((pkg) => {
+                  const selected = selectedPackage === pkg.name
+                  const duration = formatDuration(pkg.estimatedDuration)
+                  return (
+                    <li key={pkg.id} className="border-b" style={{ borderColor: 'var(--sf-rule)' }}>
+                      <button
+                        type="button"
+                        onClick={() => bookPackage(pkg.name)}
+                        aria-pressed={selected}
+                        className="grid w-full grid-cols-[1.75rem_minmax(0,1fr)_auto] items-start gap-x-3 px-2 py-4 text-left transition-colors hover:bg-[var(--sf-paper-2)] aria-pressed:bg-[var(--sf-accent-soft)] sm:px-3"
+                      >
+                        <span
+                          className="mt-0.5 grid size-6 place-items-center rounded-full border"
+                          style={selected
+                            ? { background: 'var(--sf-accent)', borderColor: 'var(--sf-accent)', color: 'var(--sf-accent-ink)' }
+                            : { borderColor: 'var(--sf-rule)', background: 'var(--sf-paper)' }}
+                          aria-hidden="true"
+                        >
+                          {selected && <Check className="size-3.5" strokeWidth={3} />}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="sf-heading block text-[var(--sf-text-md)]">{pkg.name}</span>
+                          {pkg.description && (
+                            <span className="sf-muted mt-1 block text-[var(--sf-text-sm)]">{pkg.description}</span>
+                          )}
+                          {duration && <span className="sf-figure sf-faint mt-1.5 block text-[var(--sf-text-xs)]">{duration}</span>}
+                        </span>
+                        <span className="sf-price text-right text-[var(--sf-text-lg)]">
+                          {formatServicePackagePrice(pkg.price, business.currencyCode) ?? (
+                            <span className="sf-faint font-sans text-[var(--sf-text-xs)] font-medium">Price unavailable</span>
+                          )}
+                        </span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            ) : serviceMenu.kind === 'empty' ? (
+              <div className="sf-well p-5">
+                <p className="sf-muted text-[var(--sf-text-sm)]" role="status">No service packages listed.</p>
+              </div>
+            ) : (
+              <div className="sf-well flex flex-col items-start gap-4 p-5" role="status">
+                <p className="sf-title-line text-[var(--sf-text-sm)]">
+                  <span className="sf-dot" data-tone="bad" aria-hidden="true" />
+                  <span>
+                    Service menu unavailable.
+                    {business.serviceEmail ? (
+                      <> Email <a href={`mailto:${business.serviceEmail}`} className="sf-link break-all">{business.serviceEmail}</a>.</>
+                    ) : null}
                   </span>
+                </p>
+                <div className="sf-track">
+                  <button type="button" onClick={retryServiceMenu} className={`sf-pill sf-pill-raised ${PILL_TARGET}`}>Retry service menu</button>
                 </div>
-                {pkg.description && (
-                  <p className="text-[var(--sf-text-sm)] leading-relaxed" style={{ color: 'var(--sf-ink-2)' }}>
-                    {pkg.description}
-                  </p>
-                )}
-                {Number(pkg.estimatedDuration) > 0 && (
-                  <p className="text-[var(--sf-text-xs)] mt-auto" style={{ color: 'var(--sf-ink-3)' }}>
-                    Est. {Math.floor(Number(pkg.estimatedDuration) / 60) > 0 ? `${Math.floor(Number(pkg.estimatedDuration) / 60)}h ` : ''}{Number(pkg.estimatedDuration) % 60 > 0 ? `${Number(pkg.estimatedDuration) % 60}m` : ''}
-                  </p>
-                )}
-                <button type="button" onClick={() => bookPackage(pkg.name)} className="sf-btn sf-btn-ghost text-sm mt-auto self-start" aria-pressed={selectedPackage === pkg.name}>
-                  {selectedPackage === pkg.name ? 'Selected' : 'Book this service'}
-                </button>
-              </article>
-            ))}
-          </div>
-        ) : serviceMenu.kind === 'empty' ? (
-          <p className="text-[var(--sf-text-sm)]" role="status" style={{ color: 'var(--sf-ink-3)' }}>
-            No service packages are currently listed.
-          </p>
-        ) : (
-          <div className="flex flex-col items-start gap-3 text-[var(--sf-text-sm)]" role="status" style={{ color: 'var(--sf-ink-3)' }}>
-            <p>
-              Service menu unavailable.
-              {business.serviceEmail ? (
-                <> For current availability, email <a href={`mailto:${business.serviceEmail}`} className="underline hover:text-[var(--sf-accent)]">{business.serviceEmail}</a>.</>
-              ) : null}
-            </p>
-            <Button variant="secondary" onClick={retryServiceMenu}>Retry service menu</Button>
-          </div>
-        )}
-      </Container>
-
-      <Container className="py-[var(--sf-space-2xl)] max-w-2xl">
-        <div ref={formRef} className="sf-card p-[var(--sf-space-lg)] scroll-mt-28">
-          <h2 className="sf-display text-[length:var(--sf-text-2xl)] mb-6">Request a service appointment</h2>
-          {selectedPackage && (
-            <p role="status" className="mb-6 flex flex-wrap items-center gap-3 text-[var(--sf-text-sm)]">
-              <span>Package: <strong>{selectedPackage}</strong></span>
-              <button type="button" onClick={() => setSelectedPackage(null)} className="underline underline-offset-2">Remove</button>
-            </p>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-[var(--sf-space-lg)]">
-            <section className="space-y-4">
-              <h3 className="sf-eyebrow">Contact information</h3>
-              <Field label="Full name" htmlFor="customerName">
-                <input
-                  id="customerName"
-                  name="customerName"
-                  type="text"
-                  required
-                  value={formData.customerName}
-                  onChange={handleChange}
-                  className="sf-input"
-                  autoComplete="name"
-                />
-              </Field>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="Email" htmlFor="customerEmail">
-                  <input
-                    id="customerEmail"
-                    name="customerEmail"
-                    type="email"
-                    required
-                    value={formData.customerEmail}
-                    onChange={handleChange}
-                    className="sf-input"
-                    autoComplete="email"
-                  />
-                </Field>
-                <Field label="Phone" htmlFor="customerPhone">
-                  <input
-                    id="customerPhone"
-                    name="customerPhone"
-                    type="tel"
-                    required
-                    value={formData.customerPhone}
-                    onChange={handleChange}
-                    className="sf-input"
-                    autoComplete="tel"
-                  />
-                </Field>
               </div>
-            </section>
-
-            <hr className="sf-rule" />
-
-            <section className="space-y-4">
-              <h3 className="sf-eyebrow">Appointment details</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="Preferred date" htmlFor="appointmentDate">
-                  <input
-                    id="appointmentDate"
-                    name="appointmentDate"
-                    type="date"
-                    required
-                    min={minDate}
-                    value={formData.appointmentDate}
-                    onChange={handleChange}
-                    className="sf-input"
-                  />
-                  {availability.status === 'closed' && (
-                    <p role="alert" className="mt-2 text-[var(--sf-text-xs)]">We&apos;re closed on this day. Choose another date.</p>
-                  )}
-                </Field>
-                <Field label="Preferred time" htmlFor="appointmentTime">
-                  <select
-                    id="appointmentTime"
-                    name="appointmentTime"
-                    required
-                    value={formData.appointmentTime}
-                    onChange={handleChange}
-                    className="sf-input"
-                  >
-                    <option value="">Select a time</option>
-                    {availability.status === 'open' && availability.slots.map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-              <Field label="Requested service type" htmlFor="serviceType">
-                <select
-                  id="serviceType"
-                  name="serviceType"
-                  required
-                  value={formData.serviceType}
-                  onChange={handleChange}
-                  className="sf-input"
-                >
-                  <option value="">Select service type</option>
-                  {SERVICE_TYPES.map((s) => (
-                    <option key={s.value} value={s.value}>{s.label}</option>
-                  ))}
-                </select>
-              </Field>
-            </section>
-
-            <hr className="sf-rule" />
-
-            <section className="space-y-4">
-              <h3 className="sf-eyebrow">Vehicle information</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="Year" htmlFor="vehicleYear">
-                  <input
-                    id="vehicleYear"
-                    name="vehicleYear"
-                    type="number"
-                    required
-                    min="1900"
-                    max={new Date().getFullYear() + 1}
-                    value={formData.vehicleYear}
-                    onChange={handleChange}
-                    className="sf-input"
-                    placeholder="2020"
-                  />
-                </Field>
-                <Field label="Make" htmlFor="vehicleMake">
-                  <input
-                    id="vehicleMake"
-                    name="vehicleMake"
-                    type="text"
-                    required
-                    value={formData.vehicleMake}
-                    onChange={handleChange}
-                    className="sf-input"
-                    placeholder="Toyota"
-                  />
-                </Field>
-                <Field label="Model" htmlFor="vehicleModel">
-                  <input
-                    id="vehicleModel"
-                    name="vehicleModel"
-                    type="text"
-                    required
-                    value={formData.vehicleModel}
-                    onChange={handleChange}
-                    className="sf-input"
-                    placeholder="Camry"
-                  />
-                </Field>
-                <Field label="VIN (optional)" htmlFor="vehicleVin">
-                  <input
-                    id="vehicleVin"
-                    name="vehicleVin"
-                    type="text"
-                    maxLength={17}
-                    value={formData.vehicleVin}
-                    onChange={handleChange}
-                    className="sf-input"
-                    placeholder="1HGBH41JXMN109186"
-                  />
-                </Field>
-              </div>
-            </section>
-
-            <Field label="Describe your service needs" htmlFor="description">
-              <textarea
-                id="description"
-                name="description"
-                rows={4}
-                value={formData.description}
-                onChange={handleChange}
-                className="sf-input resize-y"
-                placeholder="Please describe what service you need or any issues you're experiencing…"
-              />
-            </Field>
-
-            <input
-              type="text"
-              name="website"
-              value={formData.website}
-              onChange={handleChange}
-              tabIndex={-1}
-              autoComplete="off"
-              className="hidden"
-              aria-hidden="true"
-            />
-
-            {submitStatus === 'error' && (
-              <p className="text-[var(--sf-text-sm)]" role="alert" style={{ color: 'oklch(0.45 0.15 25)' }}>
-                {submitError || 'There was an error submitting your service request.'} Please try again
-                {business.serviceEmail ? (
-                  <> or email <a href={`mailto:${business.serviceEmail}`} className="underline">{business.serviceEmail}</a></>
-                ) : null}.
-              </p>
             )}
+          </FormSection>
 
-            <div className="flex flex-col sm:flex-row gap-3">
-              <button type="submit" disabled={isSubmitting || availability.status === 'closed'} className="sf-btn sf-btn-primary flex-1">
-                {isSubmitting ? 'Sending…' : 'Send service request'}
-              </button>
-              <Button href="/" variant="ghost" className="flex-1 sm:flex-none">
-                Cancel
-              </Button>
-            </div>
-          </form>
+          <div ref={formRef} className="scroll-mt-28">
+            <form onSubmit={handleSubmit} className="space-y-[var(--sf-space-xl)]">
+              <FormSection step="02" title="Date and time">
+                <div className="space-y-5">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Date" htmlFor="appointmentDate">
+                      <input
+                        id="appointmentDate"
+                        name="appointmentDate"
+                        type="date"
+                        required
+                        min={minDate}
+                        value={formData.appointmentDate}
+                        onChange={handleChange}
+                        className="sf-input"
+                      />
+                    </Field>
+                    <Field label="Service type" htmlFor="serviceType">
+                      <select
+                        id="serviceType"
+                        name="serviceType"
+                        required
+                        value={formData.serviceType}
+                        onChange={handleChange}
+                        className="sf-input"
+                      >
+                        <option value="">Select service type</option>
+                        {SERVICE_TYPES.map((s) => (
+                          <option key={s.value} value={s.value}>{s.label}</option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
+
+                  {availability.status === 'closed' ? (
+                    <div className="sf-well p-4">
+                      <p role="alert" className="sf-title-line text-[var(--sf-text-sm)]">
+                        <span className="sf-dot" data-tone="bad" aria-hidden="true" />
+                        <span>Closed on this day. Choose another date.</span>
+                      </p>
+                    </div>
+                  ) : (
+                    <RadioPills
+                      legend="Time"
+                      name="appointmentTime"
+                      required
+                      variant="grid"
+                      className="grid-cols-3 sm:grid-cols-4 xl:grid-cols-5"
+                      value={formData.appointmentTime}
+                      onChange={handleChange}
+                      options={availability.slots.map((slot) => ({
+                        value: slot,
+                        label: <span className="sf-figure">{slot}</span>,
+                      }))}
+                    />
+                  )}
+                </div>
+              </FormSection>
+
+              <FormSection step="03" title="Vehicle">
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-[7rem_1fr_1fr]">
+                  <Field label="Year" htmlFor="vehicleYear" className="col-span-2 sm:col-span-1">
+                    <input
+                      id="vehicleYear"
+                      name="vehicleYear"
+                      type="number"
+                      inputMode="numeric"
+                      required
+                      min="1900"
+                      max={new Date().getFullYear() + 1}
+                      value={formData.vehicleYear}
+                      onChange={handleChange}
+                      className="sf-input sf-figure"
+                      placeholder="2020"
+                    />
+                  </Field>
+                  <Field label="Make" htmlFor="vehicleMake">
+                    <input
+                      id="vehicleMake"
+                      name="vehicleMake"
+                      type="text"
+                      required
+                      value={formData.vehicleMake}
+                      onChange={handleChange}
+                      className="sf-input"
+                      placeholder="Toyota"
+                    />
+                  </Field>
+                  <Field label="Model" htmlFor="vehicleModel">
+                    <input
+                      id="vehicleModel"
+                      name="vehicleModel"
+                      type="text"
+                      required
+                      value={formData.vehicleModel}
+                      onChange={handleChange}
+                      className="sf-input"
+                      placeholder="Camry"
+                    />
+                  </Field>
+                  <Field label="VIN" htmlFor="vehicleVin" optional className="col-span-2 sm:col-span-3">
+                    <input
+                      id="vehicleVin"
+                      name="vehicleVin"
+                      type="text"
+                      maxLength={17}
+                      value={formData.vehicleVin}
+                      onChange={handleChange}
+                      className="sf-input sf-figure"
+                      placeholder="17 characters"
+                      autoCapitalize="characters"
+                      spellCheck={false}
+                    />
+                  </Field>
+                </div>
+              </FormSection>
+
+              <FormSection step="04" title="Contact">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Full name" htmlFor="customerName" className="sm:col-span-2">
+                    <input
+                      id="customerName"
+                      name="customerName"
+                      type="text"
+                      required
+                      value={formData.customerName}
+                      onChange={handleChange}
+                      className="sf-input"
+                      autoComplete="name"
+                    />
+                  </Field>
+                  <Field label="Email" htmlFor="customerEmail">
+                    <input
+                      id="customerEmail"
+                      name="customerEmail"
+                      type="email"
+                      required
+                      value={formData.customerEmail}
+                      onChange={handleChange}
+                      className="sf-input"
+                      autoComplete="email"
+                    />
+                  </Field>
+                  <Field label="Phone" htmlFor="customerPhone">
+                    <input
+                      id="customerPhone"
+                      name="customerPhone"
+                      type="tel"
+                      required
+                      value={formData.customerPhone}
+                      onChange={handleChange}
+                      className="sf-input"
+                      autoComplete="tel"
+                    />
+                  </Field>
+                  <Field label="Service notes" htmlFor="description" optional className="sm:col-span-2">
+                    <textarea
+                      id="description"
+                      name="description"
+                      rows={4}
+                      value={formData.description}
+                      onChange={handleChange}
+                      className="sf-input"
+                    />
+                  </Field>
+                </div>
+              </FormSection>
+
+              <input
+                type="text"
+                name="website"
+                value={formData.website}
+                onChange={handleChange}
+                tabIndex={-1}
+                autoComplete="off"
+                className="hidden"
+                aria-hidden="true"
+              />
+
+              <div className="space-y-4">
+                <MobileSummary>{summary}</MobileSummary>
+
+                {submitStatus === 'error' && (
+                  <Notice tone="bad">
+                    {submitError || 'There was an error submitting your service request.'} Please try again
+                    {business.serviceEmail ? (
+                      <> or email <a href={`mailto:${business.serviceEmail}`} className="sf-link break-all">{business.serviceEmail}</a></>
+                    ) : null}.
+                  </Notice>
+                )}
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || availability.status === 'closed'}
+                    className="sf-btn sf-btn-primary w-full sm:w-auto sm:min-w-56"
+                  >
+                    {isSubmitting ? 'Sending…' : 'Send service request'}
+                  </button>
+                  <Link href="/" className="sf-btn sf-btn-ghost w-full sm:w-auto">
+                    Cancel
+                  </Link>
+                </div>
+              </div>
+            </form>
+          </div>
         </div>
-      </Container>
+      </RequestLayout>
     </>
-  )
-}
-
-function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label htmlFor={htmlFor} className="sf-eyebrow block mb-2">{label}</label>
-      {children}
-    </div>
   )
 }

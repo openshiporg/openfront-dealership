@@ -16,15 +16,19 @@ export function ProfileField({
   const [state, formAction, pending] = useActionState(action, { error: null })
 
   return (
-    <form action={formAction} className="sf-card p-[var(--sf-space-md)]">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex-1 max-w-xl space-y-3">
-          <p className="font-semibold">{title}</p>
-          {children}
-          {state.error && <p role="alert" className="text-[var(--sf-text-sm)]">{state.error}</p>}
-          {!state.error && state.success && !pending && <p role="status" className="text-[var(--sf-text-sm)]">{state.success}</p>}
-        </div>
-        <button type="submit" disabled={pending} className="sf-btn sf-btn-ghost min-h-11">
+    <form
+      action={formAction}
+      className="grid gap-4 border-b py-[var(--sf-space-md)] md:grid-cols-[11rem_minmax(0,1fr)_auto] md:items-start md:gap-6"
+      style={{ borderColor: 'var(--sf-rule)' }}
+    >
+      <h2 className="sf-heading text-[var(--sf-text-lg)]">{title}</h2>
+      <div className="min-w-0 max-w-xl space-y-4">
+        {children}
+        {state.error && <div role="alert" className="sf-notice" data-tone="bad">{state.error}</div>}
+        {!state.error && state.success && !pending && <div role="status" className="sf-notice" data-tone="ok">{state.success}</div>}
+      </div>
+      <div className="sf-track self-start md:mt-6">
+        <button type="submit" disabled={pending} className="sf-pill sf-pill-raised min-h-11 px-6">
           {pending ? 'Saving…' : 'Save'}
         </button>
       </div>

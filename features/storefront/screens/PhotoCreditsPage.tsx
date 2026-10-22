@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { ArrowUpRight } from 'lucide-react'
 
 import { Container } from '../components/Container'
 import { PageHeader } from '../components/PageHeader'
@@ -34,39 +35,41 @@ export async function PhotoCreditsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Photo credits"
+        eyebrow={`Photo credits · ${photos.length} ${photos.length === 1 ? 'photo' : 'photos'}`}
         title="Vehicle photography"
       />
-      <Container className="max-w-3xl py-[var(--sf-space-2xl)]">
-        <div className="sf-card space-y-8 p-[var(--sf-space-lg)] text-[var(--sf-text-sm)] leading-7">
+      <Container className="py-[var(--sf-space-xl)] md:py-[var(--sf-space-2xl)]">
+        <ul className="grid gap-x-12 md:grid-cols-2">
           {photos.map((photo) => (
-            <section key={photo.path}>
-              <h2 className="sf-display mb-2 text-[length:var(--sf-text-xl)]">{photo.vehicle}</h2>
-              <dl className="grid grid-cols-[7rem_1fr] gap-x-4 gap-y-1">
-                <dt className="text-[var(--sf-ink-3)]">Original</dt>
-                <dd className="min-w-0 break-words">
-                  <a href={photo.sourceUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
-                    {photo.title}
+            <li key={photo.path} className="border-t py-6" style={{ borderColor: 'var(--sf-rule)' }}>
+              <h2 className="sf-heading text-[var(--sf-text-lg)]">{photo.vehicle}</h2>
+              <dl className="mt-4 grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-4 gap-y-2 text-[var(--sf-text-sm)]">
+                <dt className="sf-eyebrow pt-0.5">Original</dt>
+                <dd className="min-w-0">
+                  <a href={photo.sourceUrl} target="_blank" rel="noopener noreferrer" className="sf-link inline-flex items-start gap-1 break-words">
+                    <span className="min-w-0">{photo.title}</span>
+                    <ArrowUpRight className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
                   </a>
                 </dd>
-                <dt className="text-[var(--sf-ink-3)]">Author</dt>
-                <dd>{photo.author}</dd>
-                <dt className="text-[var(--sf-ink-3)]">License</dt>
-                <dd>
-                  <a href={photo.licenseUrl} target="_blank" rel="license noopener noreferrer" className="underline underline-offset-2">
-                    {photo.license}
+                <dt className="sf-eyebrow pt-0.5">Author</dt>
+                <dd className="min-w-0 break-words">{photo.author}</dd>
+                <dt className="sf-eyebrow pt-0.5">License</dt>
+                <dd className="min-w-0">
+                  <a href={photo.licenseUrl} target="_blank" rel="license noopener noreferrer" className="sf-link inline-flex items-start gap-1">
+                    <span className="min-w-0">{photo.license}</span>
+                    <ArrowUpRight className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
                   </a>
                 </dd>
-                <dt className="text-[var(--sf-ink-3)]">Changes</dt>
-                <dd>{photo.changes}</dd>
+                <dt className="sf-eyebrow pt-0.5">Changes</dt>
+                <dd className="sf-muted min-w-0 break-words">{photo.changes}</dd>
               </dl>
-            </section>
+            </li>
           ))}
-          <p className="border-t pt-5 text-[var(--sf-text-xs)] text-[var(--sf-ink-3)]">
-            The modified photos are shared under the same license as their originals. The photographers do not endorse
-            this dealership or its listings.
-          </p>
-        </div>
+        </ul>
+        <p className="sf-faint mt-4 max-w-2xl border-t pt-6 text-[var(--sf-text-xs)] leading-relaxed" style={{ borderColor: 'var(--sf-rule)' }}>
+          The modified photos are shared under the same license as their originals. The photographers do not endorse
+          this dealership or its listings.
+        </p>
       </Container>
     </>
   )

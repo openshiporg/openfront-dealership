@@ -13,62 +13,66 @@ export function LoginPage() {
   const [signupState, signupAction, signupPending] = useActionState(signUpCustomer, INITIAL)
 
   return (
-    <section className="sf-card w-full max-w-md p-[var(--sf-space-lg)]">
-      <p className="sf-eyebrow mb-3">Your account</p>
-      <h1 className="sf-display text-[length:var(--sf-text-2xl)] mb-6">
-        {view === 'signin' ? 'Welcome back.' : 'Create your account.'}
+    <section className="w-full max-w-sm">
+      <p className="sf-eyebrow text-center">Account</p>
+      <h1 className="sf-display mt-3 text-center text-[length:var(--sf-text-2xl)]">
+        {view === 'signin' ? 'Sign in' : 'Create account'}
       </h1>
 
-      {view === 'signin' ? (
-        <form action={signinAction} className="space-y-5">
-          <div>
-            <label htmlFor="signin-email" className="sf-eyebrow block mb-2">Email</label>
-            <input id="signin-email" name="email" type="email" autoComplete="email" required className="sf-input min-h-11" />
-          </div>
-          <div>
-            <label htmlFor="signin-password" className="sf-eyebrow block mb-2">Password</label>
-            <input id="signin-password" name="password" type="password" autoComplete="current-password" required className="sf-input min-h-11" />
-          </div>
-          {signinState.error && <p role="alert" className="text-[var(--sf-text-sm)]">{signinState.error}</p>}
-          <button type="submit" disabled={signinPending} className="sf-btn sf-btn-primary w-full min-h-11">
-            {signinPending ? 'Signing in…' : 'Sign in'}
-          </button>
-          <Link href="/account/reset" className="inline-flex min-h-11 items-center text-[var(--sf-text-sm)] underline underline-offset-2">
-            Forgot password?
-          </Link>
-        </form>
-      ) : (
-        <form action={signupAction} className="space-y-5">
-          <div>
-            <label htmlFor="signup-name" className="sf-eyebrow block mb-2">Full name</label>
-            <input id="signup-name" name="name" autoComplete="name" required maxLength={200} className="sf-input min-h-11" />
-          </div>
-          <div>
-            <label htmlFor="signup-email" className="sf-eyebrow block mb-2">Email</label>
-            <input id="signup-email" name="email" type="email" autoComplete="email" required className="sf-input min-h-11" />
-          </div>
-          <div>
-            <label htmlFor="signup-password" className="sf-eyebrow block mb-2">Password</label>
-            <input id="signup-password" name="password" type="password" autoComplete="new-password" required minLength={8} className="sf-input min-h-11" />
-          </div>
-          {signupState.error && <p role="alert" className="text-[var(--sf-text-sm)]">{signupState.error}</p>}
-          <button type="submit" disabled={signupPending} className="sf-btn sf-btn-primary w-full min-h-11">
-            {signupPending ? 'Creating account…' : 'Create account'}
-          </button>
-        </form>
-      )}
+      <div role="group" aria-label="Account access" className="sf-track sf-track-block mt-6">
+        <button type="button" onClick={() => setView('signin')} aria-pressed={view === 'signin'} className="sf-pill min-h-11">
+          Sign in
+        </button>
+        <button type="button" onClick={() => setView('signup')} aria-pressed={view === 'signup'} className="sf-pill min-h-11">
+          Create account
+        </button>
+      </div>
 
-      <p className="mt-8 border-t pt-6 text-[var(--sf-text-sm)]" style={{ borderColor: 'var(--sf-rule)', color: 'var(--sf-ink-2)' }}>
+      <div
+        className="mt-5 rounded-[var(--sf-radius-lg)] border p-5 sm:p-6"
+        style={{ borderColor: 'var(--sf-rule)', background: 'var(--sf-paper)', boxShadow: 'var(--sf-shadow-float)' }}
+      >
         {view === 'signin' ? (
-          <>Don&apos;t have an account?{' '}
-            <button type="button" onClick={() => setView('signup')} className="font-semibold underline underline-offset-2">Create one</button>
-          </>
+          <form action={signinAction} className="space-y-4">
+            <div>
+              <label htmlFor="signin-email" className="sf-label">Email</label>
+              <input id="signin-email" name="email" type="email" autoComplete="email" required className="sf-input" />
+            </div>
+            <div>
+              <div className="flex items-baseline justify-between gap-3">
+                <label htmlFor="signin-password" className="sf-label">Password</label>
+                <Link href="/account/reset" className="sf-link -my-3 inline-flex min-h-11 items-center text-[var(--sf-text-xs)]">
+                  Forgot password?
+                </Link>
+              </div>
+              <input id="signin-password" name="password" type="password" autoComplete="current-password" required className="sf-input" />
+            </div>
+            {signinState.error && <div role="alert" className="sf-notice" data-tone="bad">{signinState.error}</div>}
+            <button type="submit" disabled={signinPending} className="sf-btn sf-btn-primary w-full">
+              {signinPending ? 'Signing in…' : 'Sign in'}
+            </button>
+          </form>
         ) : (
-          <>Already have an account?{' '}
-            <button type="button" onClick={() => setView('signin')} className="font-semibold underline underline-offset-2">Sign in</button>
-          </>
+          <form action={signupAction} className="space-y-4">
+            <div>
+              <label htmlFor="signup-name" className="sf-label">Full name</label>
+              <input id="signup-name" name="name" autoComplete="name" required maxLength={200} className="sf-input" />
+            </div>
+            <div>
+              <label htmlFor="signup-email" className="sf-label">Email</label>
+              <input id="signup-email" name="email" type="email" autoComplete="email" required className="sf-input" />
+            </div>
+            <div>
+              <label htmlFor="signup-password" className="sf-label">Password</label>
+              <input id="signup-password" name="password" type="password" autoComplete="new-password" required minLength={8} className="sf-input" />
+            </div>
+            {signupState.error && <div role="alert" className="sf-notice" data-tone="bad">{signupState.error}</div>}
+            <button type="submit" disabled={signupPending} className="sf-btn sf-btn-primary w-full">
+              {signupPending ? 'Creating account…' : 'Create account'}
+            </button>
+          </form>
         )}
-      </p>
+      </div>
     </section>
   )
 }

@@ -7,17 +7,7 @@
 
 import React, { useState, useCallback, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { 
-  SearchX,
-  CirclePlus,
-  Triangle,
-  Square,
-  Circle,
-  Search
-} from 'lucide-react'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { EmptyState } from '@/components/ui/empty-state'
-import { Button } from '@/components/ui/button'
+import { CirclePlus } from 'lucide-react'
 import { PageContainer } from '../../../dashboard/components/PageContainer'
 import { PlatformFilterBar } from '../../components/PlatformFilterBar'
 import { StatusTabs } from '../components/StatusTabs'
@@ -31,6 +21,7 @@ import { useSort } from '../../../dashboard/hooks/useSort'
 import { useListItemsQuery } from '../../../dashboard/hooks/useListItems.query'
 import { buildOrderByClause } from '../../../dashboard/lib/buildOrderByClause'
 import { buildWhereClause } from '../../../dashboard/lib/buildWhereClause'
+import { DeskHeader, Notice, Panel, Pill, Track } from '../../components/desk'
 
 interface UserListPageClientProps {
   list: any
@@ -50,26 +41,17 @@ interface UserListPageClientProps {
 }
 
 function EmptyStateDefault() {
-  return (
-    <EmptyState
-      title="No staff yet"
-      description="Staff accounts you add will appear here."
-      icons={[Triangle, Square, Circle]}
-    />
-  )
+  return <p className="py-12 text-center text-sm text-muted-foreground">No staff</p>
 }
 
 function EmptyStateSearch({ onResetFilters }: { onResetFilters: () => void }) {
   return (
-    <EmptyState
-      title="No results found"
-      description="Try adjusting your search or filters."
-      icons={[Search]}
-      action={{
-        label: "Reset filters",
-        onClick: onResetFilters
-      }}
-    />
+    <div className="flex flex-col items-center gap-3 py-12 text-center">
+      <p className="text-sm text-muted-foreground">No matches</p>
+      <Track>
+        <Pill size="sm" onClick={onResetFilters}>Reset filters</Pill>
+      </Track>
+    </div>
   )
 }
 
@@ -185,11 +167,9 @@ export function UserListPageClient({
   if (!list) {
     return (
       <PageContainer title="List not found">
-        <Alert variant="destructive">
-          <AlertDescription>
-            The requested list was not found.
-          </AlertDescription>
-        </Alert>
+        <div className="px-4 md:px-6">
+          <Notice tone="bad">List not found</Notice>
+        </div>
       </PageContainer>
     )
   }
@@ -201,14 +181,10 @@ export function UserListPageClient({
   ]
 
   const header = (
-    <div>
-      <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
-        Staff
-      </h1>
-      <p className="text-muted-foreground">
-        Manage staff accounts, roles, and permissions.
-      </p>
-    </div>
+    <DeskHeader
+      title="Staff"
+      meta={statusCounts ? `${statusCounts.all} members` : undefined}
+    />
   )
 
   // Check if we have any active filters (search or actual filters)
@@ -223,38 +199,32 @@ export function UserListPageClient({
         <PlatformFilterBar 
           list={list}
           customCreateButton={
-            <Button 
-              onClick={() => setIsCreateDrawerOpen(true)}
-              size="icon"
-              className="lg:px-4 lg:py-2 lg:w-auto rounded-lg"
-            >
-              <CirclePlus />
-              <span className="hidden lg:inline">Add staff member</span>
-            </Button>
+            <Track>
+              <Pill variant="primary" onClick={() => setIsCreateDrawerOpen(true)} aria-label="Add staff member">
+                <CirclePlus />
+                <span className="hidden lg:inline">Add staff member</span>
+              </Pill>
+            </Track>
           }
         />
       </div>
 
       {/* Status Tabs */}
       {statusCounts && (
-        <div className="border-b">
+        <div className="px-4 md:px-6">
           <StatusTabs statusCounts={statusCounts} />
         </div>
       )}
 
       {/* Active Filters */}
-      <div className="px-4 md:px-6 border-b">
+      <div className="px-4 md:px-6">
         <FilterList list={list} />
       </div>
 
       {/* Staff list */}
       {error ? (
         <div className="px-4 md:px-6">
-          <Alert variant="destructive">
-            <AlertDescription>
-              Failed to load items: {error}
-            </AlertDescription>
-          </Alert>
+          <Notice tone="bad">Unable to load staff: {error}</Notice>
         </div>
       ) : isEmpty ? (
         <div className="px-4 md:px-6">
@@ -267,10 +237,12 @@ export function UserListPageClient({
       ) : (
         <>
           {/* Data grid - full width */}
-          <div className="grid grid-cols-1 divide-y">
-            {data?.items?.map((user: any) => (
-              <UserDetailsComponent key={user.id} user={user} list={list} />
-            ))}
+          <div className="px-4 pb-2 md:px-6">
+            <Panel className="divide-y">
+              {data?.items?.map((user: any) => (
+                <UserDetailsComponent key={user.id} user={user} list={list} />
+              ))}
+            </Panel>
           </div>
           
           {/* Pagination */}

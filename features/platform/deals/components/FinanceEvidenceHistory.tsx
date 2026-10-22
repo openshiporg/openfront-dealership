@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { ChevronRight, RefreshCw } from 'lucide-react'
+import { Notice, Pill, Track } from '@/features/platform/components/desk'
 import { getDealTimeline, type DomainTimelineEntry } from '../actions'
 
 export function FinanceEvidenceHistory({ dealId, aggregateType, label }: {
@@ -29,31 +31,44 @@ export function FinanceEvidenceHistory({ dealId, aggregateType, label }: {
 
   return (
     <details
-      className="mt-2 text-sm"
+      className="group min-w-0 text-sm"
       onToggle={event => {
         if (event.currentTarget.open && entries === null && !busy) void load()
       }}
     >
-      <summary>{label} · latest 20 events</summary>
-      <button type="button" className="mt-2 underline" disabled={busy} onClick={() => void load()}>
-        {busy ? 'Loading…' : 'Refresh history'}
-      </button>
-      {error && (
-        <p role="status" className="mt-2 text-amber-700">
-          {error}
-        </p>
-      )}
-      {entries?.length === 0 && <p className="mt-2">No history yet.</p>}
-      {entries?.map(entry => (
-        <details key={entry.id} className="mt-2 rounded border p-2">
-          <summary>
-            {entry.action} · {new Date(entry.occurredAt).toLocaleString()} · {entry.actor?.name || 'Unknown'}
-          </summary>
-          <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs">
-            {JSON.stringify(entry.afterSnapshot, null, 2)}
-          </pre>
-        </details>
-      ))}
+      <summary className="flex cursor-pointer list-none items-center gap-2 py-1.5 text-foreground [&::-webkit-details-marker]:hidden">
+        <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
+        <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
+        <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">Latest 20</span>
+      </summary>
+      <div className="space-y-2 pb-2 pl-5 pt-1">
+        <Track>
+          <Pill size="sm" disabled={busy} onClick={() => void load()}>
+            <RefreshCw className={busy ? 'animate-spin' : undefined} />
+            {busy ? 'Loading…' : 'Refresh history'}
+          </Pill>
+        </Track>
+        {error && <Notice tone="warn" role="status">{error}</Notice>}
+        {entries?.length === 0 && <p className="text-xs text-muted-foreground">No history</p>}
+        {entries && entries.length > 0 && (
+          <ol className="divide-y rounded-lg border">
+            {entries.map(entry => (
+              <li key={entry.id} className="min-w-0">
+                <details className="group/entry">
+                  <summary className="flex cursor-pointer list-none flex-wrap items-baseline gap-x-2 gap-y-0.5 px-3 py-2 [&::-webkit-details-marker]:hidden">
+                    <span className="min-w-0 break-words font-mono text-xs text-foreground">{entry.action}</span>
+                    <span className="text-xs tabular-nums text-muted-foreground">{new Date(entry.occurredAt).toLocaleString()}</span>
+                    <span className="text-xs text-muted-foreground">{entry.actor?.name || 'Unknown'}</span>
+                  </summary>
+                  <pre className="mx-3 mb-3 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/50 p-2 font-mono text-[11px] text-muted-foreground">
+                    {JSON.stringify(entry.afterSnapshot, null, 2)}
+                  </pre>
+                </details>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
     </details>
   )
 }

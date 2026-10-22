@@ -1,9 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -15,21 +12,29 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
-  RefreshCw,
-  Search,
-  Filter,
-  Car,
-  DollarSign,
-  Clock,
-  AlertTriangle,
-  Plus,
-  Triangle,
-  Square,
-  Circle,
-} from 'lucide-react'
-import { EmptyState } from '@/components/ui/empty-state'
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { MoreHorizontal, Plus, RefreshCw, Search, Upload } from 'lucide-react'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
+import {
+  Code,
+  DeskHeader,
+  DeskSection,
+  Facts,
+  Notice,
+  Panel,
+  Pill,
+  Readout,
+  ReadoutStrip,
+  Segmented,
+  TitleLine,
+  Track,
+  type DeskTone,
+} from '@/features/platform/components/desk'
 import {
   type InventoryVehicle,
   type IntakeRooftop,
@@ -92,13 +97,23 @@ function moneyInputCents(value: string) {
   return Number.isSafeInteger(cents) && cents <= 2_147_483_647 ? cents : null
 }
 
-const statusColors: Record<string, string> = {
-  available: 'bg-green-100 text-green-700',
-  sold: 'bg-blue-100 text-blue-700',
-  pending: 'bg-amber-100 text-amber-700',
-  hold: 'bg-purple-100 text-purple-700',
-  service: 'bg-slate-100 text-slate-700',
+const statusTones: Record<string, DeskTone> = {
+  available: 'ok',
+  pending: 'warn',
+  hold: 'info',
+  service: 'idle',
+  sold: 'accent',
 }
+
+const statusLabels: Record<string, string> = {
+  available: 'Available',
+  pending: 'Pending',
+  hold: 'On hold',
+  service: 'In service',
+  sold: 'Sold',
+}
+
+const LOT_STATUSES = ['available', 'pending', 'hold', 'service', 'sold'] as const
 
 const conditionLabels: Record<string, string> = {
   new: 'New',
@@ -106,26 +121,19 @@ const conditionLabels: Record<string, string> = {
   certified: 'Certified Pre-Owned',
 }
 
-function EmptyStateDefault() {
-  return (
-    <EmptyState
-      title="No vehicles"
-      description="Vehicles you add will appear here."
-      icons={[Triangle, Square, Circle]}
-    />
-  )
+const fieldLabelClass = 'font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground'
+
+function countByStatus(list: Vehicle[]) {
+  return list.reduce<Record<string, number>>((counts, vehicle) => {
+    counts[vehicle.status] = (counts[vehicle.status] || 0) + 1
+    return counts
+  }, {})
 }
 
-function EmptyStateSearch({ onResetFilters }: { onResetFilters: () => void }) {
-  return (
-    <EmptyState
-      title="No results found"
-      description="Try adjusting your search or filters."
-      icons={[Search]}
-      action={{ label: 'Reset filters', onClick: onResetFilters }}
-    />
-  )
+function hasOpenRecon(vehicle: Vehicle) {
+  return vehicle.reconWorkItems.some(item => ['open', 'in-progress'].includes(item.status))
 }
+
 
 export function VehicleListPageClient({
   initialVehicles,
@@ -154,6 +162,7 @@ export function VehicleListPageClient({
   const [pendingFeedRun, setPendingFeedRun] = useState<PublicFeedRunAttempt | null>(null)
   const [pendingMerchandisingAttempt, setPendingMerchandisingAttempt] = useState<MerchandisingCommandAttempt | null>(null)
   const [pendingReconStart, setPendingReconStart] = useState<ReconStartAttempt | null>(null)
+  const [lotCounts, setLotCounts] = useState<Record<string, number> | null>(() => initialError ? null : countByStatus(initialVehicles))
 
   const isInitialLoad = useRef(true)
 
@@ -167,6 +176,7 @@ export function VehicleListPageClient({
       setIntakeRooftops(rooftops)
       setIntakeRooftopId(current => current || rooftops[0]?.id || '')
       setVehicles(response.vehicles)
+      setLotCounts(current => statusFilter === 'all' ? countByStatus(response.vehicles) : current ? { ...current, [statusFilter]: response.vehicles.length } : current)
     } else {
       setError(response.error || 'Unable to load inventory.')
     }
@@ -455,7 +465,7 @@ export function VehicleListPageClient({
   const updateTaskField = (name: string, value: string) => setTask(current => current ? { ...current, fields: { ...current.fields, [name]: value } } : current)
   const taskInput = (name: string, label: string, options: { type?: string; required?: boolean; min?: number; step?: number; maxLength?: number; inputMode?: 'decimal' | 'numeric' | 'text'; disabled?: boolean } = {}) => (
     <label key={name} htmlFor={`inventory-task-${name}`} className="grid gap-1.5 text-sm">
-      <span className="font-medium">{label}</span>
+      <span className={fieldLabelClass}>{label}</span>
       <Input id={`inventory-task-${name}`} type={options.type || 'text'} inputMode={options.inputMode} min={options.min} step={options.step} maxLength={options.maxLength} required={options.required ?? true} disabled={options.disabled} value={task?.fields[name] || ''} onChange={event => updateTaskField(name, event.target.value)} />
     </label>
   )
@@ -473,288 +483,266 @@ export function VehicleListPageClient({
     { type: 'page' as const, label: 'Inventory' },
   ]
 
+  const lotTotal = lotCounts ? Object.values(lotCounts).reduce((sum, count) => sum + count, 0) : undefined
+  const statusOptions = [
+    { value: 'all', label: 'All', count: lotTotal },
+    ...LOT_STATUSES.map(status => ({ value: status, label: statusLabels[status], count: lotCounts ? lotCounts[status] || 0 : undefined, tone: statusTones[status] })),
+  ]
+  const reconOpenCount = filteredVehicles.filter(hasOpenRecon).length
+  const intakeRooftopName = intakeRooftops.find(rooftop => rooftop.id === intakeRooftopId)?.name
+
   const header = (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">Inventory</h1>
-        <p className="text-muted-foreground">Manage vehicle inventory, pricing, photos, and merchandising.</p>
+    <DeskHeader
+      title="Inventory"
+      tone={error ? 'bad' : agingCount > 0 ? 'warn' : 'ok'}
+      status={error ? 'Unavailable' : agingCount > 0 ? `${agingCount} aging units` : 'No aging units'}
+      meta={[lotTotal !== undefined ? `${lotTotal} units` : null, intakeRooftopName].filter(Boolean).join(' · ') || undefined}
+      actions={
+        <>
+          {intakeRooftops.length > 1 && (
+            <Select value={intakeRooftopId} onValueChange={setIntakeRooftopId}>
+              <SelectTrigger className="h-9 w-full rounded-full sm:w-[180px]" aria-label="Intake rooftop">
+                <SelectValue placeholder="Intake rooftop" />
+              </SelectTrigger>
+              <SelectContent>
+                {intakeRooftops.map(rooftop => (
+                  <SelectItem key={rooftop.id} value={rooftop.id}>
+                    {rooftop.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Track>
+            <Pill onClick={loadVehicles} disabled={loading} aria-label="Refresh">
+              <RefreshCw className={loading ? 'animate-spin' : undefined} />
+              <span className="max-sm:sr-only">Refresh</span>
+            </Pill>
+            <Pill onClick={intakeVehicle} disabled={actionId === 'intake' || !intakeRooftopId}>
+              <Plus /> Intake
+            </Pill>
+            <Pill variant="primary" onClick={recordPublicFeed} disabled={actionId === 'feed'}>
+              <Upload />
+              {pendingFeedRun ? 'Retry publishing' : 'Publish feed'}
+            </Pill>
+          </Track>
+        </>
+      }
+    />
+  )
+
+  const renderDetails = (vehicle: Vehicle) => (
+    <div role="region" aria-label={`Vehicle details for ${vehicle.stockNumber}`} className="mt-3 grid gap-x-8 gap-y-3 rounded-lg bg-muted/40 p-3 sm:ml-4 lg:grid-cols-2">
+      <Facts
+        items={[
+          { label: 'VIN', value: vehicle.vin, mono: true },
+          { label: 'Stock #', value: vehicle.stockNumber, mono: true },
+          { label: 'Location', value: vehicle.locationLabel || vehicle.locationCode },
+          { label: 'Days in stock', value: calculateDaysInStock(vehicle), mono: true },
+          { label: 'Retail', value: formatCurrency(vehicle.price), mono: true },
+          { label: 'Cost', value: vehicle.purchasePrice == null ? 'Not recorded' : formatCurrency(vehicle.purchasePrice), mono: true },
+        ]}
+      />
+      <Facts
+        items={[
+          { label: 'Acquisition', value: vehicle.acquisition?.status || 'None' },
+          { label: 'Recon', value: vehicle.reconStatus },
+          { label: 'Merchandising', value: vehicle.merchandisingStatus },
+          { label: 'Feed', value: vehicle.feedStatus },
+          { label: 'Photo', value: vehicle.primaryImagePath ? 'Added' : 'None' },
+          { label: 'Recon items', value: vehicle.reconWorkItems.length, mono: true },
+        ]}
+      />
+      <div className="min-w-0 border-t pt-3 text-sm lg:col-span-2">
+        <p className={fieldLabelClass}>Listing</p>
+        <p className="mt-1 break-words text-muted-foreground">{vehicle.description || 'No description'}</p>
       </div>
-      <div className="flex flex-wrap gap-2">
-        {intakeRooftops.length > 1 && (
-          <Select value={intakeRooftopId} onValueChange={setIntakeRooftopId}>
-            <SelectTrigger className="w-full sm:w-[180px]" aria-label="Intake rooftop">
-              <SelectValue placeholder="Intake rooftop" />
-            </SelectTrigger>
-            <SelectContent>
-              {intakeRooftops.map(rooftop => (
-                <SelectItem key={rooftop.id} value={rooftop.id}>
-                  {rooftop.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        <Button variant="outline" onClick={loadVehicles} disabled={loading}>
-          <RefreshCw className="h-4 w-4 mr-2" /> Refresh
-        </Button>
-        <Button variant="outline" onClick={intakeVehicle} disabled={actionId === 'intake' || !intakeRooftopId}>
-          <Plus className="h-4 w-4 mr-2" /> Intake vehicle
-        </Button>
-        <Button onClick={recordPublicFeed} disabled={actionId === 'feed'}>
-          {pendingFeedRun ? 'Retry publishing' : 'Publish feed'}
-        </Button>
+      <div className="lg:col-span-2">
+        <Track>
+          <Pill size="sm" variant="plain" onClick={() => setSelectedVehicle(null)}>Close details</Pill>
+        </Track>
       </div>
     </div>
   )
 
   return (
     <PageContainer title="Inventory" header={header} breadcrumbs={breadcrumbs}>
-    <div className="min-w-0 space-y-6 px-4 pb-6 md:px-6">
+    <div className="min-w-0 max-w-full space-y-6 px-4 pb-10 md:px-6">
       {actionMessage && (
-        <div role="status" className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
-          <span>{actionMessage}</span>
-          {pendingMerchandisingAttempt && (
-            <Button variant="outline" size="sm" onClick={retryMerchandisingAttempt} disabled={Boolean(actionId)}>
-              Retry
-            </Button>
-          )}
-        </div>
+        <Notice>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span>{actionMessage}</span>
+            {pendingMerchandisingAttempt && (
+              <Track>
+                <Pill size="sm" onClick={retryMerchandisingAttempt} disabled={Boolean(actionId)}>Retry</Pill>
+              </Track>
+            )}
+          </div>
+        </Notice>
       )}
       {pendingReconStart && (
-        <div role="status" className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
-          <span>{UNCONFIRMED_RECON_START_MESSAGE}</span>
-          <Button variant="outline" size="sm" onClick={retryReconStart} disabled={Boolean(actionId)}>
-            Retry
-          </Button>
-        </div>
+        <Notice tone="warn">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span>{UNCONFIRMED_RECON_START_MESSAGE}</span>
+            <Track>
+              <Pill size="sm" onClick={retryReconStart} disabled={Boolean(actionId)}>Retry</Pill>
+            </Track>
+          </div>
+        </Notice>
       )}
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                <Car className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Inventory</p>
-                <p className="text-xl font-bold">{filteredVehicles.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
-                <DollarSign className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Value</p>
-                <p className="text-xl font-bold">{formatCurrency(totalValue)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-amber-100 flex items-center justify-center">
-                <Clock className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Avg Days in Stock</p>
-                <p className="text-xl font-bold">{avgDaysInStock}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-red-100 flex items-center justify-center">
-                <AlertTriangle className="h-5 w-5 text-red-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Aging (60+ days)</p>
-                <p className="text-xl font-bold">{agingCount}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <ReadoutStrip>
+        <Readout label="Units" value={filteredVehicles.length} />
+        <Readout label="Retail value" value={formatCurrency(totalValue)} sub="Available units" />
+        <Readout label="Avg days" value={avgDaysInStock} sub="Available units" />
+        <Readout label="Aging 60+" value={agingCount} tone={agingCount > 0 ? 'warn' : 'ok'} />
+        <Readout label="Recon open" value={reconOpenCount} tone={reconOpenCount > 0 ? 'info' : 'idle'} />
+      </ReadoutStrip>
 
-      {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-        <div className="relative w-full sm:max-w-sm">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by VIN, stock #, make, model..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-            aria-label="Search inventory"
-          />
+      <div className="flex min-w-0 flex-col gap-3">
+        <Segmented label="Filter by status" value={statusFilter} onChange={setStatusFilter} options={statusOptions} className="self-start" />
+        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative w-full sm:max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Stock #, VIN, make, model"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="rounded-full pl-9"
+              aria-label="Search inventory"
+            />
+          </div>
+          <Select value={sortOrder} onValueChange={setSortOrder}>
+            <SelectTrigger className="w-full rounded-full sm:w-[180px]" aria-label="Sort inventory">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="age-desc">Oldest first</SelectItem>
+              <SelectItem value="age-asc">Newest first</SelectItem>
+              <SelectItem value="price-desc">Price high to low</SelectItem>
+              <SelectItem value="price-asc">Price low to high</SelectItem>
+              <SelectItem value="stock">Stock number</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-[180px]" aria-label="Filter by status">
-            <Filter className="h-4 w-4 mr-2" />
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="available">Available</SelectItem>
-            <SelectItem value="sold">Sold</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="hold">On Hold</SelectItem>
-            <SelectItem value="service">In Service</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={sortOrder} onValueChange={setSortOrder}>
-          <SelectTrigger className="w-full sm:w-[180px]" aria-label="Sort inventory">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="age-desc">Oldest first</SelectItem>
-            <SelectItem value="age-asc">Newest first</SelectItem>
-            <SelectItem value="price-desc">Price high to low</SelectItem>
-            <SelectItem value="price-asc">Price low to high</SelectItem>
-            <SelectItem value="stock">Stock number</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
-      {selectedVehicle && (
-        <Card role="region" aria-label={`Vehicle details for ${selectedVehicle.stockNumber}`}>
-          <CardContent className="space-y-4 p-4 sm:p-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Vehicle details</p>
-                <h2 className="mt-1 break-words text-lg font-semibold">{selectedVehicle.year} {selectedVehicle.make} {selectedVehicle.model} {selectedVehicle.trim || ''}</h2>
-                <p className="mt-1 break-all font-mono text-xs text-muted-foreground">Stock {selectedVehicle.stockNumber} · VIN {selectedVehicle.vin}</p>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => setSelectedVehicle(null)}>Close details</Button>
-            </div>
-            <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-              <div><p className="text-muted-foreground">Location / age</p><p className="font-medium">{selectedVehicle.locationLabel || selectedVehicle.locationCode} · {calculateDaysInStock(selectedVehicle)} days</p></div>
-              <div><p className="text-muted-foreground">Retail / cost</p><p className="font-medium">{formatCurrency(selectedVehicle.price)} / {selectedVehicle.purchasePrice == null ? 'Not recorded' : formatCurrency(selectedVehicle.purchasePrice)}</p></div>
-              <div><p className="text-muted-foreground">Acquisition / recon</p><p className="font-medium">{selectedVehicle.acquisition?.status || 'None'} / {selectedVehicle.reconStatus}</p></div>
-              <div><p className="text-muted-foreground">Merchandising / feed</p><p className="font-medium">{selectedVehicle.merchandisingStatus} / {selectedVehicle.feedStatus}</p></div>
-            </div>
-            <div className="rounded-md border p-3 text-sm">
-              <p className="font-medium">Listing</p>
-              <p className="mt-1 break-words text-muted-foreground">{selectedVehicle.description || 'No description yet.'}</p>
-              <p className="mt-2 text-xs text-muted-foreground">{selectedVehicle.primaryImagePath ? 'Photo added' : 'No photo'} · {selectedVehicle.reconWorkItems.length} recon work item{selectedVehicle.reconWorkItems.length === 1 ? '' : 's'}.</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="flex items-center justify-center py-12" role="status">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" aria-hidden="true"></div>
-              <span className="sr-only">Loading inventory</span>
-            </div>
-          ) : error ? (
-            <div className="py-12 text-center">
-              <AlertTriangle className="mx-auto mb-4 h-12 w-12 text-destructive" />
-              <p className="font-medium">Unable to load inventory</p>
-              <p className="mt-1 text-sm text-muted-foreground">{error}</p>
-              <Button variant="outline" className="mt-4" onClick={loadVehicles}>Retry</Button>
-            </div>
-          ) : filteredVehicles.length === 0 ? (
-            isFiltered ? <EmptyStateSearch onResetFilters={resetFilters} /> : <EmptyStateDefault />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="text-left py-3 px-4 font-medium">Stock #</th>
-                    <th className="text-left py-3 px-4 font-medium">Vehicle</th>
-                    <th className="text-left py-3 px-4 font-medium">VIN</th>
-                    <th className="text-left py-3 px-4 font-medium">Location</th>
-                    <th className="text-center py-3 px-4 font-medium">Pipeline</th>
-                    <th className="text-center py-3 px-4 font-medium">Status</th>
-                    <th className="text-right py-3 px-4 font-medium">Price</th>
-                    <th className="text-right py-3 px-4 font-medium">Days</th>
-                    <th className="text-right py-3 px-4 font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredVehicles.map((vehicle) => {
-                    const daysInStock = calculateDaysInStock(vehicle)
-                    const isAging = daysInStock > 60 && vehicle.status === 'available'
-                    return (
-                      <tr key={vehicle.id} className={`border-b last:border-0 hover:bg-muted/50 ${isAging ? 'bg-red-50' : ''}`}>
-                        <td className="py-3 px-4 font-mono text-xs">{vehicle.stockNumber}</td>
-                        <td className="py-3 px-4">
-                          <p className="font-medium">{vehicle.year} {vehicle.make} {vehicle.model}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {vehicle.trim && `${vehicle.trim} · `}
-                            {vehicle.color && `${vehicle.color} · `}
-                            {conditionLabels[vehicle.condition] || vehicle.condition}
-                          </p>
-                        </td>
-                        <td className="py-3 px-4 font-mono text-xs">{vehicle.vin}</td>
-                        <td className="py-3 px-4"><span className="font-mono text-xs">{vehicle.locationCode}</span>{vehicle.locationLabel && <p className="text-xs text-muted-foreground">{vehicle.locationLabel}</p>}</td>
-                        <td className="py-3 px-4 text-center space-y-1">
-                          <Badge variant="outline">Acquisition: {vehicle.acquisition?.status || 'none'}</Badge>
-                          <Badge variant="outline">Recon: {vehicle.reconStatus}</Badge>
-                          <Badge variant="outline">Merch: {vehicle.merchandisingStatus}</Badge>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <Badge className={statusColors[vehicle.status] || 'bg-gray-100 text-gray-700'}>
-                            {vehicle.status}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4 text-right font-medium">{formatCurrency(vehicle.price)}</td>
-                        <td className="py-3 px-4 text-right">
-                          <span className={isAging ? 'text-red-600 font-medium' : ''}>
-                            {daysInStock}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-right space-x-1">
-                          <Button variant="ghost" size="sm" disabled={actionId === vehicle.inventoryStockId} onClick={() => moveStock(vehicle)}>Move</Button>
-                          {vehicle.acquisition && ['arrived', 'reconditioning'].includes(vehicle.acquisition.status) && (
-                            <Button variant="ghost" size="sm" disabled={actionId === vehicle.inventoryStockId} onClick={() => advanceAcquisition(vehicle)}>
-                              {vehicle.acquisition.status === 'arrived' ? 'Begin recon' : 'Mark frontline'}
-                            </Button>
-                          )}
-                          <Button variant="ghost" size="sm" disabled={actionId === vehicle.inventoryStockId || vehicle.reconStatus === 'completed' || Boolean(pendingReconStart)} onClick={() => advanceRecon(vehicle)}>
-                            {vehicle.reconStatus === 'not-started' ? 'Open recon' : vehicle.reconStatus === 'in-progress' ? 'Advance recon' : 'Recon complete'}
-                          </Button>
-                          <Button variant="ghost" size="sm" disabled={actionId === vehicle.inventoryStockId} onClick={() => addInventoryCost(vehicle)}>Cost</Button>
-                          <Button variant="ghost" size="sm" disabled={actionId === vehicle.inventoryStockId} onClick={() => editMerchandisingDraft(vehicle)}>Edit listing</Button>
-                          {vehicle.merchandisingStatus !== 'approved' && (
-                            <Button variant="outline" size="sm" disabled={actionId === vehicle.inventoryStockId || Boolean(pendingMerchandisingAttempt)} onClick={() => submitOrApproveMerchandising(vehicle)}>
-                              {vehicle.merchandisingStatus === 'submitted' ? 'Approve' : 'Submit'}
-                            </Button>
-                          )}
-                          <Button variant="outline" size="sm" aria-expanded={selectedVehicle?.id === vehicle.id} onClick={() => setSelectedVehicle(current => current?.id === vehicle.id ? null : vehicle)}>Details</Button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <DeskSection title={statusFilter === 'all' ? 'Lot' : statusLabels[statusFilter] || statusFilter} count={loading || error ? undefined : filteredVehicles.length}>
+        {loading ? (
+          <div className="flex items-center justify-center py-12" role="status">
+            <RefreshCw className="size-5 animate-spin text-muted-foreground" aria-hidden="true" />
+            <span className="sr-only">Loading inventory</span>
+          </div>
+        ) : error ? (
+          <Notice tone="bad">
+            <p className="font-medium">Unable to load inventory</p>
+            <p className="mt-0.5 text-muted-foreground">{error}</p>
+            <Track className="mt-2">
+              <Pill size="sm" onClick={loadVehicles}>Retry</Pill>
+            </Track>
+          </Notice>
+        ) : filteredVehicles.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm text-muted-foreground">{isFiltered ? 'No matches' : 'No vehicles'}</p>
+            {isFiltered && (
+              <Track>
+                <Pill size="sm" onClick={resetFilters}>Reset filters</Pill>
+              </Track>
+            )}
+          </div>
+        ) : (
+          <Panel className="divide-y">
+            {filteredVehicles.map((vehicle) => {
+              const daysInStock = calculateDaysInStock(vehicle)
+              const isAging = daysInStock > 60 && vehicle.status === 'available'
+              const busy = actionId === vehicle.inventoryStockId
+              const canAdvanceAcquisition = Boolean(vehicle.acquisition && ['arrived', 'reconditioning'].includes(vehicle.acquisition.status))
+              const isOpen = selectedVehicle?.id === vehicle.id
+              const subline = [
+                vehicle.color,
+                conditionLabels[vehicle.condition] || vehicle.condition,
+                vehicle.locationLabel || vehicle.locationCode,
+              ].filter(Boolean)
+              return (
+                <div key={vehicle.id} className="min-w-0 px-4 py-3">
+                  <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-start md:justify-between md:gap-6">
+                    <div className="min-w-0 flex-1">
+                      <TitleLine as="h3" tone={statusTones[vehicle.status] || 'idle'} status={statusLabels[vehicle.status] || vehicle.status} className="text-sm font-medium text-foreground">
+                        {vehicle.year} {vehicle.make} {vehicle.model}
+                        {vehicle.trim && <span className="font-normal text-muted-foreground"> {vehicle.trim}</span>}
+                      </TitleLine>
+                      <p className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 pl-4 text-xs text-muted-foreground">
+                        <Code className="text-foreground">{vehicle.stockNumber}</Code>
+                        <Code><span title={vehicle.vin}>…{vehicle.vin.slice(-8)}</span></Code>
+                        {subline.map(part => <span key={part}>{part}</span>)}
+                      </p>
+                      <p className="mt-0.5 pl-4 font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
+                        {statusLabels[vehicle.status] || vehicle.status} · Acq {vehicle.acquisition?.status || 'none'} · Recon {vehicle.reconStatus} · Merch {vehicle.merchandisingStatus}
+                      </p>
+                    </div>
+                    <dl className="grid shrink-0 grid-cols-3 gap-4 pl-4 text-xs md:pl-0 md:text-right">
+                      <div className="min-w-0">
+                        <dt className="sr-only">Mileage</dt>
+                        <dd className="font-mono tabular-nums text-muted-foreground">{vehicle.mileage.toLocaleString('en-US')} mi</dd>
+                      </div>
+                      <div className="min-w-0 md:w-24">
+                        <dt className="sr-only">Price</dt>
+                        <dd className="text-sm font-semibold tabular-nums text-foreground">{formatCurrency(vehicle.price)}</dd>
+                      </div>
+                      <div className="min-w-0 md:w-14">
+                        <dt className="sr-only">Days in stock</dt>
+                        <dd className={`font-mono tabular-nums ${isAging ? 'font-semibold text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>{daysInStock}d</dd>
+                      </div>
+                    </dl>
+                  </div>
+                  <div className="mt-2 flex min-w-0 pl-4">
+                    <Track>
+                      {canAdvanceAcquisition && vehicle.acquisition && (
+                        <Pill size="sm" disabled={busy} onClick={() => advanceAcquisition(vehicle)}>
+                          {vehicle.acquisition.status === 'arrived' ? 'Begin recon' : 'Mark frontline'}
+                        </Pill>
+                      )}
+                      <Pill size="sm" disabled={busy || vehicle.reconStatus === 'completed' || Boolean(pendingReconStart)} onClick={() => advanceRecon(vehicle)}>
+                        {vehicle.reconStatus === 'not-started' ? 'Open recon' : vehicle.reconStatus === 'in-progress' ? 'Advance recon' : 'Recon complete'}
+                      </Pill>
+                      {vehicle.merchandisingStatus !== 'approved' && (
+                        <Pill size="sm" variant="primary" disabled={busy || Boolean(pendingMerchandisingAttempt)} onClick={() => submitOrApproveMerchandising(vehicle)}>
+                          {vehicle.merchandisingStatus === 'submitted' ? 'Approve' : 'Submit'}
+                        </Pill>
+                      )}
+                      <Pill size="sm" variant={isOpen ? undefined : 'plain'} aria-expanded={isOpen} onClick={() => setSelectedVehicle(current => current?.id === vehicle.id ? null : vehicle)}>
+                        Details
+                      </Pill>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Pill size="sm" variant="plain" aria-label={`More actions for ${vehicle.stockNumber}`} disabled={busy}>
+                            <MoreHorizontal />
+                          </Pill>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem disabled={busy} onClick={() => moveStock(vehicle)}>Move</DropdownMenuItem>
+                          <DropdownMenuItem disabled={busy} onClick={() => addInventoryCost(vehicle)}>Cost</DropdownMenuItem>
+                          <DropdownMenuItem disabled={busy} onClick={() => editMerchandisingDraft(vehicle)}>Edit listing</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </Track>
+                  </div>
+                  {isOpen && selectedVehicle && renderDetails(selectedVehicle)}
+                </div>
+              )
+            })}
+          </Panel>
+        )}
+      </DeskSection>
 
       <Dialog open={Boolean(task)} onOpenChange={open => { if (!open && !actionId && !task?.reconCompletionAttempt) { setTask(null); setTaskError(null) } }}>
         <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{taskTitle}</DialogTitle>
-            <DialogDescription>
-              {task?.type === 'intake' ? 'Add an acquired vehicle to inventory.' :
-                task?.type === 'edit' ? 'Update the listing price, odometer, description, and photo.' :
-                  task?.type === 'recon-complete' ? 'Record the actual recon cost.' :
-                    task?.type === 'recon-open' ? 'Add a recon work item for this vehicle.' :
-                      task?.type === 'cost' ? 'Add a cost to this vehicle.' : 'Update the vehicle lot location.'}
+            <DialogDescription className="font-mono text-xs">
+              {task?.vehicle
+                ? `${task.vehicle.stockNumber} · ${task.vehicle.year} ${task.vehicle.make} ${task.vehicle.model}${task.reconWorkItem ? ` · ${task.reconWorkItem.title}` : ''}`
+                : intakeRooftopName || 'New unit'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={submitInventoryTask} className="space-y-4">
@@ -786,19 +774,21 @@ export function VehicleListPageClient({
               {task?.type === 'recon-complete' && taskInput('actualDollars', `Actual cost (${currencyCode})`, { inputMode: 'decimal', disabled: Boolean(task.reconCompletionAttempt) })}
               {(task?.type === 'intake' || task?.type === 'edit') && <>
                 <label htmlFor="inventory-task-description" className="grid gap-1.5 text-sm sm:col-span-2">
-                  <span className="font-medium">Description{task.type === 'edit' ? '' : ' (optional)'}</span>
+                  <span className={fieldLabelClass}>Description{task.type === 'edit' ? '' : ' (optional)'}</span>
                   <Textarea id="inventory-task-description" required={task.type === 'edit'} value={task.fields.description || ''} onChange={event => updateTaskField('description', event.target.value)} rows={3} />
                 </label>
                 <label htmlFor="inventory-task-imagePath" className="grid gap-1.5 text-sm sm:col-span-2">
-                  <span className="font-medium">Photo URL{task.type === 'edit' ? '' : ' (optional)'}</span>
+                  <span className={fieldLabelClass}>Photo URL{task.type === 'edit' ? '' : ' (optional)'}</span>
                   <Input id="inventory-task-imagePath" required={task.type === 'edit'} value={task.fields.imagePath || ''} onChange={event => updateTaskField('imagePath', event.target.value)} placeholder="/inventory/vehicle.jpg" />
                 </label>
               </>}
             </div>
-            {taskError && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{taskError}</p>}
-            <DialogFooter>
-              <Button type="button" variant="outline" disabled={Boolean(actionId) || Boolean(task?.reconCompletionAttempt)} onClick={() => { setTask(null); setTaskError(null) }}>Cancel</Button>
-              <Button type="submit" disabled={Boolean(actionId)}>{actionId ? 'Saving…' : task?.reconCompletionAttempt ? 'Retry' : 'Save'}</Button>
+            {taskError && <Notice tone="bad">{taskError}</Notice>}
+            <DialogFooter className="sm:justify-end">
+              <Track>
+                <Pill variant="plain" disabled={Boolean(actionId) || Boolean(task?.reconCompletionAttempt)} onClick={() => { setTask(null); setTaskError(null) }}>Cancel</Pill>
+                <Pill type="submit" variant="primary" disabled={Boolean(actionId)}>{actionId ? 'Saving…' : task?.reconCompletionAttempt ? 'Retry' : 'Save'}</Pill>
+              </Track>
             </DialogFooter>
           </form>
         </DialogContent>

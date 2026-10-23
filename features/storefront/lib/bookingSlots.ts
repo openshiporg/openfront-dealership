@@ -6,8 +6,15 @@ export const DEFAULT_SERVICE_SLOTS = ['8:00 AM', '9:00 AM', '10:00 AM', '11:00 A
 type Hours = Pick<StorefrontBusiness, 'hoursMonFri' | 'hoursSaturday' | 'hoursSunday'> & { timezone?: string }
 
 export type DayAvailability =
-  | { status: 'closed' }
+  | { status: 'closed'; reason: 'closed' | 'past'; weekday: string }
   | { status: 'open'; slots: string[] }
+
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+// "Closed Sundays" when the store is shut that day, "No times left today" once today's slots have passed.
+export function closedDayLabel(availability: Extract<DayAvailability, { status: 'closed' }>) {
+  return availability.reason === 'past' ? 'No times left today.' : `Closed ${availability.weekday}s.`
+}
 
 const TIME_PATTERN = /(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)/gi
 
@@ -29,20 +36,27 @@ export function slotMinutes(label: string) {
   return match ? toMinutes(match[1], match[2], match[3]) : null
 }
 
-function hoursForDate(hours: Hours, date: string) {
+function weekdayOf(date: string) {
   const [year, month, day] = date.split('-').map(Number)
-  const weekday = new Date(year, month - 1, day).getDay()
+  return new Date(year, month - 1, day).getDay()
+}
+
+function hoursForWeekday(hours: Hours, weekday: number) {
   if (weekday === 0) return hours.hoursSunday
   if (weekday === 6) return hours.hoursSaturday
   return hours.hoursMonFri
 }
 
 // Store hours are free text; derive slots only when the text names a closed day
-// or an opening and closing time. Anything else falls back to the default slots.
+// or an opening and closing time. A day left blank while other days list hours is
+// closed. Anything else falls back to the default slots.
 export function dayAvailability(hours: Hours, date: string, defaultSlots: string[]): DayAvailability {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { status: 'open', slots: defaultSlots }
-  const text = hoursForDate(hours, date).trim()
-  if (/\bclosed\b/i.test(text)) return { status: 'closed' }
+  const weekdayIndex = weekdayOf(date)
+  const weekday = WEEKDAYS[weekdayIndex] ?? ''
+  const text = (hoursForWeekday(hours, weekdayIndex) || '').trim()
+  const anyHoursListed = [hours.hoursMonFri, hours.hoursSaturday, hours.hoursSunday].some((value) => value?.trim())
+  if (/\bclosed\b/i.test(text) || (!text && anyHoursListed)) return { status: 'closed', reason: 'closed', weekday }
 
   const times = Array.from(text.matchAll(TIME_PATTERN)).map((match) => toMinutes(match[1], match[2], match[3]))
   let slots = defaultSlots
@@ -52,11 +66,13 @@ export function dayAvailability(hours: Hours, date: string, defaultSlots: string
     for (let minutes = Math.ceil(open / 60) * 60; minutes + 60 <= close; minutes += 60) slots.push(slotLabel(minutes))
   }
 
+  if (!slots.length) return { status: 'closed', reason: 'closed', weekday }
   if (date === localDateString(new Date(), hours.timezone)) {
     const nowMinutes = minutesOfDay(new Date(), hours.timezone)
     slots = slots.filter((slot) => (slotMinutes(slot) ?? 0) > nowMinutes)
+    if (!slots.length) return { status: 'closed', reason: 'past', weekday }
   }
-  return slots.length ? { status: 'open', slots } : { status: 'closed' }
+  return { status: 'open', slots }
 }
 
 function zonedParts(date: Date, timeZone?: string) {

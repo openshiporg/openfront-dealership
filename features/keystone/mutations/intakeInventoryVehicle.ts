@@ -2,6 +2,7 @@ import { domainEventRequestHash, recordDomainEventInTransaction } from '../lifec
 import { assertMerchandisingContent } from '../lifecycle/inventoryPublication'
 import { inventoryStockKey, nonNegativeCents, normalizeStockNumber } from '../lifecycle/inventoryOperationsLifecycle'
 import { permissions } from '../access'
+import { inventoryCommand } from './inventoryCommandErrors'
 import { assertSessionRooftopPermission } from '../tenantRecords'
 
 type IntakeMode = 'operator-intake' | 'onboarding-ready'
@@ -145,6 +146,71 @@ function eventEvidence(input: ReturnType<typeof normalizeIntake>, mode: IntakeMo
   }
 }
 
+/** Approves the onboarding revision and writes the revision hash the storefront gate requires. */
+async function writeOnboardingApproval(prisma: any, publication: any, actorId: string, now: Date) {
+  const snapshot = assertMerchandisingContent(publication)
+  const revisionHash = domainEventRequestHash(snapshot)
+  const latestVersion = publication.merchandisingVersions[0]
+  if (latestVersion?.status === 'submitted') {
+    await prisma.inventoryMerchandisingVersion.updateMany({
+      where: { id: latestVersion.id, status: 'submitted' },
+      data: { status: 'rejected', decisionReason: 'Superseded by onboarding', decidedById: actorId, decidedAt: now },
+    })
+  }
+  let merchandisingVersionId: string
+  let created = false
+  if (latestVersion?.status === 'approved' && latestVersion.snapshot?.schemaVersion === 2 && domainEventRequestHash(latestVersion.snapshot) === revisionHash) {
+    merchandisingVersionId = latestVersion.id
+  } else {
+    const version = (latestVersion?.version ?? 0) + 1
+    const merchandising = await prisma.inventoryMerchandisingVersion.create({
+      data: {
+        rooftopId: publication.rooftopId,
+        stockId: publication.id,
+        version,
+        versionKey: `${publication.id}:${version}`,
+        status: 'approved',
+        snapshot,
+        submittedById: actorId,
+        submittedAt: now,
+        decidedById: actorId,
+        decidedAt: now,
+        decisionReason: 'Onboarding',
+      },
+      select: { id: true },
+    })
+    merchandisingVersionId = merchandising.id
+    created = true
+  }
+  await prisma.inventoryStock.update({
+    where: { id: publication.id },
+    data: { merchandisingStatus: 'approved', approvedRevisionHash: revisionHash, feedStatus: 'succeeded' },
+  })
+  return { merchandisingVersionId, created }
+}
+
+/**
+ * Onboarding replays return early, so rows seeded before the revision hash existed kept
+ * `approvedRevisionHash: ''` and never reached the storefront. Backfill them on replay.
+ */
+async function backfillOnboardingApproval(prisma: any, stockId: string, actorId: string) {
+  const publication = await prisma.inventoryStock.findUnique({
+    where: { id: stockId },
+    include: {
+      vehicle: { include: { images: true } },
+      merchandisingVersions: { orderBy: { version: 'desc' }, take: 1 },
+    },
+  })
+  if (!publication?.vehicle || publication.approvedRevisionHash || publication.merchandisingStatus !== 'approved' || publication.reconStatus !== 'completed') return
+  try {
+    assertMerchandisingContent(publication)
+  } catch {
+    // Missing price, description or photo: the inventory desk reports why the unit is not live.
+    return
+  }
+  await writeOnboardingApproval(prisma, publication, actorId, new Date())
+}
+
 export async function intakeInventoryVehicleInTransaction(
   transactionContext: any,
   rawInput: InventoryIntakeInput,
@@ -162,6 +228,7 @@ export async function intakeInventoryVehicleInTransaction(
   })
   if (replay) {
     const metadata = replay.metadata as Record<string, unknown>
+    if (options.mode === 'onboarding-ready') await backfillOnboardingApproval(prisma, String(metadata.stockId || replay.aggregateId), options.actorId)
     await recordDomainEventInTransaction(transactionContext, {
       eventKey,
       rooftopId: input.rooftopId,
@@ -394,42 +461,9 @@ export async function intakeInventoryVehicleInTransaction(
       },
     })
     if (!publication?.vehicle) throw new Error('Onboarding inventory could not be reviewed')
-    const snapshot = assertMerchandisingContent(publication)
-    const revisionHash = domainEventRequestHash(snapshot)
-    const latestVersion = publication.merchandisingVersions[0]
-    if (latestVersion?.status === 'submitted') {
-      await prisma.inventoryMerchandisingVersion.updateMany({
-        where: { id: latestVersion.id, status: 'submitted' },
-        data: { status: 'rejected', decisionReason: 'Superseded by onboarding', decidedById: options.actorId, decidedAt: now },
-      })
-    }
-    if (latestVersion?.status === 'approved' && latestVersion.snapshot?.schemaVersion === 2 && domainEventRequestHash(latestVersion.snapshot) === revisionHash) {
-      merchandisingVersionId = latestVersion.id
-    } else {
-      const version = (latestVersion?.version ?? 0) + 1
-      const merchandising = await prisma.inventoryMerchandisingVersion.create({
-        data: {
-          rooftopId: input.rooftopId,
-          stockId: stock.id,
-          version,
-          versionKey: `${stock.id}:${version}`,
-          status: 'approved',
-          snapshot,
-          submittedById: options.actorId,
-          submittedAt: now,
-          decidedById: options.actorId,
-          decidedAt: now,
-          decisionReason: 'Onboarding',
-        },
-        select: { id: true },
-      })
-      merchandisingVersionId = merchandising.id
-      publicationEvidenceCreated = true
-    }
-    await prisma.inventoryStock.update({
-      where: { id: stock.id },
-      data: { merchandisingStatus: 'approved', approvedRevisionHash: revisionHash, feedStatus: 'succeeded' },
-    })
+    const approval = await writeOnboardingApproval(prisma, publication, options.actorId, now)
+    merchandisingVersionId = approval.merchandisingVersionId
+    if (approval.created) publicationEvidenceCreated = true
     const feedRun = await prisma.inventoryFeedRun.create({
       data: {
         rooftopId: input.rooftopId,
@@ -483,7 +517,7 @@ export async function intakeInventoryVehicleInTransaction(
   }
 }
 
-export async function intakeInventoryVehicle(_root: unknown, { data }: any, context: any) {
+async function intakeInventoryVehicleCommand(_root: unknown, { data }: any, context: any) {
   if (!context.session?.itemId || !permissions.canManageInventory({ session: context.session })) {
     throw new Error('Inventory management permission is required')
   }
@@ -514,3 +548,5 @@ export async function intakeInventoryVehicle(_root: unknown, { data }: any, cont
     reused: command.reused,
   }
 }
+
+export const intakeInventoryVehicle = inventoryCommand(intakeInventoryVehicleCommand)

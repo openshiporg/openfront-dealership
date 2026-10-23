@@ -10,7 +10,7 @@ import { submitStorefrontTestDrive } from '../actions/submissions'
 import { PageHeader } from '../components/PageHeader'
 import { useStorefrontBusiness } from '../components/StorefrontBusinessProvider'
 import { customerRequestReference } from '../lib/customerRequests'
-import { DEFAULT_TEST_DRIVE_SLOTS, dayAvailability, localDateString } from '../lib/bookingSlots'
+import { DEFAULT_TEST_DRIVE_SLOTS, closedDayLabel, dayAvailability, localDateString } from '../lib/bookingSlots'
 import {
   Field,
   FormSection,
@@ -192,7 +192,7 @@ export function TestDrivePage() {
                 <div className="sf-well p-4">
                   <p role="alert" className="sf-title-line text-[var(--sf-text-sm)]">
                     <span className="sf-dot" data-tone="bad" aria-hidden="true" />
-                    <span>Closed on this day. Choose another date.</span>
+                    <span>{closedDayLabel(availability)} Choose another date.</span>
                   </p>
                 </div>
               ) : (

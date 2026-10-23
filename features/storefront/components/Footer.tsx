@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { ArrowUpRight } from 'lucide-react'
 import { Container } from './Container'
+import OpenfrontCTA from './OpenfrontCTA'
 import { StoreLogo } from '@/features/platform/store-settings/components/StoreLogo'
 import { useStorefrontBusiness } from './StorefrontBusinessProvider'
 
@@ -20,7 +21,7 @@ const VISIT = [
   { href: '/account', label: 'Account' },
 ]
 
-export function Footer() {
+export function Footer({ branding = true }: { branding?: boolean }) {
   const year = new Date().getFullYear()
   const business = useStorefrontBusiness()
   const hours = [
@@ -108,7 +109,10 @@ export function Footer() {
 
         <div className="mt-12 flex flex-col gap-3 border-t pt-6 text-[var(--sf-text-xs)] sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--sf-rule-dark)', color: 'var(--sf-on-dark-2)' }}>
           <p>© {year} {business.fullName}</p>
-          <Link href="/photo-credits" className="transition-opacity hover:opacity-70">Photo credits</Link>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <Link href="/photo-credits" className="inline-flex min-h-11 items-center transition-opacity hover:opacity-70">Photo credits</Link>
+            {branding && <OpenfrontCTA />}
+          </div>
         </div>
       </Container>
     </footer>

@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -35,6 +36,61 @@ import { useOnboardingState } from '../hooks/useOnboardingState';
 import { useOnboardingApi } from '../hooks/useOnboardingApi';
 import { getItemsFromJsonData } from '../utils/dataUtils';
 import { DEALERSHIP_TEMPLATES, SECTION_DEFINITIONS, SECTION_TYPES } from '../config/templates';
+
+const DEALERSHIP_FIELDS = [
+  { key: 'name', label: 'Dealership name', autoComplete: 'organization', required: true },
+  { key: 'phone', label: 'Phone', autoComplete: 'tel', type: 'tel' },
+  { key: 'addressLine1', label: 'Street address', autoComplete: 'address-line1' },
+  { key: 'city', label: 'City', autoComplete: 'address-level2' },
+  { key: 'state', label: 'State', autoComplete: 'address-level1' },
+  { key: 'postalCode', label: 'ZIP code', autoComplete: 'postal-code' },
+  { key: 'salesEmail', label: 'Sales email', autoComplete: 'email', type: 'email' },
+  { key: 'hoursMonFri', label: 'Hours Mon–Fri' },
+  { key: 'hoursSaturday', label: 'Hours Saturday' },
+  { key: 'hoursSunday', label: 'Hours Sunday' },
+] as const;
+
+type DealershipDetails = Record<(typeof DEALERSHIP_FIELDS)[number]['key'], string>;
+
+const EMPTY_DEALERSHIP: DealershipDetails = {
+  name: '',
+  phone: '',
+  addressLine1: '',
+  city: '',
+  state: '',
+  postalCode: '',
+  salesEmail: '',
+  hoursMonFri: '',
+  hoursSaturday: '',
+  hoursSunday: '',
+};
+
+function slugify(value: string) {
+  return value.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+}
+
+// Basic and Complete setups use the merchant's own dealership details, never the sample dealership's.
+function withDealershipDetails(data: any, details: DealershipDetails) {
+  if (!data?.dealership) return data;
+  const name = details.name.trim();
+  const slug = slugify(name) || 'dealership';
+  return {
+    ...data,
+    dealership: {
+      ...data.dealership,
+      ...Object.fromEntries(Object.entries(details).map(([key, value]) => [key, value.trim()])),
+      name,
+      shortName: name,
+      groupSlug: slug,
+      rooftopCode: slug.slice(0, 12).toUpperCase(),
+      addressLine2: '',
+      serviceEmail: details.salesEmail.trim(),
+      websiteUrl: '',
+      homepageTitle: name,
+      homepageDescription: '',
+    },
+  };
+}
 
 interface OnboardingDialogProps {
   isOpen: boolean;
@@ -70,9 +126,13 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
     resetOnboardingState,
   } = onboardingState;
 
+  const [dealershipDetails, setDealershipDetails] = React.useState<DealershipDetails>(EMPTY_DEALERSHIP);
+  const usesDealershipDetails = selectedTemplate !== 'custom';
+  const seedJsonData = usesDealershipDetails ? withDealershipDetails(currentJsonData, dealershipDetails) : currentJsonData;
+
   const { runOnboarding } = useOnboardingApi({
     selectedTemplate,
-    currentJsonData,
+    currentJsonData: seedJsonData,
     completedItems,
     setProgress,
     setItemLoading,
@@ -399,6 +459,25 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
               />
             ) : (
               /* Unified Section Renderer Component */
+              <>
+              {usesDealershipDetails && step === 'template' && !isLoading && (
+                <fieldset className="mb-6 grid gap-3 sm:grid-cols-2">
+                  <legend className="mb-3 text-sm font-medium text-foreground">Dealership</legend>
+                  {DEALERSHIP_FIELDS.map((field) => (
+                    <div key={field.key} className={field.key === 'name' || field.key === 'addressLine1' ? 'grid gap-1.5 sm:col-span-2' : 'grid gap-1.5'}>
+                      <Label htmlFor={`onboarding-${field.key}`}>{field.label}</Label>
+                      <Input
+                        id={`onboarding-${field.key}`}
+                        type={'type' in field ? field.type : 'text'}
+                        autoComplete={'autoComplete' in field ? field.autoComplete : undefined}
+                        required={'required' in field}
+                        value={dealershipDetails[field.key]}
+                        onChange={(event) => setDealershipDetails((previous) => ({ ...previous, [field.key]: event.target.value }))}
+                      />
+                    </div>
+                  ))}
+                </fieldset>
+              )}
               <SectionRenderer
                 sections={SECTION_DEFINITIONS}
                 selectedTemplate={selectedTemplate}
@@ -408,8 +487,9 @@ const OnboardingDialog: React.FC<OnboardingDialogProps> = ({
                 itemErrors={itemErrors}
                 error={error}
                 step={step}
-                currentJsonData={currentJsonData}
+                currentJsonData={seedJsonData}
               />
+              </>
             )}
           </div>
         </div>

@@ -64,3 +64,38 @@ export function assertPublishableInventory(stock: any) {
   }
   return approval
 }
+
+export type InventoryPublicListingAction = 'reapprove' | 'resubmit' | null
+
+/**
+ * The storefront gate (`assertPublishableInventory`) explained for the desk: whether this stock is
+ * publicly listed and, if not, the first gate it fails. `action` names the merchandising command that
+ * restores approval evidence for a unit the desk reports as approved but the storefront rejects.
+ */
+export function inventoryPublicListingState(stock: any): { live: boolean; reason: string | null; action: InventoryPublicListingAction } {
+  const status = String(stock.vehicle?.status || '')
+  // Intake stocks a unit as `service` until frontline; report its next prep gate instead of the lot status.
+  const inPrep = status === 'service' && !stock.frontlineAt
+  if (status !== 'available' && !inPrep) {
+    const label: Record<string, string> = { service: 'In service', pending: 'Pending sale', hold: 'On hold', sold: 'Sold' }
+    return { live: false, reason: label[status] || 'Not available', action: null }
+  }
+  if (stock.reconStatus !== 'completed') return { live: false, reason: 'Recon not complete', action: null }
+  if (stock.merchandisingStatus === 'submitted') return { live: false, reason: 'Listing awaiting approval', action: null }
+  if (stock.merchandisingStatus !== 'approved') return { live: false, reason: stock.merchandisingStatus === 'rejected' ? 'Listing rejected' : 'Listing not approved', action: null }
+  try {
+    assertCurrentInventoryApproval(stock)
+  } catch {
+    const latest = stock.merchandisingVersions?.[0]
+    let matches = false
+    try {
+      matches = latest?.status === 'approved' && latest.snapshot?.schemaVersion === 2 &&
+        domainEventRequestHash(latest.snapshot) === domainEventRequestHash(merchandisingSnapshot(stock))
+    } catch {
+      matches = false
+    }
+    return { live: false, reason: matches ? 'Approval evidence missing' : 'Listing changed since approval', action: matches ? 'reapprove' : 'resubmit' }
+  }
+  if (inPrep || !stock.frontlineAt) return { live: false, reason: 'Not marked frontline', action: null }
+  return { live: true, reason: null, action: null }
+}

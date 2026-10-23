@@ -8,9 +8,9 @@ import { submitStorefrontService } from '../actions/submissions'
 import { PageHeader } from '../components/PageHeader'
 import { useStorefrontBusiness } from '../components/StorefrontBusinessProvider'
 import { formatServicePackagePrice } from '../lib/servicePackagePrice'
-import { readServiceMenu, type ServiceMenuState } from '../lib/serviceMenuState'
+import { readServiceMenu, serviceTypeForPackage, type ServiceMenuState } from '../lib/serviceMenuState'
 import { customerRequestReference } from '../lib/customerRequests'
-import { DEFAULT_SERVICE_SLOTS, dayAvailability, localDateString } from '../lib/bookingSlots'
+import { DEFAULT_SERVICE_SLOTS, closedDayLabel, dayAvailability, localDateString } from '../lib/bookingSlots'
 import {
   Field,
   FormSection,
@@ -114,8 +114,13 @@ export function ServicePage() {
 
   const bookPackage = (name: string) => {
     setSelectedPackage(name)
-    setFormData((prev) => ({ ...prev, serviceType: prev.serviceType || 'scheduled_maintenance' }))
+    setFormData((prev) => ({ ...prev, serviceType: serviceTypeForPackage(name, SERVICE_TYPES) }))
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const clearPackage = () => {
+    setSelectedPackage(null)
+    setFormData((prev) => ({ ...prev, serviceType: '' }))
   }
 
   const selectedPackagePrice = serviceMenu.kind === 'ready' && selectedPackage
@@ -125,9 +130,10 @@ export function ServicePage() {
   const vehicleLabel = [formData.vehicleYear, formData.vehicleMake, formData.vehicleModel].filter(Boolean).join(' ')
 
   const summaryRows = (): StickerRowData[] => [
-    { label: 'Package', value: selectedPackage },
+    ...(selectedPackage
+      ? [{ label: 'Package', value: selectedPackage }]
+      : [{ label: 'Service', value: serviceTypeLabel }]),
     ...(selectedPackagePrice ? [{ label: 'Price', value: selectedPackagePrice, strong: true }] : []),
-    { label: 'Service', value: serviceTypeLabel },
     { label: 'Date', value: formData.appointmentDate ? formatRequestDate(formData.appointmentDate) : null },
     { label: 'Time', value: formData.appointmentTime },
     { label: 'Vehicle', value: vehicleLabel },
@@ -191,7 +197,7 @@ export function ServicePage() {
       meta={business.shortName || business.fullName}
       rows={summaryRows()}
       footer={selectedPackage ? (
-        <button type="button" onClick={() => setSelectedPackage(null)} className="sf-link inline-flex min-h-11 items-center gap-1.5 text-[var(--sf-text-sm)]">
+        <button type="button" onClick={clearPackage} className="sf-link inline-flex min-h-11 items-center gap-1.5 text-[var(--sf-text-sm)]">
           <X className="size-4" aria-hidden="true" />
           Remove package
         </button>
@@ -290,6 +296,17 @@ export function ServicePage() {
                         className="sf-input"
                       />
                     </Field>
+                    {selectedPackage ? (
+                      <div className="min-w-0">
+                        <p className="sf-label">Service</p>
+                        <div className="sf-input flex items-center justify-between gap-3" style={{ background: 'var(--sf-paper-2)' }}>
+                          <span className="min-w-0 truncate">{selectedPackage}</span>
+                          <button type="button" onClick={clearPackage} className="sf-link -my-2 inline-flex min-h-11 shrink-0 items-center text-[var(--sf-text-sm)]">
+                            Change
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
                     <Field label="Service type" htmlFor="serviceType">
                       <select
                         id="serviceType"
@@ -305,13 +322,14 @@ export function ServicePage() {
                         ))}
                       </select>
                     </Field>
+                    )}
                   </div>
 
                   {availability.status === 'closed' ? (
                     <div className="sf-well p-4">
                       <p role="alert" className="sf-title-line text-[var(--sf-text-sm)]">
                         <span className="sf-dot" data-tone="bad" aria-hidden="true" />
-                        <span>Closed on this day. Choose another date.</span>
+                        <span>{closedDayLabel(availability)} Choose another date.</span>
                       </p>
                     </div>
                   ) : (

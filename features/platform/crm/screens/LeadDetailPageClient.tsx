@@ -21,6 +21,7 @@ import {
   Track,
   type DeskTone,
 } from '@/features/platform/components/desk'
+import { formatPhone } from '@/features/platform/lib/format'
 import {
   type LeadDetail,
   advanceLeadCadence,
@@ -75,9 +76,9 @@ const dealTone: Record<string, DeskTone> = {
   cancelled: 'bad',
 }
 
-function formatDate(value: string | null | undefined) {
+function formatDate(value: string | null | undefined, timeZone: string) {
   if (!value) return '-'
-  return new Date(value).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  return new Date(value).toLocaleString('en-US', { timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
 
 function formatCurrency(value: number | null | undefined) {
@@ -108,11 +109,13 @@ export function LeadDetailPageClient({
   initialLead,
   initialDuplicateCount,
   initialError,
+  timeZone,
 }: {
   id: string
   initialLead: Lead | null
   initialDuplicateCount: number
   initialError: string | null
+  timeZone: string
 }) {
   const interactionKeyRef = useRef(`lead-interaction:${crypto.randomUUID()}`)
   const [lead, setLead] = useState<Lead | null>(initialLead)
@@ -367,7 +370,7 @@ export function LeadDetailPageClient({
   if (loading) {
     return (
       <PageContainer title="CRM" breadcrumbs={breadcrumbs}>
-        <div className="space-y-3 px-4 pb-6 md:px-6" role="status" aria-label="Loading lead">
+        <div className="space-y-3 px-4 pb-24 md:px-6" role="status" aria-label="Loading lead">
           <div className="h-7 w-56 max-w-full animate-pulse rounded bg-muted" />
           <div className="h-4 w-72 max-w-full animate-pulse rounded bg-muted" />
           <div className="h-48 animate-pulse rounded-xl bg-muted" />
@@ -383,7 +386,7 @@ export function LeadDetailPageClient({
         breadcrumbs={breadcrumbs}
         header={<DeskHeader title="Lead unavailable" tone="bad" status="Unavailable" />}
       >
-        <div className="space-y-3 px-4 pb-6 md:px-6">
+        <div className="space-y-3 px-4 pb-24 md:px-6">
           <Notice tone="bad">{error || 'This lead was not found.'}</Notice>
           <Track>
             <Pill onClick={loadLead}>Retry</Pill>
@@ -409,7 +412,7 @@ export function LeadDetailPageClient({
       status={currentStatus.label}
       meta={
         <span>
-          {currentStatus.label} · Created {formatDate(lead.createdAt)} · Last contact {formatDate(lead.lastContact)}
+          {currentStatus.label} · Created {formatDate(lead.createdAt, timeZone)} · Last contact {formatDate(lead.lastContact, timeZone)}
         </span>
       }
       actions={
@@ -442,8 +445,8 @@ export function LeadDetailPageClient({
 
   return (
     <PageContainer title="CRM" header={header} breadcrumbs={breadcrumbs}>
-      <div className="min-w-0 max-w-full px-4 pb-10 md:px-6">
-        {responseOverdue && <Notice tone="warn" className="mb-6">First response overdue · due {formatDate(lead.firstResponseDueAt)}</Notice>}
+      <div className="min-w-0 max-w-full px-4 pb-24 md:px-6">
+        {responseOverdue && <Notice tone="warn" className="mb-6">First response overdue · due {formatDate(lead.firstResponseDueAt, timeZone)}</Notice>}
 
         <div className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
           {/* Main column */}
@@ -509,11 +512,11 @@ export function LeadDetailPageClient({
                           {label(item.interactionType)}
                           <span className="font-normal text-muted-foreground"> · {label(item.outcome)}</span>
                         </p>
-                        <p className="font-mono text-[11px] tabular-nums text-muted-foreground">{formatDate(item.date)}</p>
+                        <p className="font-mono text-[11px] tabular-nums text-muted-foreground">{formatDate(item.date, timeZone)}</p>
                       </div>
                       {item.performedBy?.name && <p className="text-xs text-muted-foreground">{item.performedBy.name}</p>}
                       {item.notes && <p className="mt-1 whitespace-pre-line break-words text-sm">{item.notes}</p>}
-                      {item.followUpDate && <p className="mt-1 text-xs text-sky-700 dark:text-sky-300">Follow up {formatDate(item.followUpDate)}</p>}
+                      {item.followUpDate && <p className="mt-1 text-xs text-sky-700 dark:text-sky-300">Follow up {formatDate(item.followUpDate, timeZone)}</p>}
                     </li>
                   ))}
                 </ol>
@@ -529,7 +532,7 @@ export function LeadDetailPageClient({
                         <TitleLine as="p" tone={item.priority === 'urgent' || item.priority === 'high' ? 'warn' : 'idle'} status={item.priority || undefined} className="text-sm font-medium">
                           {item.title}
                         </TitleLine>
-                        <p className="pl-4 text-xs text-muted-foreground">Due {formatDate(item.dueDate)} · <span className="capitalize">{item.priority}</span></p>
+                        <p className="pl-4 text-xs text-muted-foreground">Due {formatDate(item.dueDate, timeZone)} · <span className="capitalize">{item.priority}</span></p>
                         {item.description && <p className="mt-0.5 break-words pl-4 text-xs text-muted-foreground">{item.description}</p>}
                       </div>
                       <Track className="shrink-0">
@@ -623,11 +626,11 @@ export function LeadDetailPageClient({
             <DeskSection title="Contact">
               <Facts items={[
                 { label: 'Email', value: lead.email || '-' },
-                { label: 'Phone', value: lead.phone || '-', mono: true },
+                { label: 'Phone', value: formatPhone(lead.phone) || '-', mono: true },
                 { label: 'Source', value: <span className="capitalize">{label(lead.source)}</span> },
                 { label: 'Timeframe', value: <span className="capitalize">{label(lead.timeframe)}</span> },
                 { label: 'Salesperson', value: lead.assignedSalesperson?.name || 'Unassigned' },
-                { label: 'First response', value: lead.firstResponseAt ? `Responded ${formatDate(lead.firstResponseAt)}` : lead.firstResponseDueAt ? `Due ${formatDate(lead.firstResponseDueAt)}` : 'Not assigned' },
+                { label: 'First response', value: lead.firstResponseAt ? `Responded ${formatDate(lead.firstResponseAt, timeZone)}` : lead.firstResponseDueAt ? `Due ${formatDate(lead.firstResponseDueAt, timeZone)}` : 'Not assigned' },
                 { label: 'Customer', value: `${lead.customer ? 'Linked' : 'Not linked'}${duplicateCount > 0 ? ` · ${duplicateCount} possible duplicate${duplicateCount === 1 ? '' : 's'}` : ''}` },
                 lead.customer?.household && { label: 'Household', value: lead.customer.household.displayName || '-' },
               ]} />
@@ -686,7 +689,7 @@ export function LeadDetailPageClient({
                         {vehicleName(testDrive.vehicle)}
                       </TitleLine>
                       <span className="shrink-0 text-right text-xs text-muted-foreground">
-                        <span className="font-mono tabular-nums">{formatDate(testDrive.scheduledTime)}</span> · {testDrive.completed ? 'Completed' : 'Pending'}
+                        <span className="font-mono tabular-nums">{formatDate(testDrive.scheduledTime, timeZone)}</span> · {testDrive.completed ? 'Completed' : 'Pending'}
                       </span>
                     </div>
                   ))}
@@ -704,7 +707,7 @@ export function LeadDetailPageClient({
                           {label(visit.kind)} · {label(visit.status)}
                         </TitleLine>
                         <p className="pl-4 text-xs text-muted-foreground">
-                          <span className="font-mono tabular-nums">{formatDate(visit.scheduledAt)}</span>
+                          <span className="font-mono tabular-nums">{formatDate(visit.scheduledAt, timeZone)}</span>
                           {visit.manager?.name ? ` · Manager ${visit.manager.name}` : ''}
                         </p>
                       </div>
@@ -749,7 +752,7 @@ export function LeadDetailPageClient({
                 <Facts items={[
                   { label: 'Status', value: <span className="capitalize">{lead.cadenceStatus || 'none'}</span> },
                   !!lead.cadenceStep && { label: 'Step', value: lead.cadenceStep },
-                  !!lead.cadenceDueAt && { label: 'Due', value: formatDate(lead.cadenceDueAt), mono: true },
+                  !!lead.cadenceDueAt && { label: 'Due', value: formatDate(lead.cadenceDueAt, timeZone), mono: true },
                 ]} />
                 <Input
                   aria-label="Campaign"

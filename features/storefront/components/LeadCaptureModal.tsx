@@ -11,7 +11,7 @@ import {
   trapDialogFocus,
 } from '../lib/dialogAccessibility'
 import { vehicleTitle } from '../lib/format'
-import { DEFAULT_TEST_DRIVE_SLOTS, dayAvailability, localDateString } from '../lib/bookingSlots'
+import { DEFAULT_TEST_DRIVE_SLOTS, closedDayLabel, dayAvailability, localDateString } from '../lib/bookingSlots'
 import { useStorefrontBusiness } from './StorefrontBusinessProvider'
 
 export type LeadIntent = 'contact' | 'test-drive' | 'get-quote'
@@ -261,7 +261,7 @@ export function LeadCaptureModal({
                 </select>
               </div>
               {availability.status === 'closed' && formData.preferredDate && (
-                <p role="alert" className="sf-error col-span-2 mt-0">Closed on this day.</p>
+                <p role="alert" className="sf-error col-span-2 mt-0">{closedDayLabel(availability)}</p>
               )}
             </div>
           )}

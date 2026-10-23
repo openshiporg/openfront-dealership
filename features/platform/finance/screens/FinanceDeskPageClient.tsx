@@ -659,7 +659,7 @@ export function FinanceDeskPageClient({
   if (error) {
     return (
       <PageContainer title="Finance" header={header} breadcrumbs={breadcrumbs}>
-        <div className="space-y-3 px-4 pb-6 md:px-6">
+        <div className="space-y-3 px-4 pb-24 md:px-6">
           <Notice tone="bad">
             <p className="font-medium">Finance is unavailable</p>
             <p className="mt-0.5 text-muted-foreground">{error}</p>
@@ -969,7 +969,7 @@ export function FinanceDeskPageClient({
 
   return (
     <PageContainer title="Finance" header={header} breadcrumbs={breadcrumbs}>
-      <div className="min-w-0 max-w-full space-y-8 px-4 pb-10 md:px-6">
+      <div className="min-w-0 max-w-full space-y-8 px-4 pb-24 md:px-6">
         {notice && (
           <Notice tone={notice.startsWith('Unable') ? 'bad' : 'info'}>
             <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">

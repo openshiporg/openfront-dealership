@@ -39,6 +39,7 @@ import { WorksheetLines } from '../components/WorksheetLines'
 import { readFinanceEvidence, type FinanceEvidence } from '../lib/financeEvidence'
 import { FinanceEvidenceHistory } from '../components/FinanceEvidenceHistory'
 import { labelForDeal, toneForDeal } from '../lib/dealStatus'
+import { formatUsd, formatUsdCredit } from '../lib/formatMoney'
 import { OperatorActionDialog } from '@/features/platform/components/OperatorActionDialog'
 
 type LenderOffer = DealLenderOffer
@@ -100,6 +101,30 @@ function lineCents(line: MoneyLine) {
   return Number.isFinite(value) ? value : 0
 }
 
+const worksheetLineGroups = [
+  ['fees', 'Fee'],
+  ['products', 'Product'],
+  ['rebates', 'Rebate'],
+  ['taxLines', 'Tax'],
+] as const
+
+/** Field problems the operator can fix before the worksheet is sent to the server. */
+function worksheetFieldErrors(deal: Pick<Deal, 'fees' | 'products' | 'rebates' | 'taxLines'>) {
+  const errors: string[] = []
+  for (const [field, label] of worksheetLineGroups) {
+    const missing = deal[field].flatMap((line, index) => String(line.name || '').trim() ? [] : [index + 1])
+    if (missing.length === 0) continue
+    const lineNote = deal[field].length > 1 ? ` (line ${missing.join(', ')})` : ''
+    errors.push(`${label} name is required${lineNote}`)
+  }
+  return errors
+}
+
+/** Only an optimistic-concurrency rejection means someone else changed the deal. */
+function isVersionConflict(message: string) {
+  return /changed concurrently|reload and retry/i.test(message)
+}
+
 /** One row of the deal jacket ledger. */
 function LedgerRow({ label, value, emphasis, sub, indent }: { label: ReactNode; value: ReactNode; emphasis?: 'subtotal' | 'total'; sub?: boolean; indent?: boolean }) {
   return (
@@ -122,6 +147,7 @@ export function DealDetailPageClient({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null)
   const [updating, setUpdating] = useState(false)
   const [worksheetDirty, setWorksheetDirty] = useState(false)
+  const [showLineErrors, setShowLineErrors] = useState(false)
   const [savedPricing, setSavedPricing] = useState<(ReturnType<typeof calculateDealPrice> & { financingAmountCents: number; monthlyPaymentCents: number; apr: number; loanTerm: number }) | null>(null)
   const [lenderOffers, setLenderOffers] = useState<LenderOffer[]>([])
   const [worksheetHistory, setWorksheetHistory] = useState<DealWorksheetVersion[]>([])
@@ -150,6 +176,7 @@ export function DealDetailPageClient({ id }: { id: string }) {
       for (const key of ['fees', 'rebates', 'products', 'taxLines']) value[key] = Array.isArray(value[key]) ? value[key] : []
       if (!value.taxLines.length && value.taxAmountCents > 0) value.taxLines = [{ code: 'legacy-tax', name: 'Tax', amountCents: value.taxAmountCents, source: 'operator-recorded' }]
       setWorksheetDirty(false)
+      setShowLineErrors(false)
       setWorksheetHistory(response.data.dealWorkspace.worksheetVersions || [])
       setSavedPricing({ ...calculateDealPrice(value), financingAmountCents: value.financingAmountCents || 0, monthlyPaymentCents: value.monthlyPaymentCents || 0, apr: value.apr || 0, loanTerm: value.loanTerm || 0 })
       const dollars = (cents: number | null | undefined) => (cents ?? 0) / 100
@@ -165,12 +192,24 @@ export function DealDetailPageClient({ id }: { id: string }) {
 
   const saveWorksheetVersion = async () => {
     if (!deal) return
-    setUpdating(true)
     setError(null)
+    const fieldErrors = worksheetFieldErrors(deal)
+    if (fieldErrors.length) {
+      setShowLineErrors(true)
+      setError(fieldErrors.join('. '))
+      return
+    }
+    let lines: { fees: MoneyLine[]; rebates: MoneyLine[]; products: MoneyLine[]; taxLines: MoneyLine[] }
+    const amounts = { vehiclePriceCents: Math.round(deal.vehiclePrice * 100), tradeInValueCents: Math.round(deal.tradeInValue * 100), downPaymentCents: Math.round(deal.downPayment * 100) }
     try {
-      const lines = { fees: normalizeMoneyLines(deal.fees, 'Fee'), rebates: normalizeMoneyLines(deal.rebates, 'Rebate'), products: normalizeMoneyLines(deal.products, 'Product'), taxLines: normalizeMoneyLines(deal.taxLines, 'Tax') }
-      const amounts = { vehiclePriceCents: Math.round(deal.vehiclePrice * 100), tradeInValueCents: Math.round(deal.tradeInValue * 100), downPaymentCents: Math.round(deal.downPayment * 100) }
+      lines = { fees: normalizeMoneyLines(deal.fees, 'Fee'), rebates: normalizeMoneyLines(deal.rebates, 'Rebate'), products: normalizeMoneyLines(deal.products, 'Product'), taxLines: normalizeMoneyLines(deal.taxLines, 'Tax') }
       assertValidDealPrice(calculateDealPrice({ ...amounts, ...lines, taxAmountCents: sumMoneyLines(lines.taxLines) }))
+    } catch (validationError) {
+      setError(validationError instanceof Error ? validationError.message : 'Check the worksheet amounts')
+      return
+    }
+    setUpdating(true)
+    try {
       const response = await saveDealWorksheet({
         dealId: deal.id,
         structureType: deal.structureType,
@@ -188,7 +227,10 @@ export function DealDetailPageClient({ id }: { id: string }) {
       if (!response.success) throw new Error(response.error || 'Worksheet save failed')
       await loadDeal()
     } catch (error) {
-      setError(`${error instanceof Error ? error.message : 'Worksheet save failed'}. Your edits have not been lost. If someone else changed this deal, copy your edits before reloading.`)
+      const message = error instanceof Error ? error.message : 'Worksheet save failed'
+      setError(isVersionConflict(message)
+        ? 'This deal was changed by someone else since you opened it. Your edits have not been lost. Copy your edits before reloading.'
+        : `Worksheet not saved: ${message}`)
     } finally {
       setUpdating(false)
     }
@@ -393,10 +435,7 @@ export function DealDetailPageClient({ id }: { id: string }) {
     setApprovalError(null)
   }
 
-  const formatCurrency = (value: number | null | undefined) => {
-    if (value == null) return '-'
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value)
-  }
+  const formatCurrency = (value: number | null | undefined) => formatUsd(value)
 
   const formatDate = (date: string | null) => {
     if (!date) return '-'
@@ -443,7 +482,7 @@ export function DealDetailPageClient({ id }: { id: string }) {
         }
         breadcrumbs={breadcrumbs('Deal')}
       >
-        <div className="px-4 pb-6 md:px-6">
+        <div className="px-4 pb-24 md:px-6">
           <Notice tone="bad">{error || 'The deal was not found.'}</Notice>
         </div>
       </PageContainer>
@@ -455,12 +494,18 @@ export function DealDetailPageClient({ id }: { id: string }) {
     { label: 'Vehicle selected', complete: Boolean(deal.vehicle), detail: deal.vehicle ? `${deal.vehicle.stockNumber} · ${deal.vehicle.vin}` : 'Attach vehicle and VIN' },
     { label: 'Negotiated price entered', complete: Number(deal.vehiclePrice || 0) > 0, detail: formatCurrency(deal.vehiclePrice) },
     { label: 'Deal structure complete', complete: deal.structureType === 'cash' ? deal.worksheetVersion > 0 : Number(deal.financingAmount || 0) > 0 && Number(deal.loanTerm || 0) > 0 && Number(deal.monthlyPayment || 0) > 0, detail: deal.structureType === 'cash' ? 'Cash structure' : `${formatCurrency(deal.financingAmount)} · ${deal.loanTerm || '-'} mo · ${formatCurrency(deal.monthlyPayment)}/mo` },
-    { label: 'Down payment planned', complete: deal.structureType === 'cash' || Number(deal.downPayment || 0) > 0, detail: formatCurrency(deal.downPayment) },
+    { label: 'Down payment planned', complete: deal.structureType === 'cash' || Number(deal.downPayment || 0) > 0, detail: deal.structureType === 'cash' ? `${formatCurrency(deal.downPayment)} · cash deal, full total due at signing` : formatCurrency(deal.downPayment) },
     { label: 'Tax saved', complete: deal.worksheetVersion > 0, detail: formatCurrency(deal.taxAmount) },
     { label: 'Manager/F&I approval recorded', complete: deal.approvals?.some(approval => approval.decision === 'approved'), detail: `${deal.approvals?.length || 0} approval event(s)` },
     { label: 'Delivery marked complete', complete: deal.status === 'delivered', detail: deal.saleDate ? formatDate(deal.saleDate) : 'Not delivered' },
   ]
   const checklistComplete = dealChecklist.filter(item => item.complete).length
+
+  const isCash = deal.structureType !== 'finance' && deal.structureType !== 'lease'
+  const worksheetSaved = deal.worksheetVersion > 0
+  // Server math: a cash structure finances nothing, so the whole total is due at signing and the
+  // down payment is a part of it, not a deduction. Finance: amount financed = total - down payment.
+  const downPaymentLabel = isCash ? 'Down payment (part of amount due)' : 'Planned down payment'
 
   const dealTitle = deal.vehicle ? `${deal.vehicle.year} ${deal.vehicle.make} ${deal.vehicle.model}` : 'Deal'
   const customerName = deal.lead ? `${deal.lead.firstName} ${deal.lead.lastName}` : 'No customer'
@@ -555,7 +600,7 @@ export function DealDetailPageClient({ id }: { id: string }) {
 
   return (
     <PageContainer title={dealTitle} header={header} breadcrumbs={breadcrumbs(dealTitle)}>
-      <div className="min-w-0 max-w-full space-y-8 px-4 pb-10 md:px-6">
+      <div className="min-w-0 max-w-full space-y-8 px-4 pb-24 md:px-6">
         {(error || worksheetDirty) && (
           <div className="space-y-2">
             {error && <Notice tone="bad">{error}</Notice>}
@@ -565,8 +610,8 @@ export function DealDetailPageClient({ id }: { id: string }) {
 
         {savedPricing && (
           <ReadoutStrip>
-            <Readout label="Total price" value={formatCurrency(savedPricing.totalPriceCents / 100)} sub={`Worksheet v${deal.worksheetVersion}`} />
-            <Readout label="Amount due" value={formatCurrency(savedPricing.cashPayableCents / 100)} sub="Due at signing" tone={savedPricing.cashPayableCents > 0 ? 'warn' : 'idle'} />
+            <Readout label="Total price" value={formatCurrency(savedPricing.totalPriceCents / 100)} sub={worksheetSaved ? `Worksheet v${deal.worksheetVersion}` : 'Not saved'} />
+            <Readout label="Amount due" value={formatCurrency(savedPricing.cashPayableCents / 100)} sub={isCash && savedPricing.downPaymentCents > 0 ? `Due at signing · includes ${formatCurrency(savedPricing.downPaymentCents / 100)} down` : 'Due at signing'} tone={savedPricing.cashPayableCents > 0 ? 'warn' : 'idle'} />
             {savedPricing.loanTerm > 0 ? (
               <Readout label="Payment" value={`${formatCurrency(savedPricing.monthlyPaymentCents / 100)}/mo`} sub={`${savedPricing.apr}% APR · ${savedPricing.loanTerm} mo`} />
             ) : (
@@ -580,7 +625,7 @@ export function DealDetailPageClient({ id }: { id: string }) {
           <div className="min-w-0 space-y-8">
             <DeskSection
               title="Deal jacket"
-              actions={<span className="font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground">Saved v{deal.worksheetVersion}</span>}
+              actions={<span className="font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground">{worksheetSaved ? `Saved v${deal.worksheetVersion}` : 'Unsaved'}</span>}
             >
               {savedPricing ? (
                 <Panel className="overflow-hidden">
@@ -588,9 +633,9 @@ export function DealDetailPageClient({ id }: { id: string }) {
                     <LedgerRow label="Vehicle price" value={formatCurrency(savedPricing.vehiclePriceCents / 100)} />
                     {lineGroups.map(([field, title, key, sign]) => (
                       <div key={field}>
-                        <LedgerRow label={title} value={formatCurrency((sign * savedPricing[key]) / 100)} />
+                        <LedgerRow label={title} value={sign < 0 ? formatUsdCredit(savedPricing[key] / 100) : formatCurrency(savedPricing[key] / 100)} />
                         {!worksheetDirty && deal[field].map((line, index) => (
-                          <LedgerRow key={`${field}-${index}`} sub indent label={line.name || line.code} value={formatCurrency((sign * lineCents(line)) / 100)} />
+                          <LedgerRow key={`${field}-${index}`} sub indent label={line.name || line.code} value={sign < 0 ? formatUsdCredit(lineCents(line) / 100) : formatCurrency(lineCents(line) / 100)} />
                         ))}
                       </div>
                     ))}
@@ -601,10 +646,16 @@ export function DealDetailPageClient({ id }: { id: string }) {
                         <LedgerRow key={`tax-${index}`} sub indent label={line.name || line.code} value={formatCurrency(lineCents(line) / 100)} />
                       ))}
                     </div>
-                    <LedgerRow label="Trade-in credit" value={formatCurrency(-savedPricing.tradeInValueCents / 100)} />
+                    <LedgerRow label="Trade-in credit" value={formatUsdCredit(savedPricing.tradeInValueCents / 100)} />
                     <LedgerRow emphasis="total" label="Total price" value={formatCurrency(savedPricing.totalPriceCents / 100)} />
-                    <LedgerRow label="Planned down payment" value={formatCurrency(savedPricing.downPaymentCents / 100)} />
-                    <LedgerRow label="Amount financed" value={formatCurrency(savedPricing.financingAmountCents / 100)} />
+                    {isCash ? (
+                      <LedgerRow sub indent label={downPaymentLabel} value={formatCurrency(savedPricing.downPaymentCents / 100)} />
+                    ) : (
+                      <>
+                        <LedgerRow label={downPaymentLabel} value={formatCurrency(savedPricing.downPaymentCents / 100)} />
+                        <LedgerRow label="Amount financed" value={formatCurrency(savedPricing.financingAmountCents / 100)} />
+                      </>
+                    )}
                     <LedgerRow emphasis="subtotal" label="Cash payable · due at signing" value={formatCurrency(savedPricing.cashPayableCents / 100)} />
                   </dl>
                   {(savedPricing.loanTerm > 0 || deal.saleDate) && (
@@ -641,7 +692,7 @@ export function DealDetailPageClient({ id }: { id: string }) {
                     {[
                       ['Negotiated vehicle price', 'vehiclePrice'],
                       ['Trade-in credit', 'tradeInValue'],
-                      ['Down payment', 'downPayment'],
+                      [isCash ? 'Down payment (part of amount due)' : 'Down payment', 'downPayment'],
                     ].map(([label, field]) => (
                       <label key={field} className="grid min-w-0 gap-1.5">
                         <span className={fieldLabel}>{label}</span>
@@ -656,7 +707,7 @@ export function DealDetailPageClient({ id }: { id: string }) {
                     )}
                   </div>
                   <Panel className="space-y-3 p-3">
-                    {([['fees', 'Fees', 'fee'], ['products', 'Products', 'product'], ['rebates', 'Rebates', 'rebate'], ['taxLines', 'Tax', 'tax']] as const).map(([field, title, category]) => <WorksheetLines key={field} title={title} category={category} lines={deal[field]} disabled={updating} onChange={lines => { setWorksheetDirty(true); setDeal(current => current ? { ...current, [field]: lines } : current) }} />)}
+                    {([['fees', 'Fees', 'fee'], ['products', 'Products', 'product'], ['rebates', 'Rebates', 'rebate'], ['taxLines', 'Tax', 'tax']] as const).map(([field, title, category]) => <WorksheetLines key={field} title={title} category={category} lines={deal[field]} disabled={updating} showErrors={showLineErrors} onChange={lines => { setWorksheetDirty(true); setDeal(current => current ? { ...current, [field]: lines } : current) }} />)}
                   </Panel>
                   <Track>
                     <Pill variant={worksheetDirty ? 'primary' : 'raised'} onClick={saveWorksheetVersion} disabled={updating}>
@@ -669,7 +720,7 @@ export function DealDetailPageClient({ id }: { id: string }) {
             )}
 
             {deal.structureType !== 'cash' && (
-              <DeskSection title={`Lender offers · worksheet ${deal.worksheetVersion}`} count={lenderOffers.length}>
+              <DeskSection title={worksheetSaved ? `Lender offers · worksheet ${deal.worksheetVersion}` : 'Lender offers · unsaved worksheet'} count={lenderOffers.length}>
                 <div className="space-y-3">
                   {!finance?.selectedOfferCurrent && <Notice tone="warn" role="status">{finance?.issue || 'Select or reconfirm an offer for this saved worksheet.'}</Notice>}
                   {lenderOffers.length === 0 ? (
@@ -805,7 +856,7 @@ export function DealDetailPageClient({ id }: { id: string }) {
               {savedPricing ? (
                 <Facts items={[
                   { label: 'Trade-in credit', value: formatCurrency(savedPricing.tradeInValueCents / 100), mono: true },
-                  { label: 'Planned down payment', value: formatCurrency(savedPricing.downPaymentCents / 100), mono: true },
+                  { label: downPaymentLabel, value: formatCurrency(savedPricing.downPaymentCents / 100), mono: true },
                   { label: 'Structure', value: <span className="capitalize">{deal.structureType || 'cash'}</span> },
                 ]} />
               ) : (

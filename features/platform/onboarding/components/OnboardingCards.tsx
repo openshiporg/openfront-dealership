@@ -4,6 +4,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getStoreSetupState } from "../actions/onboarding";
 
 const DEALERSHIP_WELCOME_STEP = {
   title: "Welcome to Openfront Dealership",
@@ -59,13 +60,11 @@ InfoCardContent.displayName = "InfoCardContent";
 const InfoCardFooter = ({
   children,
   className,
-  isHovered,
-}: CommonCardProps & { isHovered: boolean }) => {
+}: CommonCardProps) => {
   return (
     <div
       className={cn(
-        "flex justify-between text-xs text-muted-foreground mt-2 overflow-hidden transition-all duration-300 ease-spring",
-        isHovered ? "max-h-[60px] opacity-100" : "max-h-0 opacity-0",
+        "flex justify-between text-xs text-muted-foreground mt-2",
         className
       )}
     >
@@ -94,6 +93,19 @@ export function OnboardingCards({
     .map((step) => step.href === "#onboarding" ? { ...step, ...DEALERSHIP_WELCOME_STEP } : step);
   const cardCount = cards.length;
   const [showCompleted, setShowCompleted] = React.useState(cardCount > 0);
+  const [storeConfigured, setStoreConfigured] = React.useState<boolean | null>(null);
+  const hidden = !userRole?.canManageOnboarding || onboardingStatus === "completed" || onboardingStatus === "dismissed";
+
+  React.useEffect(() => {
+    if (hidden) return;
+    let active = true;
+    getStoreSetupState()
+      .then((state) => active && setStoreConfigured(!state.success || state.configured))
+      .catch(() => active && setStoreConfigured(true));
+    return () => {
+      active = false;
+    };
+  }, [hidden]);
 
   React.useEffect(() => {
     let timeout: NodeJS.Timeout | undefined = undefined;
@@ -108,6 +120,11 @@ export function OnboardingCards({
   }
 
   if (onboardingStatus === "completed" || onboardingStatus === "dismissed") {
+    return null;
+  }
+
+  // A store that already has a rooftop is set up; onboarding would seed a second dealership.
+  if (storeConfigured !== false) {
     return null;
   }
 
@@ -137,7 +154,6 @@ function OnboardingCard({
   onDismiss?: () => void;
   onOpenDialog?: () => void;
 }) {
-  const [isHovered, setIsHovered] = React.useState(false);
   const [isDismissed, setIsDismissed] = React.useState(false);
 
   const handleDismiss = () => {
@@ -158,8 +174,6 @@ function OnboardingCard({
           "opacity-100 translate-y-0",
           "hover:shadow-sm"
         )}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
       >
         <div className="absolute -top-1 -right-1.5 z-10">
           <div className="h-3 w-3 rounded-full bg-blue-700 dark:bg-blue-400 border-blue-200 dark:border-blue-800/50 border-3 animate-pulse" />
@@ -171,7 +185,7 @@ function OnboardingCard({
           </InfoCardContent>
         </div>
 
-        <InfoCardFooter isHovered={isHovered}>
+        <InfoCardFooter>
           <div className="m-2 space-x-2">
             <Button size="sm" onClick={onOpenDialog} className="text-xs h-6">
               Get started

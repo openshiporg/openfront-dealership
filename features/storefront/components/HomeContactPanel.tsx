@@ -15,7 +15,7 @@ export function HomeContactPanel() {
   const hasLocation = business.addressLine1 || business.addressLine2
 
   return (
-    <section className="sf-section" style={{ background: 'var(--sf-paper-2)' }}>
+    <section className="sf-section" style={{ background: 'var(--sf-paper-2)' }} data-flush-end>
       <Container className="grid gap-10 md:grid-cols-[1.2fr_1fr_1fr]">
         <div className="min-w-0">
           <p className="sf-eyebrow">Visit</p>

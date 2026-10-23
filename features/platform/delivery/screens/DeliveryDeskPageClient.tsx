@@ -378,7 +378,7 @@ export function DeliveryDeskPageClient({
 
   return (
     <PageContainer title="Delivery" header={header} breadcrumbs={breadcrumbs}>
-      <div className="min-w-0 max-w-full space-y-8 px-4 pb-10 md:px-6">
+      <div className="min-w-0 max-w-full space-y-8 px-4 pb-24 md:px-6">
         {notice && <Notice tone={notice.startsWith('Unable') ? 'bad' : 'ok'} role="status">{notice}</Notice>}
 
         <ReadoutStrip>

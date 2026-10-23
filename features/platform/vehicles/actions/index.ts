@@ -2,7 +2,8 @@
 
 import { revalidatePath } from 'next/cache'
 
-import { keystoneClient, type KeystoneResponse } from '@/features/dashboard/lib/keystoneClient'
+import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
+import { inventoryCommandRequest, type InventoryCommandResponse } from '../lib/inventoryCommandClient'
 
 export interface InventoryVehicle {
   id: string
@@ -13,6 +14,7 @@ export interface InventoryVehicle {
   model: string
   trim: string | null
   color: string | null
+  interiorColor: string | null
   mileage: number
   price: number
   purchasePrice: number | null
@@ -33,7 +35,10 @@ export interface InventoryVehicle {
   latestMerchandisingVersion: { id: string; status: string; updatedAt: string } | null
   reconWorkItems: Array<{ id: string; title: string; status: string; updatedAt: string }>
   acquisition: { id: string; status: string; updatedAt: string } | null
+  publicListing: InventoryPublicListing
 }
+
+export type InventoryPublicListing = { live: boolean; reason: string | null; action: 'reapprove' | 'resubmit' | null }
 
 export type IntakeRooftop = { id: string; name: string }
 
@@ -56,6 +61,9 @@ type InventoryWorkspaceItem = {
     make: string
     model: string
     trim: string | null
+    exteriorColor: string | null
+    interiorColor: string | null
+    condition: string | null
     mileage: number
     status: string
     priceCents: number | null
@@ -66,6 +74,7 @@ type InventoryWorkspaceItem = {
   acquisition: { id: string; status: string; updatedAt: string } | null
   reconWorkItems: Array<{ id: string; title: string; status: string; updatedAt: string }> | null
   latestMerchandisingVersion: { id: string; status: string; updatedAt: string } | null
+  publicListing: { live: boolean; reason: string | null; action: string | null } | null
 }
 
 export type InventoryWorkspaceResult =
@@ -83,14 +92,15 @@ function toInventoryVehicle(item: InventoryWorkspaceItem): InventoryVehicle {
     make: item.vehicle.make,
     model: item.vehicle.model,
     trim: item.vehicle.trim,
-    color: null,
+    color: item.vehicle.exteriorColor || null,
+    interiorColor: item.vehicle.interiorColor || null,
     mileage: item.vehicle.mileage,
     price: item.vehicle.priceCents == null ? 0 : item.vehicle.priceCents / 100,
     purchasePrice: item.cost?.purchaseCostCents == null ? null : item.cost.purchaseCostCents / 100,
     description: item.vehicle.description || '',
     primaryImagePath: item.vehicle.primaryImagePath || null,
     status: item.vehicle.status,
-    condition: 'used',
+    condition: item.vehicle.condition || '',
     dateAcquired: item.stockedAt,
     createdAt: item.stockedAt,
     inventoryStockId: item.id,
@@ -104,6 +114,11 @@ function toInventoryVehicle(item: InventoryWorkspaceItem): InventoryVehicle {
     latestMerchandisingVersion: item.latestMerchandisingVersion,
     reconWorkItems: item.reconWorkItems || [],
     acquisition: item.acquisition || null,
+    publicListing: {
+      live: Boolean(item.publicListing?.live),
+      reason: item.publicListing?.reason || null,
+      action: item.publicListing?.action === 'reapprove' || item.publicListing?.action === 'resubmit' ? item.publicListing.action : null,
+    },
   }
 }
 
@@ -113,11 +128,12 @@ export async function getInventoryWorkspace(status: string): Promise<InventoryWo
       inventoryWorkspace(status: $status, limit: 100) {
         items {
           id stockNumber locationCode locationLabel stockedAt updatedAt daysInStock reconStatus merchandisingStatus feedStatus frontlineAt
-          vehicle { id vin stockNumber year make model trim mileage status priceCents description primaryImagePath }
+          vehicle { id vin stockNumber year make model trim exteriorColor interiorColor condition mileage status priceCents description primaryImagePath }
           cost { purchaseCostCents totalCostCents }
           acquisition { id status updatedAt }
           reconWorkItems { id title status updatedAt }
           latestMerchandisingVersion { id status updatedAt }
+          publicListing { live reason action }
         }
         intakeRooftops { id name }
       }
@@ -132,8 +148,8 @@ export async function getInventoryWorkspace(status: string): Promise<InventoryWo
   }
 }
 
-async function runInventoryMutation<T>(mutation: string, variables: Record<string, unknown>): Promise<KeystoneResponse<T>> {
-  const response = await keystoneClient<T>(mutation, variables)
+async function runInventoryMutation<T>(mutation: string, variables: Record<string, unknown>): Promise<InventoryCommandResponse<T>> {
+  const response = await inventoryCommandRequest<T>(mutation, variables)
   if (response.success) revalidatePath(VEHICLES_PATH)
   return response
 }
@@ -149,6 +165,9 @@ export async function intakeInventoryVehicle(data: {
   year: number
   make: string
   model: string
+  trim: string
+  exteriorColor: string
+  interiorColor: string
   mileage: number
   purchasePriceCents: number
   listPriceCents: number
@@ -305,4 +324,15 @@ export async function getDealershipCurrencyCode() {
     }
   `, {}, { cache: 'no-store' })
   return (response.success && response.data.dealershipProfile?.currencyCode) || 'USD'
+}
+
+export type InventoryMake = { id: string; name: string; models: Array<{ id: string; name: string }> }
+
+export async function getInventoryMakes(): Promise<InventoryMake[]> {
+  const response = await keystoneClient<{ makes: InventoryMake[] | null }>(`
+    query InventoryMakes {
+      makes(orderBy: { name: asc }, take: 200) { id name models(orderBy: { name: asc }) { id name } }
+    }
+  `, {}, { cache: 'no-store' })
+  return response.success ? (response.data.makes || []).map(make => ({ ...make, models: make.models || [] })) : []
 }

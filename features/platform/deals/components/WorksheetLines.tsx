@@ -7,12 +7,14 @@ import { type MoneyLine } from '@/features/keystone/lifecycle/dealPricing'
 
 const fieldLabel = 'font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-muted-foreground'
 
-export function WorksheetLines({ title, category, lines, onChange, disabled }: {
+export function WorksheetLines({ title, category, lines, onChange, disabled, showErrors }: {
   title: string
   category: string
   lines: MoneyLine[]
   onChange: (lines: MoneyLine[]) => void
   disabled?: boolean
+  /** Flag lines that cannot be saved, after the operator tries to save. */
+  showErrors?: boolean
 }) {
   const update = (index: number, patch: Partial<MoneyLine>) => onChange(lines.map((line, position) => position === index ? { ...line, ...patch } : line))
   return (
@@ -34,7 +36,9 @@ export function WorksheetLines({ title, category, lines, onChange, disabled }: {
         {lines.length === 0 && <p className="py-2 text-xs text-muted-foreground">No {title.toLowerCase()}</p>}
         {lines.length > 0 && (
           <ul className="mt-2 divide-y rounded-lg border bg-muted/30">
-            {lines.map((line, index) => (
+            {lines.map((line, index) => {
+              const nameMissing = Boolean(showErrors) && !String(line.name || '').trim()
+              return (
               <li key={`${category}-${index}`} className="grid min-w-0 gap-2 p-2.5 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.5fr)_8rem_auto] sm:items-end">
                 <label htmlFor={`${category}-${index}-code`} className="grid min-w-0 gap-1">
                   <span className={fieldLabel}>Code</span>
@@ -42,7 +46,8 @@ export function WorksheetLines({ title, category, lines, onChange, disabled }: {
                 </label>
                 <label htmlFor={`${category}-${index}-name`} className="grid min-w-0 gap-1">
                   <span className={fieldLabel}>Description</span>
-                  <Input id={`${category}-${index}-name`} className="h-8" value={line.name || ''} maxLength={160} onChange={event => update(index, { name: event.target.value })} />
+                  <Input id={`${category}-${index}-name`} className="h-8" value={line.name || ''} maxLength={160} required aria-invalid={nameMissing || undefined} aria-describedby={nameMissing ? `${category}-${index}-name-error` : undefined} onChange={event => update(index, { name: event.target.value })} />
+                  {nameMissing && <span id={`${category}-${index}-name-error`} className="text-xs text-destructive">Description is required</span>}
                 </label>
                 <label htmlFor={`${category}-${index}-amount`} className="grid min-w-0 gap-1">
                   <span className={fieldLabel}>Amount (USD)</span>
@@ -55,7 +60,8 @@ export function WorksheetLines({ title, category, lines, onChange, disabled }: {
                   </Pill>
                 </Track>
               </li>
-            ))}
+              )
+            })}
           </ul>
         )}
       </div>

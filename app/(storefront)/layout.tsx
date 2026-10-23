@@ -3,6 +3,8 @@ import type { Metadata } from 'next'
 import { StorefrontShell } from '@/features/storefront'
 import { loadStorefrontBusiness } from '@/features/storefront/lib/data/storefront-business'
 
+export const dynamic = 'force-dynamic'
+
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await loadStorefrontBusiness()
 

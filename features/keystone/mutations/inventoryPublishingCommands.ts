@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import { permissions } from '../access'
+import { inventoryCommand } from './inventoryCommandErrors'
 import { commandDate } from '../lifecycle/commandDate'
 import { assertMerchandisingContent, assertPublishableInventory, loadInventoryPublication, lockInventoryStock, merchandisingSnapshot } from '../lifecycle/inventoryPublication'
 import { resolveInventoryChannel } from '../../integrations/inventory-channel'
@@ -43,7 +44,7 @@ async function commandResult(context: any, stockId: string, id: string, reused: 
   return { id, stockId, status: stock.reconStatus, merchandisingStatus: stock.merchandisingStatus, feedStatus: stock.feedStatus, updatedAt: stock.updatedAt, reused }
 }
 
-export async function updateInventoryMerchandisingDraft(_root: unknown, { data }: any, context: any) {
+async function updateInventoryMerchandisingDraftCommand(_root: unknown, { data }: any, context: any) {
   requireInventory(context)
   const stock = await stockAccess(context, String(data.stockId || ''))
   if (!['available', 'service'].includes(stock.vehicle.status)) throw new Error('Only active inventory can be edited')
@@ -93,7 +94,7 @@ export async function updateInventoryMerchandisingDraft(_root: unknown, { data }
   return commandResult(context, stock.id, stock.id, reused)
 }
 
-export async function submitInventoryMerchandising(_root: unknown, { data }: any, context: any) {
+async function submitInventoryMerchandisingCommand(_root: unknown, { data }: any, context: any) {
   requireInventory(context)
   const stock = await stockAccess(context, String(data.stockId || ''))
   const idempotencyKey = key(data.idempotencyKey)
@@ -127,7 +128,7 @@ export async function submitInventoryMerchandising(_root: unknown, { data }: any
   return commandResult(context, stock.id, command.id, command.reused)
 }
 
-export async function decideInventoryMerchandising(_root: unknown, { data }: any, context: any) {
+async function decideInventoryMerchandisingCommand(_root: unknown, { data }: any, context: any) {
   requireInventory(context)
   const version = await context.query.InventoryMerchandisingVersion.findOne({ where: { id: String(data.id || '') }, query: 'id version status updatedAt stock { id rooftop { id } }' })
   if (!version?.stock?.rooftop?.id) throw new Error('Merchandising version not found or not accessible')
@@ -137,15 +138,31 @@ export async function decideInventoryMerchandising(_root: unknown, { data }: any
   const expectedUpdatedAt = commandDate(data.expectedUpdatedAt)
   const eventKey = `inventory-merchandising-decision:${key(data.idempotencyKey)}`
   const evidence = { stockId: version.stock.id, versionId: version.id, version: version.version, decision, reason, expectedUpdatedAt: expectedUpdatedAt.toISOString() }
+  // An approved version whose stock lost its revision hash (rows approved before the hash existed, or
+  // seeded without it) is re-approved in place when its snapshot still matches the live content.
+  const reapproval = decision === 'approved' && version.status === 'approved'
   const priorEvent = await context.sudo().prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { id: true } })
-  if (!priorEvent) assertMerchandisingTransition(version.status, decision)
+  if (!priorEvent && !reapproval) assertMerchandisingTransition(version.status, decision)
   const reused = await context.transaction(async (tx: any) => {
     await lockInventoryStock(tx, version.stock.id)
-    const event: DomainEventInput = { eventKey, rooftopId: version.stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: version.stock.id, action: `merchandising-${decision}`, topic: 'inventory-merchandising.decided', actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: version.stock.rooftop.id, ...evidence } }
+    const event: DomainEventInput = { eventKey, rooftopId: version.stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: version.stock.id, action: reapproval ? 'merchandising-reapproved' : `merchandising-${decision}`, topic: 'inventory-merchandising.decided', actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: version.stock.rooftop.id, ...evidence } }
     const recorded = await recordDomainEventInTransaction(tx, event)
     if (recorded.reused) return true
     const current = await loadInventoryPublication(tx, version.stock.id)
     const latest = current.merchandisingVersions[0]
+    if (reapproval) {
+      if (current.merchandisingStatus !== 'approved' || current.approvedRevisionHash !== '' || latest?.id !== version.id || latest.status !== 'approved') throw new Error('This listing is not awaiting re-approval; reload the current revision')
+      const snapshot = assertMerchandisingContent(current)
+      if (latest.snapshot?.schemaVersion !== 2 || domainEventRequestHash(latest.snapshot) !== domainEventRequestHash(snapshot)) throw new Error('Listing changed since approval; submit it for review again')
+      if (commandDate(latest.updatedAt).getTime() !== expectedUpdatedAt.getTime()) throw new Error('Merchandising version changed concurrently; reload and retry')
+      const restored = await tx.prisma.inventoryStock.updateMany({
+        where: { id: version.stock.id, rooftopId: version.stock.rooftop.id, merchandisingStatus: 'approved', approvedRevisionHash: '' },
+        data: { approvedRevisionHash: domainEventRequestHash(merchandisingSnapshot(current)), feedStatus: 'not-published' },
+      })
+      if (restored.count !== 1) throw new Error('Inventory changed concurrently; reload the current revision')
+      await tx.prisma.inventoryStockEvent.create({ data: { rooftopId: version.stock.rooftop.id, stockId: version.stock.id, eventKey, eventType: 'merchandising-reapproved', reason, evidence, actorId: context.session.itemId } })
+      return false
+    }
     if (current.merchandisingStatus !== 'submitted' || latest?.id !== version.id || latest.status !== 'submitted') throw new Error('This merchandising review was superseded; reload the current revision')
     const snapshot = assertMerchandisingContent(current)
     if (latest.snapshot?.schemaVersion !== 2 || domainEventRequestHash(latest.snapshot) !== domainEventRequestHash(snapshot)) throw new Error('Inventory changed after submission; submit the current revision again')
@@ -171,7 +188,7 @@ export async function decideInventoryMerchandising(_root: unknown, { data }: any
   return commandResult(context, version.stock.id, version.id, reused)
 }
 
-export async function recordInventoryFeedRun(_root: unknown, { data }: any, context: any) {
+async function recordInventoryFeedRunCommand(_root: unknown, { data }: any, context: any) {
   requireInventory(context)
   const channel = resolveInventoryChannel(data.channelKey)
   const stockIds: string[] = [...new Set<string>((Array.isArray(data.stockIds) ? data.stockIds : []).map((value: unknown) => String(value)))].slice(0, 500)
@@ -229,3 +246,8 @@ export async function recordInventoryFeedRun(_root: unknown, { data }: any, cont
   }, { timeout: 30_000 })
   return { id: command.id, rooftopId, channelKey: channel.key, status, attemptedCount: stockIds.length, succeededCount, failedCount, errorCount: errors.length, completedAt, reused: command.reused }
 }
+
+export const updateInventoryMerchandisingDraft = inventoryCommand(updateInventoryMerchandisingDraftCommand)
+export const submitInventoryMerchandising = inventoryCommand(submitInventoryMerchandisingCommand)
+export const decideInventoryMerchandising = inventoryCommand(decideInventoryMerchandisingCommand)
+export const recordInventoryFeedRun = inventoryCommand(recordInventoryFeedRunCommand)

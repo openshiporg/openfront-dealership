@@ -3,6 +3,8 @@ import type { Metadata } from 'next'
 
 import { TestDrivePage } from '@/features/storefront/screens/TestDrivePage'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = { title: 'Test drive' }
 
 export default function Page() {

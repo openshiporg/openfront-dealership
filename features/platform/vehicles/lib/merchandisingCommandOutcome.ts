@@ -2,7 +2,7 @@ export type MerchandisingRevisionRef = { id: string; status: string; updatedAt: 
 
 export type MerchandisingCommandAttempt =
   | { kind: 'submit'; stockId: string; reason: string; idempotencyKey: string }
-  | { kind: 'approve'; stockId: string; versionId: string; decision: 'approved'; reason: string; expectedUpdatedAt: string; idempotencyKey: string }
+  | { kind: 'approve' | 'reapprove'; stockId: string; versionId: string; decision: 'approved'; reason: string; expectedUpdatedAt: string; idempotencyKey: string }
 
 export type MerchandisingCommandResult = {
   id: string
@@ -14,8 +14,21 @@ export type MerchandisingCommandResult = {
 export function createMerchandisingCommandAttempt(
   stockId: string,
   latestRevision: MerchandisingRevisionRef,
-  createUuid: () => string
+  createUuid: () => string,
+  publicAction: 'reapprove' | 'resubmit' | null = null
 ): MerchandisingCommandAttempt {
+  // Approved, but the storefront rejects it for missing revision evidence: re-approve the same version.
+  if (publicAction === 'reapprove' && latestRevision?.status === 'approved') {
+    return {
+      kind: 'reapprove',
+      stockId,
+      versionId: latestRevision.id,
+      decision: 'approved',
+      reason: 'Re-approved from inventory operations desk',
+      expectedUpdatedAt: latestRevision.updatedAt,
+      idempotencyKey: `merch-reapprove:${latestRevision.id}:${createUuid()}`,
+    }
+  }
   if (latestRevision?.status === 'submitted') {
     return {
       kind: 'approve',
@@ -51,7 +64,7 @@ export function normalizeMerchandisingCommandResult(value: unknown, attempt: Mer
   if (stockId !== attempt.stockId) return null
   if (!['draft', 'submitted', 'approved', 'rejected'].includes(String(merchandisingStatus))) return null
   if (typeof reused !== 'boolean') return null
-  if (attempt.kind === 'approve' && id !== attempt.versionId) return null
+  if (attempt.kind !== 'submit' && id !== attempt.versionId) return null
 
   return {
     id,
@@ -66,10 +79,10 @@ export function resolveMerchandisingCommandResponse(success: boolean, value: unk
 }
 
 export function merchandisingCommandResultMessage(attempt: MerchandisingCommandAttempt, result: MerchandisingCommandResult) {
-  const expectedStatus = attempt.kind === 'approve' ? 'approved' : 'submitted'
+  const expectedStatus = attempt.kind === 'submit' ? 'submitted' : 'approved'
 
   if (result.merchandisingStatus === expectedStatus) {
-    return attempt.kind === 'approve' ? 'Listing approved.' : 'Listing submitted for approval.'
+    return attempt.kind === 'approve' ? 'Listing approved.' : attempt.kind === 'reapprove' ? 'Listing re-approved.' : 'Listing submitted for approval.'
   }
 
   return `Listing status is ${result.merchandisingStatus}. Refresh and review before continuing.`

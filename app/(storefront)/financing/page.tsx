@@ -3,6 +3,8 @@ import type { Metadata } from 'next'
 
 import { FinancingPage } from '@/features/storefront/screens/FinancingPage'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = { title: 'Financing' }
 
 export default function Page() {

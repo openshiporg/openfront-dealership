@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import * as RadioGroupPrimitive from '@radix-ui/react-radio-group'
 import { RadioGroup } from '@/components/ui/radio-group'
 import { sanitizeStoreLogoSvg } from '@/features/lib/sanitize-store-logo'
@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DeskHeader, DeskSection, Notice, Pill, Track } from '@/features/platform/components/desk'
 import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   type DealershipStoreSettings,
   saveDealershipStoreSettings,
@@ -40,6 +41,56 @@ const EMPTY_SETTINGS: DealershipStoreSettings = {
   homepageDescription: '',
   logoIcon: LOGO_ICONS[0].lightSvg,
   logoColor: DEFAULT_STORE_LOGO_COLOR,
+  timezone: '',
+}
+
+const US_TIME_ZONES = [
+  { value: 'America/New_York', label: 'Eastern (New York)' },
+  { value: 'America/Chicago', label: 'Central (Chicago)' },
+  { value: 'America/Denver', label: 'Mountain (Denver)' },
+  { value: 'America/Phoenix', label: 'Mountain, no DST (Phoenix)' },
+  { value: 'America/Los_Angeles', label: 'Pacific (Los Angeles)' },
+  { value: 'America/Anchorage', label: 'Alaska (Anchorage)' },
+  { value: 'Pacific/Honolulu', label: 'Hawaii (Honolulu)' },
+  { value: 'America/Puerto_Rico', label: 'Atlantic (Puerto Rico)' },
+]
+
+function otherTimeZones(current: string) {
+  let zones: string[] = []
+  try {
+    zones = Intl.supportedValuesOf('timeZone')
+  } catch {
+    zones = []
+  }
+  const us = new Set(US_TIME_ZONES.map(zone => zone.value))
+  const rest = zones.filter(zone => !us.has(zone))
+  if (current && !us.has(current) && !rest.includes(current)) rest.unshift(current)
+  return rest.map(zone => ({ value: zone, label: zone.replaceAll('_', ' ') }))
+}
+
+function TimezoneSelect({ value, onChange, disabled }: { value: string; onChange: (value: string) => void; disabled?: boolean }) {
+  const others = useMemo(() => otherTimeZones(value), [value])
+  return (
+    <div className="min-w-0 space-y-1.5">
+      <Label htmlFor="store-settings-timezone" className={labelClass}>Timezone</Label>
+      <Select value={value || undefined} onValueChange={onChange} disabled={disabled}>
+        <SelectTrigger id="store-settings-timezone" className="w-full" aria-label="Timezone">
+          <SelectValue placeholder={disabled ? 'Unavailable' : 'Select timezone'} />
+        </SelectTrigger>
+        <SelectContent className="max-h-[min(420px,var(--radix-select-content-available-height))]">
+          <SelectGroup>
+            <SelectLabel>United States</SelectLabel>
+            {US_TIME_ZONES.map(zone => <SelectItem key={zone.value} value={zone.value}>{zone.label}</SelectItem>)}
+          </SelectGroup>
+          <SelectSeparator />
+          <SelectGroup>
+            <SelectLabel>All zones</SelectLabel>
+            {others.map(zone => <SelectItem key={zone.value} value={zone.value}>{zone.label}</SelectItem>)}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </div>
+  )
 }
 
 const labelClass = 'font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground'
@@ -99,6 +150,7 @@ export function StoreSettingsPageClient({
   const safePreviewMark = sanitizeStoreLogoSvg(form.logoIcon)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(initialError)
+  const [warning, setWarning] = useState<string | null>(null)
 
   const update = (key: keyof DealershipStoreSettings, value: string) => {
     setForm(current => ({ ...current, [key]: value }))
@@ -108,10 +160,16 @@ export function StoreSettingsPageClient({
     if (initialError || invalidMark) return
     setIsSaving(true)
     setError(null)
+    setWarning(null)
     const result = await saveDealershipStoreSettings(form)
     if (result.success && result.data) {
-      setForm(result.data)
-      toast.success('Store settings saved')
+      setForm({ ...result.data, timezone: result.data.timezone || form.timezone })
+      if (result.warning) {
+        setWarning(result.warning)
+        toast.error(result.warning)
+      } else {
+        toast.success('Store settings saved')
+      }
     } else if (!result.success) {
       setError(result.error)
       toast.error(result.error)
@@ -145,6 +203,8 @@ export function StoreSettingsPageClient({
           <Notice tone="warn">Add a dealership name and short name to publish the storefront.</Notice>
         ) : null}
 
+        {warning ? <Notice tone="warn">{warning}</Notice> : null}
+
         {error ? (
           <Notice tone="bad">
             <p className="font-medium">Settings were not saved</p>
@@ -162,7 +222,11 @@ export function StoreSettingsPageClient({
               <div className="space-y-1.5">
                 <p className={labelClass}>Logo color</p>
                 <RadioGroup value={form.logoColor} onValueChange={value => update('logoColor', value)} className="grid grid-cols-2 gap-1 rounded-2xl bg-muted p-1 shadow-[inset_0_1px_2px_rgb(0_0_0/0.08)] min-[400px]:grid-cols-3 sm:grid-cols-4 dark:bg-black/30" aria-label="Logo color">
-                  {HUE_PRESETS.map(preset => {
+                  {[
+                    ...HUE_PRESETS,
+                    // A rotation saved before the presets were renamed keeps its own swatch.
+                    ...(HUE_PRESETS.some(preset => String(preset.value) === form.logoColor) ? [] : [{ name: 'Current', value: Number(form.logoColor) }]),
+                  ].map(preset => {
                     const value = String(preset.value)
                     const selected = form.logoColor === value
                     return (
@@ -210,6 +274,9 @@ export function StoreSettingsPageClient({
                 <Field label="City" value={form.city} onChange={value => update('city', value)} />
                 <Field label="State" value={form.state} onChange={value => update('state', value)} />
                 <Field label="Postal code" value={form.postalCode} onChange={value => update('postalCode', value)} />
+              </div>
+              <div className="sm:max-w-sm">
+                <TimezoneSelect value={form.timezone} onChange={value => update('timezone', value)} disabled={Boolean(initialSettings) && !initialSettings?.timezone} />
               </div>
             </Section>
           </div>

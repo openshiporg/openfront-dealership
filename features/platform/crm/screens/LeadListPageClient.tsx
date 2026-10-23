@@ -27,6 +27,7 @@ import {
   type DeskTone,
 } from '@/features/platform/components/desk'
 import { type CrmLeadSummary, getCrmLeads } from '../actions'
+import { dayKey, formatPhone } from '@/features/platform/lib/format'
 
 interface Lead {
   id: string
@@ -82,9 +83,11 @@ const isOverdue = (lead: Lead) =>
 export function LeadListPageClient({
   initialLeads,
   initialError,
+  timeZone,
 }: {
   initialLeads: CrmLeadSummary[]
   initialError: string | null
+  timeZone: string
 }) {
   const [leads, setLeads] = useState<Lead[]>(() => initialLeads.map(toLead))
   const [loading, setLoading] = useState(false)
@@ -135,18 +138,15 @@ export function LeadListPageClient({
       : getLeadsByStatus(statusFilter)
 
   const formatDate = (date: string) => {
-    const d = new Date(date)
-    const now = new Date()
-    const diff = now.getTime() - d.getTime()
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+    const days = Math.round((Date.parse(dayKey(Date.now(), timeZone)) - Date.parse(dayKey(date, timeZone))) / (1000 * 60 * 60 * 24))
     if (days === 0) return 'Today'
     if (days === 1) return 'Yesterday'
-    if (days < 7) return `${days} days ago`
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    if (days > 1 && days < 7) return `${days} days ago`
+    return new Date(date).toLocaleDateString('en-US', { timeZone, month: 'short', day: 'numeric' })
   }
 
   const formatDue = (date: string) =>
-    new Date(date).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    new Date(date).toLocaleString('en-US', { timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 
   const activeLeads = filteredLeads.filter(l => !isClosed(l.status)).length
   const hotLeads = filteredLeads.filter(l => l.temperature === 'immediately' && !isClosed(l.status)).length
@@ -191,7 +191,7 @@ export function LeadListPageClient({
           </p>
           {!compact && (
             <p className="truncate pl-4 text-xs text-muted-foreground">
-              {[lead.email, lead.phone].filter(Boolean).join(' · ')}
+              {[lead.email, formatPhone(lead.phone)].filter(Boolean).join(' · ')}
               {lead.temperature && lead.temperature !== 'immediately' && ` · ${temperatureLabels[lead.temperature] || lead.temperature}`}
             </p>
           )}
@@ -231,7 +231,7 @@ export function LeadListPageClient({
 
   return (
     <PageContainer title="CRM" header={header} breadcrumbs={breadcrumbs}>
-      <div className="min-w-0 max-w-full space-y-6 px-4 pb-10 md:px-6">
+      <div className="min-w-0 max-w-full space-y-6 px-4 pb-24 md:px-6">
         <ReadoutStrip>
           <Readout label="Open" value={activeLeads} />
           <Readout label="Hot" value={hotLeads} tone={hotLeads > 0 ? 'bad' : 'idle'} sub={`${overdueCount} response overdue`} />

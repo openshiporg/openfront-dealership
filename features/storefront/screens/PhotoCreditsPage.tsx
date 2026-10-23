@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import { ArrowUpRight } from 'lucide-react'
 
 import { Container } from '../components/Container'
@@ -30,7 +30,25 @@ async function listedPhotoAttributions(): Promise<PhotoAttribution[]> {
 
 export async function PhotoCreditsPage() {
   const photos = await listedPhotoAttributions()
-  if (!photos.length) notFound()
+
+  if (!photos.length) {
+    return (
+      <>
+        <PageHeader eyebrow="Photo credits" title="Vehicle photography" />
+        <Container className="py-[var(--sf-space-xl)] md:py-[var(--sf-space-2xl)]">
+          <div className="sf-well flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+            <p className="sf-title-line font-semibold">
+              <span className="sf-dot" aria-hidden="true" />
+              No attributed photos listed
+            </p>
+            <div className="sf-track">
+              <Link href="/inventory" className="sf-pill sf-pill-raised min-h-11 sm:min-h-9">Inventory</Link>
+            </div>
+          </div>
+        </Container>
+      </>
+    )
+  }
 
   return (
     <>

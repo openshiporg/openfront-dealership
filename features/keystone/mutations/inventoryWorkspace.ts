@@ -1,5 +1,6 @@
 import { permissions } from '../access'
 import { inventoryChannelKeys } from '../../integrations/inventory-channel'
+import { inventoryPublicListingState } from '../lifecycle/inventoryPublication'
 
 function boundedPage(limitValue: unknown, offsetValue: unknown) {
   const limit = Math.max(1, Math.min(100, Number(limitValue) || 50))
@@ -36,13 +37,19 @@ export async function inventoryWorkspace(_root: unknown, args: any, context: any
     where: { id: { in: ids } },
     include: {
       rooftop: { select: { id: true, name: true } },
-      vehicle: { select: { id: true, vin: true, stockNumber: true, year: true, make: true, model: true, trim: true, mileage: true, status: true, priceCents: true, description: true, images: { where: { isPrimary: true }, take: 1, select: { imagePath: true } } } },
+      vehicle: { select: { id: true, vin: true, stockNumber: true, year: true, make: true, model: true, trim: true, exteriorColor: true, interiorColor: true, condition: true, mileage: true, status: true, priceCents: true, description: true, images: { where: { isPrimary: true }, take: 1, select: { imagePath: true } } } },
       acquisition: { select: { id: true, reference: true, status: true, vin: true, year: true, make: true, model: true, acquisitionSource: true, appraisalCents: true, purchaseCents: true, reconEstimateCents: true, updatedAt: true, vehicleId: true } },
       reconWorkItems: { orderBy: { createdAt: 'desc' }, take: 20, select: { id: true, title: true, category: true, status: true, estimatedCostCents: true, actualCostCents: true, dueAt: true, updatedAt: true } },
       merchandisingVersions: { orderBy: { version: 'desc' }, take: 1, select: { id: true, version: true, status: true, submittedAt: true, decidedAt: true, decisionReason: true, updatedAt: true } },
     },
   }) : []
   const byId = new Map(rows.map((row: any) => [row.id, row]))
+  // Same rows the storefront gate reads, so the desk can say why a unit is not publicly listed.
+  const publications = ids.length ? await context.sudo().prisma.inventoryStock.findMany({
+    where: { id: { in: ids } },
+    include: { vehicle: { include: { images: true } }, merchandisingVersions: { orderBy: { version: 'desc' }, take: 1 } },
+  }) : []
+  const publicListingById = new Map(publications.map((stock: any) => [stock.id, inventoryPublicListingState(stock)]))
   const now = Date.now()
   const items: any[] = ids.flatMap((id: string) => {
     const row: any = byId.get(id)
@@ -67,6 +74,7 @@ export async function inventoryWorkspace(_root: unknown, args: any, context: any
       cost: canViewCost ? { purchaseCostCents: row.purchaseCostCents ?? 0, reconCostCents: row.reconCostCents ?? 0, otherCostCents: row.otherCostCents ?? 0, totalCostCents: row.totalCostCents ?? 0 } : null,
       reconWorkItems: row.reconWorkItems.map((work: any) => ({ ...work, estimatedCostCents: canViewCost ? work.estimatedCostCents : null, actualCostCents: canViewCost ? work.actualCostCents : null })),
       latestMerchandisingVersion: row.merchandisingVersions[0] ?? null,
+      publicListing: publicListingById.get(row.id) ?? { live: false, reason: 'Not available', action: null },
     }]
   })
   const canManageInventory = permissions.canManageInventory({ session: context.session })

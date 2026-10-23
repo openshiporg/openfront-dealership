@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { GraphQLClient } from 'graphql-request'
-import { startOnboarding, completeOnboarding } from '../actions/onboarding'
+import { startOnboarding, completeOnboarding, getStoreSetupState } from '../actions/onboarding'
 import { seedItemLabel, type SectionType } from '../config/templates'
 import { requestSeedRecord, runSeedPhases, validateDealershipSeed, type SeedEntity } from '../utils/seedRecords'
 import { DEFAULT_STORE_LOGO_COLOR, DEFAULT_STORE_LOGO_ICON, normalizeStoreLogoColor } from '@/features/lib/store-logo'
@@ -53,6 +53,9 @@ export function useOnboardingApi({
 
     try {
       validateDealershipSeed(currentJsonData)
+      const setup = await getStoreSetupState()
+      if (!setup.success) throw new Error('Store setup status could not be checked')
+      if (setup.configured) throw new Error('This store is already set up')
       const client = new GraphQLClient(GRAPHQL_ENDPOINT, { headers: { 'Content-Type': 'application/json' } })
       const data = currentJsonData
       let rooftopId = ''

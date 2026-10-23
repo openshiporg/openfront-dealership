@@ -19,26 +19,30 @@ export function ComparisonBar() {
   if (count === 0 || pathname === '/compare') return null
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-14 z-50 flex justify-center px-3 md:bottom-5">
-      <div
-        className="sf-band pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-full py-1.5 pl-5 pr-1.5"
-        style={{ boxShadow: 'var(--sf-shadow-float)' }}
-        role="region"
-        aria-label="Compare"
-      >
-        <p className="min-w-0 flex-1 truncate text-[var(--sf-text-sm)]">
-          <span className="sf-figure font-semibold">{count}</span>
-          <span style={{ color: 'var(--sf-on-dark-2)' }}> of 4 selected</span>
-        </p>
-        <div className="sf-track shrink-0">
-          <button type="button" onClick={() => clearComparison()} className="sf-pill">
-            Clear
-          </button>
-          <Link href="/compare" className="sf-pill sf-pill-primary">
-            Compare
-          </Link>
+    <>
+      {/* Keeps the end of the footer reachable above the fixed bar. */}
+      <div className="sf-band h-20" aria-hidden="true" />
+      <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-3 md:bottom-5">
+        <div
+          className="sf-band pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-full py-1.5 pl-5 pr-1.5"
+          style={{ boxShadow: 'var(--sf-shadow-float)' }}
+          role="region"
+          aria-label="Compare"
+        >
+          <p className="min-w-0 flex-1 truncate text-[var(--sf-text-sm)]">
+            <span className="sf-figure font-semibold">{count}</span>
+            <span style={{ color: 'var(--sf-on-dark-2)' }}> of 4 selected</span>
+          </p>
+          <div className="sf-track shrink-0">
+            <button type="button" onClick={() => clearComparison()} className="sf-pill">
+              Clear
+            </button>
+            <Link href="/compare" className="sf-pill sf-pill-primary">
+              Compare
+            </Link>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }

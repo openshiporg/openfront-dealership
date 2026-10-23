@@ -1,21 +1,43 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import Link from 'next/link'
-import { RefreshCw, Search } from 'lucide-react'
+import { Plus, RefreshCw, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
+import { OperatorActionDialog, type OperatorActionField } from '@/features/platform/components/OperatorActionDialog'
 import { Code, DeskHeader, Notice, Panel, Pill, Segmented, TitleLine, Track, type DeskTone } from '@/features/platform/components/desk'
-import { type TestDrive, completeTestDrive, getTestDrives, verifyTestDriveLicense } from '../actions'
+import { dayKey, formatPhone } from '@/features/platform/lib/format'
+import {
+  type TestDrive,
+  completeTestDrive,
+  getTestDriveVehicles,
+  getTestDrives,
+  scheduleTestDrive,
+  verifyTestDriveLicense,
+} from '../actions'
+
+const EMPTY_SCHEDULE = { customerName: '', customerPhone: '', customerEmail: '', scheduledAt: '', vehicleId: '' }
+
+function scheduleFields(vehicles: Array<{ value: string; label: string }>): OperatorActionField[] {
+  return [
+    { name: 'customerName', label: 'Customer name', maxLength: 200 },
+    { name: 'customerPhone', label: 'Phone', maxLength: 50, placeholder: '(202) 555-0147' },
+    { name: 'customerEmail', label: 'Email', type: 'email', maxLength: 320 },
+    { name: 'scheduledAt', label: 'Date and time', type: 'datetime-local', description: 'Dealership time' },
+    { name: 'vehicleId', label: 'Vehicle', type: 'select', options: vehicles, placeholder: vehicles.length ? 'Select vehicle' : 'No available vehicles' },
+  ]
+}
 
 type QueueFilter = 'today' | 'upcoming' | 'open' | 'completed' | 'all'
 
-function formatDateTime(value: string | null | undefined) {
+function formatDateTime(value: string | null | undefined, timeZone: string) {
   if (!value) return 'Unscheduled'
   return new Date(value).toLocaleString('en-US', {
+    timeZone,
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
@@ -37,9 +59,9 @@ function vehicleName(testDrive: TestDrive) {
   return [testDrive.vehicle.year, testDrive.vehicle.make, testDrive.vehicle.model].filter(Boolean).join(' ')
 }
 
-function isToday(value: string | null | undefined) {
+function isToday(value: string | null | undefined, timeZone: string) {
   if (!value) return false
-  return new Date(value).toDateString() === new Date().toDateString()
+  return dayKey(value, timeZone) === dayKey(Date.now(), timeZone)
 }
 
 function isUpcoming(value: string | null | undefined) {
@@ -47,15 +69,15 @@ function isUpcoming(value: string | null | undefined) {
   return new Date(value).getTime() >= Date.now()
 }
 
-function formatTime(value: string | null | undefined) {
+function formatTime(value: string | null | undefined, timeZone: string) {
   if (!value) return '--:--'
-  return new Date(value).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  return new Date(value).toLocaleTimeString('en-US', { timeZone, hour: 'numeric', minute: '2-digit' })
 }
 
-function formatDay(value: string | null | undefined) {
+function formatDay(value: string | null | undefined, timeZone: string) {
   if (!value) return 'Unscheduled'
-  if (isToday(value)) return 'Today'
-  return new Date(value).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  if (isToday(value, timeZone)) return 'Today'
+  return new Date(value).toLocaleDateString('en-US', { timeZone, weekday: 'short', month: 'short', day: 'numeric' })
 }
 
 function driveState(testDrive: TestDrive): { tone: DeskTone; label: string } {
@@ -82,9 +104,11 @@ function interestDraftsFor(testDrives: TestDrive[]) {
 export function TestDriveDeskPageClient({
   initialTestDrives,
   initialError,
+  timeZone,
 }: {
   initialTestDrives: TestDrive[]
   initialError: string | null
+  timeZone: string
 }) {
   const [testDrives, setTestDrives] = useState<TestDrive[]>(initialTestDrives)
   const [loading, setLoading] = useState(false)
@@ -95,6 +119,56 @@ export function TestDriveDeskPageClient({
   const [filter, setFilter] = useState<QueueFilter>('open')
   const [feedbackDrafts, setFeedbackDrafts] = useState<Record<string, string>>(() => feedbackDraftsFor(initialTestDrives))
   const [interestDrafts, setInterestDrafts] = useState<Record<string, string>>(() => interestDraftsFor(initialTestDrives))
+  const [schedule, setSchedule] = useState<{ values: Record<string, string>; idempotencyKey: string } | null>(null)
+  const [scheduleError, setScheduleError] = useState<string | null>(null)
+  const [scheduleBusy, setScheduleBusy] = useState(false)
+  const [vehicleOptions, setVehicleOptions] = useState<Array<{ value: string; label: string }>>([])
+  const [notice, setNotice] = useState<string | null>(null)
+
+  const openSchedule = async () => {
+    setScheduleError(null)
+    setSchedule({ values: { ...EMPTY_SCHEDULE }, idempotencyKey: `desk-test-drive:${crypto.randomUUID()}` })
+    const response = await getTestDriveVehicles()
+    if (response.success && response.data) {
+      const options = response.data.vehicles.map(vehicle => ({
+        value: vehicle.id,
+        label: [[vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(' ') || 'Vehicle', vehicle.stockNumber ? `#${vehicle.stockNumber}` : null].filter(Boolean).join(' · '),
+      }))
+      setVehicleOptions(options)
+      if (!options.length) setScheduleError('No available vehicles')
+    } else {
+      setVehicleOptions([])
+      setScheduleError(response.error || 'Unable to load vehicles')
+    }
+  }
+
+  const submitSchedule = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!schedule) return
+    const values = schedule.values
+    const match = (values.scheduledAt || '').match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/)
+    if (!match) { setScheduleError('Date and time are required'); return }
+    if (!values.vehicleId) { setScheduleError('Vehicle is required'); return }
+    setScheduleBusy(true)
+    setScheduleError(null)
+    const response = await scheduleTestDrive({
+      customerName: values.customerName.trim(),
+      customerEmail: values.customerEmail.trim(),
+      customerPhone: values.customerPhone.trim(),
+      preferredDate: match[1],
+      preferredTime: match[2],
+      vehicleId: values.vehicleId,
+      idempotencyKey: schedule.idempotencyKey,
+    })
+    setScheduleBusy(false)
+    if (!response.success) {
+      setScheduleError(response.error || 'Unable to schedule test drive')
+      return
+    }
+    setSchedule(null)
+    setNotice('Test drive scheduled')
+    await loadTestDrives()
+  }
 
   const loadTestDrives = async () => {
     setLoading(true)
@@ -117,7 +191,7 @@ export function TestDriveDeskPageClient({
   const filteredTestDrives = useMemo(() => {
     const queued =
       filter === 'today'
-        ? testDrives.filter(testDrive => isToday(testDrive.scheduledTime))
+        ? testDrives.filter(testDrive => isToday(testDrive.scheduledTime, timeZone))
         : filter === 'upcoming'
           ? testDrives.filter(testDrive => !testDrive.completed && isUpcoming(testDrive.scheduledTime))
           : filter === 'completed'
@@ -173,7 +247,7 @@ export function TestDriveDeskPageClient({
 
   const counts = {
     open: testDrives.filter(testDrive => !testDrive.completed).length,
-    today: testDrives.filter(testDrive => isToday(testDrive.scheduledTime)).length,
+    today: testDrives.filter(testDrive => isToday(testDrive.scheduledTime, timeZone)).length,
     upcoming: testDrives.filter(testDrive => !testDrive.completed && isUpcoming(testDrive.scheduledTime)).length,
     completed: testDrives.filter(testDrive => testDrive.completed).length,
     all: testDrives.length,
@@ -197,6 +271,10 @@ export function TestDriveDeskPageClient({
             <RefreshCw className={loading ? 'animate-spin' : undefined} />
             Refresh
           </Pill>
+          <Pill variant="primary" onClick={openSchedule}>
+            <Plus />
+            Schedule test drive
+          </Pill>
         </Track>
       }
     />
@@ -204,7 +282,17 @@ export function TestDriveDeskPageClient({
 
   return (
     <PageContainer title="Test Drives" header={header} breadcrumbs={breadcrumbs}>
-      <div className="min-w-0 max-w-full space-y-4 px-4 pb-10 md:px-6">
+      <div className="min-w-0 max-w-full space-y-4 px-4 pb-24 md:px-6">
+        {notice && (
+          <Notice tone="ok">
+            <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
+              <p className="min-w-0">{notice}</p>
+              <Track>
+                <Pill size="sm" variant="plain" onClick={() => setNotice(null)}>Dismiss</Pill>
+              </Track>
+            </div>
+          </Notice>
+        )}
         <Segmented<QueueFilter>
           label="Filter test drives"
           value={filter}
@@ -272,8 +360,8 @@ export function TestDriveDeskPageClient({
               return (
                 <div key={testDrive.id} className="grid min-w-0 grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3 gap-y-3 px-4 py-3 md:grid-cols-[5.5rem_minmax(0,1fr)_minmax(0,18rem)_auto] md:items-start">
                   <div className="min-w-0">
-                    <p className="font-mono text-sm font-medium tabular-nums text-foreground">{formatTime(testDrive.scheduledTime)}</p>
-                    <p className="text-[11px] text-muted-foreground" title={formatDateTime(testDrive.scheduledTime)}>{formatDay(testDrive.scheduledTime)}</p>
+                    <p className="font-mono text-sm font-medium tabular-nums text-foreground">{formatTime(testDrive.scheduledTime, timeZone)}</p>
+                    <p className="text-[11px] text-muted-foreground" title={formatDateTime(testDrive.scheduledTime, timeZone)}>{formatDay(testDrive.scheduledTime, timeZone)}</p>
                   </div>
 
                   <div className="min-w-0">
@@ -306,7 +394,7 @@ export function TestDriveDeskPageClient({
                         {testDrive.driverLicenseVerified ? 'License verified' : 'License needs check'}
                       </span>
                       {' · '}
-                      {testDrive.lead?.phone || testDrive.lead?.email || 'No contact'}
+                      {formatPhone(testDrive.lead?.phone) || testDrive.lead?.email || 'No contact'}
                       {testDrive.salesperson?.name ? ` · ${testDrive.salesperson.name}` : ''}
                     </p>
                   </div>
@@ -369,6 +457,24 @@ export function TestDriveDeskPageClient({
             })}
           </Panel>
         )}
+
+        <OperatorActionDialog
+          open={Boolean(schedule)}
+          title="Schedule test drive"
+          fields={scheduleFields(vehicleOptions)}
+          values={schedule?.values || {}}
+          error={scheduleError}
+          busy={scheduleBusy}
+          submitLabel="Schedule"
+          onValuesChange={values => setSchedule(current => (current ? { ...current, values } : null))}
+          onSubmit={submitSchedule}
+          onOpenChange={open => {
+            if (!open) {
+              setSchedule(null)
+              setScheduleError(null)
+            }
+          }}
+        />
       </div>
     </PageContainer>
   )

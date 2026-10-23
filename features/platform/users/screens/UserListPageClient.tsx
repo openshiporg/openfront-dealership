@@ -256,6 +256,7 @@ export function UserListPageClient({
               />
             </div>
           )}
+          <div aria-hidden="true" className="h-20" />
         </>
       )}
 

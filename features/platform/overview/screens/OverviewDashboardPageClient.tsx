@@ -22,6 +22,7 @@ import {
   type DeskTone,
 } from '@/features/platform/components/desk'
 import { getOperationalReport, type OperationalReport, type PeriodMetric } from '../actions'
+import { useHydrated } from '../../lib/useHydrated'
 
 const chartConfig = {
   revenue: { label: 'Delivered revenue', color: 'var(--foreground)' },
@@ -69,6 +70,7 @@ export function OverviewDashboardPageClient({
   initialCurrencyCode: string
   initialError: string | null
 }) {
+  const hydrated = useHydrated()
   const [report, setReport] = useState<OperationalReport | null>(initialReport)
   const [currencyCode, setCurrencyCode] = useState(initialCurrencyCode)
   const [loading, setLoading] = useState(false)
@@ -105,7 +107,9 @@ export function OverviewDashboardPageClient({
       status={report ? (exceptions > 0 ? `${exceptions} open exceptions` : 'No open exceptions') : 'Unavailable'}
       meta={
         report
-          ? `30 days to ${formatDate(report.metrics.period.generatedAt)} · Updated ${new Date(report.generatedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+          ? hydrated
+            ? `30 days to ${formatDate(report.metrics.period.generatedAt)} · Updated ${new Date(report.generatedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+            : '30 days'
           : 'Unavailable'
       }
       actions={
@@ -128,7 +132,7 @@ export function OverviewDashboardPageClient({
   if (!report) {
     return (
       <PageContainer title="Overview" header={header} breadcrumbs={breadcrumbs}>
-        <div className="px-4 pb-6 md:px-6">
+        <div className="px-4 pb-24 md:px-6">
           <Notice tone="bad">
             <p className="font-medium">Unable to load the overview</p>
             {error && <p className="mt-0.5 text-muted-foreground">{error}</p>}
@@ -147,7 +151,7 @@ export function OverviewDashboardPageClient({
 
   return (
     <PageContainer title="Overview" header={header} breadcrumbs={breadcrumbs}>
-      <div className="min-w-0 max-w-full space-y-8 px-4 pb-10 md:px-6">
+      <div className="min-w-0 max-w-full space-y-8 px-4 pb-24 md:px-6">
         {error && <Notice tone="bad">{error}</Notice>}
 
         <DeskSection title="Today">
@@ -238,7 +242,7 @@ export function OverviewDashboardPageClient({
                         {deal.vehicle ? `${deal.vehicle.year} ${deal.vehicle.make} ${deal.vehicle.model}` : 'No vehicle'}
                       </TitleLine>
                       <p className="truncate pl-4 text-xs text-muted-foreground">
-                        {deal.lead ? `${deal.lead.firstName} ${deal.lead.lastName}` : 'No customer'} · {formatDate(deal.occurredAt)}
+                        {deal.lead ? `${deal.lead.firstName} ${deal.lead.lastName}` : 'No customer'}{hydrated && ` · ${formatDate(deal.occurredAt)}`}
                       </p>
                     </div>
                     <div className="shrink-0 text-right">

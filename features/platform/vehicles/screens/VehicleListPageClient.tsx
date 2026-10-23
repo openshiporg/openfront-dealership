@@ -36,6 +36,7 @@ import {
   type DeskTone,
 } from '@/features/platform/components/desk'
 import {
+  type InventoryMake,
   type InventoryVehicle,
   type IntakeRooftop,
   decideInventoryMerchandising,
@@ -99,6 +100,7 @@ function moneyInputCents(value: string) {
 
 const statusTones: Record<string, DeskTone> = {
   available: 'ok',
+  prep: 'info',
   pending: 'warn',
   hold: 'info',
   service: 'idle',
@@ -107,13 +109,47 @@ const statusTones: Record<string, DeskTone> = {
 
 const statusLabels: Record<string, string> = {
   available: 'Available',
+  prep: 'In prep',
   pending: 'Pending',
   hold: 'On hold',
   service: 'In service',
   sold: 'Sold',
 }
 
-const LOT_STATUSES = ['available', 'pending', 'hold', 'service', 'sold'] as const
+const LOT_STATUSES = ['available', 'prep', 'pending', 'hold', 'service', 'sold'] as const
+
+/** Intake stocks a unit as Vehicle.status `service` until it is marked frontline; that is prep, not a repair. */
+function lotStage(vehicle: Vehicle) {
+  return vehicle.status === 'service' && !vehicle.frontlineAt ? 'prep' : vehicle.status
+}
+
+/** The workspace filters on Vehicle.status; prep and service share `service`. */
+function serverStatusFilter(stage: string) {
+  return stage === 'prep' ? 'service' : stage
+}
+
+const acquisitionLabels: Record<string, string> = {
+  appraised: 'Appraised',
+  approved: 'Acquisition approved',
+  purchased: 'Purchased',
+  arrived: 'Arrived',
+  reconditioning: 'Sent to recon',
+  frontline: 'Frontline',
+  cancelled: 'Acquisition cancelled',
+}
+
+const reconLabels: Record<string, string> = {
+  'not-started': 'Recon not started',
+  'in-progress': 'Recon in progress',
+  completed: 'Recon done',
+}
+
+const listingLabels: Record<string, string> = {
+  draft: 'Listing draft',
+  submitted: 'Listing awaiting approval',
+  approved: 'Listing approved',
+  rejected: 'Listing rejected',
+}
 
 const conditionLabels: Record<string, string> = {
   new: 'New',
@@ -121,11 +157,19 @@ const conditionLabels: Record<string, string> = {
   certified: 'Certified Pre-Owned',
 }
 
+const CONDITIONS = ['new', 'used', 'certified'] as const
+const OTHER_MAKE = '__other'
+
+function featureList(value: string) {
+  return [...new Set(value.split(/[\n,]/).map(feature => feature.trim()).filter(Boolean))].slice(0, 100)
+}
+
 const fieldLabelClass = 'font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground'
 
-function countByStatus(list: Vehicle[]) {
+function countByStage(list: Vehicle[]) {
   return list.reduce<Record<string, number>>((counts, vehicle) => {
-    counts[vehicle.status] = (counts[vehicle.status] || 0) + 1
+    const stage = lotStage(vehicle)
+    counts[stage] = (counts[stage] || 0) + 1
     return counts
   }, {})
 }
@@ -140,11 +184,13 @@ export function VehicleListPageClient({
   initialIntakeRooftops,
   initialError,
   currencyCode,
+  makes = [],
 }: {
   initialVehicles: Vehicle[]
   initialIntakeRooftops: IntakeRooftop[]
   initialError: string | null
   currencyCode: string
+  makes?: InventoryMake[]
 }) {
   const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles)
   const [loading, setLoading] = useState(false)
@@ -158,11 +204,16 @@ export function VehicleListPageClient({
   const [intakeRooftopId, setIntakeRooftopId] = useState(initialIntakeRooftops[0]?.id || '')
   const [task, setTask] = useState<InventoryTask | null>(null)
   const [taskError, setTaskError] = useState<string | null>(null)
-  const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const [actionMessage, setActionMessageText] = useState<string | null>(null)
+  const [actionTone, setActionTone] = useState<DeskTone>('idle')
+  const setActionMessage = (message: string | null, tone: DeskTone = 'idle') => {
+    setActionMessageText(message)
+    setActionTone(tone)
+  }
   const [pendingFeedRun, setPendingFeedRun] = useState<PublicFeedRunAttempt | null>(null)
   const [pendingMerchandisingAttempt, setPendingMerchandisingAttempt] = useState<MerchandisingCommandAttempt | null>(null)
   const [pendingReconStart, setPendingReconStart] = useState<ReconStartAttempt | null>(null)
-  const [lotCounts, setLotCounts] = useState<Record<string, number> | null>(() => initialError ? null : countByStatus(initialVehicles))
+  const [lotCounts, setLotCounts] = useState<Record<string, number> | null>(() => initialError ? null : countByStage(initialVehicles))
 
   const isInitialLoad = useRef(true)
 
@@ -170,13 +221,19 @@ export function VehicleListPageClient({
     setLoading(true)
     setError(null)
 
-    const response = await getInventoryWorkspace(statusFilter)
+    const response = await getInventoryWorkspace(serverStatusFilter(statusFilter))
     if (response.success) {
       const rooftops = response.intakeRooftops
       setIntakeRooftops(rooftops)
       setIntakeRooftopId(current => current || rooftops[0]?.id || '')
-      setVehicles(response.vehicles)
-      setLotCounts(current => statusFilter === 'all' ? countByStatus(response.vehicles) : current ? { ...current, [statusFilter]: response.vehicles.length } : current)
+      setVehicles(statusFilter === 'all' ? response.vehicles : response.vehicles.filter(vehicle => lotStage(vehicle) === statusFilter))
+      const counted = countByStage(response.vehicles)
+      setLotCounts(current => {
+        if (statusFilter === 'all') return counted
+        if (!current) return current
+        const stages = statusFilter === 'prep' || statusFilter === 'service' ? ['prep', 'service'] : [statusFilter]
+        return { ...current, ...Object.fromEntries(stages.map(stage => [stage, counted[stage] || 0])) }
+      })
     } else {
       setError(response.error || 'Unable to load inventory.')
     }
@@ -198,7 +255,8 @@ export function VehicleListPageClient({
       return
     }
     const fields: Record<string, string> = type === 'intake' ? {
-      vin: '', stockNumber: '', year: String(new Date().getFullYear()), make: '', model: '',
+      vin: '', stockNumber: '', year: String(new Date().getFullYear()), condition: 'used', makeChoice: '', make: '', model: '', trim: '',
+      exteriorColor: '', interiorColor: '', features: '',
       purchaseDollars: '', retailDollars: '', mileage: '0', description: '', imagePath: '', locationCode: 'INTAKE',
     } : type === 'edit' && vehicle ? {
       retailDollars: vehicle.price.toFixed(2), mileage: String(vehicle.mileage), description: vehicle.description, imagePath: vehicle.primaryImagePath || '',
@@ -235,8 +293,10 @@ export function VehicleListPageClient({
         const stockNumber = field('stockNumber').toUpperCase()
         const year = Number(field('year'))
         const mileage = Number(field('mileage'))
-        const make = field('make')
+        const make = makes.length && field('makeChoice') !== OTHER_MAKE ? field('makeChoice') : field('make')
         const model = field('model')
+        const condition = field('condition')
+        if (!CONDITIONS.includes(condition as typeof CONDITIONS[number])) throw new Error('Choose a condition.')
         const locationCode = field('locationCode').toUpperCase()
         const purchasePriceCents = money('purchaseDollars', 'Purchase cost')
         const priceCents = money('retailDollars', 'Retail price')
@@ -247,8 +307,9 @@ export function VehicleListPageClient({
         response = await intakeInventoryVehicle({
           rooftopId: intakeRooftopId, idempotencyKey: task.idempotencyKey,
           reason: 'Vehicle acquired and stocked from inventory operations desk', acquisitionSource: 'dealer-transfer', sourceReference: 'operator-recorded',
-          vin, stockNumber, year, make, model, mileage, purchasePriceCents, listPriceCents: priceCents, priceCents,
-          condition: 'used', description: field('description'), features: [], imagePath: field('imagePath'), locationCode, locationLabel: locationCode,
+          vin, stockNumber, year, make, model, trim: field('trim'), exteriorColor: field('exteriorColor'), interiorColor: field('interiorColor'),
+          mileage, purchasePriceCents, listPriceCents: priceCents, priceCents,
+          condition, description: field('description'), features: featureList(task.fields.features || ''), imagePath: field('imagePath'), locationCode, locationLabel: locationCode,
         })
       } else if (task.type === 'edit' && task.vehicle) {
         const priceCents = money('retailDollars', 'Retail price')
@@ -284,6 +345,13 @@ export function VehicleListPageClient({
         setTask(current => current && current.idempotencyKey === task.idempotencyKey ? { ...current, reconCompletionAttempt: attempt } : current)
         const reconResponse = await transitionInventoryReconWorkItem({ id: attempt.workItemId, toStatus: attempt.toStatus, actualCostCents: attempt.actualCostCents, expectedUpdatedAt: attempt.expectedUpdatedAt, reason: attempt.reason, idempotencyKey: attempt.idempotencyKey })
         response = reconResponse
+        if (!reconResponse.success && reconResponse.rejected) {
+          // Refused before anything was written: show why and let the amount be corrected.
+          reconCompletionAttempt = null
+          setTask(current => current && current.idempotencyKey === task.idempotencyKey ? { ...current, reconCompletionAttempt: undefined } : current)
+          setTaskError(reconResponse.error)
+          return
+        }
         const result = normalizeReconCompletionResult(
           reconResponse.success,
           reconResponse.success ? reconResponse.data.transitionInventoryReconWorkItem : null,
@@ -317,7 +385,7 @@ export function VehicleListPageClient({
     if (!vehicle.acquisition || !['arrived', 'reconditioning'].includes(vehicle.acquisition.status)) return
     const toStatus = vehicle.acquisition.status === 'arrived' ? 'reconditioning' : 'frontline'
     if (toStatus === 'frontline' && (vehicle.reconStatus !== 'completed' || vehicle.merchandisingStatus !== 'approved')) {
-      setActionMessage('Complete recon and approve the listing before marking this vehicle frontline.')
+      setActionMessage('Finish recon and approve the listing before marking frontline.', 'warn')
       return
     }
     setActionId(vehicle.inventoryStockId)
@@ -328,7 +396,8 @@ export function VehicleListPageClient({
       reason: `${toStatus} from inventory operations desk`,
       idempotencyKey: `acquisition-transition:${vehicle.acquisition.id}:${crypto.randomUUID()}`,
     })
-    setActionMessage(response.success ? `Acquisition moved to ${toStatus}.` : `Unable to update acquisition: ${response.error}`)
+    if (response.success) setActionMessage(toStatus === 'frontline' ? 'Marked frontline.' : 'Sent to recon.')
+    else setActionMessage(response.error, 'bad')
     await loadVehicles()
     setActionId(null)
   }
@@ -337,17 +406,23 @@ export function VehicleListPageClient({
     setPendingMerchandisingAttempt(attempt)
     setActionId(attempt.stockId)
     try {
-      const response = attempt.kind === 'approve'
+      const response = attempt.kind !== 'submit'
         ? await decideInventoryMerchandising({ id: attempt.versionId, decision: attempt.decision, reason: attempt.reason, expectedUpdatedAt: attempt.expectedUpdatedAt, idempotencyKey: attempt.idempotencyKey })
         : await submitInventoryMerchandising({ stockId: attempt.stockId, reason: attempt.reason, idempotencyKey: attempt.idempotencyKey })
+      if (!response.success && response.rejected) {
+        setPendingMerchandisingAttempt(null)
+        setActionMessage(response.error, 'bad')
+        await loadVehicles()
+        return
+      }
       const result = resolveMerchandisingCommandResponse(
         response.success,
-        response.success ? response.data[attempt.kind === 'approve' ? 'decideInventoryMerchandising' : 'submitInventoryMerchandising'] : null,
+        response.success ? response.data[attempt.kind !== 'submit' ? 'decideInventoryMerchandising' : 'submitInventoryMerchandising'] : null,
         attempt
       )
       if (!result) {
         setPendingMerchandisingAttempt(attempt)
-        setActionMessage(UNCONFIRMED_MERCHANDISING_COMMAND_MESSAGE)
+        setActionMessage(UNCONFIRMED_MERCHANDISING_COMMAND_MESSAGE, 'warn')
         return
       }
       setPendingMerchandisingAttempt(null)
@@ -355,7 +430,7 @@ export function VehicleListPageClient({
       await loadVehicles()
     } catch {
       setPendingMerchandisingAttempt(attempt)
-      setActionMessage(UNCONFIRMED_MERCHANDISING_COMMAND_MESSAGE)
+      setActionMessage(UNCONFIRMED_MERCHANDISING_COMMAND_MESSAGE, 'warn')
     } finally {
       setActionId(null)
     }
@@ -363,7 +438,7 @@ export function VehicleListPageClient({
 
   const submitOrApproveMerchandising = async (vehicle: Vehicle) => {
     if (pendingMerchandisingAttempt) return
-    const attempt = createMerchandisingCommandAttempt(vehicle.inventoryStockId, vehicle.latestMerchandisingVersion, () => crypto.randomUUID())
+    const attempt = createMerchandisingCommandAttempt(vehicle.inventoryStockId, vehicle.latestMerchandisingVersion, () => crypto.randomUUID(), vehicle.publicListing.action)
     await executeMerchandisingAttempt(attempt)
   }
 
@@ -377,6 +452,12 @@ export function VehicleListPageClient({
     setActionId(attempt.stockId)
     try {
       const response = await transitionInventoryReconWorkItem({ id: attempt.workItemId, toStatus: attempt.toStatus, expectedUpdatedAt: attempt.expectedUpdatedAt, reason: attempt.reason, idempotencyKey: attempt.idempotencyKey })
+      if (!response.success && response.rejected) {
+        setPendingReconStart(null)
+        setActionMessage(response.error, 'bad')
+        await loadVehicles()
+        return
+      }
       const result = normalizeReconStartResult(response.success, response.success ? response.data.transitionInventoryReconWorkItem : null, attempt)
       if (!result) {
         setPendingReconStart(attempt)
@@ -416,10 +497,16 @@ export function VehicleListPageClient({
     setActionId('feed')
     try {
       const response = await recordInventoryFeedRun({ channelKey: 'public-inventory-feed', stockIds: attempt.stockIds, errors: [], idempotencyKey: attempt.idempotencyKey })
+      if (!response.success && response.rejected) {
+        setPendingFeedRun(null)
+        setActionMessage(response.error, 'bad')
+        await loadVehicles()
+        return
+      }
       const result = response.success ? normalizePublicFeedRunResult(response.data.recordInventoryFeedRun, attempt.stockIds.length) : null
       if (!result) {
         setPendingFeedRun(attempt)
-        setActionMessage(UNCONFIRMED_PUBLIC_FEED_RUN_MESSAGE)
+        setActionMessage(UNCONFIRMED_PUBLIC_FEED_RUN_MESSAGE, 'warn')
         return
       }
       setActionMessage(publicFeedRunResultMessage(result))
@@ -427,7 +514,7 @@ export function VehicleListPageClient({
       await loadVehicles()
     } catch {
       setPendingFeedRun(attempt)
-      setActionMessage(UNCONFIRMED_PUBLIC_FEED_RUN_MESSAGE)
+      setActionMessage(UNCONFIRMED_PUBLIC_FEED_RUN_MESSAGE, 'warn')
     } finally {
       setActionId(null)
     }
@@ -463,13 +550,15 @@ export function VehicleListPageClient({
     : 0
   const agingCount = filteredVehicles.filter(v => v.status === 'available' && calculateDaysInStock(v) > 60).length
   const updateTaskField = (name: string, value: string) => setTask(current => current ? { ...current, fields: { ...current.fields, [name]: value } } : current)
-  const taskInput = (name: string, label: string, options: { type?: string; required?: boolean; min?: number; step?: number; maxLength?: number; inputMode?: 'decimal' | 'numeric' | 'text'; disabled?: boolean } = {}) => (
+  const taskInput = (name: string, label: string, options: { type?: string; required?: boolean; min?: number; step?: number; maxLength?: number; inputMode?: 'decimal' | 'numeric' | 'text'; disabled?: boolean; list?: string } = {}) => (
     <label key={name} htmlFor={`inventory-task-${name}`} className="grid gap-1.5 text-sm">
       <span className={fieldLabelClass}>{label}</span>
-      <Input id={`inventory-task-${name}`} type={options.type || 'text'} inputMode={options.inputMode} min={options.min} step={options.step} maxLength={options.maxLength} required={options.required ?? true} disabled={options.disabled} value={task?.fields[name] || ''} onChange={event => updateTaskField(name, event.target.value)} />
+      <Input id={`inventory-task-${name}`} type={options.type || 'text'} inputMode={options.inputMode} min={options.min} step={options.step} maxLength={options.maxLength} required={options.required ?? true} disabled={options.disabled} list={options.list} value={task?.fields[name] || ''} onChange={event => updateTaskField(name, event.target.value)} />
     </label>
   )
-  const taskTitle = task?.type === 'intake' ? 'Intake vehicle' : task?.type === 'edit' ? 'Edit listing draft' : task?.type === 'move' ? 'Move inventory' : task?.type === 'cost' ? 'Record inventory cost' : task?.type === 'recon-open' ? 'Open recon work' : 'Complete recon work'
+  const taskTitle = task?.type === 'intake' ? 'Intake vehicle' : task?.type === 'edit' ? 'Edit listing draft' : task?.type === 'move' ? 'Move inventory' : task?.type === 'cost' ? 'Record inventory cost' : task?.type === 'recon-open' ? 'Add recon work item' : 'Finish recon work item'
+  const intakeMakeChoice = task?.type === 'intake' ? task.fields.makeChoice || '' : ''
+  const intakeModels = makes.find(make => make.name === intakeMakeChoice)?.models || []
 
   const isFiltered = Boolean(searchQuery.trim()) || statusFilter !== 'all'
   const resetFilters = () => {
@@ -545,10 +634,12 @@ export function VehicleListPageClient({
       />
       <Facts
         items={[
-          { label: 'Acquisition', value: vehicle.acquisition?.status || 'None' },
-          { label: 'Recon', value: vehicle.reconStatus },
-          { label: 'Merchandising', value: vehicle.merchandisingStatus },
+          { label: 'Acquisition', value: vehicle.acquisition ? acquisitionLabels[vehicle.acquisition.status] || vehicle.acquisition.status : 'None' },
+          { label: 'Recon', value: reconLabels[vehicle.reconStatus] || vehicle.reconStatus },
+          { label: 'Listing', value: listingLabels[vehicle.merchandisingStatus] || vehicle.merchandisingStatus },
+          { label: 'Storefront', value: vehicle.publicListing.live ? 'Live' : `Not live: ${vehicle.publicListing.reason || 'Not available'}` },
           { label: 'Feed', value: vehicle.feedStatus },
+          { label: 'Colours', value: [vehicle.color, vehicle.interiorColor].filter(Boolean).join(' / ') || 'Not recorded' },
           { label: 'Photo', value: vehicle.primaryImagePath ? 'Added' : 'None' },
           { label: 'Recon items', value: vehicle.reconWorkItems.length, mono: true },
         ]}
@@ -567,9 +658,9 @@ export function VehicleListPageClient({
 
   return (
     <PageContainer title="Inventory" header={header} breadcrumbs={breadcrumbs}>
-    <div className="min-w-0 max-w-full space-y-6 px-4 pb-10 md:px-6">
+    <div className="min-w-0 max-w-full space-y-6 px-4 pb-24 md:px-6">
       {actionMessage && (
-        <Notice>
+        <Notice tone={actionTone}>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <span>{actionMessage}</span>
             {pendingMerchandisingAttempt && (
@@ -656,18 +747,53 @@ export function VehicleListPageClient({
               const daysInStock = calculateDaysInStock(vehicle)
               const isAging = daysInStock > 60 && vehicle.status === 'available'
               const busy = actionId === vehicle.inventoryStockId
-              const canAdvanceAcquisition = Boolean(vehicle.acquisition && ['arrived', 'reconditioning'].includes(vehicle.acquisition.status))
+              const stage = lotStage(vehicle)
               const isOpen = selectedVehicle?.id === vehicle.id
               const subline = [
                 vehicle.color,
                 conditionLabels[vehicle.condition] || vehicle.condition,
                 vehicle.locationLabel || vehicle.locationCode,
               ].filter(Boolean)
+              const acquisitionStatus = vehicle.acquisition?.status
+              const activeRecon = vehicle.reconWorkItems.find(item => ['open', 'in-progress'].includes(item.status))
+              const reconDone = vehicle.reconStatus === 'completed'
+              const listingApproved = vehicle.merchandisingStatus === 'approved'
+              // One step at a time: send to recon, work the recon items, approve the listing, then frontline.
+              const actions: Array<{ key: string; label: string; onClick: () => void; disabled?: boolean }> = []
+              if (acquisitionStatus === 'arrived' && vehicle.acquisition) {
+                actions.push({ key: 'acquisition', label: 'Send to recon', onClick: () => advanceAcquisition(vehicle) })
+              }
+              if (!reconDone && acquisitionStatus !== 'arrived') {
+                actions.push({
+                  key: 'recon',
+                  label: !activeRecon ? 'Add work item' : activeRecon.status === 'in-progress' ? 'Finish work' : 'Start work',
+                  onClick: () => advanceRecon(vehicle),
+                  disabled: Boolean(pendingReconStart),
+                })
+              }
+              if (reconDone && (!listingApproved || vehicle.publicListing.action)) {
+                const listingLabel = vehicle.publicListing.action === 'reapprove' ? 'Re-approve listing'
+                  : vehicle.publicListing.action === 'resubmit' ? 'Resubmit listing'
+                    : vehicle.merchandisingStatus === 'submitted' ? 'Approve listing' : 'Submit listing'
+                actions.push({ key: 'listing', label: listingLabel, onClick: () => submitOrApproveMerchandising(vehicle), disabled: Boolean(pendingMerchandisingAttempt) })
+              }
+              if (acquisitionStatus === 'reconditioning' && vehicle.acquisition && reconDone && listingApproved && !vehicle.publicListing.action) {
+                actions.push({ key: 'acquisition', label: 'Mark frontline', onClick: () => advanceAcquisition(vehicle) })
+              }
+              const showLive = stage === 'available' || stage === 'prep'
+              const liveFlag = vehicle.publicListing.live
+                ? <span className="text-emerald-700 dark:text-emerald-400">Live</span>
+                : <span className={vehicle.publicListing.action || stage === 'available' ? 'text-amber-700 dark:text-amber-400' : undefined}>Not live: {vehicle.publicListing.reason || 'Not available'}</span>
+              const statusParts = [
+                acquisitionStatus && acquisitionStatus !== 'frontline' ? acquisitionLabels[acquisitionStatus] || acquisitionStatus : vehicle.frontlineAt ? 'Frontline' : null,
+                reconLabels[vehicle.reconStatus] || vehicle.reconStatus,
+                listingLabels[vehicle.merchandisingStatus] || vehicle.merchandisingStatus,
+              ].filter(Boolean) as string[]
               return (
                 <div key={vehicle.id} className="min-w-0 px-4 py-3">
                   <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-start md:justify-between md:gap-6">
                     <div className="min-w-0 flex-1">
-                      <TitleLine as="h3" tone={statusTones[vehicle.status] || 'idle'} status={statusLabels[vehicle.status] || vehicle.status} className="text-sm font-medium text-foreground">
+                      <TitleLine as="h3" tone={statusTones[stage] || 'idle'} status={statusLabels[stage] || stage} className="text-sm font-medium text-foreground">
                         {vehicle.year} {vehicle.make} {vehicle.model}
                         {vehicle.trim && <span className="font-normal text-muted-foreground"> {vehicle.trim}</span>}
                       </TitleLine>
@@ -676,8 +802,10 @@ export function VehicleListPageClient({
                         <Code><span title={vehicle.vin}>…{vehicle.vin.slice(-8)}</span></Code>
                         {subline.map(part => <span key={part}>{part}</span>)}
                       </p>
-                      <p className="mt-0.5 pl-4 font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
-                        {statusLabels[vehicle.status] || vehicle.status} · Acq {vehicle.acquisition?.status || 'none'} · Recon {vehicle.reconStatus} · Merch {vehicle.merchandisingStatus}
+                      <p className="mt-0.5 flex min-w-0 flex-wrap gap-x-1.5 pl-4 font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
+                        <span>{statusLabels[stage] || stage}</span>
+                        {statusParts.map(part => <span key={part}>· {part}</span>)}
+                        {showLive && <span>· {liveFlag}</span>}
                       </p>
                     </div>
                     <dl className="grid shrink-0 grid-cols-3 gap-4 pl-4 text-xs md:pl-0 md:text-right">
@@ -697,19 +825,11 @@ export function VehicleListPageClient({
                   </div>
                   <div className="mt-2 flex min-w-0 pl-4">
                     <Track>
-                      {canAdvanceAcquisition && vehicle.acquisition && (
-                        <Pill size="sm" disabled={busy} onClick={() => advanceAcquisition(vehicle)}>
-                          {vehicle.acquisition.status === 'arrived' ? 'Begin recon' : 'Mark frontline'}
+                      {actions.map((action, index) => (
+                        <Pill key={action.key} size="sm" variant={index === 0 ? 'primary' : undefined} disabled={busy || action.disabled} onClick={action.onClick}>
+                          {action.label}
                         </Pill>
-                      )}
-                      <Pill size="sm" disabled={busy || vehicle.reconStatus === 'completed' || Boolean(pendingReconStart)} onClick={() => advanceRecon(vehicle)}>
-                        {vehicle.reconStatus === 'not-started' ? 'Open recon' : vehicle.reconStatus === 'in-progress' ? 'Advance recon' : 'Recon complete'}
-                      </Pill>
-                      {vehicle.merchandisingStatus !== 'approved' && (
-                        <Pill size="sm" variant="primary" disabled={busy || Boolean(pendingMerchandisingAttempt)} onClick={() => submitOrApproveMerchandising(vehicle)}>
-                          {vehicle.merchandisingStatus === 'submitted' ? 'Approve' : 'Submit'}
-                        </Pill>
-                      )}
+                      ))}
                       <Pill size="sm" variant={isOpen ? undefined : 'plain'} aria-expanded={isOpen} onClick={() => setSelectedVehicle(current => current?.id === vehicle.id ? null : vehicle)}>
                         Details
                       </Pill>
@@ -751,8 +871,45 @@ export function VehicleListPageClient({
                 {taskInput('vin', '17-character VIN', { required: true, maxLength: 17 })}
                 {taskInput('stockNumber', 'Stock number')}
                 {taskInput('year', 'Model year', { type: 'number', min: 1886, step: 1 })}
-                {taskInput('make', 'Make')}
-                {taskInput('model', 'Model')}
+                <label htmlFor="inventory-task-condition" className="grid gap-1.5 text-sm">
+                  <span className={fieldLabelClass}>Condition</span>
+                  <Select value={task.fields.condition || 'used'} onValueChange={value => updateTaskField('condition', value)}>
+                    <SelectTrigger id="inventory-task-condition">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CONDITIONS.map(condition => (
+                        <SelectItem key={condition} value={condition}>{conditionLabels[condition]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+                {makes.length > 0 ? (
+                  <label htmlFor="inventory-task-makeChoice" className="grid gap-1.5 text-sm">
+                    <span className={fieldLabelClass}>Make</span>
+                    <Select value={intakeMakeChoice} onValueChange={value => { updateTaskField('makeChoice', value); updateTaskField('model', '') }}>
+                      <SelectTrigger id="inventory-task-makeChoice">
+                        <SelectValue placeholder="Choose make" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {makes.map(make => (
+                          <SelectItem key={make.id} value={make.name}>{make.name}</SelectItem>
+                        ))}
+                        <SelectItem value={OTHER_MAKE}>Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </label>
+                ) : taskInput('make', 'Make', { maxLength: 100 })}
+                {makes.length > 0 && intakeMakeChoice === OTHER_MAKE && taskInput('make', 'Other make', { maxLength: 100 })}
+                {taskInput('model', 'Model', { maxLength: 100, list: intakeModels.length ? 'inventory-task-model-options' : undefined })}
+                {intakeModels.length > 0 && (
+                  <datalist id="inventory-task-model-options">
+                    {intakeModels.map(model => <option key={model.id} value={model.name} />)}
+                  </datalist>
+                )}
+                {taskInput('trim', 'Trim (optional)', { required: false, maxLength: 100 })}
+                {taskInput('exteriorColor', 'Exterior colour (optional)', { required: false, maxLength: 100 })}
+                {taskInput('interiorColor', 'Interior colour (optional)', { required: false, maxLength: 100 })}
                 {taskInput('mileage', 'Odometer', { type: 'number', min: 0, step: 1 })}
                 {taskInput('purchaseDollars', `Purchase cost (${currencyCode})`, { inputMode: 'decimal' })}
                 {taskInput('retailDollars', `Retail price (${currencyCode})`, { inputMode: 'decimal' })}
@@ -772,6 +929,12 @@ export function VehicleListPageClient({
                 {taskInput('estimatedDollars', `Estimated cost (${currencyCode})`, { inputMode: 'decimal' })}
               </>}
               {task?.type === 'recon-complete' && taskInput('actualDollars', `Actual cost (${currencyCode})`, { inputMode: 'decimal', disabled: Boolean(task.reconCompletionAttempt) })}
+              {task?.type === 'intake' && (
+                <label htmlFor="inventory-task-features" className="grid gap-1.5 text-sm sm:col-span-2">
+                  <span className={fieldLabelClass}>Features (optional, one per line)</span>
+                  <Textarea id="inventory-task-features" value={task.fields.features || ''} onChange={event => updateTaskField('features', event.target.value)} rows={3} />
+                </label>
+              )}
               {(task?.type === 'intake' || task?.type === 'edit') && <>
                 <label htmlFor="inventory-task-description" className="grid gap-1.5 text-sm sm:col-span-2">
                   <span className={fieldLabelClass}>Description{task.type === 'edit' ? '' : ' (optional)'}</span>

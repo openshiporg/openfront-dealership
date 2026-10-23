@@ -31,6 +31,7 @@ import {
   type DealSetupLead,
   type DealSetupVehicle,
 } from '../actions'
+import { formatUsd, formatUsdCredit } from '../lib/formatMoney'
 
 type Vehicle = DealSetupVehicle
 type Lead = DealSetupLead
@@ -85,6 +86,7 @@ export function DealCreatePageClient({
   const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles)
   const [leads, setLeads] = useState<Lead[]>(initialLeads)
   const [salesReps, setSalesReps] = useState<User[]>([])
+  const [salesRepsLoading, setSalesRepsLoading] = useState(false)
 
   const [formData, setFormData] = useState({
     vehicleId: '',
@@ -110,9 +112,11 @@ export function DealCreatePageClient({
     setSalesReps([])
     setFormData(previous => ({ ...previous, salespersonId: '' }))
     const rooftopId = vehicles.find(vehicle => vehicle.id === formData.vehicleId)?.rooftop.id
+    setSalesRepsLoading(Boolean(rooftopId))
     if (rooftopId) {
       getRooftopSalespeople(rooftopId).then(response => {
         if (!current) return
+        setSalesRepsLoading(false)
         if (response.success && response.data) setSalesReps(response.data.users)
         else setError(response.error || 'Unable to load sales reps.')
       })
@@ -191,9 +195,8 @@ export function DealCreatePageClient({
     }
   }
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value)
-  }
+  const formatCurrency = (value: number) => formatUsd(value)
+  const formatPrice = (value: number) => formatUsd(value, { whole: true })
 
   const selectedVehicle = vehicles.find(v => v.id === formData.vehicleId)
   const selectedLead = leads.find(l => l.id === formData.leadId)
@@ -220,11 +223,19 @@ export function DealCreatePageClient({
     />
   )
 
+  const salesRepPlaceholder = !formData.vehicleId
+    ? 'Choose a vehicle first'
+    : salesRepsLoading
+      ? 'Loading sales reps'
+      : salesReps.length === 0
+        ? 'No sales reps at this rooftop'
+        : 'Select sales rep'
+
   const frontGross = selectedVehicle ? formData.vehiclePrice - (selectedVehicle.purchasePrice || 0) : null
 
   return (
     <PageContainer title="New Deal" header={header} breadcrumbs={breadcrumbs}>
-      <div className="min-w-0 max-w-full px-4 pb-10 md:px-6">
+      <div className="min-w-0 max-w-full px-4 pb-24 md:px-6">
         {loading ? (
           <p role="status" className="py-16 text-center text-sm text-muted-foreground">Loading deal options</p>
         ) : error ? (
@@ -288,7 +299,7 @@ export function DealCreatePageClient({
                     <SelectContent>
                       {vehicles.map(v => (
                         <SelectItem key={v.id} value={v.id}>
-                          {v.year} {v.make} {v.model} · #{v.stockNumber} · {formatCurrency(v.price)}
+                          {v.year} {v.make} {v.model} · #{v.stockNumber} · {formatPrice(v.price)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -302,17 +313,17 @@ export function DealCreatePageClient({
                       <Code>#{selectedVehicle.stockNumber}</Code>
                     </div>
                     <dl className="flex gap-4 font-mono text-xs tabular-nums">
-                      <div className="text-right"><dt className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">MSRP</dt><dd>{formatCurrency(selectedVehicle.price)}</dd></div>
-                      <div className="text-right"><dt className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Cost</dt><dd>{formatCurrency(selectedVehicle.purchasePrice || 0)}</dd></div>
+                      <div className="text-right"><dt className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">MSRP</dt><dd>{formatPrice(selectedVehicle.price)}</dd></div>
+                      <div className="text-right"><dt className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Cost</dt><dd>{formatPrice(selectedVehicle.purchasePrice || 0)}</dd></div>
                     </dl>
                   </Panel>
                 )}
 
                 <label className="grid min-w-0 gap-1.5">
                   <span className={fieldLabel}>Sales rep</span>
-                  <Select value={formData.salespersonId} onValueChange={(v) => setFormData(prev => ({ ...prev, salespersonId: v }))}>
+                  <Select value={formData.salespersonId} onValueChange={(v) => setFormData(prev => ({ ...prev, salespersonId: v }))} disabled={!formData.vehicleId || salesRepsLoading || salesReps.length === 0}>
                     <SelectTrigger aria-label="Sales representative">
-                      <SelectValue placeholder="Select sales rep" />
+                      <SelectValue placeholder={salesRepPlaceholder} />
                     </SelectTrigger>
                     <SelectContent>
                       {salesReps.map(u => (
@@ -372,10 +383,10 @@ export function DealCreatePageClient({
                 <Panel className="overflow-hidden">
                   <dl className="divide-y divide-border/60">
                     <SummaryRow label="Vehicle price" value={formatCurrency(formData.vehiclePrice)} />
-                    {formData.tradeInValue > 0 && <SummaryRow label="Trade-in credit" value={`-${formatCurrency(formData.tradeInValue)}`} credit />}
+                    {formData.tradeInValue > 0 && <SummaryRow label="Trade-in credit" value={formatUsdCredit(formData.tradeInValue)} credit />}
                     <SummaryRow label="Subtotal" value={formatCurrency(calculated.subtotal)} />
                     <SummaryRow emphasis label="Working balance" value={formatCurrency(calculated.totalPrice)} />
-                    <SummaryRow label="Down payment" value={`-${formatCurrency(formData.downPayment)}`} credit />
+                    <SummaryRow label="Down payment" value={formatUsdCredit(formData.downPayment)} credit={formData.downPayment > 0} />
                     <SummaryRow label="Remaining balance" value={formatCurrency(calculated.remainingBalance)} />
                   </dl>
                 </Panel>
@@ -386,11 +397,12 @@ export function DealCreatePageClient({
                 )}
                 {saveError && <Notice tone="bad">{saveError}</Notice>}
                 <Track block>
-                  <Pill variant="primary" onClick={handleSave} disabled={saving || !formData.vehicleId}>
+                  <Pill variant="primary" onClick={handleSave} disabled={saving || !formData.vehicleId} aria-describedby={!formData.vehicleId ? 'deal-create-requirement' : undefined}>
                     <Save />
                     {saving ? 'Creating…' : 'Create worksheet'}
                   </Pill>
                 </Track>
+                {!formData.vehicleId && <p id="deal-create-requirement" className="text-center text-xs text-muted-foreground">Choose a vehicle first</p>}
               </section>
             </aside>
           </div>

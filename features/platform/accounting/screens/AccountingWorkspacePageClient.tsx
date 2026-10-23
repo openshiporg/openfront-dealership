@@ -285,7 +285,7 @@ export function AccountingWorkspacePageClient({
 
   return (
     <PageContainer title="Accounting" header={header} breadcrumbs={breadcrumbs}>
-      <div className="min-w-0 max-w-full space-y-8 px-4 pb-10 md:px-6">
+      <div className="min-w-0 max-w-full space-y-8 px-4 pb-24 md:px-6">
         {message && (
           <Notice tone="info">
             <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">

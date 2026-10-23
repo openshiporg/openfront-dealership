@@ -9,7 +9,6 @@ import { HeroSearch } from '../components/HeroSearch'
 import { HomeContactPanel } from '../components/HomeContactPanel'
 import { VehicleCard } from '../components/VehicleCard'
 import { vehicleConditionLabel } from '../lib/vehicleStatus'
-import { VehiclePhotoPlaceholder } from '../components/VehiclePhotoPlaceholder'
 import { formatPrice, vehicleTitle } from '../lib/format'
 import { primaryVehicleImage, vehicleImageUrl } from '../lib/images'
 import { loadHomeQuery, selectHomeFeaturedVehicles, selectHomeInventoryCount } from '../lib/data/home-inventory'
@@ -63,14 +62,18 @@ export async function HomePage() {
   const currentYear = new Date().getFullYear()
   const years = Array.from({ length: 30 }, (_, i) => currentYear + 1 - i)
   const vehicles = featured.status === 'ready' ? featured.value : []
-  const lead = vehicles[0]
-  const leadImage = lead ? vehicleImageUrl(primaryVehicleImage(lead.images)) : null
+  // The hero shows the first listed vehicle that has a photo; with none, the hero is a single column.
+  const leadEntry = vehicles
+    .map((vehicle) => ({ vehicle, image: vehicleImageUrl(primaryVehicleImage(vehicle.images)) }))
+    .find((entry) => entry.image)
+  const lead = leadEntry?.vehicle
+  const leadImage = leadEntry?.image ?? null
   const count = inventoryCount.status === 'ready' ? inventoryCount.value : null
 
   return (
     <>
       <section className="sf-band relative overflow-hidden">
-        <Container className="relative grid gap-10 pb-28 pt-10 md:pb-36 md:pt-16 lg:grid-cols-[1fr_1.05fr] lg:items-end lg:gap-14">
+        <Container className={`relative grid gap-10 pb-28 pt-10 md:pb-36 md:pt-16 ${lead && leadImage ? 'lg:grid-cols-[1fr_1.05fr] lg:items-end lg:gap-14' : ''}`}>
           <div className="min-w-0">
             {count !== null && (
               <p className="sf-title-line sf-eyebrow">
@@ -78,7 +81,7 @@ export async function HomePage() {
                 <span className="sf-figure">{new Intl.NumberFormat('en-US').format(count)}</span> in stock
               </p>
             )}
-            <h1 className="sf-display mt-4 max-w-[15ch] text-[length:var(--sf-text-display)]">
+            <h1 className={`sf-display mt-4 text-[length:var(--sf-text-display)] ${lead && leadImage ? 'max-w-[15ch]' : 'max-w-[22ch]'}`}>
               {business.homepageTitle || business.fullName}
             </h1>
             {business.homepageDescription && (
@@ -92,14 +95,10 @@ export async function HomePage() {
             </div>
           </div>
 
-          {lead && (
+          {lead && leadImage && (
             <Link href={`/inventory/${lead.id}`} className="group relative hidden min-w-0 lg:block">
               <div className="relative aspect-[16/10] overflow-hidden rounded-[var(--sf-radius-lg)]" style={{ background: 'var(--sf-paper-4)' }}>
-                {leadImage ? (
-                  <Image src={leadImage} alt={vehicleTitle(lead)} fill priority unoptimized sizes="50vw" className="object-cover transition-transform duration-700 group-hover:scale-[1.02]" />
-                ) : (
-                  <VehiclePhotoPlaceholder />
-                )}
+                <Image src={leadImage} alt={vehicleTitle(lead)} fill priority unoptimized sizes="50vw" className="object-cover transition-transform duration-700 group-hover:scale-[1.02]" />
               </div>
               <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-4 rounded-[var(--sf-radius-md)] p-4" style={{ background: 'oklch(0.18 0.012 262 / 0.78)', backdropFilter: 'blur(10px)' }}>
                 <div className="min-w-0">
@@ -117,7 +116,7 @@ export async function HomePage() {
         <HeroSearch makes={makes} years={years} />
       </Container>
 
-      <section className="sf-section">
+      <section className="sf-section pt-[var(--sf-space-xl)] md:pt-[var(--sf-space-2xl)]">
         <Container>
           <div className="mb-8 flex items-end justify-between gap-4">
             <h2 className="sf-display text-[length:var(--sf-text-2xl)]">Latest arrivals</h2>

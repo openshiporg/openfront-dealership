@@ -103,3 +103,31 @@ export async function recordPartsMovement(data: Record<string, unknown>) {
     }
   `, { data })
 }
+
+type BookingPayload = { ok: boolean; errorCode?: string | null; errorMessage?: string | null; serviceAppointmentId?: string | null }
+
+/** Books a phone or walk-in customer through the same command the storefront uses. */
+export async function bookServiceAppointment(data: {
+  customerName: string
+  customerEmail: string
+  customerPhone: string
+  appointmentDate: string
+  appointmentTime: string
+  serviceType: string
+  vehicleYear: number
+  vehicleMake: string
+  vehicleModel: string
+  description?: string
+  idempotencyKey: string
+}) {
+  const response = await keystoneClient<{ submitServiceBooking: BookingPayload }>(`
+    mutation BookServiceAppointment($data: SubmitServiceBookingInput!) {
+      submitServiceBooking(data: $data) { ok errorCode errorMessage serviceAppointmentId }
+    }
+  `, { data })
+  if (!response.success) return response
+  const payload = response.data.submitServiceBooking
+  if (!payload?.ok) return { success: false as const, error: payload?.errorMessage || 'Unable to book appointment' }
+  revalidatePath(SERVICE_PATH)
+  return { success: true as const, data: payload }
+}

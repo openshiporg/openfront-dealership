@@ -30,6 +30,9 @@ export type ServiceMetrics = {
   closedRepairOrders: number
   serviceRevenue: number
   avgRepairOrder: number
+  settledRepairOrders: number
+  /** Denominator of the operational parts fill rate; 0 means there is no rate to show. */
+  partsCommittedQuantity: number
   appointmentsByStatus: { status: string; count: number }[]
   repairOrdersByStatus: { status: string; count: number; revenue: number }[]
   serviceTypeBreakdown: { serviceType: string; count: number }[]
@@ -322,6 +325,7 @@ export async function getServiceMetrics(): Promise<{ success: boolean; data?: Se
           description
           quantity
           minimumQuantity
+          committedQuantity
           price
         }
         partsInventoriesCount
@@ -411,6 +415,8 @@ export async function getServiceMetrics(): Promise<{ success: boolean; data?: Se
         closedRepairOrders,
         serviceRevenue,
         avgRepairOrder,
+        settledRepairOrders: settledOrders.length,
+        partsCommittedQuantity: parts.reduce((sum, part) => sum + (part.committedQuantity || 0), 0),
         appointmentsByStatus,
         repairOrdersByStatus,
         serviceTypeBreakdown,

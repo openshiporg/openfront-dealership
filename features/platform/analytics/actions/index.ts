@@ -16,7 +16,8 @@ export type AnalyticsOperations = {
   generatedAt: string
   metrics: {
     financeProductPenetrationPercent?: number
-    service?: { effectiveLaborRateCents?: number }
+    deliveredDeals?: number
+    service?: { effectiveLaborRateCents?: number; soldHours?: number }
     parts?: { fillRatePercent?: number }
   } | null
   exceptions: { accounting?: number; payments?: number; funding?: number; total?: number } | null

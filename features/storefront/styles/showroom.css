@@ -123,8 +123,25 @@ body:has(.storefront) {
   color: var(--sf-on-dark-2);
 }
 
-.sf-band .sf-muted {
+.sf-band .sf-muted,
+.sf-band .sf-faint,
+.sf-band .sf-pill .sf-count {
   color: var(--sf-on-dark-2);
+}
+
+/* Page body: bottom breathing room before the footer, unless the page ends on a full-bleed panel. */
+.sf-main {
+  padding-bottom: var(--sf-space-xl);
+}
+
+@media (min-width: 768px) {
+  .sf-main {
+    padding-bottom: var(--sf-space-2xl);
+  }
+}
+
+.sf-main:has(> [data-flush-end]:last-child) {
+  padding-bottom: 0;
 }
 
 .sf-section {
@@ -462,6 +479,11 @@ body:has(.storefront) {
   .sf-input {
     font-size: var(--sf-text-sm);
   }
+}
+
+/* Field with a leading icon (search) */
+.sf-input.sf-input-icon {
+  padding-left: 2.5rem;
 }
 
 .sf-input:hover {

@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
 
 import { permissions } from '../access'
+import { commandDate } from '../lifecycle/commandDate'
+import { inventoryCommand } from './inventoryCommandErrors'
 import { recordDomainEventInTransaction, type DomainEventInput } from '../lifecycle/domainEvents'
 import { assertReconTransition, inventoryStockKey, nonNegativeCents, normalizeStockNumber } from '../lifecycle/inventoryOperationsLifecycle'
 import { assertSessionRooftopPermission, assertUserRooftopAccess } from '../tenantRecords'
@@ -60,7 +62,7 @@ async function result(context: any, stockId: string, reused: boolean, relatedId?
   return { id: relatedId ?? stock.id, stockId: stock.id, status: stock.reconStatus, merchandisingStatus: stock.merchandisingStatus, feedStatus: stock.feedStatus, updatedAt: stock.updatedAt, reused }
 }
 
-export async function establishInventoryStock(_root: unknown, { data }: any, context: any) {
+async function establishInventoryStockCommand(_root: unknown, { data }: any, context: any) {
   requireInventory(context)
   const vehicleId = String(data.vehicleId || '')
   const vehicle = await context.query.Vehicle.findOne({ where: { id: vehicleId }, query: 'id vin stockNumber rooftop { id } acquisition { id status purchaseCents arrivedAt frontlineAt }' })
@@ -103,15 +105,13 @@ export async function establishInventoryStock(_root: unknown, { data }: any, con
   return result(context, command.id, command.reused)
 }
 
-export async function moveInventoryStock(_root: unknown, { data }: any, context: any) {
+async function moveInventoryStockCommand(_root: unknown, { data }: any, context: any) {
   requireInventory(context)
   const stock = await accessibleStock(context, String(data.stockId || ''))
   const locationCode = text(data.locationCode, 'Location code', 80).toUpperCase()
   const locationLabel = String(data.locationLabel || '').trim().slice(0, 200)
   const reason = text(data.reason, 'Audit reason')
-  const expectedUpdatedAt = data.expectedUpdatedAt instanceof Date
-    ? new Date(data.expectedUpdatedAt.getTime()) : new Date(String(data.expectedUpdatedAt || ''))
-  if (Number.isNaN(expectedUpdatedAt.getTime())) throw new Error('expectedUpdatedAt is invalid')
+  const expectedUpdatedAt = commandDate(data.expectedUpdatedAt)
   const eventKey = `inventory-stock-move:${commandKey(data.idempotencyKey)}`
   const evidence = { stockId: stock.id, toLocationCode: locationCode, locationLabel, expectedUpdatedAt: expectedUpdatedAt.toISOString(), reason }
   const reused = await context.transaction(async (tx: any) => {
@@ -125,7 +125,7 @@ export async function moveInventoryStock(_root: unknown, { data }: any, context:
   return result(context, stock.id, reused)
 }
 
-export async function recordInventoryCost(_root: unknown, { data }: any, context: any) {
+async function recordInventoryCostCommand(_root: unknown, { data }: any, context: any) {
   requireInventory(context)
   const stock = await accessibleStock(context, String(data.stockId || ''))
   const costType = String(data.costType || '')
@@ -150,7 +150,7 @@ export async function recordInventoryCost(_root: unknown, { data }: any, context
   return result(context, stock.id, reused)
 }
 
-export async function openInventoryReconWorkItem(_root: unknown, { data }: any, context: any) {
+async function openInventoryReconWorkItemCommand(_root: unknown, { data }: any, context: any) {
   requireInventory(context)
   const stock = await accessibleStock(context, String(data.stockId || ''))
   const title = text(data.title, 'Work item title', 200)
@@ -184,7 +184,7 @@ export async function openInventoryReconWorkItem(_root: unknown, { data }: any, 
   return result(context, stock.id, resolvedId !== itemId, resolvedId)
 }
 
-export async function transitionInventoryReconWorkItem(_root: unknown, { data }: any, context: any) {
+async function transitionInventoryReconWorkItemCommand(_root: unknown, { data }: any, context: any) {
   requireInventory(context)
   const item = await context.query.InventoryReconWorkItem.findOne({ where: { id: String(data.id || '') }, query: 'id status updatedAt stock { id rooftop { id } }' })
   if (!item?.stock?.rooftop?.id) throw new Error('Reconditioning work item not found or not accessible')
@@ -192,8 +192,8 @@ export async function transitionInventoryReconWorkItem(_root: unknown, { data }:
   const toStatus = String(data.toStatus || '')
   const actualCostCents = data.actualCostCents == null ? null : nonNegativeCents(data.actualCostCents, 'Actual cost')
   if (toStatus === 'completed' && actualCostCents == null) throw new Error('Completed work requires actual cost evidence')
-  const expectedUpdatedAt = new Date(String(data.expectedUpdatedAt || ''))
-  if (Number.isNaN(expectedUpdatedAt.getTime())) throw new Error('expectedUpdatedAt is invalid')
+  // DateTime arrives as a Date; String(Date) drops milliseconds and the updatedAt CAS below never matches.
+  const expectedUpdatedAt = commandDate(data.expectedUpdatedAt)
   const reason = text(data.reason, 'Audit reason')
   const eventKey = `inventory-recon-transition:${commandKey(data.idempotencyKey)}`
   const evidence = { workItemId: item.id, stockId: item.stock.id, toStatus, actualCostCents, expectedUpdatedAt: expectedUpdatedAt.toISOString(), reason }
@@ -213,3 +213,9 @@ export async function transitionInventoryReconWorkItem(_root: unknown, { data }:
   }, { timeout: 30_000 })
   return result(context, item.stock.id, reused, item.id)
 }
+
+export const establishInventoryStock = inventoryCommand(establishInventoryStockCommand)
+export const moveInventoryStock = inventoryCommand(moveInventoryStockCommand)
+export const recordInventoryCost = inventoryCommand(recordInventoryCostCommand)
+export const openInventoryReconWorkItem = inventoryCommand(openInventoryReconWorkItemCommand)
+export const transitionInventoryReconWorkItem = inventoryCommand(transitionInventoryReconWorkItemCommand)

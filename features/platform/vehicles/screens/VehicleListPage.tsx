@@ -1,8 +1,8 @@
-import { getDealershipCurrencyCode, getInventoryWorkspace } from '../actions'
+import { getDealershipCurrencyCode, getInventoryMakes, getInventoryWorkspace } from '../actions'
 import { VehicleListPageClient } from './VehicleListPageClient'
 
 export async function VehicleListPage() {
-  const [response, currencyCode] = await Promise.all([getInventoryWorkspace('all'), getDealershipCurrencyCode()])
+  const [response, currencyCode, makes] = await Promise.all([getInventoryWorkspace('all'), getDealershipCurrencyCode(), getInventoryMakes()])
 
   return (
     <VehicleListPageClient
@@ -10,6 +10,7 @@ export async function VehicleListPage() {
       initialIntakeRooftops={response.success ? response.intakeRooftops : []}
       initialError={response.success ? null : response.error}
       currencyCode={currencyCode}
+      makes={makes}
     />
   )
 }

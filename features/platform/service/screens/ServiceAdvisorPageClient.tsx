@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from 'react'
 import Link from 'next/link'
-import { RefreshCw, Search } from 'lucide-react'
+import { Plus, RefreshCw, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
@@ -24,9 +24,11 @@ import {
   Track,
   type DeskTone,
 } from '@/features/platform/components/desk'
+import { dayKey, formatPhone, recordReference } from '@/features/platform/lib/format'
 import { cn } from '@/lib/utils'
 import {
   addServiceOrderLineItem,
+  bookServiceAppointment,
   configurePart,
   getFixedOpsWorkspace,
   getRooftopStaff,
@@ -37,7 +39,16 @@ import {
   transitionServiceAppointment,
   transitionServiceOrder,
 } from '../actions'
-import { serviceTaskFields, serviceTaskRequest, type ServiceChoice, type ServiceTask, type ServiceTaskOperation } from '../lib/serviceTasks'
+import {
+  EMPTY_BOOKING,
+  bookingFields,
+  serviceTaskFields,
+  serviceTaskRequest,
+  splitLocalDateTime,
+  type ServiceChoice,
+  type ServiceTask,
+  type ServiceTaskOperation,
+} from '../lib/serviceTasks'
 import type { FixedOpsWorkspace } from '../lib/types'
 
 
@@ -139,9 +150,10 @@ const orderStatusLabels: Record<string, string> = {
 }
 
 
-function formatDateTime(value: string | null) {
+function formatDateTime(value: string | null, timeZone: string) {
   if (!value) return 'Unscheduled'
   return new Date(value).toLocaleString('en-US', {
+    timeZone,
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
@@ -158,11 +170,9 @@ function formatCurrency(value: number | null | undefined) {
   }).format(value || 0)
 }
 
-function isToday(value: string | null) {
+function isToday(value: string | null, timeZone: string) {
   if (!value) return false
-  const date = new Date(value)
-  const today = new Date()
-  return date.toDateString() === today.toDateString()
+  return dayKey(value, timeZone) === dayKey(Date.now(), timeZone)
 }
 
 function toAppointments(workspace: FixedOpsWorkspace | null | undefined): ServiceAppointment[] {
@@ -223,8 +233,9 @@ const appointmentFilters = [
 
 const orderFilters = ['all', 'estimate', 'approved', 'in-progress', 'completed', 'invoiced', 'paid']
 
-function shortId(id: string) {
-  return id.slice(0, 8)
+/** Display reference only; a sequential RO number needs a schema field. */
+function roReference(id: string) {
+  return recordReference('RO', id) || 'RO'
 }
 
 function Empty({ label, onReset }: { label: string; onReset?: () => void }) {
@@ -243,9 +254,11 @@ function Empty({ label, onReset }: { label: string; onReset?: () => void }) {
 export function ServiceAdvisorPageClient({
   initialWorkspace,
   initialError,
+  timeZone,
 }: {
   initialWorkspace: FixedOpsWorkspace | null
   initialError: string | null
+  timeZone: string
 }) {
   const [appointments, setAppointments] = useState<ServiceAppointment[]>(toAppointments(initialWorkspace))
   const [orders, setOrders] = useState<ServiceOrder[]>(toOrders(initialWorkspace))
@@ -263,6 +276,45 @@ export function ServiceAdvisorPageClient({
   const [staff, setStaff] = useState<ServiceChoice[]>([])
   const [orderFilter, setOrderFilter] = useState('all')
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
+  const [booking, setBooking] = useState<{ values: Record<string, string>; idempotencyKey: string } | null>(null)
+  const [bookingError, setBookingError] = useState<string | null>(null)
+  const [bookingBusy, setBookingBusy] = useState(false)
+
+  const openBooking = () => {
+    setBookingError(null)
+    setBooking({ values: { ...EMPTY_BOOKING }, idempotencyKey: `desk-service:${crypto.randomUUID()}` })
+  }
+  const submitBooking = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!booking) return
+    setBookingBusy(true)
+    setBookingError(null)
+    try {
+      const values = booking.values
+      const { date, time } = splitLocalDateTime(values.appointmentAt || '')
+      const response = await bookServiceAppointment({
+        customerName: values.customerName.trim(),
+        customerEmail: values.customerEmail.trim(),
+        customerPhone: values.customerPhone.trim(),
+        appointmentDate: date,
+        appointmentTime: time,
+        serviceType: values.serviceType,
+        vehicleYear: Number(values.vehicleYear),
+        vehicleMake: values.vehicleMake.trim(),
+        vehicleModel: values.vehicleModel.trim(),
+        description: values.description.trim() || undefined,
+        idempotencyKey: booking.idempotencyKey,
+      })
+      if (!response.success) throw new Error(response.error)
+      setBooking(null)
+      setNotice('Appointment booked')
+      await loadServiceData()
+    } catch (error) {
+      setBookingError(error instanceof Error ? error.message : 'Unable to book appointment')
+    } finally {
+      setBookingBusy(false)
+    }
+  }
 
   const openTask = (next: Omit<ServiceTask, 'idempotencyKey'>) => {
     setTaskError(null)
@@ -410,7 +462,7 @@ export function ServiceAdvisorPageClient({
   const receivePart = (part: Part) => openTask({ kind: 'receipt', recordId: part.id, values: { quantity: '', reference: '' } })
 
   const filteredAppointments = useMemo(() => {
-    const queued = appointmentFilter === 'today' ? appointments.filter(appointment => isToday(appointment.appointmentDate))
+    const queued = appointmentFilter === 'today' ? appointments.filter(appointment => isToday(appointment.appointmentDate, timeZone))
       : appointmentFilter === 'open' ? appointments.filter(appointment => !['completed', 'cancelled'].includes(appointment.status || ''))
         : appointmentFilter === 'waiting-parts' ? appointments.filter(appointment => appointment.status === 'waiting-parts')
           : appointments
@@ -421,7 +473,7 @@ export function ServiceAdvisorPageClient({
   }, [appointments, appointmentFilter, search, sortOrder])
   const visibleOrders = useMemo(() => {
     const term = search.trim().toLowerCase()
-    return orders.filter(order => !term || `${order.id} ${order.invoiceNumber || ''} ${order.appointment?.customerVehicleDescription || ''} ${order.concern || ''}`.toLowerCase().includes(term))
+    return orders.filter(order => !term || `${order.id} ${roReference(order.id)} ${order.invoiceNumber || ''} ${order.appointment?.customerVehicleDescription || ''} ${order.concern || ''}`.toLowerCase().includes(term))
   }, [orders, search])
 
   const searchTerm = search.trim()
@@ -461,7 +513,7 @@ export function ServiceAdvisorPageClient({
 
   const appointmentCounts: Record<string, number> = {
     open: appointments.filter(appointment => !['completed', 'cancelled'].includes(appointment.status || '')).length,
-    today: appointments.filter(appointment => isToday(appointment.appointmentDate)).length,
+    today: appointments.filter(appointment => isToday(appointment.appointmentDate, timeZone)).length,
     'waiting-parts': appointments.filter(appointment => appointment.status === 'waiting-parts').length,
     all: appointments.length,
   }
@@ -484,6 +536,10 @@ export function ServiceAdvisorPageClient({
           <Pill onClick={configurePartRecord} disabled={updatingId === 'part' || !serviceRooftops.length}>
             Configure part
           </Pill>
+          <Pill variant="primary" onClick={openBooking} disabled={!serviceRooftops.length}>
+            <Plus />
+            New appointment
+          </Pill>
         </Track>
       }
     />
@@ -492,7 +548,7 @@ export function ServiceAdvisorPageClient({
   if (error) {
     return (
       <PageContainer title="Service" header={header} breadcrumbs={breadcrumbs}>
-        <div className="space-y-3 px-4 pb-6 md:px-6">
+        <div className="space-y-3 px-4 pb-24 md:px-6">
           <Notice tone="bad">
             <p className="font-medium">Service is unavailable</p>
             <p className="mt-0.5 text-muted-foreground">{error}</p>
@@ -517,7 +573,7 @@ export function ServiceAdvisorPageClient({
         <div className="min-w-0 space-y-3">
           <div className="min-w-0">
             <TitleLine as="h2" tone={statusTones[status] || 'idle'} status={orderStatusLabels[status] || status} className="text-lg font-semibold tracking-tight">
-              <Code className="text-base text-foreground">RO #{shortId(order.id)}</Code> {order.appointment?.customerVehicleDescription || 'Vehicle not set'}
+              <Code className="text-base text-foreground">{roReference(order.id)}</Code> {order.appointment?.customerVehicleDescription || 'Vehicle not set'}
             </TitleLine>
             <p className="mt-0.5 pl-4 text-xs text-muted-foreground">
               {[
@@ -557,9 +613,9 @@ export function ServiceAdvisorPageClient({
         <DeskSection title="Repair">
           <Facts
             items={[
-              { label: 'Appointment', value: formatDateTime(order.appointment?.appointmentDate || null) },
+              { label: 'Appointment', value: formatDateTime(order.appointment?.appointmentDate || null, timeZone) },
               { label: 'Service', value: <span className="capitalize">{order.appointment?.serviceType || 'service'}</span> },
-              customer?.phone ? { label: 'Phone', value: customer.phone, mono: true } : null,
+              customer?.phone ? { label: 'Phone', value: formatPhone(customer.phone), mono: true } : null,
               { label: 'Concern', value: order.concern || '-' },
               { label: 'Cause', value: order.cause || '-' },
               { label: 'Correction', value: order.correction || '-' },
@@ -574,7 +630,7 @@ export function ServiceAdvisorPageClient({
               },
               order.authorizationEvidence?.reference ? { label: 'Authorization ref', value: order.authorizationEvidence.reference, mono: true } : null,
               order.invoiceNumber ? { label: 'Invoice', value: order.invoiceNumber, mono: true } : null,
-              order.completedAt ? { label: 'Completed', value: formatDateTime(order.completedAt) } : null,
+              order.completedAt ? { label: 'Completed', value: formatDateTime(order.completedAt, timeZone) } : null,
             ]}
           />
         </DeskSection>
@@ -623,9 +679,9 @@ export function ServiceAdvisorPageClient({
 
   return (
     <PageContainer title="Service" header={header} breadcrumbs={breadcrumbs}>
-      <div className="min-w-0 max-w-full space-y-8 px-4 pb-10 md:px-6">
+      <div className="min-w-0 max-w-full space-y-8 px-4 pb-24 md:px-6">
         {notice && (
-          <Notice tone={notice.startsWith('Unable') ? 'bad' : notice === 'Saved' ? 'ok' : 'info'}>
+          <Notice tone={notice.startsWith('Unable') ? 'bad' : notice === 'Saved' || notice === 'Appointment booked' ? 'ok' : 'info'}>
             <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
               <p className="min-w-0">{notice}</p>
               <Track>
@@ -716,12 +772,12 @@ export function ServiceAdvisorPageClient({
                     >
                       <div className="min-w-0">
                         <TitleLine as="p" tone={statusTones[status] || 'idle'} status={orderStatusLabels[status] || status} className="text-sm font-medium">
-                          <Code className="text-foreground">#{shortId(order.id)}</Code>{' '}
+                          <Code className="text-foreground">{roReference(order.id)}</Code>{' '}
                           {customer ? `${[customer.firstName, customer.lastName].filter(Boolean).join(' ') || 'Customer'} · ` : ''}
                           {order.appointment?.customerVehicleDescription || 'Vehicle not set'}
                         </TitleLine>
                         <p className="truncate pl-4 text-xs text-muted-foreground">
-                          {orderStatusLabels[status] || status} · {formatDateTime(order.appointment?.appointmentDate || null)} ·{' '}
+                          {orderStatusLabels[status] || status} · {formatDateTime(order.appointment?.appointmentDate || null, timeZone)} ·{' '}
                           <span className="capitalize">{order.appointment?.serviceType || 'service'}</span>
                         </p>
                       </div>
@@ -781,15 +837,15 @@ export function ServiceAdvisorPageClient({
                           <p className="pl-4 text-xs text-muted-foreground">
                             {appointmentStatusLabels[status] || status} · <span className="capitalize">{appointment.serviceType || 'Service request'}</span> ·{' '}
                             {appointment.assignedTech?.name || 'Unassigned'}
-                            {appointment.lead?.phone ? ` · ${appointment.lead.phone}` : ''}
+                            {appointment.lead?.phone ? ` · ${formatPhone(appointment.lead.phone)}` : ''}
                           </p>
                           <p className="line-clamp-2 pl-4 text-xs text-muted-foreground">{appointment.description || 'No concern recorded.'}</p>
                         </div>
                         <div className="shrink-0 text-right">
-                          <p className="whitespace-nowrap font-mono text-xs tabular-nums">{formatDateTime(appointment.appointmentDate)}</p>
+                          <p className="whitespace-nowrap font-mono text-xs tabular-nums">{formatDateTime(appointment.appointmentDate, timeZone)}</p>
                           {appointment.serviceOrder && (
                             <p className="mt-0.5 font-mono text-[11px] tabular-nums text-muted-foreground">
-                              RO #{shortId(appointment.serviceOrder.id)} · {formatCurrency(appointment.serviceOrder.grandTotal)}
+                              {roReference(appointment.serviceOrder.id)} · {formatCurrency(appointment.serviceOrder.grandTotal)}
                             </p>
                           )}
                         </div>
@@ -861,6 +917,23 @@ export function ServiceAdvisorPageClient({
             if (!open) {
               setTask(null)
               setTaskError(null)
+            }
+          }}
+        />
+        <OperatorActionDialog
+          open={Boolean(booking)}
+          title="New appointment"
+          fields={bookingFields()}
+          values={booking?.values || {}}
+          error={bookingError}
+          busy={bookingBusy}
+          submitLabel="Book appointment"
+          onValuesChange={values => setBooking(current => (current ? { ...current, values } : null))}
+          onSubmit={submitBooking}
+          onOpenChange={open => {
+            if (!open) {
+              setBooking(null)
+              setBookingError(null)
             }
           }}
         />

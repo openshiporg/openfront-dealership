@@ -1,6 +1,8 @@
 import { permissions } from '../access'
+import { inventoryCommand } from './inventoryCommandErrors'
 import { assertSessionRooftopPermission } from '../tenantRecords'
 import { recordDomainEventInTransaction } from '../lifecycle/domainEvents'
+import { assertCurrentInventoryApproval, loadInventoryPublication } from '../lifecycle/inventoryPublication'
 import {
   assertInventoryAcquisitionTransition,
   buildAcquisitionEvidence,
@@ -15,7 +17,7 @@ function optionalCents(value: unknown, label: string) {
   return number
 }
 
-export async function transitionInventoryAcquisition(
+async function transitionInventoryAcquisitionCommand(
   _root: unknown,
   { id, toStatus, expectedUpdatedAt, reason, purchaseCents, reconEstimateCents, vehicleId, idempotencyKey }: {
     id: string
@@ -106,7 +108,7 @@ export async function transitionInventoryAcquisition(
     if (toStatus === 'frontline') {
       const stock = await tx.prisma.inventoryStock.findFirst({
         where: { vehicleId: nextVehicleId!, rooftopId: acquisition.rooftop.id, reconStatus: 'completed', merchandisingStatus: 'approved' },
-        select: { id: true },
+        select: { id: true, approvedRevisionHash: true, feedStatus: true },
       })
       if (!stock) throw new Error('Inventory readiness changed; completed recon and approved merchandising are required')
 
@@ -118,6 +120,20 @@ export async function transitionInventoryAcquisition(
       })
       if (eligibleVehicle.count !== 1) {
         throw new Error('Vehicle is reserved or no longer eligible for frontline readiness; reload and retry')
+      }
+      // The Vehicle status trigger clears approval on service -> available, but lot status is not part of
+      // the approved marketing snapshot. Keep the approval when the approved content is unchanged.
+      if (stock.approvedRevisionHash) {
+        const current = await loadInventoryPublication(tx, stock.id)
+        let approvalStillCurrent = true
+        try {
+          assertCurrentInventoryApproval({ ...current, merchandisingStatus: 'approved', approvedRevisionHash: stock.approvedRevisionHash })
+        } catch {
+          approvalStillCurrent = false
+        }
+        if (approvalStillCurrent) {
+          await tx.prisma.inventoryStock.update({ where: { id: stock.id }, data: { merchandisingStatus: 'approved', approvedRevisionHash: stock.approvedRevisionHash, feedStatus: stock.feedStatus } })
+        }
       }
       frontlineStockId = stock.id
     }
@@ -156,3 +172,5 @@ export async function transitionInventoryAcquisition(
 
   return context.db.InventoryAcquisition.findOne({ where: { id } })
 }
+
+export const transitionInventoryAcquisition = inventoryCommand(transitionInventoryAcquisitionCommand)

@@ -63,3 +63,39 @@ export async function completeTestDrive(data: { id: string; interestedLevel: str
   if (response.success) revalidatePath(TEST_DRIVES_PATH)
   return response
 }
+
+export type TestDriveVehicleOption = { id: string; year: number | null; make: string | null; model: string | null; stockNumber: string | null }
+
+export async function getTestDriveVehicles() {
+  return keystoneClient<{ vehicles: TestDriveVehicleOption[] }>(`
+    query TestDriveVehicles {
+      vehicles(where: { status: { equals: "available" } }, orderBy: [{ stockNumber: asc }], take: 200) {
+        id year make model stockNumber
+      }
+    }
+  `, {}, { cache: 'no-store' })
+}
+
+type SchedulePayload = { ok: boolean; errorCode?: string | null; errorMessage?: string | null; testDriveId?: string | null }
+
+/** Schedules a phone or walk-in customer through the same command the storefront uses. */
+export async function scheduleTestDrive(data: {
+  customerName: string
+  customerEmail: string
+  customerPhone: string
+  preferredDate: string
+  preferredTime: string
+  vehicleId: string
+  idempotencyKey: string
+}) {
+  const response = await keystoneClient<{ submitTestDrive: SchedulePayload }>(`
+    mutation ScheduleTestDrive($data: SubmitTestDriveInput!) {
+      submitTestDrive(data: $data) { ok errorCode errorMessage testDriveId }
+    }
+  `, { data })
+  if (!response.success) return response
+  const payload = response.data.submitTestDrive
+  if (!payload?.ok) return { success: false as const, error: payload?.errorMessage || 'Unable to schedule test drive' }
+  revalidatePath(TEST_DRIVES_PATH)
+  return { success: true as const, data: payload }
+}

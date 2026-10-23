@@ -22,6 +22,7 @@ import {
 } from '@/features/platform/components/desk'
 import { getDealDeskWorkspace, type DealDeskDeal } from '../actions'
 import { DEAL_STATUSES, labelForDeal, toneForDeal } from '../lib/dealStatus'
+import { formatUsd } from '../lib/formatMoney'
 
 interface Deal {
   id: string
@@ -52,10 +53,7 @@ function countByStatus(deals: Array<{ status: string }>): StatusCounts {
   return counts
 }
 
-const formatCurrency = (value: number | null | undefined) => {
-  if (value == null) return '-'
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)
-}
+const formatCurrency = (value: number | null | undefined) => formatUsd(value, { whole: true })
 
 const formatDate = (date: string | null) => {
   if (!date) return '-'
@@ -162,7 +160,7 @@ export function DealListPageClient({
 
   return (
     <PageContainer title="Deals" header={header} breadcrumbs={breadcrumbs}>
-      <div className="min-w-0 max-w-full space-y-8 px-4 pb-10 md:px-6">
+      <div className="min-w-0 max-w-full space-y-8 px-4 pb-24 md:px-6">
         <ReadoutStrip>
           <Readout label="Delivered revenue" value={formatCurrency(totalRevenue)} />
           <Readout label="Pending" value={pendingCount} tone={pendingCount > 0 ? 'warn' : 'idle'} />

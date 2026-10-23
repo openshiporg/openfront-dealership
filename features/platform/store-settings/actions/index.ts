@@ -27,10 +27,12 @@ export type DealershipStoreSettings = {
   homepageDescription: string
   logoIcon: string
   logoColor: string
+  /** IANA zone stored on the storefront's rooftop, not on DealershipProfile. */
+  timezone: string
 }
 
 export type StoreSettingsResult =
-  | { success: true; data: DealershipStoreSettings | null }
+  | { success: true; data: DealershipStoreSettings | null; warning?: string }
   | { success: false; error: string }
 
 const SETTINGS_FIELDS = `
@@ -39,6 +41,27 @@ const SETTINGS_FIELDS = `
   hoursMonFri hoursSaturday hoursSunday websiteUrl currencyCode
   homepageTitle homepageDescription logoIcon logoColor
 `
+
+type StorefrontRooftop = { rooftopId: string; timezone: string }
+
+function isTimeZone(value: string) {
+  if (!value) return false
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value })
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function getStorefrontRooftop(): Promise<StorefrontRooftop | null> {
+  const response = await keystoneClient<{ storefrontProfile: StorefrontRooftop | null }>(`
+    query StoreSettingsRooftop {
+      storefrontProfile { rooftopId timezone }
+    }
+  `, {}, { cache: 'no-store' })
+  return response.success ? response.data.storefrontProfile : null
+}
 
 function boundedText(value: unknown, max: number) {
   return String(value ?? '').trim().slice(0, max)
@@ -61,6 +84,9 @@ function prepareSettings(input: DealershipStoreSettings): DealershipStoreSetting
   const logoIcon = sanitizeStoreLogoSvg(submittedMark)
   if (submittedMark && !logoIcon) throw new Error('Brand mark must be a valid, safe SVG document.')
 
+  const timezone = boundedText(input.timezone, 100)
+  if (timezone && !isTimeZone(timezone)) throw new Error('Choose a valid timezone.')
+
   return {
     id: input.id,
     name,
@@ -82,15 +108,19 @@ function prepareSettings(input: DealershipStoreSettings): DealershipStoreSetting
     homepageDescription: boundedText(input.homepageDescription, 1_000),
     logoIcon,
     logoColor: normalizeStoreLogoColor(input.logoColor),
+    timezone,
   }
 }
 
 export async function getDealershipStoreSettings(): Promise<StoreSettingsResult> {
-  const response = await keystoneClient<{ dealershipProfile: DealershipStoreSettings | null }>(`
-    query DealershipStoreSettings {
-      dealershipProfile { ${SETTINGS_FIELDS} }
-    }
-  `, {}, { cache: 'no-store' })
+  const [response, rooftop] = await Promise.all([
+    keystoneClient<{ dealershipProfile: Omit<DealershipStoreSettings, 'timezone'> | null }>(`
+      query DealershipStoreSettings {
+        dealershipProfile { ${SETTINGS_FIELDS} }
+      }
+    `, {}, { cache: 'no-store' }),
+    getStorefrontRooftop(),
+  ])
 
   if (!response.success) return { success: false, error: response.error }
   const settings = response.data.dealershipProfile
@@ -101,6 +131,7 @@ export async function getDealershipStoreSettings(): Promise<StoreSettingsResult>
       ...settings,
       logoIcon: sanitizeStoreLogoSvg(settings.logoIcon),
       logoColor: normalizeStoreLogoColor(settings.logoColor),
+      timezone: rooftop?.timezone || '',
     },
   }
 }
@@ -115,7 +146,7 @@ export async function saveDealershipStoreSettings(
     return { success: false, error: error instanceof Error ? error.message : 'Settings are invalid.' }
   }
 
-  const { id, ...settingsData } = data
+  const { id, timezone, ...settingsData } = data
   const mutation = id
     ? `mutation UpdateDealershipStoreSettings($id: ID!, $data: DealershipProfileUpdateInput!) {
         settings: updateDealershipProfile(where: { id: $id }, data: $data) { ${SETTINGS_FIELDS} }
@@ -124,14 +155,35 @@ export async function saveDealershipStoreSettings(
         settings: createDealershipProfile(data: $data) { ${SETTINGS_FIELDS} }
       }`
 
-  const response = await keystoneClient<{ settings: DealershipStoreSettings }>(
+  const response = await keystoneClient<{ settings: Omit<DealershipStoreSettings, 'timezone'> }>(
     mutation,
     id ? { id, data: settingsData } : { data: settingsData }
   )
   if (!response.success) return { success: false, error: response.error }
 
+  // The rooftop is resolved on the server; the timezone is written only when it changed,
+  // so merchants without dealership-management access can still save the profile.
+  const rooftop = await getStorefrontRooftop()
+  let savedTimezone = rooftop?.timezone || ''
+  let timezoneError: string | null = null
+  if (timezone && rooftop && timezone !== rooftop.timezone) {
+    const rooftopResponse = await keystoneClient<{ updateRooftop: { timezone: string } | null }>(`
+      mutation UpdateStoreTimezone($id: ID!, $timezone: String!) {
+        updateRooftop(where: { id: $id }, data: { timezone: $timezone }) { timezone }
+      }
+    `, { id: rooftop.rooftopId, timezone })
+    if (rooftopResponse.success && rooftopResponse.data.updateRooftop) savedTimezone = rooftopResponse.data.updateRooftop.timezone
+    else timezoneError = rooftopResponse.success ? 'Timezone was not saved.' : `Timezone was not saved: ${rooftopResponse.error}`
+  } else if (timezone && !rooftop) {
+    timezoneError = 'Timezone was not saved: storefront location unavailable.'
+  }
+
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/platform/store-settings')
   revalidatePath('/', 'layout')
-  return { success: true, data: response.data.settings }
+  return {
+    success: true,
+    data: { ...response.data.settings, timezone: savedTimezone },
+    ...(timezoneError ? { warning: timezoneError } : {}),
+  }
 }

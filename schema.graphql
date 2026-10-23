@@ -10642,11 +10642,20 @@ type InventoryVehicleResult {
   make: String!
   model: String!
   trim: String
+  exteriorColor: String
+  interiorColor: String
+  condition: String
   mileage: Int
   status: String
   priceCents: Int
   description: String
   primaryImagePath: String
+}
+
+type InventoryPublicListingResult {
+  live: Boolean!
+  reason: String
+  action: String
 }
 
 type InventoryCostSummary {
@@ -10696,6 +10705,7 @@ type InventoryStockResult {
   cost: InventoryCostSummary
   reconWorkItems: [InventoryReconWorkResult!]!
   latestMerchandisingVersion: InventoryMerchandisingResult
+  publicListing: InventoryPublicListingResult!
 }
 
 type InventoryAcquisitionResult {

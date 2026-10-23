@@ -179,7 +179,7 @@ export function TradeInDeskPageClient({
 
   return (
     <PageContainer title="Trade-Ins" header={header} breadcrumbs={breadcrumbs}>
-      <div className="min-w-0 max-w-full space-y-4 px-4 pb-10 md:px-6">
+      <div className="min-w-0 max-w-full space-y-4 px-4 pb-24 md:px-6">
         <Segmented<QueueFilter>
           label="Filter trade-ins"
           value={filter}

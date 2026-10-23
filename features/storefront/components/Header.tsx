@@ -102,12 +102,12 @@ export function Header() {
         style={{ background: 'oklch(0.987 0.002 255 / 0.9)', borderColor: 'var(--sf-rule)' }}
       >
         <Container className="flex h-16 items-center gap-4 md:h-[4.5rem]">
-          <Link href="/" className="flex min-w-0 shrink items-center gap-2.5" aria-label={`${business.shortName} home`}>
-            <StoreLogo svg={business.logoIcon} color={business.logoColor} className="size-7" />
-            <span className="sf-heading truncate text-[1.0625rem] md:text-[1.1875rem]">{business.shortName}</span>
+          <Link href="/" className="flex min-w-0 flex-1 items-center gap-2.5 xl:flex-initial" aria-label={`${business.shortName} home`} title={business.shortName}>
+            <StoreLogo svg={business.logoIcon} color={business.logoColor} className="size-7 shrink-0" />
+            <span className="sf-heading min-w-[6rem] truncate whitespace-nowrap text-[1rem] md:text-[1.1875rem]">{business.shortName}</span>
           </Link>
 
-          <nav className="ml-6 hidden items-center gap-1 lg:flex" aria-label="Primary">
+          <nav className="ml-4 hidden shrink-0 items-center gap-1 xl:flex" aria-label="Primary">
             {NAV.map((item) => {
               const active = isActive(pathname, item.href)
               return (
@@ -115,7 +115,7 @@ export function Header() {
                   key={item.href}
                   href={item.href}
                   aria-current={active ? 'page' : undefined}
-                  className="relative rounded-full px-3 py-2 text-[var(--sf-text-sm)] font-semibold transition-colors"
+                  className="relative whitespace-nowrap rounded-full px-3 py-2 text-[var(--sf-text-sm)] font-semibold transition-colors"
                   style={{ color: active ? 'var(--sf-ink)' : 'var(--sf-ink-2)' }}
                 >
                   {item.label}
@@ -127,7 +127,7 @@ export function Header() {
             })}
           </nav>
 
-          <div className="ml-auto flex items-center gap-1.5">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
             <form onSubmit={onSearch} className="relative hidden md:block" role="search">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" style={{ color: 'var(--sf-ink-3)' }} aria-hidden="true" />
               <input
@@ -135,7 +135,7 @@ export function Header() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Make, model, stock #"
-                className="sf-input w-52 rounded-full pl-9 xl:w-64"
+                className="sf-input sf-input-icon w-48 rounded-full 2xl:w-60"
                 aria-label="Search inventory"
               />
             </form>
@@ -171,14 +171,14 @@ export function Header() {
               </a>
             )}
 
-            <Link href="/inventory" className="sf-btn sf-btn-primary sf-btn-sm ml-1 hidden md:inline-flex">
+            <Link href="/inventory" className="sf-btn sf-btn-primary sf-btn-sm ml-1 hidden whitespace-nowrap md:inline-flex xl:hidden">
               Shop inventory
             </Link>
 
             <button
               ref={menuButtonRef}
               type="button"
-              className="grid size-11 place-items-center rounded-full transition-colors hover:bg-[var(--sf-paper-2)] lg:hidden"
+              className="grid size-11 place-items-center rounded-full transition-colors hover:bg-[var(--sf-paper-2)] xl:hidden"
               onClick={() => setMenuOpen((v) => !v)}
               aria-expanded={menuOpen}
               aria-controls="storefront-mobile-menu"
@@ -193,7 +193,7 @@ export function Header() {
       {menuOpen && (
         <div
           id="storefront-mobile-menu"
-          className="max-h-[calc(100dvh-4rem)] overflow-y-auto border-b lg:hidden"
+          className="max-h-[calc(100dvh-4rem)] overflow-y-auto border-b xl:hidden"
           style={{ background: 'var(--sf-paper)', borderColor: 'var(--sf-rule)', boxShadow: 'var(--sf-shadow-float)' }}
         >
           <Container className="flex flex-col py-4">
@@ -204,7 +204,7 @@ export function Header() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Make, model, stock #"
-                className="sf-input rounded-full pl-9"
+                className="sf-input sf-input-icon rounded-full"
                 aria-label="Search inventory"
               />
             </form>

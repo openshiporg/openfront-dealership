@@ -38,8 +38,17 @@ const USER_FIELDS = `
   createdAt
 `;
 
+// Storefront shoppers are Users without a role or dealership membership; the staff desk leaves them out.
+const STAFF_WHERE = {
+  OR: [
+    { NOT: [{ role: null }] },
+    { dealerGroupMemberships: { some: {} } },
+    { rooftopMemberships: { some: {} } },
+  ],
+};
+
 /**
- * Get list of users
+ * Get list of staff users
  */
 export async function getUsers(
   where: Record<string, unknown> = {},
@@ -58,7 +67,7 @@ export async function getUsers(
   `;
 
   const response = await keystoneClient(query, {
-    where,
+    where: { AND: [STAFF_WHERE, where] },
     take,
     skip,
     orderBy,
@@ -87,15 +96,15 @@ export async function getUsers(
  */
 export async function getUserStatusCounts() {
   const query = `
-    query GetUserStatusCounts {
-      sales: usersCount(where: { isSalesperson: { equals: true } })
-      service: usersCount(where: { isServiceAdvisor: { equals: true } })
-      finance: usersCount(where: { isFinanceManager: { equals: true } })
-      all: usersCount
+    query GetUserStatusCounts($staff: UserWhereInput!) {
+      sales: usersCount(where: { AND: [$staff, { isSalesperson: { equals: true } }] })
+      service: usersCount(where: { AND: [$staff, { isServiceAdvisor: { equals: true } }] })
+      finance: usersCount(where: { AND: [$staff, { isFinanceManager: { equals: true } }] })
+      all: usersCount(where: $staff)
     }
   `;
 
-  const response = await keystoneClient(query);
+  const response = await keystoneClient(query, { staff: STAFF_WHERE });
 
   if (response.success) {
     return {

@@ -49,3 +49,11 @@ export async function startOnboarding() {
 export async function completeOnboarding() {
   return updateOnboardingStatus('completed');
 }
+
+export async function getStoreSetupState() {
+  const response = await keystoneClient(`query StoreSetupState { rooftopsCount }`);
+  if (!response.success) {
+    return { success: false as const, configured: false };
+  }
+  return { success: true as const, configured: (response.data?.rooftopsCount ?? 0) > 0 };
+}

@@ -96,7 +96,7 @@ function BarRows({
   )
 }
 
-export function AnalyticsDashboardPageClient({ initialData }: { initialData: AnalyticsData }) {
+export function AnalyticsDashboardPageClient({ initialData, timeZone }: { initialData: AnalyticsData; timeZone: string }) {
   const [data, setData] = useState<AnalyticsData>(initialData)
   const [loading, setLoading] = useState(false)
   const [area, setArea] = useState<Area>('sales')
@@ -122,13 +122,19 @@ export function AnalyticsDashboardPageClient({ initialData }: { initialData: Ana
   ]
 
   const exceptions = operations?.exceptions?.total || 0
+  const NO_DATA = '-'
+  const opMetrics = operations?.metrics
+  // Rates over an empty set have no value; the report returns 0 or 100 for those.
+  const financePenetration = opMetrics?.deliveredDeals ? `${opMetrics.financeProductPenetrationPercent || 0}%` : NO_DATA
+  const laborRate = opMetrics?.service?.soldHours ? formatCurrency((opMetrics.service.effectiveLaborRateCents || 0) / 100) : NO_DATA
+  const partsFillRate = serviceMetrics?.partsCommittedQuantity && opMetrics?.parts?.fillRatePercent !== undefined ? `${opMetrics.parts.fillRatePercent}%` : NO_DATA
 
   const header = (
     <DeskHeader
       title="Analytics"
       tone={error ? 'bad' : exceptions > 0 ? 'warn' : 'ok'}
       status={error ? 'Unavailable' : exceptions > 0 ? `${exceptions} open exceptions` : 'No open exceptions'}
-      meta={operations?.generatedAt ? `Updated ${new Date(operations.generatedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : undefined}
+      meta={operations?.generatedAt ? `Updated ${new Date(operations.generatedAt).toLocaleString('en-US', { timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : undefined}
       actions={
         <Track>
           <Pill onClick={loadData} disabled={loading} aria-label="Refresh">
@@ -143,7 +149,7 @@ export function AnalyticsDashboardPageClient({ initialData }: { initialData: Ana
   if (error) {
     return (
       <PageContainer title="Analytics" header={header} breadcrumbs={breadcrumbs}>
-        <div className="px-4 pb-6 md:px-6">
+        <div className="px-4 pb-24 md:px-6">
           <Notice tone="bad">
             <p className="font-medium">Unable to load analytics</p>
             <p className="mt-0.5 text-muted-foreground">{error}</p>
@@ -164,13 +170,13 @@ export function AnalyticsDashboardPageClient({ initialData }: { initialData: Ana
 
   return (
     <PageContainer title="Analytics" header={header} breadcrumbs={breadcrumbs}>
-    <div className="min-w-0 max-w-full space-y-8 overflow-x-hidden px-4 pb-10 md:px-6 [&_.recharts-responsive-container]:max-w-full">
+    <div className="min-w-0 max-w-full space-y-8 overflow-x-hidden px-4 pb-24 md:px-6 [&_.recharts-responsive-container]:max-w-full">
 
       <DeskSection title="Operations">
         <ReadoutStrip>
-          <Readout label="F&I penetration" value={`${operations?.metrics?.financeProductPenetrationPercent || 0}%`} />
-          <Readout label="Effective labor rate" value={formatCurrency((operations?.metrics?.service?.effectiveLaborRateCents || 0) / 100)} />
-          <Readout label="Parts fill rate" value={`${operations?.metrics?.parts?.fillRatePercent || 0}%`} />
+          <Readout label="F&I penetration" value={financePenetration} sub={financePenetration === NO_DATA ? 'No data' : undefined} />
+          <Readout label="Effective labor rate" value={laborRate} sub={laborRate === NO_DATA ? 'No data' : undefined} />
+          <Readout label="Parts fill rate" value={partsFillRate} sub={partsFillRate === NO_DATA ? 'No data' : undefined} />
           <Readout
             label="Open exceptions"
             value={exceptions}
@@ -187,7 +193,7 @@ export function AnalyticsDashboardPageClient({ initialData }: { initialData: Ana
           <ReadoutStrip>
             <Readout label="Delivered sales" value={salesMetrics?.totalSales || 0} />
             <Readout label="Delivered revenue" value={formatCurrency(salesMetrics?.totalRevenue || 0)} />
-            <Readout label="Avg deal profit" value={formatCurrency(salesMetrics?.avgDealProfit || 0)} />
+            <Readout label="Avg deal profit" value={salesMetrics?.totalSales ? formatCurrency(salesMetrics.avgDealProfit || 0) : NO_DATA} />
             <Readout label="Reps active" value={salesMetrics?.salesByRep.length || 0} />
           </ReadoutStrip>
 
@@ -284,7 +290,7 @@ export function AnalyticsDashboardPageClient({ initialData }: { initialData: Ana
             <Readout label="Inventory value" value={formatCurrency(inventoryMetrics?.totalValue || 0)} />
             <Readout
               label="Avg days in stock"
-              value={Math.round(inventoryMetrics?.avgDaysInStock || 0)}
+              value={inventoryMetrics?.totalVehicles ? Math.round(inventoryMetrics.avgDaysInStock || 0) : NO_DATA}
               tone={inventoryMetrics?.avgDaysInStock && inventoryMetrics.avgDaysInStock > 60 ? 'warn' : undefined}
             />
             <Readout label="Available" value={inventoryMetrics?.vehiclesByStatus.find(s => s.status === 'available')?.count || 0} tone="ok" />
@@ -362,7 +368,7 @@ export function AnalyticsDashboardPageClient({ initialData }: { initialData: Ana
             <Readout label="Today's appointments" value={serviceMetrics?.todayAppointments || 0} tone={serviceMetrics?.todayAppointments ? 'info' : undefined} />
             <Readout label="Active ROs" value={serviceMetrics?.activeRepairOrders || 0} />
             <Readout label="Settled RO revenue" value={formatCurrency(serviceMetrics?.serviceRevenue || 0)} />
-            <Readout label="Avg settled RO" value={formatCurrency(serviceMetrics?.avgRepairOrder || 0)} />
+            <Readout label="Avg settled RO" value={serviceMetrics?.settledRepairOrders ? formatCurrency(serviceMetrics.avgRepairOrder || 0) : NO_DATA} />
           </ReadoutStrip>
 
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">

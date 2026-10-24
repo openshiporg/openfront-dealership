@@ -21,6 +21,7 @@ export type DashboardMetrics = {
   salesFunnel: Array<{ label: string; count: number }>
   totalLeads: number
   leadConversionPercent: number
+  convertedLeads?: number
   pendingDeals: number
   todayAppointments: number
   deliveredDeals: number

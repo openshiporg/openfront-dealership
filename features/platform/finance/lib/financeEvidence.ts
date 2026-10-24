@@ -3,7 +3,8 @@ import { readFinanceEvidence, type FinanceEvidence } from '@/features/platform/d
 import type { FinanceStep, FinanceStepCode } from '@/features/keystone/lifecycle/financePrerequisites'
 
 export type { FinanceStep, FinanceStepCode }
-export type CashPaymentState = { amountDueCents: number; receivedCents: number; remainingCents: number }
+export type CashPaymentRecord = { id: string; netCents: number; capturedCents: number; refundedCents: number; method: string; providerKey: string; reference: string | null; status: string; receivedAt: string }
+export type CashPaymentState = { amountDueCents: number; receivedCents: number; remainingCents: number; payments: CashPaymentRecord[]; cashReceivedCents: number; form8300Required: boolean }
 
 /** The server's finance projection plus the step plan the finance and delivery desks act on. */
 export type DeskFinanceEvidence = FinanceEvidence & {
@@ -27,7 +28,17 @@ const extras = z.object({
   structureType: z.enum(['cash', 'finance']),
   steps: z.array(step).max(40),
   nextStep: bounded.nullable(),
-  payment: z.object({ amountDueCents: cents, receivedCents: cents, remainingCents: cents }).nullable(),
+  payment: z.object({
+    amountDueCents: cents,
+    receivedCents: cents,
+    remainingCents: cents,
+    payments: z.array(z.object({
+      id: bounded, netCents: cents, capturedCents: cents, refundedCents: cents, method: bounded, providerKey: bounded,
+      reference: bounded.nullable(), status: bounded, receivedAt: bounded,
+    })).max(200).default([]),
+    cashReceivedCents: cents.default(0),
+    form8300Required: z.boolean().default(false),
+  }).nullable(),
 })
 
 // Base fields go through the shared parser; a missing or malformed plan is "no plan", never "done".

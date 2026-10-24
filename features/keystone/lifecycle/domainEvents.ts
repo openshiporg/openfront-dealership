@@ -51,6 +51,17 @@ function validateEvent(input: DomainEventInput) {
   if (input.eventKey.length > 240) throw new Error('Domain event key is too long')
 }
 
+// Keystone 6.5's Prisma extension returns a GraphQLError instead of throwing when a query fails.
+// Once a statement fails, Postgres aborts the transaction and every later query "returns" an error
+// too, so a failed write earlier in a command would otherwise surface here as a bogus idempotency
+// conflict. Fail the command instead; the transaction rolls back and nothing is saved.
+function assertQuerySucceeded<T>(result: T): T {
+  if (result instanceof Error || (result && typeof result === 'object' && (result as any).extensions?.code === 'KS_PRISMA_ERROR')) {
+    throw new Error('Nothing was saved: a database check rejected this change')
+  }
+  return result
+}
+
 export async function recordDomainEventInTransaction(transactionContext: any, input: DomainEventInput) {
   validateEvent(input)
   const prisma = transactionContext.prisma
@@ -66,11 +77,11 @@ export async function recordDomainEventInTransaction(transactionContext: any, in
     payload: input.payload ?? input.afterSnapshot ?? {},
   }
   const requestHash = domainEventRequestHash(request)
-  await prisma.$queryRaw`SELECT 1 AS "locked" FROM pg_advisory_xact_lock(hashtextextended(${`domain-event:${input.eventKey}`}, 0))`
-  const existing = await prisma.domainAuditEvent.findUnique({
+  assertQuerySucceeded(await prisma.$queryRaw`SELECT 1 AS "locked" FROM pg_advisory_xact_lock(hashtextextended(${`domain-event:${input.eventKey}`}, 0))`)
+  const existing = assertQuerySucceeded(await prisma.domainAuditEvent.findUnique({
     where: { eventKey: input.eventKey },
     select: { id: true, requestHash: true },
-  })
+  }))
   if (existing) {
     if (existing.requestHash !== requestHash) {
       throw new Error('Domain event idempotency key was reused with different evidence')
@@ -79,7 +90,7 @@ export async function recordDomainEventInTransaction(transactionContext: any, in
   }
 
   const occurredAt = input.occurredAt ?? new Date()
-  const audit = await prisma.domainAuditEvent.create({
+  const audit = assertQuerySucceeded(await prisma.domainAuditEvent.create({
     data: {
       rooftopId: input.rooftopId,
       eventKey: input.eventKey,
@@ -94,8 +105,8 @@ export async function recordDomainEventInTransaction(transactionContext: any, in
       occurredAt,
     },
     select: { id: true },
-  })
-  await prisma.domainOutboxEvent.create({
+  }))
+  assertQuerySucceeded(await prisma.domainOutboxEvent.create({
     data: {
       rooftopId: input.rooftopId,
       deliveryKey: input.eventKey,
@@ -107,7 +118,7 @@ export async function recordDomainEventInTransaction(transactionContext: any, in
       attemptCount: 0,
       availableAt: occurredAt,
     },
-  })
+  }))
   return { id: audit.id, reused: false }
 }
 

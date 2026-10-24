@@ -6,6 +6,7 @@ import { Plus, RefreshCw, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
 import { OperatorActionDialog, type OperatorActionField } from '@/features/platform/components/OperatorActionDialog'
@@ -33,7 +34,7 @@ function scheduleFields(vehicles: Array<{ value: string; label: string }>): Oper
   ]
 }
 
-type QueueFilter = 'today' | 'upcoming' | 'past-due' | 'completed' | 'all'
+type QueueFilter = 'today' | 'upcoming' | 'past-due' | 'completed' | 'no-show' | 'cancelled' | 'all'
 
 function formatDateTime(value: string | null | undefined, timeZone: string) {
   if (!value) return 'Unscheduled'
@@ -70,9 +71,26 @@ function isUpcoming(value: string | null | undefined) {
   return new Date(value).getTime() >= Date.now()
 }
 
+/** A no-show or customer cancellation closes the drive but is not a completed drive. */
+function isNoShow(testDrive: TestDrive) {
+  return Boolean(testDrive.noShow) && !testDrive.cancelledAt
+}
+
+function isCancelled(testDrive: TestDrive) {
+  return Boolean(testDrive.cancelledAt)
+}
+
+function isCompleted(testDrive: TestDrive) {
+  return Boolean(testDrive.completed) && !testDrive.noShow && !testDrive.cancelledAt
+}
+
+function isOpen(testDrive: TestDrive) {
+  return !testDrive.completed && !testDrive.noShow && !testDrive.cancelledAt
+}
+
 /** Open drives whose scheduled time has passed; they stay here until completed or marked no-show. */
 function isPastDue(testDrive: TestDrive) {
-  return !testDrive.completed && Boolean(testDrive.scheduledTime) && !isUpcoming(testDrive.scheduledTime)
+  return isOpen(testDrive) && Boolean(testDrive.scheduledTime) && !isUpcoming(testDrive.scheduledTime)
 }
 
 function formatTime(value: string | null | undefined, timeZone: string) {
@@ -132,6 +150,8 @@ export function TestDriveDeskPageClient({
   const [scheduleBusy, setScheduleBusy] = useState(false)
   const [vehicleOptions, setVehicleOptions] = useState<Array<{ value: string; label: string }>>([])
   const [notice, setNotice] = useState<string | null>(null)
+  const [noShowTarget, setNoShowTarget] = useState<TestDrive | null>(null)
+  const [noShowError, setNoShowError] = useState<string | null>(null)
 
   const openSchedule = async () => {
     setScheduleError(null)
@@ -201,12 +221,16 @@ export function TestDriveDeskPageClient({
       filter === 'today'
         ? testDrives.filter(testDrive => isToday(testDrive.scheduledTime, timeZone))
         : filter === 'upcoming'
-          ? testDrives.filter(testDrive => !testDrive.completed && isUpcoming(testDrive.scheduledTime))
+          ? testDrives.filter(testDrive => isOpen(testDrive) && isUpcoming(testDrive.scheduledTime))
           : filter === 'completed'
-            ? testDrives.filter(testDrive => testDrive.completed)
-            : filter === 'past-due'
-              ? testDrives.filter(isPastDue)
-              : testDrives
+            ? testDrives.filter(isCompleted)
+            : filter === 'no-show'
+              ? testDrives.filter(isNoShow)
+              : filter === 'cancelled'
+                ? testDrives.filter(isCancelled)
+                : filter === 'past-due'
+                  ? testDrives.filter(isPastDue)
+                  : testDrives
     const term = search.trim().toLowerCase()
     const visible = !term
       ? queued
@@ -247,11 +271,19 @@ export function TestDriveDeskPageClient({
     setUpdatingId(null)
   }
 
-  const markNoShow = async (testDrive: TestDrive) => {
+  const markNoShow = async () => {
+    const testDrive = noShowTarget
+    if (!testDrive) return
     setUpdatingId(testDrive.id)
+    setNoShowError(null)
     const response = await markTestDriveNoShow(testDrive.id)
 
-    if (!response.success) alert(`Unable to mark no-show: ${response.error}`)
+    if (!response.success) {
+      setNoShowError(response.error || 'Unable to mark no-show.')
+      setUpdatingId(null)
+      return
+    }
+    setNoShowTarget(null)
     await loadTestDrives()
     setUpdatingId(null)
   }
@@ -265,8 +297,10 @@ export function TestDriveDeskPageClient({
   const counts = {
     pastDue: testDrives.filter(isPastDue).length,
     today: testDrives.filter(testDrive => isToday(testDrive.scheduledTime, timeZone)).length,
-    upcoming: testDrives.filter(testDrive => !testDrive.completed && isUpcoming(testDrive.scheduledTime)).length,
-    completed: testDrives.filter(testDrive => testDrive.completed).length,
+    upcoming: testDrives.filter(testDrive => isOpen(testDrive) && isUpcoming(testDrive.scheduledTime)).length,
+    completed: testDrives.filter(isCompleted).length,
+    noShow: testDrives.filter(isNoShow).length,
+    cancelled: testDrives.filter(isCancelled).length,
     all: testDrives.length,
   }
 
@@ -320,6 +354,8 @@ export function TestDriveDeskPageClient({
             { value: 'upcoming', label: 'Upcoming', count: counts.upcoming },
             { value: 'past-due', label: 'Past due', count: counts.pastDue },
             { value: 'completed', label: 'Completed', count: counts.completed },
+            { value: 'no-show', label: 'No-show', count: counts.noShow },
+            { value: 'cancelled', label: 'Cancelled', count: counts.cancelled },
             { value: 'all', label: 'All', count: counts.all },
           ]}
         />
@@ -460,11 +496,11 @@ export function TestDriveDeskPageClient({
                     )}
                   </div>
 
-                  {!testDrive.completed && (
+                  {isOpen(testDrive) && (
                     <div className="col-span-2 flex justify-end md:col-span-1">
                       <Track>
                         {isPastDue(testDrive) && (
-                          <Pill size="sm" onClick={() => markNoShow(testDrive)} disabled={busy}>
+                          <Pill size="sm" onClick={() => { setNoShowError(null); setNoShowTarget(testDrive) }} disabled={busy}>
                             No-show
                           </Pill>
                         )}
@@ -489,6 +525,31 @@ export function TestDriveDeskPageClient({
             })}
           </Panel>
         )}
+
+        <Dialog
+          open={Boolean(noShowTarget)}
+          onOpenChange={open => { if (!open && !updatingId) { setNoShowTarget(null); setNoShowError(null) } }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Mark no-show?</DialogTitle>
+              <DialogDescription>
+                {noShowTarget ? `${leadName(noShowTarget)} · ${vehicleName(noShowTarget)} · ${formatDateTime(noShowTarget.scheduledTime, timeZone)}` : null}
+              </DialogDescription>
+            </DialogHeader>
+            {noShowError && <Notice tone="bad">{noShowError}</Notice>}
+            <DialogFooter>
+              <Track>
+                <Pill variant="plain" className="max-sm:h-11" onClick={() => { setNoShowTarget(null); setNoShowError(null) }} disabled={Boolean(updatingId)}>
+                  Cancel
+                </Pill>
+                <Pill variant="primary" className="max-sm:h-11" onClick={markNoShow} disabled={Boolean(updatingId)}>
+                  {updatingId && updatingId === noShowTarget?.id ? 'Saving' : 'Mark no-show'}
+                </Pill>
+              </Track>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <OperatorActionDialog
           open={Boolean(schedule)}

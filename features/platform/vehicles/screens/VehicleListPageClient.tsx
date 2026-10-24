@@ -195,6 +195,15 @@ function listingNeeds(vehicle: Vehicle): 'photos' | 'details' | null {
   return null
 }
 
+/** Listing, photo, recon and frontline work run only on lot inventory (the server refuses the rest). */
+function isActiveInventory(vehicle: Vehicle) {
+  return vehicle.status === 'available' || vehicle.status === 'service'
+}
+
+function inactiveReason(vehicle: Vehicle) {
+  return `${statusLabels[vehicle.status] || vehicle.status} units are closed to listing changes`
+}
+
 function hasOpenRecon(vehicle: Vehicle) {
   return vehicle.reconWorkItems.some(item => ['open', 'in-progress'].includes(item.status))
 }
@@ -612,11 +621,11 @@ export function VehicleListPageClient({
     const str = `${v.year} ${v.make} ${v.model} ${v.vin} ${v.stockNumber} ${v.locationCode}`.toLowerCase()
     return str.includes(search)
   }).sort((a, b) => {
-    if (sortOrder === 'age-asc') return calculateDaysInStock(a) - calculateDaysInStock(b)
+    if (sortOrder === 'age-asc') return (calculateDaysInStock(a) ?? -1) - (calculateDaysInStock(b) ?? -1)
     if (sortOrder === 'price-desc') return b.price - a.price
     if (sortOrder === 'price-asc') return a.price - b.price
     if (sortOrder === 'stock') return a.stockNumber.localeCompare(b.stockNumber)
-    return calculateDaysInStock(b) - calculateDaysInStock(a)
+    return (calculateDaysInStock(b) ?? -1) - (calculateDaysInStock(a) ?? -1)
   })
 
   const formatCurrency = (value: number | null | undefined) => {
@@ -624,17 +633,24 @@ export function VehicleListPageClient({
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: currencyCode, maximumFractionDigits: 0 }).format(value)
   }
 
-  function calculateDaysInStock(vehicle: Vehicle) {
+  /** Stops at the sale date once sold; null for a sold unit with no recorded sale date. */
+  function calculateDaysInStock(vehicle: Vehicle): number | null {
     const date = vehicle.dateAcquired || vehicle.createdAt
+    if (vehicle.status === 'sold' && !vehicle.soldAt) return null
     if (!date) return 0
-    return Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24))
+    const end = vehicle.status === 'sold' && vehicle.soldAt ? new Date(vehicle.soldAt).getTime() : Date.now()
+    return Math.max(0, Math.floor((end - new Date(date).getTime()) / (1000 * 60 * 60 * 24)))
+  }
+  const daysLabel = (vehicle: Vehicle) => {
+    const days = calculateDaysInStock(vehicle)
+    return days == null ? 'Sold' : `${days}d`
   }
 
   const totalValue = filteredVehicles.filter(v => v.status === 'available').reduce((sum, v) => sum + (v.price || 0), 0)
   const avgDaysInStock = filteredVehicles.filter(v => v.status === 'available').length > 0
-    ? Math.round(filteredVehicles.filter(v => v.status === 'available').reduce((sum, v) => sum + calculateDaysInStock(v), 0) / filteredVehicles.filter(v => v.status === 'available').length)
+    ? Math.round(filteredVehicles.filter(v => v.status === 'available').reduce((sum, v) => sum + (calculateDaysInStock(v) ?? 0), 0) / filteredVehicles.filter(v => v.status === 'available').length)
     : 0
-  const agingCount = filteredVehicles.filter(v => v.status === 'available' && calculateDaysInStock(v) > 60).length
+  const agingCount = filteredVehicles.filter(v => v.status === 'available' && (calculateDaysInStock(v) ?? 0) > 60).length
   const updateTaskField = (name: string, value: string) => setTask(current => current ? { ...current, fields: { ...current.fields, [name]: value } } : current)
   const taskInput = (name: string, label: string, options: { type?: string; required?: boolean; min?: number; step?: number; maxLength?: number; inputMode?: 'decimal' | 'numeric' | 'text'; disabled?: boolean; list?: string } = {}) => (
     <label key={name} htmlFor={`inventory-task-${name}`} className="grid gap-1.5 text-sm">
@@ -732,7 +748,7 @@ export function VehicleListPageClient({
           { label: 'VIN', value: vehicle.vin, mono: true },
           { label: 'Stock #', value: vehicle.stockNumber, mono: true },
           { label: 'Location', value: vehicle.locationLabel || vehicle.locationCode },
-          { label: 'Days in stock', value: calculateDaysInStock(vehicle), mono: true },
+          { label: 'Days in stock', value: daysLabel(vehicle), mono: true },
           { label: 'Retail', value: formatCurrency(vehicle.price), mono: true },
           { label: 'Cost', value: vehicle.purchasePrice == null ? 'Not recorded' : formatCurrency(vehicle.purchasePrice), mono: true },
         ]}
@@ -756,7 +772,7 @@ export function VehicleListPageClient({
       <div className="lg:col-span-2">
         <Track>
           <Pill size="sm" asChild><Link href={`${basePath}/platform/vehicles/${vehicle.id}`}>Open vehicle</Link></Pill>
-          <Pill size="sm" onClick={() => managePhotos(vehicle)}>Photos</Pill>
+          {isActiveInventory(vehicle) && <Pill size="sm" onClick={() => managePhotos(vehicle)}>Photos</Pill>}
           <Pill size="sm" variant="plain" onClick={() => setSelectedVehicle(null)}>Close details</Pill>
         </Track>
       </div>
@@ -852,7 +868,8 @@ export function VehicleListPageClient({
           <Panel className="divide-y">
             {filteredVehicles.map((vehicle) => {
               const daysInStock = calculateDaysInStock(vehicle)
-              const isAging = daysInStock > 60 && vehicle.status === 'available'
+              const isAging = daysInStock != null && daysInStock > 60 && vehicle.status === 'available'
+              const active = isActiveInventory(vehicle)
               const busy = actionId === vehicle.inventoryStockId
               const stage = lotStage(vehicle)
               const isOpen = selectedVehicle?.id === vehicle.id
@@ -868,10 +885,11 @@ export function VehicleListPageClient({
               const needs = listingNeeds(vehicle)
               // One step at a time: send to recon, work the recon items, approve the listing, then frontline.
               const actions: Array<{ key: string; label: string; onClick: () => void; disabled?: boolean }> = []
-              if (acquisitionStatus === 'arrived' && vehicle.acquisition) {
+              // Pending, sold and delivered units are off the lot workflow: no recon, listing or frontline steps.
+              if (active && acquisitionStatus === 'arrived' && vehicle.acquisition) {
                 actions.push({ key: 'acquisition', label: 'Send to recon', onClick: () => advanceAcquisition(vehicle) })
               }
-              if (!reconDone && acquisitionStatus !== 'arrived') {
+              if (active && !reconDone && acquisitionStatus !== 'arrived') {
                 actions.push({
                   key: 'recon',
                   label: !activeRecon ? 'Add work item' : activeRecon.status === 'in-progress' ? 'Finish work' : 'Start work',
@@ -879,7 +897,7 @@ export function VehicleListPageClient({
                   disabled: Boolean(pendingReconStart),
                 })
               }
-              if (reconDone && (!listingApproved || vehicle.publicListing.action)) {
+              if (active && reconDone && (!listingApproved || vehicle.publicListing.action)) {
                 const submits = vehicle.publicListing.action !== 'reapprove' && vehicle.merchandisingStatus !== 'submitted'
                 const listingLabel = vehicle.publicListing.action === 'reapprove' ? 'Re-approve listing'
                   : vehicle.publicListing.action === 'resubmit' ? 'Resubmit listing'
@@ -889,7 +907,7 @@ export function VehicleListPageClient({
                 else if (submits && needs === 'details') actions.push({ key: 'listing', label: 'Add description', onClick: () => editMerchandisingDraft(vehicle) })
                 else actions.push({ key: 'listing', label: listingLabel, onClick: () => submitOrApproveMerchandising(vehicle), disabled: Boolean(pendingMerchandisingAttempt) })
               }
-              if (acquisitionStatus === 'reconditioning' && vehicle.acquisition && reconDone && listingApproved && !vehicle.publicListing.action) {
+              if (active && acquisitionStatus === 'reconditioning' && vehicle.acquisition && reconDone && listingApproved && !vehicle.publicListing.action) {
                 actions.push({ key: 'acquisition', label: 'Mark frontline', onClick: () => advanceAcquisition(vehicle) })
               }
               const showLive = stage === 'available' || stage === 'prep'
@@ -900,7 +918,7 @@ export function VehicleListPageClient({
                 acquisitionStatus && acquisitionStatus !== 'frontline' ? acquisitionLabels[acquisitionStatus] || acquisitionStatus : vehicle.frontlineAt ? 'Frontline' : null,
                 reconLabel(vehicle),
                 listingLabels[vehicle.merchandisingStatus] || vehicle.merchandisingStatus,
-                !listingApproved && needs === 'photos' ? 'Needs photos' : !listingApproved && needs === 'details' ? 'Needs description' : null,
+                active && !listingApproved && needs === 'photos' ? 'Needs photos' : active && !listingApproved && needs === 'details' ? 'Needs description' : null,
               ].filter(Boolean) as string[]
               return (
                 <div key={vehicle.id} className="min-w-0 px-4 py-3">
@@ -934,7 +952,7 @@ export function VehicleListPageClient({
                       </div>
                       <div className="min-w-0 md:w-14">
                         <dt className="sr-only">Days in stock</dt>
-                        <dd className={`font-mono tabular-nums ${isAging ? 'font-semibold text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>{daysInStock}d</dd>
+                        <dd className={`font-mono tabular-nums ${isAging ? 'font-semibold text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>{daysLabel(vehicle)}</dd>
                       </div>
                     </dl>
                   </div>
@@ -956,10 +974,14 @@ export function VehicleListPageClient({
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem asChild><Link href={`${basePath}/platform/vehicles/${vehicle.id}`}>Open vehicle</Link></DropdownMenuItem>
-                          <DropdownMenuItem disabled={busy} onClick={() => moveStock(vehicle)}>Move</DropdownMenuItem>
+                          {active && <DropdownMenuItem disabled={busy} onClick={() => moveStock(vehicle)}>Move</DropdownMenuItem>}
                           <DropdownMenuItem disabled={busy} onClick={() => addInventoryCost(vehicle)}>Cost</DropdownMenuItem>
-                          <DropdownMenuItem disabled={busy} onClick={() => editMerchandisingDraft(vehicle)}>Edit listing</DropdownMenuItem>
-                          <DropdownMenuItem disabled={busy} onClick={() => managePhotos(vehicle)}>Photos</DropdownMenuItem>
+                          {active ? <>
+                            <DropdownMenuItem disabled={busy} onClick={() => editMerchandisingDraft(vehicle)}>Edit listing</DropdownMenuItem>
+                            <DropdownMenuItem disabled={busy} onClick={() => managePhotos(vehicle)}>Photos</DropdownMenuItem>
+                          </> : (
+                            <DropdownMenuItem disabled>{inactiveReason(vehicle)}</DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </Track>

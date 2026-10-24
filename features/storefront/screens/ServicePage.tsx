@@ -10,6 +10,7 @@ import { useStorefrontBusiness } from '../components/StorefrontBusinessProvider'
 import { formatServicePackagePrice } from '../lib/servicePackagePrice'
 import { readServiceMenu, serviceTypeForPackage, type ServiceMenuState } from '../lib/serviceMenuState'
 import { customerRequestReference } from '../lib/customerRequests'
+import { fillBlankFields, useCustomerPrefill } from '../lib/useCustomerPrefill'
 import { DEFAULT_SERVICE_SLOTS, closedDayLabel, dayAvailability, localDateString } from '../lib/bookingSlots'
 import {
   Field,
@@ -49,6 +50,8 @@ const SERVICE_TYPES = [
   { value: 'other', label: 'Other' },
 ]
 
+const PACKAGE_CHOICE = 'package:'
+
 const EMPTY = {
   customerName: '',
   customerEmail: '',
@@ -85,6 +88,12 @@ export function ServicePage() {
   const [serviceMenu, setServiceMenu] = useState<ServiceMenuState>({ kind: 'loading' })
   const [serviceMenuRequest, setServiceMenuRequest] = useState(0)
   const [submittedRows, setSubmittedRows] = useState<StickerRowData[] | null>(null)
+  const prefill = useCustomerPrefill()
+
+  useEffect(() => {
+    if (!prefill) return
+    setFormData((prev) => fillBlankFields(prev, { customerName: prefill.name, customerEmail: prefill.email, customerPhone: prefill.phone }))
+  }, [prefill])
 
   useEffect(() => {
     let active = true
@@ -121,6 +130,20 @@ export function ServicePage() {
   const clearPackage = () => {
     setSelectedPackage(null)
     setFormData((prev) => ({ ...prev, serviceType: '' }))
+  }
+
+  // One choice: a menu package or, without one, a service type. Both live in the same select.
+  const menuPackages = serviceMenu.kind === 'ready' ? serviceMenu.packages : []
+  const serviceChoice = selectedPackage ? `${PACKAGE_CHOICE}${selectedPackage}` : formData.serviceType
+  const chooseService = (value: string) => {
+    if (value.startsWith(PACKAGE_CHOICE)) {
+      const name = value.slice(PACKAGE_CHOICE.length)
+      setSelectedPackage(name)
+      setFormData((prev) => ({ ...prev, serviceType: serviceTypeForPackage(name, SERVICE_TYPES) }))
+      return
+    }
+    setSelectedPackage(null)
+    setFormData((prev) => ({ ...prev, serviceType: value }))
   }
 
   const selectedPackagePrice = serviceMenu.kind === 'ready' && selectedPackage
@@ -164,7 +187,9 @@ export function ServicePage() {
       setRequestReference(customerRequestReference('service', result.data.serviceAppointmentId))
       setSubmitStatus('success')
       setIdempotencyKey(crypto.randomUUID())
-      setFormData(EMPTY)
+      setFormData(prefill
+        ? fillBlankFields(EMPTY, { customerName: prefill.name, customerEmail: prefill.email, customerPhone: prefill.phone })
+        : EMPTY)
       setSelectedPackage(null)
     } catch (error) {
       setSubmitError(error instanceof Error && error.message ? error.message : null)
@@ -299,33 +324,34 @@ export function ServicePage() {
                         className="sf-input"
                       />
                     </Field>
-                    {selectedPackage ? (
-                      <div className="min-w-0">
-                        <p className="sf-label">Service</p>
-                        <div className="sf-input flex items-center justify-between gap-3" style={{ background: 'var(--sf-paper-2)' }}>
-                          <span className="min-w-0 truncate">{selectedPackage}</span>
-                          <button type="button" onClick={clearPackage} className="sf-link -my-2 inline-flex min-h-11 shrink-0 items-center text-[length:var(--sf-text-sm)]">
-                            Change
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                    <Field label="Service type" htmlFor="serviceType">
+                    <Field label="Service" htmlFor="serviceType">
                       <select
                         id="serviceType"
                         name="serviceType"
                         required
-                        value={formData.serviceType}
-                        onChange={handleChange}
+                        value={serviceChoice}
+                        onChange={(e) => chooseService(e.target.value)}
                         className="sf-input"
                       >
-                        <option value="">Select service type</option>
-                        {SERVICE_TYPES.map((s) => (
-                          <option key={s.value} value={s.value}>{s.label}</option>
+                        <option value="">Select service</option>
+                        {menuPackages.length > 0 && (
+                          <optgroup label="Service menu">
+                            {menuPackages.map((pkg) => (
+                              <option key={pkg.id} value={`${PACKAGE_CHOICE}${pkg.name}`}>{pkg.name}</option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {menuPackages.length > 0 ? (
+                          <optgroup label="Other service">
+                            {SERVICE_TYPES.map((type) => (
+                              <option key={type.value} value={type.value}>{type.label}</option>
+                            ))}
+                          </optgroup>
+                        ) : SERVICE_TYPES.map((type) => (
+                          <option key={type.value} value={type.value}>{type.label}</option>
                         ))}
                       </select>
                     </Field>
-                    )}
                   </div>
 
                   {availability.status === 'closed' ? (

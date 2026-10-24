@@ -490,7 +490,14 @@ export function VehicleDetailPageClient({
         <ReadoutStrip>
           <Readout label="Retail" value={money(vehicle.priceCents)} sub={vehicle.listPriceCents != null && vehicle.listPriceCents !== vehicle.priceCents ? `List ${money(vehicle.listPriceCents)}` : undefined} />
           {stock?.cost && <Readout label="Total cost" value={money(stock.cost.totalCostCents)} sub={vehicle.priceCents ? `Margin ${money(vehicle.priceCents - stock.cost.totalCostCents)}` : undefined} />}
-          {stock && <Readout label="Days in stock" value={stock.daysInStock} tone={stock.daysInStock >= 60 ? 'warn' : undefined} />}
+          {stock && (
+            <Readout
+              label="Days in stock"
+              value={stock.daysInStock ?? 'Sold'}
+              sub={stock.soldAt ? `Sold ${formatDate(stock.soldAt, timeZone)}` : undefined}
+              tone={vehicle.status !== 'sold' && stock.daysInStock != null && stock.daysInStock >= 60 ? 'warn' : undefined}
+            />
+          )}
           {stock && <Readout label="Storefront" value={listingLive ? 'Live' : 'Not live'} tone={listingLive ? 'ok' : publicAction ? 'warn' : 'idle'} sub={listingLive ? undefined : stock.publicListing.reason || undefined} />}
           {stock && <Readout label="Feed" value={feedStatusLabels[stock.feedStatus] || stock.feedStatus} tone={feedStatusTones[stock.feedStatus]} />}
         </ReadoutStrip>
@@ -534,7 +541,7 @@ export function VehicleDetailPageClient({
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {detail.images.map(image => image.url
                     // eslint-disable-next-line @next/next/no-img-element
-                    ? <img key={image.id} src={image.url} alt="" className="aspect-[4/3] w-full rounded-lg object-cover" />
+                    ? <img key={image.id} src={image.url} alt="" className="aspect-[4/3] w-full rounded-lg bg-muted object-contain" />
                     : <div key={image.id} className="aspect-[4/3] rounded-lg bg-muted" />)}
                 </div>
               ) : <EmptyRow>No photos</EmptyRow>}
@@ -544,7 +551,7 @@ export function VehicleDetailPageClient({
               title="Recon work"
               id="vehicle-recon"
               count={reconItems.length}
-              actions={stock && <Track><Pill size="sm" disabled={!editable || Boolean(busy)} title={editable ? undefined : notEditableReason} onClick={() => openDialog('recon-open', { title: '', category: 'inspection', estimate: '', vendorName: '', assignedToId: '', dueAt: '' })}><Plus /> Add</Pill></Track>}
+              actions={stock && editable && <Track><Pill size="sm" disabled={Boolean(busy)} onClick={() => openDialog('recon-open', { title: '', category: 'inspection', estimate: '', vendorName: '', assignedToId: '', dueAt: '' })}><Plus /> Add</Pill></Track>}
             >
               <SectionError section={detail.reconWorkItems}>
                 {!stock ? <EmptyRow>Not stocked</EmptyRow> : reconItems.length === 0 ? <EmptyRow>No work items</EmptyRow> : (
@@ -565,7 +572,7 @@ export function VehicleDetailPageClient({
                             {item.actualCostCents != null && <span>· Actual {money(item.actualCostCents)}</span>}
                             {item.completedAt && <span>· Done {formatDate(item.completedAt, timeZone)}</span>}
                           </p>
-                          {open && (
+                          {open && editable && (
                             <Track className="ml-4 mt-2">
                               {item.status === 'open' && <Pill size="sm" variant="primary" disabled={!editable || Boolean(busy)} onClick={() => startRecon(item)}>Start</Pill>}
                               <Pill size="sm" variant={item.status === 'in-progress' ? 'primary' : undefined} disabled={!editable || Boolean(busy)} onClick={() => openDialog('recon-complete', { actual: item.estimatedCostCents ? formatCentsForInput(item.estimatedCostCents) : '' }, item.id)}>Complete</Pill>
@@ -584,11 +591,11 @@ export function VehicleDetailPageClient({
               title="Listing review"
               id="vehicle-listing"
               count={versions.length}
-              actions={stock && (
+              actions={stock && editable && (
                 <Track>
                   <Pill
                     size="sm"
-                    disabled={!editable || Boolean(busy) || stock.merchandisingStatus === 'submitted' || needsPhotos || needsDetails}
+                    disabled={Boolean(busy) || stock.merchandisingStatus === 'submitted' || needsPhotos || needsDetails}
                     title={stock.merchandisingStatus === 'submitted' ? 'Review already pending' : needsPhotos ? 'Add a photo first' : needsDetails ? 'Add a price and description first' : undefined}
                     onClick={() => void submitListing()}
                   >
@@ -624,11 +631,12 @@ export function VehicleDetailPageClient({
                           {version.decisionReason && <p className="mt-1 break-words pl-4 text-xs">{version.decisionReason}</p>}
                           {current && version.status === 'submitted' && stock?.merchandisingStatus === 'submitted' && (
                             <Track className="ml-4 mt-2">
-                              <Pill size="sm" variant="primary" disabled={!editable || Boolean(busy)} onClick={() => approveVersion(version.id, version.updatedAt)}>Approve</Pill>
-                              <Pill size="sm" disabled={!editable || Boolean(busy)} onClick={() => openDialog('reject', { reason: '' }, version.id)}>Reject</Pill>
+                              {editable && <Pill size="sm" variant="primary" disabled={Boolean(busy)} onClick={() => approveVersion(version.id, version.updatedAt)}>Approve</Pill>}
+                              {/* Rejecting a stale review stays open on a sold unit; approving would relist it. */}
+                              <Pill size="sm" disabled={!stock || Boolean(busy)} onClick={() => openDialog('reject', { reason: '' }, version.id)}>Reject</Pill>
                             </Track>
                           )}
-                          {current && version.status === 'approved' && publicAction === 'reapprove' && (
+                          {current && editable && version.status === 'approved' && publicAction === 'reapprove' && (
                             <Track className="ml-4 mt-2">
                               <Pill size="sm" variant="primary" disabled={!editable || Boolean(busy)} onClick={() => approveVersion(version.id, version.updatedAt, true)}>Re-approve</Pill>
                             </Track>

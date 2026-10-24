@@ -12,6 +12,7 @@ import { useStorefrontBusiness } from '../components/StorefrontBusinessProvider'
 import { formatMileage, formatPrice } from '../lib/format'
 import { customerRequestReference } from '../lib/customerRequests'
 import { transitionTradeInStep, TRADE_IN_ESTIMATE_DISCLAIMER } from '../lib/tradeInForm'
+import { fillBlankFields, useCustomerPrefill } from '../lib/useCustomerPrefill'
 import { currencySymbol } from '../lib/format'
 import {
   Field,
@@ -32,7 +33,9 @@ const MAKES = [
   'Mercedes-Benz', 'Nissan', 'Subaru', 'Tesla', 'Toyota', 'Volkswagen',
 ]
 const currentYear = new Date().getFullYear()
-const YEARS = Array.from({ length: 20 }, (_, i) => currentYear - i)
+// Matches the server's accepted range (1980 through next model year).
+const OLDEST_TRADE_YEAR = 1980
+const YEARS = Array.from({ length: currentYear + 1 - OLDEST_TRADE_YEAR + 1 }, (_, i) => currentYear + 1 - i)
 
 const CONDITIONS = [
   { value: 'excellent', label: 'Excellent' },
@@ -83,6 +86,15 @@ export function TradeInPage() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [interestedVehicle, setInterestedVehicle] = useState<Vehicle | null>(null)
   const [estimate, setEstimate] = useState<{ min: number; max: number } | null>(null)
+  const prefill = useCustomerPrefill()
+  const contactPrefill = prefill
+    ? { firstName: prefill.firstName, lastName: prefill.lastName, email: prefill.email, phone: prefill.phone }
+    : {}
+
+  useEffect(() => {
+    if (!prefill) return
+    setFormData((prev) => fillBlankFields(prev, { firstName: prefill.firstName, lastName: prefill.lastName, email: prefill.email, phone: prefill.phone }))
+  }, [prefill])
 
   useEffect(() => {
     if (!interestedVehicleId) {
@@ -150,7 +162,7 @@ export function TradeInPage() {
   const reset = () => {
     setSubmitted(false)
     setStep(1)
-    setFormData(EMPTY)
+    setFormData(fillBlankFields(EMPTY, contactPrefill))
     setSubmissionReference(null)
     setEstimate(null)
     setStepError(null)

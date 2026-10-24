@@ -400,7 +400,7 @@ export function ServiceAdvisorPageClient({
                             </Link>
                           </TitleLine>
                           <p className="pl-4 text-xs text-muted-foreground">
-                            {APPOINTMENT_STATUS_LABELS[status] || status} · <span className="capitalize">{appointment.serviceType || 'Service'}</span> · {appointment.assignedTech?.name || 'Unassigned'}
+                            {APPOINTMENT_STATUS_LABELS[status] || status} · <span className="capitalize">{appointment.servicePackage?.name || appointment.serviceType || 'Service'}</span> · {appointment.assignedTech?.name || 'Unassigned'}
                             {appointment.lead?.phone ? ` · ${formatPhone(appointment.lead.phone)}` : ''}
                           </p>
                           {appointment.description && <p className="line-clamp-2 pl-4 text-xs text-muted-foreground">{appointment.description}</p>}

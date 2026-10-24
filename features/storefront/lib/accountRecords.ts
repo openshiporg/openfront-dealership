@@ -52,10 +52,13 @@ export function formatDateTime(value: string | null | undefined, timeZone?: stri
   if (!value) return null
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return null
+  // dateStyle/timeStyle can't be combined with timeZoneName (Intl throws), so spell the fields out.
+  const fields: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }
   try {
-    return date.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: timeZone || undefined, timeZoneName: 'short' })
+    return date.toLocaleString('en-US', { ...fields, timeZone: timeZone || undefined })
   } catch {
-    return date.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZoneName: 'short' })
+    // An unknown stored time zone falls back to the server's zone rather than failing the page.
+    return date.toLocaleString('en-US', fields)
   }
 }
 

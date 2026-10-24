@@ -1,4 +1,5 @@
 import { calculateDealPrice } from './dealPricing'
+import { FORM_8300_THRESHOLD_CENTS } from './paymentMethods'
 
 type PaymentStore = { prisma: { paymentTransaction: { findMany(input: {
   where: { dealId: string; rooftopId: string; status: { in: string[] } }
@@ -29,7 +30,37 @@ export async function cashPaymentState(tx: PaymentStore, deal: { id: string; roo
     return null
   }
   const receivedCents = await dealReceivedCents(tx, deal)
-  return { amountDueCents, receivedCents, remainingCents: amountDueCents - receivedCents }
+  const payments = await dealPaymentLedger(tx as unknown as LedgerStore, deal)
+  const cashReceivedCents = payments.filter(payment => payment.method === 'cash').reduce((sum, payment) => sum + payment.netCents, 0)
+  return { amountDueCents, receivedCents, remainingCents: amountDueCents - receivedCents, payments, cashReceivedCents,
+    form8300Required: cashReceivedCents > FORM_8300_THRESHOLD_CENTS }
+}
+
+type LedgerStore = { prisma: { paymentTransaction: { findMany(input: unknown): Promise<Array<{
+  id: string; capturedCents: number | null; refundedCents: number | null; paymentMethod: string | null
+  providerKey: string; providerTransactionId: string | null; status: string; createdAt: Date
+}>> } } }
+
+/** Money taken on a deal, oldest first: what the finance desk lists as payments received. */
+export async function dealPaymentLedger(tx: LedgerStore, deal: { id: string; rooftopId: string }) {
+  const rows = await tx.prisma.paymentTransaction.findMany({
+    where: { dealId: deal.id, rooftopId: deal.rooftopId, status: { in: ['captured', 'partially-refunded', 'refunded'] } },
+    select: { id: true, capturedCents: true, refundedCents: true, paymentMethod: true, providerKey: true, providerTransactionId: true, status: true, createdAt: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    take: 200,
+  })
+  if (!Array.isArray(rows)) return []
+  return rows.map(row => ({
+    id: row.id,
+    netCents: Number(row.capturedCents || 0) - Number(row.refundedCents || 0),
+    capturedCents: Number(row.capturedCents || 0),
+    refundedCents: Number(row.refundedCents || 0),
+    method: row.paymentMethod || '',
+    providerKey: row.providerKey,
+    reference: row.providerTransactionId || null,
+    status: row.status,
+    receivedAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+  }))
 }
 
 export function formatUsdCents(cents: number) {

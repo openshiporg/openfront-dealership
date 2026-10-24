@@ -26,6 +26,8 @@ export interface InventoryVehicle {
   condition: string
   dateAcquired: string | null
   createdAt: string
+  /** Sale date from the unit's deal, when the vehicle is sold and one was recorded. */
+  soldAt: string | null
   inventoryStockId: string
   locationCode: string
   locationLabel: string | null
@@ -109,6 +111,7 @@ function toInventoryVehicle(item: InventoryWorkspaceItem): InventoryVehicle {
     condition: item.vehicle.condition || '',
     dateAcquired: item.stockedAt,
     createdAt: item.stockedAt,
+    soldAt: null,
     inventoryStockId: item.id,
     locationCode: item.locationCode,
     locationLabel: item.locationLabel,
@@ -126,6 +129,27 @@ function toInventoryVehicle(item: InventoryWorkspaceItem): InventoryVehicle {
       action: item.publicListing?.action === 'reapprove' || item.publicListing?.action === 'resubmit' ? item.publicListing.action : null,
     },
   }
+}
+
+/**
+ * Days in stock stop at the sale. The sale date lives on the deal (set at delivery); a role that
+ * cannot read deals, or a sold unit without one, keeps soldAt null and shows "Sold".
+ */
+async function attachSaleDates(vehicles: InventoryVehicle[]) {
+  const soldIds = vehicles.filter(vehicle => vehicle.status === 'sold').map(vehicle => vehicle.id)
+  if (!soldIds.length) return
+  const response = await keystoneClient<{ deals: Array<{ status: string | null; saleDate: string | null; vehicle: { id: string } | null }> }>(`
+    query InventorySaleDates($ids: [ID!]) {
+      deals(where: { vehicle: { id: { in: $ids } } }, orderBy: { createdAt: desc }, take: 500) { status saleDate vehicle { id } }
+    }
+  `, { ids: soldIds }, { cache: 'no-store' })
+  if (!response.success) return
+  const saleDates = new Map<string, string>()
+  for (const deal of response.data.deals || []) {
+    if (!deal.vehicle?.id || !deal.saleDate || deal.status === 'cancelled' || saleDates.has(deal.vehicle.id)) continue
+    saleDates.set(deal.vehicle.id, deal.saleDate)
+  }
+  for (const vehicle of vehicles) vehicle.soldAt = saleDates.get(vehicle.id) ?? null
 }
 
 export async function getInventoryWorkspace(status: string): Promise<InventoryWorkspaceResult> {
@@ -147,9 +171,11 @@ export async function getInventoryWorkspace(status: string): Promise<InventoryWo
   `, { status }, { cache: 'no-store' })
 
   if (!response.success) return { success: false, error: response.error }
+  const vehicles = (response.data.inventoryWorkspace.items || []).map(toInventoryVehicle)
+  await attachSaleDates(vehicles)
   return {
     success: true,
-    vehicles: (response.data.inventoryWorkspace.items || []).map(toInventoryVehicle),
+    vehicles,
     intakeRooftops: response.data.inventoryWorkspace.intakeRooftops || [],
   }
 }

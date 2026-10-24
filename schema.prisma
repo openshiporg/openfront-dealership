@@ -1695,6 +1695,7 @@ model PaymentTransaction {
   amountCents                           Int
   currency                              String                 @default("usd")
   providerKey                           String                 @default("")
+  paymentMethod                         String                 @default("")
   paymentProvider                       PaymentProvider?       @relation("PaymentTransaction_paymentProvider", fields: [paymentProviderId], references: [id])
   paymentProviderId                     String?                @map("paymentProvider")
   providerTransactionId                 String                 @default("")

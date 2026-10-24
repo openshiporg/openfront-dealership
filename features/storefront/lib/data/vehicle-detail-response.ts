@@ -1,3 +1,6 @@
+import type { Vehicle } from '../types'
+import { GET_VEHICLE_BY_ID, GET_VEHICLE_RECORD_BY_ID } from './queries'
+
 export type VehicleDetailResolution<T extends { id: string }> =
   | { status: 'available'; vehicle: T }
   | { status: 'not-found' }
@@ -36,4 +39,38 @@ export function parseVehicleFeatures(value: unknown): unknown[] {
   } catch {
     return []
   }
+}
+
+export type VehicleDetailLoad =
+  | { id: string; status: 'error' }
+  | { id: string; status: 'not-found' }
+  | { id: string; status: 'available'; vehicle: Vehicle }
+  // Was publicly listed, now pending or sold: rendered read-only and noindex.
+  | { id: string; status: 'unlisted'; vehicle: Vehicle }
+
+type VehicleDetailRequest = (query: string, variables: Record<string, any>) => Promise<unknown>
+
+/**
+ * Live listing first. A miss falls back to the pending/sold record, which the server returns only for
+ * units that passed the public listing gate; anything else stays a 404. Used by the server page and
+ * the client retry so both resolve the same way.
+ */
+export async function resolveVehicleDetail(id: string, request: VehicleDetailRequest): Promise<VehicleDetailLoad> {
+  let live: VehicleDetailResolution<Vehicle>
+  try {
+    live = classifyVehicleDetailResponse<Vehicle>(await request(GET_VEHICLE_BY_ID, { id }), id)
+  } catch {
+    return { id, status: 'error' }
+  }
+  if (live.status === 'available') return { id, status: 'available', vehicle: live.vehicle }
+  if (live.status === 'malformed') return { id, status: 'error' }
+  try {
+    const record = classifyVehicleDetailResponse<Vehicle>(await request(GET_VEHICLE_RECORD_BY_ID, { id }), id)
+    if (record.status === 'available' && ['pending', 'sold'].includes(record.vehicle.status)) {
+      return { id, status: 'unlisted', vehicle: record.vehicle }
+    }
+  } catch {
+    // The record lookup is a courtesy for shared links; failing it keeps the 404.
+  }
+  return { id, status: 'not-found' }
 }

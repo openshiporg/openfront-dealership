@@ -13,6 +13,7 @@ import { PageHeader } from '../components/PageHeader'
 import { useStorefrontBusiness } from '../components/StorefrontBusinessProvider'
 import { currencySymbol, formatPrice, storefrontCurrency, vehicleTitle } from '../lib/format'
 import { customerRequestReference } from '../lib/customerRequests'
+import { fillBlankFields, useCustomerPrefill } from '../lib/useCustomerPrefill'
 import { FINANCING_ANNUAL_INCOME_INPUT, isFinancingSubmitDisabled } from '../lib/financingForm'
 import { buildAmortizationSchedule, calculateFinancingEstimate, parseFinancingAmount } from '../lib/data/financing-calculator'
 import { classifyVehicleDetailResponse } from '../lib/data/vehicle-detail-response'
@@ -84,6 +85,12 @@ function FinancingContent() {
   )
   const [vehicleLookupRetry, setVehicleLookupRetry] = useState(0)
   const [showAmortization, setShowAmortization] = useState(false)
+  const prefill = useCustomerPrefill()
+
+  useEffect(() => {
+    if (!prefill) return
+    setApplicationForm((prev) => fillBlankFields(prev, { fullName: prefill.name, email: prefill.email, phone: prefill.phone }))
+  }, [prefill])
 
   const currentVehicleLookup = vehicleId && vehicleLookup.status !== 'none' && vehicleLookup.vehicleId === vehicleId
     ? vehicleLookup
@@ -205,9 +212,9 @@ function FinancingContent() {
       setApplicationStatus('success')
       setIdempotencyKey(crypto.randomUUID())
       setApplicationForm({
-        fullName: '',
-        email: '',
-        phone: '',
+        fullName: prefill?.name || '',
+        email: prefill?.email || '',
+        phone: prefill?.phone || '',
         employmentStatus: '',
         annualIncome: '',
         creditTier: '',

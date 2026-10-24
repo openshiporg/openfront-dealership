@@ -62,6 +62,36 @@ export const GET_VEHICLE_BY_ID = `
   }
 `
 
+// A unit that was publicly listed and has since gone pending or sold. Aliased so the same
+// response classifier reads it; the server returns only public fields and withholds price.
+export const GET_VEHICLE_RECORD_BY_ID = `
+  query GetVehicleRecord($id: ID!) {
+    publicInventoryVehicle: publicInventoryVehicleRecord(id: $id) {
+      id
+      vin
+      stockNumber
+      year
+      make
+      model
+      trim
+      color: exteriorColor
+      mileage
+      price
+      status
+      condition
+      features
+      description
+      images {
+        id
+        imagePath
+        image { url }
+        isPrimary
+        sortOrder
+      }
+    }
+  }
+`
+
 export const GET_VEHICLES_COUNT = `
   query GetVehiclesCount($where: JSON) {
     publicInventoryCount(where: $where)

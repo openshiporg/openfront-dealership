@@ -7,6 +7,7 @@ import { domainEventRequestHash, recordDomainEventInTransaction, stableJson, typ
 import { assertSessionRooftopPermission, assertUserRooftopAccess } from '../tenantRecords'
 import { assertCurrentFunding, currentDealAuthority, lockDeal, readLockedFunding, worksheetBinding } from '../lifecycle/dealFinanceEvidence'
 import { recomputeServiceOrderTotals } from './serviceOrderLineCommands'
+import { closeLeadWonOnDelivery } from '../lifecycle/leadClosure'
 
 function idempotencyKey(value: unknown) {
   const key = String(value || '').trim()
@@ -313,6 +314,8 @@ export async function completeDealDelivery(_root: unknown, { data }: any, contex
     if (sold.count !== 1) throw new Error('Reserved vehicle could not be released for delivery')
     const completedCase = await tx.prisma.deliveryCase.updateMany({ where: { id: deliveryCase.id, dealId: deal.id, rooftopId: deal.rooftopId, status: 'ready', updatedAt: expectedDeliveryCaseUpdatedAt }, data: { status: 'delivered', deliverySnapshot: evidence } })
     if (completedCase.count !== 1) throw new Error('Delivery case changed concurrently')
+    // The sale is done: the buyer's lead closes as won in the same transaction.
+    await closeLeadWonOnDelivery(tx, { dealId: deal.id, leadId: deal.leadId, rooftopId: deal.rooftopId, actorId: context.session.itemId, deliveryEventKey: eventKey, occurredAt: new Date() })
     await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: 'Deal', aggregateId: deal.id, action: 'delivery-completed', topic: 'deal.delivery-completed', actorId: context.session.itemId, afterSnapshot: evidence, payload })
     const current = await authority.context.query.Deal.findOne({ where: { id: deal.id }, query: 'id status updatedAt' })
     return { ...current, reused: false }

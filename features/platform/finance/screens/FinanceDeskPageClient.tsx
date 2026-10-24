@@ -26,6 +26,8 @@ import {
 } from '@/features/platform/components/desk'
 import { centsToDollarInput, parseDollarsToCents, readDeskFinanceEvidence, type FinanceStep, type FinanceStepCode } from '../lib/financeEvidence'
 import { FinanceEvidenceHistory } from '@/features/platform/deals/components/FinanceEvidenceHistory'
+import { formatPhone } from '@/features/platform/lib/format'
+import { DEAL_PAYMENT_METHODS, DEAL_PAYMENT_METHOD_LABELS } from '@/features/keystone/lifecycle/paymentMethods'
 import { cn } from '@/lib/utils'
 import {
   getFinanceWorkspace,
@@ -33,6 +35,7 @@ import {
   manageFinanceFundingCase,
   openFinanceFollowUp,
   queueFinancingApplication,
+  recordCashDealDeposit,
   recordFinanceComplianceCheck,
   recordLenderDecision,
   reviewFinancePrerequisites,
@@ -123,7 +126,46 @@ function formatCurrencyCents(cents: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100)
 }
 
+function parseDollarsSafe(raw: string) {
+  try { return parseDollarsToCents(raw, 'Amount') } catch { return null }
+}
+
 const checkLabels: Record<string, string> = { identity: 'Identity', ofac: 'OFAC', 'red-flag': 'Red flag', privacy: 'Privacy notice' }
+const checkStatusLabels: Record<string, string> = { requested: 'Requested', completed: 'Completed', failed: 'Failed', 'manual-review': 'Manual review' }
+const decisionLabels: Record<string, string> = { approved: 'Approved', conditional: 'Conditional', declined: 'Declined', expired: 'Expired', cancelled: 'Cancelled' }
+const fundingLabels: Record<string, string> = { pending: 'Pending', exception: 'Exception', 'clear-to-fund': 'Clear to fund', funded: 'Funded', cancelled: 'Cancelled' }
+const contractStatusLabels: Record<string, string> = { preparing: 'Preparing', ready: 'Ready', sent: 'Sent', viewed: 'Viewed', signed: 'Signed', declined: 'Declined', void: 'Void' }
+const documentLabels: Record<string, string> = {
+  'buyers-order': 'Buyer\'s order',
+  'retail-installment-contract': 'Retail installment contract',
+  'privacy-disclosure': 'Privacy disclosure',
+  'product-menu': 'F&I product menu',
+}
+const itemStatusLabels: Record<string, string> = { open: 'Open', complete: 'Complete', waived: 'Waived', resolved: 'Resolved' }
+const providerLabels: Record<string, string> = { 'operator-recorded': 'Recorded by staff' }
+const paymentMethodOptions = DEAL_PAYMENT_METHODS.map(value => ({ value, label: DEAL_PAYMENT_METHOD_LABELS[value] }))
+const FORM_8300_STATE = 'Cash over $10,000: IRS Form 8300 required'
+
+/** Server codes ("manual-review") to staff labels; unknown codes become "Manual review". */
+function label(map: Record<string, string>, value: string | null | undefined) {
+  if (!value) return '-'
+  if (map[value]) return map[value]
+  const words = value.replace(/[-_]+/g, ' ').trim()
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+function paymentMethodLabel(method: string, providerKey: string) {
+  if (method) return label(DEAL_PAYMENT_METHOD_LABELS, method)
+  return providerKey === 'operator-recorded' ? 'Method not recorded' : label({ stripe: 'Card (online)' }, providerKey)
+}
+
+function isCashDeal(deal: Deal) {
+  return (deal.financeEvidence?.structureType ?? deal.structureType) === 'cash'
+}
+
+function contactLine(deal: Deal) {
+  return [formatPhone(deal.lead?.phone), deal.lead?.email?.trim()].filter(Boolean).join(' · ') || 'No contact'
+}
 
 function getCustomerName(deal: Deal) {
   if (!deal.lead) return 'No customer'
@@ -142,9 +184,12 @@ function getDealWarnings(deal: Deal) {
   const amountFinanced = deal.financingAmount || 0
   const apr = deal.apr || 0
 
-  if (total > 0 && downPayment / total < 0.05) warnings.push('Low down payment')
-  if (total > 0 && amountFinanced / total > 0.9) warnings.push('High loan-to-value')
-  if (apr >= 12) warnings.push('High APR')
+  // Loan risk flags only apply to financed deals; a cash buyer pays the whole amount.
+  if (!isCashDeal(deal)) {
+    if (total > 0 && downPayment / total < 0.05) warnings.push('Low down payment')
+    if (total > 0 && amountFinanced / total > 0.9) warnings.push('High loan-to-value')
+    if (apr >= 12) warnings.push('High APR')
+  }
   if ((deal.profit || 0) < 0) warnings.push('Negative gross')
 
   return warnings
@@ -335,8 +380,10 @@ export function FinanceDeskPageClient({
 
   const recordPayment = (deal: Deal) => {
     const remaining = deal.financeEvidence?.payment?.remainingCents
-    openFinanceTask({ kind: 'payment', deal, fields: { amount: remaining != null && remaining >= 0 ? centsToDollarInput(remaining) : '', receiptReference: '', attestPayment: '' } })
+    openFinanceTask({ kind: 'payment', deal, fields: { amount: remaining != null && remaining >= 0 ? centsToDollarInput(remaining) : '', paymentMethod: '', receiptReference: '', attestPayment: '' } })
   }
+
+  const recordDeposit = (deal: Deal) => openFinanceTask({ kind: 'deposit', deal, fields: { amount: '', paymentMethod: '', receiptReference: '' } })
 
   const openPrerequisiteReview = (deal: Deal) => openFinanceTask({
     kind: 'prerequisite-review',
@@ -362,7 +409,7 @@ export function FinanceDeskPageClient({
   const taskFields: OperatorActionField[] = !task ? [] : task.kind === 'deal-approval' ? [
     { name: 'notes', label: 'Approval notes (optional)', type: 'textarea', required: false, maxLength: 1000 },
   ] : task.kind === 'lender-decision' ? [
-    { name: 'decision', label: 'Lender decision', type: 'select', options: ['approved', 'conditional', 'declined', 'expired', 'cancelled'].map(value => ({ value, label: value })) },
+    { name: 'decision', label: 'Lender decision', type: 'select', options: ['approved', 'conditional', 'declined', 'expired', 'cancelled'].map(value => ({ value, label: decisionLabels[value] })) },
     { name: 'externalReference', label: 'Lender reference', maxLength: 200 },
     ...(task.fields.decision === 'declined' ? [{ name: 'reasonCodes', label: 'Decline reason codes (comma separated)', required: true }] : []),
     ...(['approved', 'conditional'].includes(task.fields.decision || '') ? [
@@ -373,12 +420,12 @@ export function FinanceDeskPageClient({
     ] : []),
   ] : task.kind === 'compliance' ? [
     { name: 'checkType', label: 'Check type', type: 'select', options: (task.deal ? requiredChecks(task.deal) : ['identity', 'ofac', 'red-flag', 'privacy']).map(value => ({ value, label: checkLabels[value] || value })) },
-    { name: 'status', label: 'Check status', type: 'select', options: ['requested', 'completed', 'failed', 'manual-review'].map(value => ({ value, label: value })) },
+    { name: 'status', label: 'Check status', type: 'select', options: ['requested', 'completed', 'failed', 'manual-review'].map(value => ({ value, label: checkStatusLabels[value] })) },
     ...(task.fields.status === 'completed' ? [{ name: 'evidenceReference', label: 'Check reference', maxLength: 200 }] : []),
   ] : task.kind === 'contract-ready' ? [
     { name: 'confirmed', label: 'I reviewed each required document', type: 'checkbox' },
   ] : task.kind === 'contract-provider' ? [
-    { name: 'providerStatus', label: 'Contract status', type: 'select', options: ['sent', 'viewed', 'signed', 'declined', 'void'].map(value => ({ value, label: value })) },
+    { name: 'providerStatus', label: 'Contract status', type: 'select', options: ['sent', 'viewed', 'signed', 'declined', 'void'].map(value => ({ value, label: contractStatusLabels[value] })) },
     { name: 'envelopeReference', label: 'Envelope reference', maxLength: 200 }, { name: 'evidenceReference', label: 'Contract reference', maxLength: 200 },
   ] : task.kind === 'buyers-order' ? [
     { name: 'reference', label: 'Signed buyer\'s order reference', maxLength: 200 },
@@ -388,20 +435,26 @@ export function FinanceDeskPageClient({
     { name: 'policyVersion', label: 'Policy version', maxLength: 200 },
     { name: 'reviewerAuthorityReference', label: 'Reviewer approval reference', maxLength: 200 },
   ] : task.kind === 'funding' ? [
-    { name: 'status', label: 'Funding state', type: 'select', options: ['pending', 'exception', 'clear-to-fund', 'funded', 'cancelled'].map(value => ({ value, label: value })) },
+    { name: 'status', label: 'Funding state', type: 'select', options: ['pending', 'exception', 'clear-to-fund', 'funded', 'cancelled'].map(value => ({ value, label: fundingLabels[value] })) },
     ...(['clear-to-fund', 'funded'].includes(task.fields.status || '') ? [{ name: 'attestChecklist', label: 'I reviewed the signed contract, stipulations, lender approval, and insurance', type: 'checkbox' as const }] : []),
     ...(task.fields.status === 'funded' ? [{ name: 'fundingReference', label: `Funding reference for worksheet ${task.deal?.worksheetVersion}`, maxLength: 200 }] : []),
     ...(task.fields.status === 'exception' ? [{ name: 'exceptionNotes', label: 'Funding exception details', type: 'textarea' as const, maxLength: 1000 }] : []),
   ] : task.kind === 'payment' ? [
-    { name: 'amount', label: 'Amount received ($)', maxLength: 20, description: task.deal?.financeEvidence?.payment ? `Due ${formatCurrencyCents(task.deal.financeEvidence.payment.remainingCents)}` : undefined },
+    { name: 'amount', label: 'Balance received ($)', maxLength: 20, description: task.deal?.financeEvidence?.payment ? `Balance due ${formatCurrencyCents(task.deal.financeEvidence.payment.remainingCents)}` : undefined },
+    ...(task.fields.amount && parseDollarsSafe(task.fields.amount) === 0 ? [] : [{ name: 'paymentMethod', label: 'Payment method', type: 'select' as const, options: paymentMethodOptions }]),
     { name: 'receiptReference', label: 'Receipt reference', maxLength: 200 },
-    { name: 'attestPayment', label: 'Payment received', type: 'checkbox' as const, description: 'Payment received in full' },
+    { name: 'attestPayment', label: 'Paid in full', type: 'checkbox' as const, description: 'The balance is received and the deal is paid in full' },
+  ] : task.kind === 'deposit' ? [
+    { name: 'amount', label: 'Amount received ($)', maxLength: 20, description: task.deal?.financeEvidence?.payment ? `Up to ${formatCurrencyCents(task.deal.financeEvidence.payment.remainingCents)}` : undefined },
+    { name: 'paymentMethod', label: 'Payment method', type: 'select' as const, options: paymentMethodOptions },
+    { name: 'receiptReference', label: 'Receipt reference', maxLength: 200 },
   ] : []
   const taskTitles: Record<string, string> = {
     'deal-approval': task?.decision === 'approved' ? 'Approve deal' : 'Review deal',
     'lender-decision': 'Record lender decision',
     'buyers-order': 'Record signed buyer\'s order',
     payment: 'Record payment',
+    deposit: 'Record deposit',
     compliance: 'Record compliance check',
     'contract-ready': 'Mark contract package ready',
     'contract-provider': 'Record contract status',
@@ -502,10 +555,25 @@ export function FinanceDeskPageClient({
           evidenceSource: 'operator-recorded',
           idempotencyKey: task.idempotencyKey,
         })
+      } else if (task.kind === 'deposit' && deal) {
+        const amount = centsFromDollars('amount', 'Amount received')
+        const remaining = deal.financeEvidence?.payment?.remainingCents
+        if (amount <= 0) throw new Error('Enter an amount greater than $0.')
+        if (remaining != null && amount > remaining) throw new Error(`The deposit can't be more than the ${formatCurrencyCents(remaining)} still due.`)
+        if (!value('paymentMethod')) throw new Error('Choose the payment method.')
+        if (!value('receiptReference')) throw new Error('Enter the receipt reference.')
+        response = await recordCashDealDeposit({
+          dealId: deal.id,
+          amountCents: amount,
+          paymentMethod: value('paymentMethod'),
+          receiptReference: value('receiptReference'),
+          idempotencyKey: task.idempotencyKey,
+        })
       } else if (task.kind === 'payment' && deal) {
         const amount = centsFromDollars('amount', 'Amount received')
+        if (amount > 0 && !value('paymentMethod')) throw new Error('Choose the payment method.')
         if (!value('receiptReference')) throw new Error('Enter the receipt reference.')
-        if (value('attestPayment') !== 'yes') throw new Error('Confirm the payment was received in full.')
+        if (value('attestPayment') !== 'yes') throw new Error('Confirm the deal is paid in full.')
         response = await manageFinanceFundingCase({
           dealId: deal.id,
           worksheetVersion: deal.worksheetVersion,
@@ -516,6 +584,7 @@ export function FinanceDeskPageClient({
           exceptions: [],
           fundingReference: value('receiptReference'),
           paymentAmountCents: amount,
+          ...(amount > 0 ? { paymentMethod: value('paymentMethod') } : {}),
           idempotencyKey: task.idempotencyKey,
         })
       } else if (task.kind === 'prerequisite-review' && deal) {
@@ -555,7 +624,7 @@ export function FinanceDeskPageClient({
       if (response && !response.success) { setTaskError(response.error || 'Unable to save. Your entries are preserved.'); return }
       if (!response) throw new Error('Something went wrong. Close and reopen this task.')
       setTask(null)
-      setNotice(task.kind === 'lender-decision' ? 'Lender decision recorded.' : task.kind === 'payment' ? 'Payment recorded.' : task.kind.startsWith('contract') || task.kind === 'buyers-order' ? 'Contract updated.' : 'Saved.')
+      setNotice(task.kind === 'lender-decision' ? 'Lender decision recorded.' : task.kind === 'payment' ? 'Payment recorded.' : task.kind === 'deposit' ? 'Deposit recorded.' : task.kind.startsWith('contract') || task.kind === 'buyers-order' ? 'Contract updated.' : 'Saved.')
       await loadDeals()
     } catch (error) {
       setTaskError(error instanceof Error ? error.message : 'Unable to save.')
@@ -616,7 +685,7 @@ export function FinanceDeskPageClient({
     <DeskHeader
       title="Finance"
       tone={error ? 'bad' : stageCounts.submitted > 0 ? 'warn' : 'ok'}
-      status={error ? 'Unavailable' : `${stageCounts.submitted} submitted`}
+      status={error ? 'Unavailable' : stageCounts.submitted > 0 ? 'Approvals waiting' : 'Up to date'}
       meta={error ? 'Unavailable' : `${stageCounts.active} in finance · ${openFinanceRequests.length} applications · ${products.length} products`}
       actions={
         <Track>
@@ -662,7 +731,9 @@ export function FinanceDeskPageClient({
     const fundingCase = fundingCases.find(item => item.deal?.id === deal.id)
     const evidence = deal.financeEvidence
     const dealHref = `${basePath}/platform/deals/${deal.id}`
-    const cash = evidence?.structureType === 'cash'
+    const cash = isCashDeal(deal)
+    const payment = cash ? evidence?.payment ?? null : null
+    const canRecordDeposit = cash && deal.status === 'approved' && payment != null && payment.remainingCents > 0
     const next = nextStepFor(deal)
     const steps = evidence?.steps || []
     const primaryNext = next && next.available && next.code !== 'delivery' ? next : null
@@ -704,11 +775,16 @@ export function FinanceDeskPageClient({
           </div>
 
           {/* One step at a time: the server's next required step is the primary action. */}
-          {(primaryNext || deal.status === 'submitted' || deal.status === 'financed' || (!cash && fundingStatusOpen) || hasAcceptedMenu) && (
+          {(primaryNext || canRecordDeposit || deal.status === 'submitted' || deal.status === 'financed' || (!cash && fundingStatusOpen) || hasAcceptedMenu) && (
           <Track aria-label="Deal actions">
             {primaryNext && (
               <Pill size="sm" variant="primary" onClick={() => runStep(deal, primaryNext.code)} disabled={busy}>
                 {primaryNext.label}
+              </Pill>
+            )}
+            {canRecordDeposit && (
+              <Pill size="sm" variant={primaryNext ? 'raised' : 'primary'} onClick={() => recordDeposit(deal)} disabled={busy}>
+                Record deposit
               </Pill>
             )}
             {deal.status === 'submitted' && (
@@ -734,6 +810,7 @@ export function FinanceDeskPageClient({
           {next && !next.available && next.blockedReason && (
             <p className="pl-4 text-xs text-muted-foreground" role="status">{next.label}: {next.blockedReason}</p>
           )}
+          {payment?.form8300Required && <Notice tone="warn">{FORM_8300_STATE}</Notice>}
           {warnings.length > 0 && <Notice tone="warn">{warnings.join(' · ')}</Notice>}
         </div>
 
@@ -778,15 +855,21 @@ export function FinanceDeskPageClient({
         <DeskSection title="Worksheet">
           <Facts
             items={[
-              { label: 'Contact', value: deal.lead?.phone || deal.lead?.email || 'No contact' },
+              { label: 'Contact', value: contactLine(deal) },
+              { label: 'Structure', value: cash ? 'Cash' : deal.structureType === 'lease' ? 'Lease' : 'Finance' },
               { label: 'Vehicle price', value: formatCurrency(deal.vehiclePrice), mono: true },
               { label: 'Trade-in', value: formatCurrency(deal.tradeInValue), mono: true },
-              { label: 'Down payment', value: formatCurrency(deal.downPayment), mono: true },
+              cash ? null : { label: 'Down payment', value: formatCurrency(deal.downPayment), mono: true },
               { label: 'Tax', value: formatCurrency(deal.taxAmount), mono: true },
               { label: 'Total', value: formatCurrency(deal.totalPrice), mono: true },
-              { label: 'Amount financed', value: formatCurrency(deal.financingAmount), mono: true },
-              { label: 'APR · term', value: `${deal.apr || 0}% · ${deal.loanTerm || 0} mo`, mono: true },
-              { label: 'Payment', value: formatCurrency(deal.monthlyPayment), mono: true },
+              ...(cash ? [
+                payment ? { label: 'Amount due', value: formatCurrencyCents(payment.amountDueCents), mono: true } : null,
+                payment ? { label: 'Balance', value: formatCurrencyCents(Math.max(0, payment.remainingCents)), mono: true } : null,
+              ] : [
+                { label: 'Amount financed', value: formatCurrency(deal.financingAmount), mono: true },
+                { label: 'APR · term', value: `${deal.apr || 0}% · ${deal.loanTerm || 0} mo`, mono: true },
+                { label: 'Payment', value: formatCurrency(deal.monthlyPayment), mono: true },
+              ]),
               { label: 'Gross', value: formatCurrency(deal.profit), mono: true },
               { label: 'Flags', value: warnings.length > 0 ? `${warnings.length}` : 'No flags' },
             ]}
@@ -799,11 +882,11 @@ export function FinanceDeskPageClient({
               ...application.submissions.map(submission => (
                 <li key={submission.id} className="flex min-w-0 items-start justify-between gap-4 py-2.5">
                   <div className="min-w-0">
-                    <TitleLine as="p" tone={stateTone(submission.status)} status={submission.status} className="font-medium">
-                      Submitted · {submission.providerKey}
+                    <TitleLine as="p" tone={stateTone(submission.status)} status={label({}, submission.status)} className="font-medium">
+                      Submitted · {label(providerLabels, submission.providerKey)}
                     </TitleLine>
                     <p className="truncate pl-4 text-xs text-muted-foreground">
-                      {submission.status} · {submission.providerMode}{submission.externalReference ? ` · ${submission.externalReference}` : ''}
+                      {label({}, submission.status)}{submission.externalReference ? ` · ${submission.externalReference}` : ''}
                     </p>
                   </div>
                   <p className="shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">{formatDate(submission.queuedAt, timeZone)}</p>
@@ -812,8 +895,8 @@ export function FinanceDeskPageClient({
               ...application.decisions.map(decision => (
                 <li key={decision.id} className="flex min-w-0 items-start justify-between gap-4 py-2.5">
                   <div className="min-w-0">
-                    <TitleLine as="p" tone={stateTone(decision.decision)} status={decision.decision} className="font-medium capitalize">
-                      {decision.decision} · {decision.providerKey}
+                    <TitleLine as="p" tone={stateTone(decision.decision)} status={label(decisionLabels, decision.decision)} className="font-medium">
+                      {label(decisionLabels, decision.decision)} · {label(providerLabels, decision.providerKey)}
                     </TitleLine>
                     <p className="truncate pl-4 text-xs text-muted-foreground">
                       {formatDate(decision.decidedAt, timeZone)}{decision.reasonCodes.length > 0 ? ` · ${decision.reasonCodes.join(', ')}` : ''}
@@ -873,7 +956,7 @@ export function FinanceDeskPageClient({
                   <TitleLine as="p" tone={stateTone(cancellation.status)} status={cancellation.status}>
                     <Code>{cancellation.productCode}</Code>
                   </TitleLine>
-                  <p className="shrink-0 text-xs capitalize text-muted-foreground">{cancellation.status}</p>
+                  <p className="shrink-0 text-xs text-muted-foreground">{label({}, cancellation.status)}</p>
                 </li>
               ))}
             </Ledger>
@@ -884,10 +967,10 @@ export function FinanceDeskPageClient({
           <Ledger empty="No checks">
             {dealChecks.map(check => (
               <li key={check.id} className="flex min-w-0 items-center justify-between gap-4 py-2">
-                <TitleLine as="p" tone={stateTone(check.status)} status={check.status} className="capitalize">
-                  {check.checkType}
+                <TitleLine as="p" tone={stateTone(check.status)} status={label(checkStatusLabels, check.status)}>
+                  {label(checkLabels, check.checkType)}
                 </TitleLine>
-                <p className="shrink-0 text-xs capitalize text-muted-foreground">{check.status}</p>
+                <p className="shrink-0 text-xs text-muted-foreground">{label(checkStatusLabels, check.status)}</p>
               </li>
             ))}
           </Ledger>
@@ -896,14 +979,14 @@ export function FinanceDeskPageClient({
         <DeskSection title="Contract">
           {contract ? (
             <div className="space-y-2">
-              <TitleLine as="p" tone={stateTone(contract.status)} status={contract.status} className="text-sm font-medium capitalize">
-                {contract.status}
+              <TitleLine as="p" tone={stateTone(contract.status)} status={label(contractStatusLabels, contract.status)} className="text-sm font-medium">
+                {label(contractStatusLabels, contract.status)}
               </TitleLine>
               <Ledger empty="No documents">
                 {(contract.documentChecklist || []).map(item => (
                   <li key={item.code} className="flex min-w-0 items-center justify-between gap-4 py-2">
-                    <Code className="text-foreground">{item.code}</Code>
-                    <TitleLine as="span" tone={stateTone(item.status)} className="shrink-0 text-xs capitalize text-muted-foreground">{item.status}</TitleLine>
+                    <span className="min-w-0 break-words">{label(documentLabels, item.code)}</span>
+                    <TitleLine as="span" tone={stateTone(item.status)} className="shrink-0 text-xs text-muted-foreground">{label(itemStatusLabels, item.status)}</TitleLine>
                   </li>
                 ))}
               </Ledger>
@@ -917,16 +1000,41 @@ export function FinanceDeskPageClient({
           <div className="space-y-3">
             <Facts
               items={[
-                { label: cash ? 'Payment' : 'Funding', value: <TitleLine as="span" tone={evidence?.fundingCurrent ? 'ok' : stateTone(evidence?.fundingStatus)}>{evidence?.fundingCurrent ? (cash ? 'received' : 'funded') : evidence?.fundingStatus || 'not started'}</TitleLine> },
+                { label: cash ? 'Payment' : 'Funding', value: <TitleLine as="span" tone={evidence?.fundingCurrent ? 'ok' : stateTone(evidence?.fundingStatus)}>{evidence?.fundingCurrent ? (cash ? 'Paid in full' : 'Funded') : evidence?.fundingStatus ? label(fundingLabels, evidence.fundingStatus) : cash && payment && payment.receivedCents > 0 ? 'Partly paid' : 'Not started'}</TitleLine> },
                 evidence?.fundingStatus ? { label: 'Worksheet', value: evidence.fundingCurrent ? 'current' : 'earlier version' } : null,
                 evidence?.fundingReference ? { label: cash ? 'Receipt' : 'Reference', value: evidence.fundingReference, mono: true } : null,
-                cash && evidence?.payment ? { label: 'Amount due', value: formatCurrencyCents(evidence.payment.amountDueCents), mono: true } : null,
-                cash && evidence?.payment ? { label: 'Received', value: formatCurrencyCents(evidence.payment.receivedCents), mono: true } : null,
+                payment ? { label: 'Amount due', value: formatCurrencyCents(payment.amountDueCents), mono: true } : null,
+                payment ? { label: 'Received', value: formatCurrencyCents(payment.receivedCents), mono: true } : null,
+                payment ? { label: 'Balance', value: formatCurrencyCents(Math.max(0, payment.remainingCents)), mono: true } : null,
+                payment && payment.cashReceivedCents > 0 ? { label: 'Cash received', value: formatCurrencyCents(payment.cashReceivedCents), mono: true } : null,
+                payment?.form8300Required ? { label: 'Compliance', value: <TitleLine as="span" tone="warn">{FORM_8300_STATE}</TitleLine> } : null,
                 { label: 'Prerequisites', value: evidence?.prerequisites?.current ? (cash ? 'Confirmed with payment' : 'Reviewed') : 'Not yet' },
-                fundingCase ? { label: 'Funding case', value: fundingCase.status } : null,
+                fundingCase ? { label: 'Funding case', value: label(fundingLabels, fundingCase.status) } : null,
                 fundingCase ? { label: 'Open exceptions', value: openFundingExceptions, mono: true } : null,
               ]}
             />
+            {payment && (
+              <div>
+                <p className="mb-1 text-xs font-medium text-muted-foreground">Payments received</p>
+                <Ledger empty="No payments">
+                  {payment.payments.map(record => (
+                    <li key={record.id} className="flex min-w-0 items-start justify-between gap-4 py-2">
+                      <div className="min-w-0">
+                        <TitleLine as="p" tone={record.status === 'captured' ? 'ok' : 'idle'} status={label({ captured: 'Received', 'partially-refunded': 'Partly refunded', refunded: 'Refunded' }, record.status)} className="font-medium">
+                          {paymentMethodLabel(record.method, record.providerKey)}
+                        </TitleLine>
+                        <p className="break-words pl-4 text-xs text-muted-foreground">
+                          {formatDate(record.receivedAt, timeZone)}
+                          {record.reference ? <> · <Code>{record.reference}</Code></> : null}
+                          {record.refundedCents > 0 ? ` · Refunded ${formatCurrencyCents(record.refundedCents)}` : ''}
+                        </p>
+                      </div>
+                      <p className="shrink-0 font-mono text-sm tabular-nums">{formatCurrencyCents(record.netCents)}</p>
+                    </li>
+                  ))}
+                </Ledger>
+              </div>
+            )}
             <div className="space-y-1 text-xs text-muted-foreground [&_summary]:cursor-pointer [&_summary]:font-medium [&_summary]:text-foreground">
               {evidence?.prerequisites?.snapshot && (
                 <details>
@@ -1041,16 +1149,33 @@ export function FinanceDeskPageClient({
                         <p className="truncate pl-4 text-xs text-muted-foreground">
                           <Code>#{deal.vehicle?.stockNumber || '-'}</Code> · {statusLabels[status] || status}
                           {deal.financeEvidence?.nextStep ? ` · Next: ${nextStepFor(deal)?.label}` : ''}
+                          {deal.financeEvidence?.payment?.form8300Required ? ' · Form 8300 required' : ''}
                           {warnings.length > 0 ? ` · ${warnings.join(', ')}` : ''}
                         </p>
                       </div>
-                      <div className="shrink-0 text-right">
-                        <p className="text-sm font-medium tabular-nums">{formatCurrency(deal.financingAmount)}</p>
-                        <p className="font-mono text-[11px] tabular-nums text-muted-foreground">
-                          {deal.apr || 0}% · {deal.loanTerm || 0} mo
-                        </p>
-                        <p className="font-mono text-[11px] tabular-nums text-muted-foreground">{formatCurrency(deal.monthlyPayment)}/mo</p>
-                      </div>
+                      {isCashDeal(deal) ? (
+                        <div className="shrink-0 text-right">
+                          {deal.financeEvidence?.payment && deal.financeEvidence.payment.remainingCents > 0 ? (
+                            <>
+                              <p className="text-sm font-medium tabular-nums">{formatCurrencyCents(deal.financeEvidence.payment.remainingCents)}</p>
+                              <p className="font-mono text-[11px] tabular-nums text-muted-foreground">Cash · due</p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-sm font-medium tabular-nums">{deal.financeEvidence?.payment ? formatCurrencyCents(deal.financeEvidence.payment.amountDueCents) : formatCurrency(deal.totalPrice)}</p>
+                              <p className="font-mono text-[11px] tabular-nums text-muted-foreground">{deal.financeEvidence?.payment ? 'Cash · paid' : 'Cash · total'}</p>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="shrink-0 text-right">
+                          <p className="text-sm font-medium tabular-nums">{formatCurrency(deal.financingAmount)}</p>
+                          <p className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                            {deal.apr || 0}% · {deal.loanTerm || 0} mo
+                          </p>
+                          <p className="font-mono text-[11px] tabular-nums text-muted-foreground">{formatCurrency(deal.monthlyPayment)}/mo</p>
+                        </div>
+                      )}
                     </button>
                   )
                 })}
@@ -1080,7 +1205,7 @@ export function FinanceDeskPageClient({
                   <div key={application.id} className="flex min-w-0 flex-col gap-3 px-4 py-3 md:flex-row md:items-start md:justify-between">
                     <div className="flex min-w-0 flex-1 items-start justify-between gap-4">
                       <div className="min-w-0">
-                        <TitleLine as="p" tone={stateTone(application.status)} status={application.status} className="text-sm font-medium">
+                        <TitleLine as="p" tone={stateTone(application.status)} status={label({}, application.status)} className="text-sm font-medium">
                           <Link href={`${basePath}/platform/finance/applications/${application.id}`} className="hover:underline">
                             {applicantName}
                           </Link>
@@ -1088,11 +1213,11 @@ export function FinanceDeskPageClient({
                           {vehicleName}
                         </TitleLine>
                         <p className="pl-4 text-xs text-muted-foreground">
-                          <Code>{application.reference || application.id}</Code> · {application.status} · Stock <Code>#{vehicle?.stockNumber || '-'}</Code> · {formatCurrency((vehicle?.priceCents || 0) / 100)}
+                          <Code>{application.reference || application.id}</Code> · {label({}, application.status)} · Stock <Code>#{vehicle?.stockNumber || '-'}</Code> · {formatCurrency((vehicle?.priceCents || 0) / 100)}
                         </p>
                         <p className="pl-4 text-xs text-muted-foreground">
-                          Submitted {formatDate(application.submittedAt, timeZone)} · {submission ? `${submission.providerKey} · ` : ''}{lenderState}
-                          {decision ? ` · Latest decision: ${decision.decision}` : ''}
+                          Submitted {formatDate(application.submittedAt, timeZone)} · {submission ? `${label(providerLabels, submission.providerKey)} · ` : ''}{submission ? label({}, lenderState) : lenderState}
+                          {decision ? ` · Latest decision: ${label(decisionLabels, decision.decision)}` : ''}
                         </p>
                       </div>
                       <div className="shrink-0 text-right">

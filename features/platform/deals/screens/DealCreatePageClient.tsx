@@ -3,7 +3,10 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowRight, RefreshCw, Save } from 'lucide-react'
+import { ArrowRight, RefreshCw, Save, UserPlus } from 'lucide-react'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { formatPhone } from '@/features/platform/lib/format'
 import {
   Select,
   SelectContent,
@@ -24,9 +27,10 @@ import {
   Track,
 } from '@/features/platform/components/desk'
 import {
-  createDealPencil,
+  createDealWorksheet,
   getDealSetupOptions,
   getRooftopSalespeople,
+  openWalkInLead,
   type DealSetupLead,
   type DealSetupVehicle,
   type DealTradeInOption,
@@ -85,6 +89,22 @@ function previewDeal(form: { vehiclePrice: number; tradeInValue: number; downPay
 }
 
 const NO_TRADE_IN = 'none'
+const NEW_CUSTOMER = '__new-customer__'
+
+type WalkInForm = { firstName: string; lastName: string; phone: string; email: string }
+const EMPTY_WALK_IN: WalkInForm = { firstName: '', lastName: '', phone: '', email: '' }
+
+function walkInErrors(form: WalkInForm) {
+  const errors: Partial<Record<keyof WalkInForm, string>> = {}
+  if (!form.firstName.trim()) errors.firstName = 'First name is required'
+  if (!form.lastName.trim()) errors.lastName = 'Last name is required'
+  const email = form.email.trim()
+  const digits = form.phone.replace(/\D/g, '')
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = 'Email is invalid'
+  if (form.phone.trim() && (digits.length < 7 || digits.length > 15)) errors.phone = 'Phone is invalid'
+  if (!email && !form.phone.trim()) errors.phone = 'Enter a phone or email'
+  return errors
+}
 
 function tradeInLabel(tradeIn: DealTradeInOption) {
   return [tradeIn.year, tradeIn.make, tradeIn.model, tradeIn.trim].filter(Boolean).join(' ') || 'Trade-in'
@@ -137,6 +157,12 @@ export function DealCreatePageClient({
   const [salesRepsLoading, setSalesRepsLoading] = useState(false)
 
   const [formData, setFormData] = useState(() => prefilledForm(initialVehicles, initialLeads, initialTradeIns, prefillLeadId, prefillTradeInId))
+  const [walkInOpen, setWalkInOpen] = useState(false)
+  const [walkIn, setWalkIn] = useState<WalkInForm>(EMPTY_WALK_IN)
+  const [walkInTouched, setWalkInTouched] = useState(false)
+  const [walkInSaving, setWalkInSaving] = useState(false)
+  const [walkInError, setWalkInError] = useState<string | null>(null)
+  const walkInKeyRef = useRef(`deal-walk-in:${crypto.randomUUID()}`)
 
   const calculated = previewDeal(formData, dealDefaults)
 
@@ -211,7 +237,7 @@ export function DealCreatePageClient({
       return
     }
 
-    const data: Parameters<typeof createDealPencil>[0] = {
+    const data: Parameters<typeof createDealWorksheet>[0] = {
       rooftopId: selectedVehicle.rooftop.id,
       vehicleId: formData.vehicleId,
       idempotencyKey: idempotencyKeyRef.current,
@@ -224,16 +250,64 @@ export function DealCreatePageClient({
     if (formData.salespersonId) data.salespersonId = formData.salespersonId
     if (formData.tradeInId) data.tradeInId = formData.tradeInId
 
-    const response = await createDealPencil(data)
+    // Creates the pencil and saves worksheet version 1, so the deal opens ready to present.
+    const response = await createDealWorksheet(data)
 
     setSaving(false)
 
-    if (response.success && response.data?.createDealPencil?.id) {
-      const dealId = response.data.createDealPencil.id
-      router.push(`${basePath}/platform/deals/${dealId}`)
+    if (response.success) {
+      router.push(`${basePath}/platform/deals/${response.data.dealId}`)
     } else {
       setSaveError(`Failed to create deal: ${response.error || 'Unknown error'}`)
     }
+  }
+
+  const openWalkIn = () => {
+    setWalkIn(EMPTY_WALK_IN)
+    setWalkInTouched(false)
+    setWalkInError(null)
+    walkInKeyRef.current = `deal-walk-in:${crypto.randomUUID()}`
+    setWalkInOpen(true)
+  }
+
+  const walkInFieldErrors = walkInErrors(walkIn)
+
+  const saveWalkIn = async () => {
+    setWalkInTouched(true)
+    setWalkInError(null)
+    const vehicle = vehicles.find(item => item.id === formData.vehicleId)
+    if (!vehicle?.rooftop?.id) { setWalkInError('Choose a vehicle first'); return }
+    if (Object.keys(walkInFieldErrors).length > 0) return
+    setWalkInSaving(true)
+    const response = await openWalkInLead({
+      rooftopId: vehicle.rooftop.id,
+      firstName: walkIn.firstName.trim(),
+      lastName: walkIn.lastName.trim(),
+      ...(walkIn.email.trim() ? { email: walkIn.email.trim() } : {}),
+      ...(walkIn.phone.trim() ? { phone: walkIn.phone.trim() } : {}),
+      interestedVehicleId: vehicle.id,
+      idempotencyKey: walkInKeyRef.current,
+    })
+    setWalkInSaving(false)
+    if (!response.success) { setWalkInError(response.error || 'Unable to add the customer'); return }
+    const created = response.data.openLead
+    const lead: Lead = {
+      id: created.id,
+      firstName: walkIn.firstName.trim(),
+      lastName: walkIn.lastName.trim(),
+      email: walkIn.email.trim().toLowerCase(),
+      phone: walkIn.phone.trim(),
+      rooftop: { id: vehicle.rooftop.id },
+      interestedVehicle: { id: vehicle.id },
+      assignedSalesperson: created.assignedToId ? { id: created.assignedToId } : null,
+    }
+    setLeads(previous => previous.some(item => item.id === lead.id) ? previous : [lead, ...previous])
+    setFormData(previous => ({
+      ...previous,
+      leadId: lead.id,
+      salespersonId: lead.assignedSalesperson && salesReps.some(user => user.id === lead.assignedSalesperson?.id) ? lead.assignedSalesperson.id : previous.salespersonId,
+    }))
+    setWalkInOpen(false)
   }
 
   const formatCurrency = (value: number) => formatUsd(value)
@@ -332,11 +406,12 @@ export function DealCreatePageClient({
               <Step index={1} title="Customer" done={Boolean(formData.leadId)} optional>
                 <label className="grid min-w-0 gap-1.5">
                   <span className={fieldLabel}>Customer (lead)</span>
-                  <Select value={formData.leadId} onValueChange={chooseLead}>
+                  <Select value={formData.leadId} onValueChange={value => value === NEW_CUSTOMER ? openWalkIn() : chooseLead(value)}>
                     <SelectTrigger aria-label="Customer">
                       <SelectValue placeholder="Select customer" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value={NEW_CUSTOMER}>New customer</SelectItem>
                       {leads.map(l => (
                         <SelectItem key={l.id} value={l.id}>
                           {l.firstName} {l.lastName}
@@ -349,9 +424,15 @@ export function DealCreatePageClient({
                   <Panel className="px-4 py-3 text-sm">
                     <p className="font-medium">{selectedLead.firstName} {selectedLead.lastName}</p>
                     <p className="break-all text-muted-foreground">{selectedLead.email}</p>
-                    <p className="tabular-nums text-muted-foreground">{selectedLead.phone}</p>
+                    <p className="tabular-nums text-muted-foreground">{formatPhone(selectedLead.phone)}</p>
                   </Panel>
                 )}
+                <Track>
+                  <Pill size="sm" onClick={openWalkIn}>
+                    <UserPlus />
+                    New customer
+                  </Pill>
+                </Track>
               </Step>
 
               <Step index={2} title="Vehicle" done={Boolean(formData.vehicleId)}>
@@ -378,7 +459,7 @@ export function DealCreatePageClient({
                       <Code>#{selectedVehicle.stockNumber}</Code>
                     </div>
                     <dl className="flex gap-4 font-mono text-xs tabular-nums">
-                      <div className="text-right"><dt className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">MSRP</dt><dd>{formatPrice(selectedVehicle.price)}</dd></div>
+                      <div className="text-right"><dt className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">{selectedVehicle.condition === 'new' ? 'MSRP' : 'Price'}</dt><dd>{formatPrice(selectedVehicle.price)}</dd></div>
                       <div className="text-right"><dt className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Cost</dt><dd>{formatPrice(selectedVehicle.purchasePrice || 0)}</dd></div>
                     </dl>
                   </Panel>
@@ -498,6 +579,77 @@ export function DealCreatePageClient({
           </div>
         )}
       </div>
+
+      <Dialog open={walkInOpen} onOpenChange={open => { if (!walkInSaving) setWalkInOpen(open) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>New customer</DialogTitle>
+          </DialogHeader>
+          <form
+            className="grid gap-3"
+            noValidate
+            onSubmit={event => { event.preventDefault(); void saveWalkIn() }}
+          >
+            {!formData.vehicleId && <Notice tone="warn">Choose a vehicle first</Notice>}
+            <div className="grid gap-3 sm:grid-cols-2">
+              {([['firstName', 'First name', 'given-name'], ['lastName', 'Last name', 'family-name']] as const).map(([name, label, autoComplete]) => (
+                <label key={name} htmlFor={`walk-in-${name}`} className="grid min-w-0 gap-1.5">
+                  <span className={fieldLabel}>{label}</span>
+                  <Input
+                    id={`walk-in-${name}`}
+                    value={walkIn[name]}
+                    autoComplete={autoComplete}
+                    maxLength={100}
+                    aria-invalid={walkInTouched && walkInFieldErrors[name] ? true : undefined}
+                    aria-describedby={walkInTouched && walkInFieldErrors[name] ? `walk-in-${name}-error` : undefined}
+                    onChange={event => setWalkIn(previous => ({ ...previous, [name]: event.target.value }))}
+                  />
+                  {walkInTouched && walkInFieldErrors[name] && <span id={`walk-in-${name}-error`} className="text-xs text-destructive">{walkInFieldErrors[name]}</span>}
+                </label>
+              ))}
+            </div>
+            <label htmlFor="walk-in-phone" className="grid min-w-0 gap-1.5">
+              <span className={fieldLabel}>Phone</span>
+              <Input
+                id="walk-in-phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                maxLength={50}
+                value={walkIn.phone}
+                aria-invalid={walkInTouched && walkInFieldErrors.phone ? true : undefined}
+                aria-describedby={walkInTouched && walkInFieldErrors.phone ? 'walk-in-phone-error' : undefined}
+                onChange={event => setWalkIn(previous => ({ ...previous, phone: event.target.value }))}
+                onBlur={() => setWalkIn(previous => ({ ...previous, phone: formatPhone(previous.phone) }))}
+              />
+              {walkInTouched && walkInFieldErrors.phone && <span id="walk-in-phone-error" className="text-xs text-destructive">{walkInFieldErrors.phone}</span>}
+            </label>
+            <label htmlFor="walk-in-email" className="grid min-w-0 gap-1.5">
+              <span className={fieldLabel}>Email</span>
+              <Input
+                id="walk-in-email"
+                type="email"
+                autoComplete="email"
+                maxLength={320}
+                value={walkIn.email}
+                aria-invalid={walkInTouched && walkInFieldErrors.email ? true : undefined}
+                aria-describedby={walkInTouched && walkInFieldErrors.email ? 'walk-in-email-error' : undefined}
+                onChange={event => setWalkIn(previous => ({ ...previous, email: event.target.value }))}
+              />
+              {walkInTouched && walkInFieldErrors.email && <span id="walk-in-email-error" className="text-xs text-destructive">{walkInFieldErrors.email}</span>}
+            </label>
+            {walkInError && <Notice tone="bad">{walkInError}</Notice>}
+            <DialogFooter>
+              <Track>
+                <Pill type="button" variant="plain" onClick={() => setWalkInOpen(false)} disabled={walkInSaving}>Cancel</Pill>
+                <Pill type="submit" variant="primary" disabled={walkInSaving || !formData.vehicleId}>
+                  {walkInSaving ? 'Adding…' : 'Add customer'}
+                </Pill>
+              </Track>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </PageContainer>
   )
 }

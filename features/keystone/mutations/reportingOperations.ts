@@ -65,8 +65,8 @@ export async function operationalReport(_root: unknown, args: { rooftopId?: stri
   const todayWindows = Object.entries(zoneGroups).map(([zone, ids]) => ({ ids, ...rooftopDayWindow(zone, reportNow) }))
   const todayWhere = (field: string) => ({ OR: todayWindows.map(window => ({ rooftopId: { in: window.ids }, [field]: { gte: window.start, lt: window.end } })) })
   const [leads, deals, stocks, menus, labor, parts, serviceOrders, todayServiceAppointments, todayTestDrives, accountingExceptions, paymentExceptions, fundingExceptions] = await Promise.all([
-    prisma.lead.findMany({ where, select: { status: true, createdAt: true } }),
-    prisma.deal.findMany({ where, select: { id: true, status: true, vehiclePriceCents: true, grossCents: true, saleDate: true, createdAt: true, salesperson: { select: { id: true, name: true } }, vehicle: { select: { year: true, make: true, model: true } }, lead: { select: { firstName: true, lastName: true } } } }),
+    prisma.lead.findMany({ where, select: { id: true, status: true, createdAt: true } }),
+    prisma.deal.findMany({ where, select: { id: true, leadId: true, status: true, vehiclePriceCents: true, grossCents: true, saleDate: true, createdAt: true, salesperson: { select: { id: true, name: true } }, vehicle: { select: { year: true, make: true, model: true } }, lead: { select: { firstName: true, lastName: true } } } }),
     prisma.inventoryStock.findMany({ where, select: { stockedAt: true, totalCostCents: true, vehicle: { select: { status: true, priceCents: true } } } }),
     prisma.financeMenuVersion.findMany({ where: { ...where, status: 'accepted' }, select: { dealId: true, selectedProductCodes: true } }),
     prisma.serviceLaborOperation.findMany({ where, select: { soldHours: true, actualMinutes: true, status: true } }),
@@ -79,6 +79,8 @@ export async function operationalReport(_root: unknown, args: { rooftopId?: stri
     prisma.financeFundingCase.count({ where: { ...where, status: 'exception' } }),
   ])
   const delivered = deals.filter((item: any) => item.status === 'delivered' && item.saleDate)
+  const deliveredLeadIds = new Set(deals.filter((item: any) => item.status === 'delivered' && item.leadId).map((item: any) => item.leadId))
+  const convertedLeadCount = leads.filter((item: any) => item.status === 'closed-won' || deliveredLeadIds.has(item.id)).length
   const currentDelivered = delivered.filter((item: any) => new Date(item.saleDate).getTime() >= currentStart.getTime())
   const previousDelivered = delivered.filter((item: any) => { const value = new Date(item.saleDate).getTime(); return value >= previousStart.getTime() && value < currentStart.getTime() })
   const currentLeads = leads.filter((item: any) => new Date(item.createdAt).getTime() >= currentStart.getTime())
@@ -119,7 +121,9 @@ export async function operationalReport(_root: unknown, args: { rooftopId?: stri
     },
     salesFunnel: grouped(leads, 'status'),
     totalLeads: leads.length,
-    leadConversionPercent: leads.length ? Math.round(leads.filter((item: any) => item.status === 'closed-won').length / leads.length * 10_000) / 100 : 0,
+    // Converted: closed won, or the buyer on a delivered deal (deliveries before leads auto-closed).
+    convertedLeads: convertedLeadCount,
+    leadConversionPercent: leads.length ? Math.round(convertedLeadCount / leads.length * 10_000) / 100 : 0,
     pendingDeals: deals.filter((item: any) => ['pencil', 'submitted'].includes(item.status)).length,
     todayAppointments: todayServiceAppointments + todayTestDrives,
     deliveredDeals: delivered.length,

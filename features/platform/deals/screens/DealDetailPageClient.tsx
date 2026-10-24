@@ -63,6 +63,7 @@ interface Deal {
   structureType: string
   worksheetVersion: number
   financeEvidence: FinanceEvidence | null
+  form8300Required?: boolean
   fees: MoneyLine[]
   rebates: MoneyLine[]
   products: MoneyLine[]
@@ -87,6 +88,7 @@ interface Deal {
     stockNumber: string
     vin: string
     exteriorColor: string | null
+    condition?: string | null
     price: number
     purchasePrice: number
   } | null
@@ -220,6 +222,7 @@ export function DealDetailPageClient({ id }: { id: string }) {
       const value = response.data.dealWorkspace.deal
       setDealTradeInRecord(response.data.tradeIn)
       setDealRooftopId(response.data.rooftopId)
+      value.form8300Required = value.financeEvidence?.payment?.form8300Required === true
       value.financeEvidence = readFinanceEvidence(value.financeEvidence)
       for (const key of ['fees', 'rebates', 'products', 'taxLines']) value[key] = Array.isArray(value[key]) ? value[key] : []
       if (!value.taxLines.length && value.taxAmountCents > 0) value.taxLines = [{ code: 'legacy-tax', name: 'Tax', amountCents: value.taxAmountCents, source: 'operator-recorded' }]
@@ -751,6 +754,7 @@ export function DealDetailPageClient({ id }: { id: string }) {
           <div className="space-y-2">
             {error && <Notice tone="bad">{error}</Notice>}
             {worksheetDirty && <Notice tone="warn" role="status">Unsaved worksheet changes</Notice>}
+            {deal.form8300Required && <Notice tone="warn" role="status">Cash over $10,000: IRS Form 8300 required</Notice>}
           </div>
         )}
 
@@ -1031,7 +1035,7 @@ export function DealDetailPageClient({ id }: { id: string }) {
                   { label: 'Stock #', value: <Code className="text-foreground">{deal.vehicle.stockNumber}</Code> },
                   { label: 'VIN', value: <Code className="break-all text-foreground">{deal.vehicle.vin}</Code> },
                   { label: 'Color', value: deal.vehicle.exteriorColor || '-' },
-                  { label: 'MSRP', value: formatCurrency(deal.vehicle.price), mono: true },
+                  { label: deal.vehicle.condition === 'new' ? 'MSRP' : 'Price', value: formatCurrency(deal.vehicle.price), mono: true },
                 ]} />
               ) : (
                 <p className="py-2 text-sm text-muted-foreground">No vehicle attached</p>

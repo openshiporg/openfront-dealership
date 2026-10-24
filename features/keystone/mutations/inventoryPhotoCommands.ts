@@ -1,5 +1,6 @@
 import { permissions } from '../access'
 import { inventoryCommand } from './inventoryCommandErrors'
+import { assertActiveInventory } from './inventoryActiveStatus'
 import { lockInventoryStock } from '../lifecycle/inventoryPublication'
 import { recordDomainEventInTransaction, type DomainEventInput } from '../lifecycle/domainEvents'
 import { assertSessionRooftopPermission } from '../tenantRecords'
@@ -29,7 +30,7 @@ async function stockAccess(context: any, id: string) {
   const stock = await context.query.InventoryStock.findOne({ where: { id }, query: 'id rooftop { id } vehicle { id year make model status }' })
   if (!stock?.rooftop?.id || !stock.vehicle?.id) throw new Error('Inventory stock not found or not accessible')
   await assertSessionRooftopPermission(context, stock.rooftop.id, 'canManageInventory')
-  if (!['available', 'service'].includes(stock.vehicle.status)) throw new Error('Only active inventory can be edited')
+  assertActiveInventory(stock.vehicle.status)
   return stock
 }
 

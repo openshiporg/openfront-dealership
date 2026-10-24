@@ -315,7 +315,7 @@ export function ServiceAppointmentDetailPageClient({
             <Facts
               items={[
                 { label: 'Date', value: formatDateTime(appointment.appointmentDate, timeZone) },
-                { label: 'Service', value: <span className="capitalize">{appointment.serviceType || 'Service'}</span> },
+                { label: 'Service', value: <span className="capitalize">{appointment.servicePackage?.name || appointment.serviceType || 'Service'}</span> },
                 { label: 'Concern', value: appointment.description || '-' },
                 appointment.estimatedDuration != null ? { label: 'Duration', value: `${appointment.estimatedDuration} min`, mono: true } : null,
                 { label: 'Technician', value: appointment.assignedTech?.name || 'Unassigned' },

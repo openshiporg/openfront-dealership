@@ -7637,6 +7637,7 @@ type PaymentTransaction {
   amountCents: Int
   currency: String
   providerKey: String
+  paymentMethod: String
   paymentProvider: PaymentProvider
   providerTransactionId: String
   providerSessionId: String
@@ -7670,6 +7671,7 @@ input PaymentTransactionWhereInput {
   amountCents: IntFilter
   currency: StringFilter
   providerKey: StringFilter
+  paymentMethod: StringFilter
   paymentProvider: PaymentProviderWhereInput
   providerTransactionId: StringFilter
   providerSessionId: StringFilter
@@ -7692,6 +7694,7 @@ input PaymentTransactionOrderByInput {
   amountCents: OrderDirection
   currency: OrderDirection
   providerKey: OrderDirection
+  paymentMethod: OrderDirection
   providerTransactionId: OrderDirection
   providerSessionId: OrderDirection
   checkoutUrl: OrderDirection
@@ -7715,6 +7718,7 @@ input PaymentTransactionUpdateInput {
   amountCents: Int
   currency: String
   providerKey: String
+  paymentMethod: String
   paymentProvider: PaymentProviderRelateToOneForUpdateInput
   providerTransactionId: String
   providerSessionId: String
@@ -7750,6 +7754,7 @@ input PaymentTransactionCreateInput {
   amountCents: Int
   currency: String
   providerKey: String
+  paymentMethod: String
   paymentProvider: PaymentProviderRelateToOneForCreateInput
   providerTransactionId: String
   providerSessionId: String
@@ -8903,6 +8908,7 @@ type Mutation {
   manageFinanceContractPackage(data: ManageFinanceContractInput!): FinanceContractPackage!
   reviewFinancePrerequisites(data: ReviewFinancePrerequisitesInput!): OperatorCommandResult!
   manageFinanceFundingCase(data: ManageFinanceFundingInput!): FinanceFundingCase!
+  recordCashDealDeposit(data: RecordCashDealDepositInput!): CashDealDepositResult!
   recordFinanceProductCancellation(data: RecordFinanceProductCancellationInput!): FinanceProductCancellation!
   intakeInventoryVehicle(data: IntakeInventoryVehicleInput!): InventoryIntakeResult!
   establishInventoryStock(data: EstablishInventoryStockInput!): InventoryCommandResult!
@@ -9185,6 +9191,7 @@ type Query {
   redirectToInit: Boolean
   publicInventoryVehicles(where: JSON, orderBy: JSON, take: Int, skip: Int): PublicInventoryResult!
   publicInventoryVehicle(id: ID!): PublicInventoryVehicle
+  publicInventoryVehicleRecord(id: ID!): PublicInventoryVehicle
   publicInventoryCount(where: JSON): Int!
   storefrontProfile(rooftopSlug: String): StorefrontProfilePayload!
   domainTimeline(aggregateType: String!, aggregateId: ID!, limit: Int = 50): [DomainAuditEvent!]!
@@ -9881,6 +9888,7 @@ type DealVehicleResult {
   model: String
   trim: String
   exteriorColor: String
+  condition: String
   status: String
   priceCents: Int
 }
@@ -10048,6 +10056,8 @@ type FinanceDealLeadResult {
   id: ID!
   firstName: String
   lastName: String
+  email: String
+  phone: String
 }
 
 type FinanceDealVehicleResult {
@@ -10071,6 +10081,7 @@ type FinanceDealApprovalResult {
 type FinanceDealResult {
   id: ID!
   worksheetVersion: Int
+  structureType: String
   financeEvidence: JSON
   rooftop: InventoryRooftopResult
   vehiclePrice: Float
@@ -10275,10 +10286,16 @@ type FixedOpsAppointmentOrderResult {
   grandTotalCents: Int
 }
 
+type FixedOpsServicePackageResult {
+  id: ID!
+  name: String
+}
+
 type FixedOpsAppointmentResult {
   id: ID!
   appointmentDate: DateTime
   serviceType: String
+  servicePackage: FixedOpsServicePackageResult
   status: String
   vehicleVin: String
   transportationNeed: String
@@ -10805,7 +10822,27 @@ input ManageFinanceFundingInput {
   exceptions: JSON!
   fundingReference: String
   paymentAmountCents: Int
+  paymentMethod: String
   idempotencyKey: String!
+}
+
+input RecordCashDealDepositInput {
+  dealId: ID!
+  amountCents: Int!
+  paymentMethod: String!
+  receiptReference: String!
+  idempotencyKey: String!
+}
+
+type CashDealDepositResult {
+  id: ID!
+  dealId: ID!
+  amountCents: Int!
+  paymentMethod: String!
+  receiptReference: String!
+  remainingCents: Int!
+  form8300Required: Boolean!
+  reused: Boolean!
 }
 
 input RecordFinanceProductCancellationInput {

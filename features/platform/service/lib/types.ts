@@ -3,6 +3,7 @@ export type FixedOpsAppointment = {
   rooftop: { id: string }
   appointmentDate: string | null
   serviceType: string | null
+  servicePackage?: { id: string; name: string | null } | null
   status: string | null
   customerVehicleDescription: string | null
   description: string | null
@@ -47,6 +48,7 @@ export type FixedOpsOrder = {
     id: string
     appointmentDate: string | null
     serviceType: string | null
+    servicePackage?: { id: string; name: string | null } | null
     customerVehicleDescription: string | null
     assignedTech: { name: string | null } | null
   } | null
@@ -121,6 +123,7 @@ export type ServiceOrderDetail = {
     status: string | null
     appointmentDate: string | null
     serviceType: string | null
+    servicePackage?: { id: string; name: string | null } | null
     description: string | null
     customerVehicleDescription: string | null
     vehicleVin: string | null
@@ -144,6 +147,7 @@ export type ServiceAppointmentDetail = {
   createdAt: string | null
   appointmentDate: string | null
   serviceType: string | null
+  servicePackage?: { id: string; name: string | null } | null
   description: string | null
   estimatedDuration: number | null
   customerVehicleDescription: string | null

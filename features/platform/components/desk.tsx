@@ -7,6 +7,7 @@
 import * as React from 'react'
 import { Slot } from '@radix-ui/react-slot'
 import { cn } from '@/lib/utils'
+import { ScrollFadeTrack } from './deskScrollTrack'
 
 export type DeskTone = 'ok' | 'warn' | 'bad' | 'info' | 'idle' | 'accent'
 
@@ -63,18 +64,28 @@ export function DeskHeader({
   eyebrow?: React.ReactNode
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-3 pb-1 sm:flex-row sm:items-end sm:justify-between">
-      <div className="min-w-0">
+    // Actions wrap below the title when they don't fit beside it, and a header Track wraps its own pills
+    // instead of scrolling them out of sight, so no action is ever clipped at phone width.
+    <div className="flex min-w-0 flex-wrap items-end justify-between gap-x-4 gap-y-3 pb-1">
+      <div className="min-w-0 max-w-full flex-[1_1_16rem]">
         {eyebrow && <p className="mb-1 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">{eyebrow}</p>}
         <TitleLine as="h1" tone={tone} status={status} className="text-2xl font-semibold tracking-tight text-foreground">
           {title}
         </TitleLine>
         {meta && <div className="mt-1 text-sm text-muted-foreground">{meta}</div>}
       </div>
-      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+      {actions && (
+        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 [&_[data-slot=track]]:flex-wrap [&_[data-slot=track]]:overflow-visible [&_[data-slot=track]]:rounded-[20px]">
+          {actions}
+        </div>
+      )}
     </div>
   )
 }
+
+const TRACK_CLASS =
+  'inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-full bg-muted p-1 shadow-[inset_0_1px_2px_rgb(0_0_0/0.08)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:bg-black/30 dark:shadow-[inset_0_1px_2px_rgb(0_0_0/0.5)]'
+const TRACK_BLOCK_CLASS = 'flex w-full [&>*]:flex-1'
 
 /** Recessed track that holds raised pills. */
 export function Track({
@@ -85,11 +96,8 @@ export function Track({
 }: React.HTMLAttributes<HTMLDivElement> & { block?: boolean }) {
   return (
     <div
-      className={cn(
-        'inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-full bg-muted p-1 shadow-[inset_0_1px_2px_rgb(0_0_0/0.08)] [scrollbar-width:none] dark:bg-black/30 dark:shadow-[inset_0_1px_2px_rgb(0_0_0/0.5)]',
-        block && 'flex w-full [&>*]:flex-1',
-        className,
-      )}
+      data-slot="track"
+      className={cn(TRACK_CLASS, block && TRACK_BLOCK_CLASS, className)}
       {...props}
     >
       {children}
@@ -155,8 +163,9 @@ export function Segmented<T extends string>({
   block?: boolean
   className?: string
 }) {
+  // Overflowing choices scroll sideways behind an edge fade rather than being cut off.
   return (
-    <Track role="group" aria-label={label} block={block} className={className}>
+    <ScrollFadeTrack role="group" aria-label={label} activeKey={value} className={cn(TRACK_CLASS, block && TRACK_BLOCK_CLASS, className)}>
       {options.map((option) => (
         <Pill
           key={option.value}
@@ -171,7 +180,7 @@ export function Segmented<T extends string>({
           {option.count !== undefined && <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{option.count}</span>}
         </Pill>
       ))}
-    </Track>
+    </ScrollFadeTrack>
   )
 }
 

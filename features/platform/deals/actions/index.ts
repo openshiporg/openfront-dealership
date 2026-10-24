@@ -40,6 +40,7 @@ export type DealSetupVehicle = {
   model: string
   price: number
   purchasePrice: number
+  condition: string | null
   rooftop: { id: string }
 }
 
@@ -100,7 +101,7 @@ export async function getDealWorkspace(id: string) {
       dealershipProfile { ${DEAL_DEFAULTS_FIELDS} }
       dealTradeIn: deal(where: { id: $id }) { rooftop { id } tradeInVehicle { id year make model trim vin offerAmountCents } }
       dealWorkspace(id: $id) {
-        deal { id financeEvidence vehiclePriceCents tradeInValueCents downPaymentCents financingAmountCents monthlyPaymentCents loanTerm apr taxAmountCents totalPriceCents fees rebates products taxLines residualValueCents moneyFactorBasisPoints status structureType worksheetVersion presentedAt acceptedAt saleDate createdAt updatedAt salesperson { id name } lead { id firstName lastName } vehicle { id year make model trim exteriorColor stockNumber vin priceCents } approvals { id decision approvalDate notes approver { name } } }
+        deal { id financeEvidence vehiclePriceCents tradeInValueCents downPaymentCents financingAmountCents monthlyPaymentCents loanTerm apr taxAmountCents totalPriceCents fees rebates products taxLines residualValueCents moneyFactorBasisPoints status structureType worksheetVersion presentedAt acceptedAt saleDate createdAt updatedAt salesperson { id name } lead { id firstName lastName } vehicle { id year make model trim exteriorColor condition stockNumber vin priceCents } approvals { id decision approvalDate notes approver { name } } }
         worksheetVersions { id snapshot occurredAt }
       }
     }
@@ -138,7 +139,7 @@ export async function getDealTimeline(aggregateType: 'Deal' | 'FinanceFundingCas
 export async function getDealSetupOptions() {
   const [vehicles, leads, profile, tradeIns] = await Promise.all([
     keystoneClient<{ vehicles: DealSetupVehicle[] }>(`
-      query DealSetupVehicles { vehicles(where: { status: { equals: "available" } }) { id stockNumber year make model price purchasePrice rooftop { id } } }
+      query DealSetupVehicles { vehicles(where: { status: { equals: "available" } }) { id stockNumber year make model price purchasePrice condition rooftop { id } } }
     `, {}, { cache: 'no-store' }),
     keystoneClient<{ leads: DealSetupLead[] }>(`
       query DealSetupLeads { leads(where: { status: { not: { equals: "closed-lost" } } }) { id firstName lastName email phone rooftop { id } interestedVehicle { id } assignedSalesperson { id } } }
@@ -288,4 +289,51 @@ export async function setDealTradeIn(data: { dealId: string; tradeInId: string |
     revalidatePath('/dashboard/platform/trade-ins')
   }
   return response
+}
+
+/** A walk-in customer added from the new-deal form: an ordinary lead through `openLead`. */
+export async function openWalkInLead(data: { rooftopId: string; firstName: string; lastName: string; email?: string; phone?: string; interestedVehicleId?: string; idempotencyKey: string }) {
+  const response = await operatorCommandRequest<{ openLead: { id: string; assignedToId: string | null; reused: boolean } }>(`
+    mutation OpenWalkInLead($data: OpenLeadInput!) {
+      openLead(data: $data) { id assignedToId reused }
+    }
+  `, { data: { ...data, source: 'walk-in' } })
+  if (response.success) revalidatePath('/dashboard/platform/crm')
+  return response
+}
+
+/**
+ * "Create worksheet": the pencil, then worksheet version 1 so the deal is ready to present.
+ * Both keys derive from the form's one idempotency key, so a retry replays instead of duplicating.
+ */
+export async function createDealWorksheet(data: Parameters<typeof createDealPencil>[0]) {
+  const created = await operatorCommandRequest<{ createDealPencil: { id: string; updatedAt: string } | null }>(`
+    mutation CreateDealPencil($data: CreateDealPencilInput!) {
+      createDealPencil(data: $data) { id updatedAt }
+    }
+  `, { data })
+  if (!created.success || !created.data?.createDealPencil?.id) return { success: false as const, error: created.success ? 'The deal was not created' : created.error }
+  const deal = created.data.createDealPencil
+  // Fees and tax lines are omitted, so version 1 keeps the dealership defaults the pencil was seeded with.
+  const saved = await operatorCommandRequest<{ saveDealWorksheet: DealCommandResult }>(`
+    mutation SaveInitialWorksheet($data: SaveDealWorksheetInput!) {
+      saveDealWorksheet(data: $data) { id status reused updatedAt }
+    }
+  `, { data: {
+    dealId: deal.id,
+    structureType: 'cash',
+    vehiclePriceCents: data.vehiclePriceCents,
+    tradeInValueCents: data.tradeInValueCents,
+    downPaymentCents: data.downPaymentCents,
+    monthlyPaymentCents: 0,
+    loanTerm: null,
+    apr: null,
+    residualValueCents: null,
+    moneyFactorBasisPoints: null,
+    expectedUpdatedAt: deal.updatedAt,
+    reason: 'Initial worksheet',
+    idempotencyKey: `${data.idempotencyKey}:worksheet-1`,
+  } })
+  revalidateDeal(deal.id)
+  return { success: true as const, data: { dealId: deal.id, worksheetError: saved.success ? null : saved.error || 'The worksheet was not saved' } }
 }

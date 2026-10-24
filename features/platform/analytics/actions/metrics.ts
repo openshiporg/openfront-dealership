@@ -11,7 +11,7 @@ export type SalesMetrics = {
   salesByMonth: { month: string; count: number; revenue: number }[]
   salesByRep: { name: string; count: number; revenue: number }[]
   vehiclesSold: { make: string; count: number }[]
-  topVehicles: { year: number; make: string; model: string; count: number }[]
+  topVehicles: { year: number; make: string; model: string; count: number; revenue: number }[]
 }
 
 export type InventoryMetrics = {
@@ -78,6 +78,7 @@ export async function getSalesMetrics(): Promise<{ success: boolean; data?: Sale
         deals(where: $where, take: $take, orderBy: [{ id: asc }]) {
           id
           vehiclePrice
+          totalPrice
           grossCents
           status
           saleDate
@@ -150,18 +151,21 @@ export async function getSalesMetrics(): Promise<{ success: boolean; data?: Sale
       .map(([make, count]) => ({ make, count }))
       .sort((a, b) => b.count - a.count)
 
-    const vehicleCombos: Record<string, { year: number; make: string; model: string; count: number }> = {}
+    // Sold units are valued at the deal's sale price, never the vehicle's current list price.
+    const salePrice = (d: any) => Number(d.vehiclePrice || d.totalPrice || 0)
+    const vehicleCombos: Record<string, { year: number; make: string; model: string; count: number; revenue: number }> = {}
     deals.forEach(d => {
       if (d.vehicle) {
         const key = `${d.vehicle.year}-${d.vehicle.make}-${d.vehicle.model}`
         if (!vehicleCombos[key]) {
-          vehicleCombos[key] = { year: d.vehicle.year, make: d.vehicle.make, model: d.vehicle.model, count: 0 }
+          vehicleCombos[key] = { year: d.vehicle.year, make: d.vehicle.make, model: d.vehicle.model, count: 0, revenue: 0 }
         }
         vehicleCombos[key].count++
+        vehicleCombos[key].revenue += salePrice(d)
       }
     })
     const topVehicles = Object.values(vehicleCombos)
-      .sort((a, b) => b.count - a.count)
+      .sort((a, b) => b.count - a.count || b.revenue - a.revenue)
       .slice(0, 10)
 
     return {

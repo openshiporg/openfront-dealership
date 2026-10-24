@@ -23,6 +23,7 @@ import {
 } from '@/features/platform/components/desk'
 import { getOperationalReport, type OperationalReport, type PeriodMetric } from '../actions'
 import { useHydrated } from '../../lib/useHydrated'
+import { monthLabel } from '../../analytics/lib/monthLabel'
 
 const chartConfig = {
   revenue: { label: 'Delivered revenue', color: 'var(--foreground)' },
@@ -143,7 +144,7 @@ export function OverviewDashboardPageClient({
   }
 
   const metrics = report.metrics
-  const revenueChart = metrics.deliveredByMonth.map(item => ({ ...item, revenue: item.revenueCents / 100 }))
+  const revenueChart = metrics.deliveredByMonth.map(item => ({ ...item, label: monthLabel(item.month), revenue: item.revenueCents / 100 }))
   const compactCurrency = new Intl.NumberFormat('en-US', { style: 'currency', currency: currencyCode, notation: 'compact', maximumFractionDigits: 0 })
   const funnelMax = Math.max(1, ...metrics.salesFunnel.map(stage => stage.count))
   const leaderRevenue = Math.max(1, ...metrics.topSalespeople.map(person => person.revenueCents))
@@ -182,7 +183,7 @@ export function OverviewDashboardPageClient({
             <Readout label="Units delivered" value={pc.deliveredCount.current} sub={comparisonLabel(pc.deliveredCount)} tone={comparisonTone(pc.deliveredCount)} />
             <Readout label="Gross" value={formatCurrencyCents(pc.deliveredGrossCents.current)} sub={`Avg ${formatCurrencyCents(metrics.averageDeliveredGrossCents)}`} tone={comparisonTone(pc.deliveredGrossCents)} />
             <Readout label="New leads" value={pc.newLeads.current} sub={comparisonLabel(pc.newLeads)} tone={comparisonTone(pc.newLeads)} />
-            <Readout label="Lead conversion" value={`${metrics.leadConversionPercent.toFixed(1)}%`} sub={`${metrics.totalLeads} leads`} />
+            <Readout label="Lead conversion" value={`${metrics.leadConversionPercent.toFixed(1)}%`} sub={metrics.convertedLeads != null ? `${metrics.convertedLeads} of ${metrics.totalLeads} leads` : `${metrics.totalLeads} leads`} />
             <Readout label="Service revenue" value={formatCurrencyCents(pc.settledServiceRevenueCents.current)} sub={comparisonLabel(pc.settledServiceRevenueCents)} tone={comparisonTone(pc.settledServiceRevenueCents)} />
           </ReadoutStrip>
         </DeskSection>
@@ -193,7 +194,7 @@ export function OverviewDashboardPageClient({
               <ChartContainer config={chartConfig} className="h-[240px] w-full">
                 <BarChart data={revenueChart} margin={{ left: 0, right: 0, top: 8 }}>
                   <CartesianGrid vertical={false} strokeDasharray="2 4" />
-                  <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
                   <YAxis width={56} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} tickFormatter={value => compactCurrency.format(Number(value))} />
                   <ChartTooltip content={<ChartTooltipContent />} />
                   <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[6, 6, 2, 2]} maxBarSize={40} />

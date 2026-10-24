@@ -25,6 +25,8 @@ export const PaymentTransaction = list({
     amountCents: integer({ validation: { isRequired: true, min: 1 } }),
     currency: text({ validation: { isRequired: true }, defaultValue: 'usd' }),
     providerKey: text({ validation: { isRequired: true } }),
+    // How an operator-recorded payment was taken (cash, check, card, wire, ACH, financing); empty for processor payments.
+    paymentMethod: text({ defaultValue: '' }),
     paymentProvider: relationship({ ref: 'PaymentProvider.transactions' }),
     providerTransactionId: text(),
     providerSessionId: text(),

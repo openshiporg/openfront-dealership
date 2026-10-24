@@ -188,10 +188,10 @@ export function LeadListPageClient({
           <Readout label="Response overdue" value={counts?.overdue ?? '-'} tone={(counts?.overdue ?? 0) > 0 ? 'bad' : 'idle'} />
           <Readout label="New" value={counts?.new ?? '-'} tone={(counts?.new ?? 0) > 0 ? 'info' : 'idle'} />
           <Readout
-            label="Closed won"
-            value={counts?.['closed-won'] ?? '-'}
-            tone={(counts?.['closed-won'] ?? 0) > 0 ? 'ok' : 'idle'}
-            sub={counts && counts.all > 0 ? `${Math.round((counts['closed-won'] / counts.all) * 100)}% of all` : undefined}
+            label="Converted"
+            value={counts?.converted ?? '-'}
+            tone={(counts?.converted ?? 0) > 0 ? 'ok' : 'idle'}
+            sub={counts && counts.all > 0 ? `${Math.round((counts.converted / counts.all) * 100)}% conversion` : undefined}
           />
         </ReadoutStrip>
 

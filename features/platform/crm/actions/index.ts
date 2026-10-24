@@ -169,7 +169,7 @@ const SORTS: Record<string, any> = {
   updated: [{ updatedAt: 'desc' }],
 }
 
-export type LeadListCounts = Record<'open' | 'overdue' | 'all' | (typeof STATUS_KEYS)[number], number>
+export type LeadListCounts = Record<'open' | 'overdue' | 'all' | 'converted' | (typeof STATUS_KEYS)[number], number>
 
 export async function getLeadList(filters: LeadListFilters) {
   const base = leadBaseWhere(filters)
@@ -181,7 +181,7 @@ export async function getLeadList(filters: LeadListFilters) {
       $where: LeadWhereInput!, $orderBy: [LeadOrderByInput!]!, $take: Int!, $skip: Int!,
       $open: LeadWhereInput!, $overdue: LeadWhereInput!, $all: LeadWhereInput!,
       $new: LeadWhereInput!, $contacted: LeadWhereInput!, $testDrive: LeadWhereInput!,
-      $negotiating: LeadWhereInput!, $won: LeadWhereInput!, $lost: LeadWhereInput!
+      $negotiating: LeadWhereInput!, $won: LeadWhereInput!, $lost: LeadWhereInput!, $converted: LeadWhereInput!
     ) {
       leads(where: $where, orderBy: $orderBy, take: $take, skip: $skip) {
         id firstName lastName email phone source status timeframe createdAt updatedAt
@@ -199,6 +199,7 @@ export async function getLeadList(filters: LeadListFilters) {
       negotiating: leadsCount(where: $negotiating)
       won: leadsCount(where: $won)
       lost: leadsCount(where: $lost)
+      converted: leadsCount(where: $converted)
     }
   `, {
     where,
@@ -214,12 +215,15 @@ export async function getLeadList(filters: LeadListFilters) {
     negotiating: count('negotiating'),
     won: count('closed-won'),
     lost: count('closed-lost'),
+    // Converted: closed won, or the buyer on a delivered deal (deliveries before leads auto-closed).
+    converted: { AND: [...base, { OR: [{ status: { equals: 'closed-won' } }, { deals: { some: { status: { equals: 'delivered' } } } }] }] },
   }, { cache: 'no-store' })
   if (!response.success) return { success: false as const, error: response.error }
   const data = response.data
   const counts: LeadListCounts = {
     open: data.open, overdue: data.overdue, all: data.all, new: data.new, contacted: data.contacted,
     'test-drive-scheduled': data.testDrive, negotiating: data.negotiating, 'closed-won': data.won, 'closed-lost': data.lost,
+    converted: data.converted,
   }
   return { success: true as const, data: { leads: data.leads || [], counts, pageSize: LEAD_PAGE_SIZE, page } }
 }
@@ -272,7 +276,7 @@ export type LeadDetail = {
   interactions: { id: string; interactionType: string | null; date: string | null; outcome: string | null; notes: string | null; followUpDate: string | null; performedBy: { name: string | null } | null }[]
   tasks: { id: string; title: string | null; description: string | null; dueDate: string | null; priority: string | null; completed: boolean | null; completedDate: string | null; assignedTo: CrmPerson | null }[]
   testDrives: { id: string; scheduledTime: string | null; completed: boolean | null; noShow: boolean | null; vehicle: { year: number | null; make: string | null; model: string | null } | null }[]
-  deals: { id: string; status: string | null; vehiclePrice: number | null; monthlyPayment: number | null; vehicle: { year: number | null; make: string | null; model: string | null } | null }[]
+  deals: { id: string; status: string | null; structureType: string | null; vehiclePrice: number | null; totalPrice: number | null; monthlyPayment: number | null; vehicle: { year: number | null; make: string | null; model: string | null } | null }[]
   salesVisits: {
     id: string
     kind: string | null
@@ -315,7 +319,7 @@ export async function getLead(id: string) {
         interactions(orderBy: { date: desc }) { id interactionType date outcome notes followUpDate performedBy { name } }
         tasks(orderBy: { dueDate: asc }) { id title description dueDate priority completed completedDate assignedTo { id name } }
         testDrives(orderBy: { scheduledTime: desc }) { id scheduledTime completed noShow vehicle { year make model } }
-        deals(orderBy: { createdAt: desc }) { id status vehiclePrice monthlyPayment vehicle { year make model } }
+        deals(orderBy: { createdAt: desc }) { id status structureType vehiclePrice totalPrice monthlyPayment vehicle { year make model } }
         salesVisits(orderBy: { createdAt: desc }) {
           id kind status scheduledAt arrivedAt managerTurnAt completedAt outcome notes updatedAt
           manager { id name } assignedSalesperson { id name }

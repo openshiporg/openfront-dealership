@@ -23,8 +23,8 @@ export async function getFixedOpsWorkspace() {
     query FixedOpsWorkspace {
       fixedOpsWorkspace(limit: 100) {
         serviceRooftops { id name }
-        appointments { id rooftop { id } appointmentDate serviceType status customerVehicleDescription description estimatedDuration mileageIn advisorNotes lead { id firstName lastName email phone } assignedTech { id name } serviceOrder { id status grandTotalCents } }
-        orders { id rooftop { id name } status concern cause correction payType authorizationEvidence authorizationStatus invoiceNumber laborOperations { id operationCode description status technician { id name } } lineItems { id itemType description partNumber quantity unitPriceCents priceCents } laborTotalCents partsTotalCents taxCents grandTotalCents completedAt updatedAt appointment { id appointmentDate serviceType customerVehicleDescription assignedTech { name } } }
+        appointments { id rooftop { id } appointmentDate serviceType servicePackage { id name } status customerVehicleDescription description estimatedDuration mileageIn advisorNotes lead { id firstName lastName email phone } assignedTech { id name } serviceOrder { id status grandTotalCents } }
+        orders { id rooftop { id name } status concern cause correction payType authorizationEvidence authorizationStatus invoiceNumber laborOperations { id operationCode description status technician { id name } } lineItems { id itemType description partNumber quantity unitPriceCents priceCents } laborTotalCents partsTotalCents taxCents grandTotalCents completedAt updatedAt appointment { id appointmentDate serviceType servicePackage { id name } customerVehicleDescription assignedTech { name } } }
         parts { id partNumber description quantity minimumQuantity priceCents supplier }
       }
     }
@@ -36,7 +36,7 @@ const ORDER_DETAIL_FIELDS = `
   laborTotalCents partsTotalCents taxCents grandTotalCents completedAt lockedAt settledAt
   rooftop { id name }
   appointment {
-    id status appointmentDate serviceType description customerVehicleDescription vehicleVin mileageIn transportationNeed advisorNotes
+    id status appointmentDate serviceType servicePackage { id name } description customerVehicleDescription vehicleVin mileageIn transportationNeed advisorNotes
     assignedTech { id name }
     lead { id firstName lastName email phone }
   }
@@ -63,7 +63,7 @@ export async function getServiceAppointmentDetail(id: string) {
   const response = await keystoneClient<{ serviceAppointment: ServiceAppointmentDetail | null }>(`
     query ServiceAppointmentDetail($id: ID!) {
       serviceAppointment(where: { id: $id }) {
-        id status updatedAt createdAt appointmentDate serviceType description estimatedDuration customerVehicleDescription vehicleVin mileageIn transportationNeed capacitySlot advisorNotes
+        id status updatedAt createdAt appointmentDate serviceType servicePackage { id name } description estimatedDuration customerVehicleDescription vehicleVin mileageIn transportationNeed capacitySlot advisorNotes
         rooftop { id name }
         assignedTech { id name }
         lead { id firstName lastName email phone }

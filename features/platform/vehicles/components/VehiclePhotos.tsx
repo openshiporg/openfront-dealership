@@ -83,13 +83,14 @@ export function VehiclePhotoEditor({
               <li key={tile.id} className="flex min-w-0 items-center overflow-hidden rounded-[14px] border bg-card sm:block">
                 <div className="relative aspect-[4/3] w-24 shrink-0 bg-muted sm:w-auto">
                   {tile.url
-                    ? <Image src={tile.url} alt={tile.name} fill unoptimized sizes="200px" className="object-cover" />
+                    ? <Image src={tile.url} alt={tile.name} fill unoptimized sizes="200px" className="object-contain" />
                     : <span className="absolute inset-0 grid place-items-center text-xs text-muted-foreground">No preview</span>}
                   {index === 0 && (
                     <span className="absolute left-1.5 top-1.5 rounded-full bg-foreground px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em] text-background">Primary</span>
                   )}
                 </div>
-                <div className="flex min-w-0 flex-1 justify-center p-1.5">
+                <div className="flex min-w-0 flex-1 flex-col items-center gap-1 p-1.5">
+                  <p className="w-full truncate px-1 text-center text-xs text-muted-foreground" title={tile.name}>{tile.name}</p>
                   <Track>
                     <Pill size="sm" variant="plain" className={iconPill} aria-label={`Move ${tile.name} earlier`} disabled={busy || index === 0} onClick={() => onMove(tile.id, index - 1)}>
                       <ChevronLeft />
@@ -123,23 +124,24 @@ export function VehiclePhotoEditor({
             if (files.length) onAddFiles(files)
           }}
         />
-        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+        {/* Stacked at every width: inside a dialog the row is too narrow to share with the URL field. */}
+        <div className="flex min-w-0 flex-col gap-2">
           <Track className="self-start">
             <Pill className="max-sm:h-11" disabled={busy} onClick={() => inputRef.current?.click()}>
               <ImagePlus /> {tiles.length ? 'Add more photos' : 'Add photos'}
             </Pill>
           </Track>
-          <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <Input
               aria-label="Image URL"
               placeholder="Image URL"
               value={url}
               disabled={busy}
-              className="max-sm:h-11"
+              className="min-w-0 flex-1 max-sm:h-11"
               onChange={event => setUrl(event.target.value)}
               onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); addUrl() } }}
             />
-            <Track>
+            <Track className="shrink-0 overflow-visible">
               <Pill className="max-sm:h-11" disabled={busy || !url.trim()} onClick={addUrl}>Add URL</Pill>
             </Track>
           </div>
@@ -178,7 +180,20 @@ export function LiveVehiclePhotos({
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const tiles: PhotoTile[] = images.map((image, index) => ({ id: image.id, url: image.url, name: `Photo ${index + 1}` }))
+  // Labels follow the photo, not its position, so reorder buttons keep their names. File names are not
+  // stored on VehicleImage: a photo uploaded here keeps its file name until reload, others are numbered
+  // in the order first seen and never renumbered.
+  const names = useRef(new Map<string, string>())
+  const nextNumber = useRef(1)
+  const nameFor = (id: string) => {
+    let name = names.current.get(id)
+    if (!name) {
+      name = `Photo ${nextNumber.current++}`
+      names.current.set(id, name)
+    }
+    return name
+  }
+  const tiles: PhotoTile[] = images.map(image => ({ id: image.id, url: image.url, name: nameFor(image.id) }))
 
   const run = async (work: () => Promise<string | null>) => {
     setBusy(true)
@@ -202,6 +217,12 @@ export function LiveVehiclePhotos({
       try {
         const response = await uploadVehiclePhoto(stockId, photo, `inventory-photo:${stockId}:${crypto.randomUUID()}`)
         if (!response.success) failures.push(response.error)
+        else {
+          const createdId = (response.data as { addInventoryVehiclePhoto?: { id?: string; reused?: boolean } } | null)?.addInventoryVehiclePhoto
+          if (createdId?.id && !createdId.reused && !names.current.has(createdId.id)) {
+            names.current.set(createdId.id, photo.file?.name || photo.url.split('/').pop()?.split('?')[0] || `Photo ${nextNumber.current++}`)
+          }
+        }
       } catch (caught) {
         failures.push(caught instanceof Error ? caught.message : 'Upload failed.')
       }

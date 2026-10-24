@@ -20,7 +20,7 @@ export async function getFinanceWorkspace() {
   return keystoneClient<{ financeWorkspace: FinanceWorkspace }>(`
     query FinanceWorkspace {
       financeWorkspace(limit: 50) {
-        deals { id worksheetVersion financeEvidence rooftop { id name } vehiclePrice tradeInValue downPayment financingAmount monthlyPayment loanTerm apr taxAmount status totalPrice profit createdAt updatedAt salesperson { id name } lead { id firstName lastName } vehicle { id year make model stockNumber vin purchasePrice } approvals { id decision approvalDate notes approver { name } } }
+        deals { id worksheetVersion structureType financeEvidence rooftop { id name } vehiclePrice tradeInValue downPayment financingAmount monthlyPayment loanTerm apr taxAmount status totalPrice profit createdAt updatedAt salesperson { id name } lead { id firstName lastName email phone } vehicle { id year make model stockNumber vin purchasePrice } approvals { id decision approvalDate notes approver { name } } }
         applications { id reference status applicantName requestedAmountCents submittedAt vehicle { id year make model stockNumber priceCents } lead { id rooftop { id } firstName lastName email phone status createdAt interestedVehicle { id year make model stockNumber priceCents } tasks { id title dueDate completed priority } } submissions { id providerKey providerMode externalRequestSent status externalReference queuedAt } decisions { id providerKey decision approvedAmountCents aprBasisPoints termMonths monthlyPaymentCents reasonCodes decidedAt } }
         products { id rooftop { id } code name category providerKey retailPriceCents costCents }
         productQuotes { id deal { id } product { id code } status }
@@ -202,6 +202,7 @@ export async function manageFinanceFundingCase(data: {
   exceptions: Array<{ code: string; status: string; notes: string }>
   fundingReference?: string
   paymentAmountCents?: number
+  paymentMethod?: string
   idempotencyKey: string
 }) {
   return mutate(`
@@ -224,6 +225,20 @@ export async function recordFinanceProductCancellation(data: {
   return mutate(`
     mutation RecordFinanceProductCancellation($data: RecordFinanceProductCancellationInput!) {
       recordFinanceProductCancellation(data: $data) { id status }
+    }
+  `, { data })
+}
+
+export async function recordCashDealDeposit(data: {
+  dealId: string
+  amountCents: number
+  paymentMethod: string
+  receiptReference: string
+  idempotencyKey: string
+}) {
+  return mutate<{ recordCashDealDeposit: { id: string; remainingCents: number; form8300Required: boolean; reused: boolean } }>(`
+    mutation RecordCashDealDeposit($data: RecordCashDealDepositInput!) {
+      recordCashDealDeposit(data: $data) { id remainingCents form8300Required reused }
     }
   `, { data })
 }

@@ -746,7 +746,7 @@ export function ServiceOrderDetailPageClient({
                   items={[
                     { label: 'Status', value: <TitleLine as="span" tone={STATUS_TONES[appointment.status || ''] || 'idle'} className="justify-end">{APPOINTMENT_STATUS_LABELS[appointment.status || ''] || appointment.status}</TitleLine> },
                     { label: 'Date', value: formatDateTime(appointment.appointmentDate, timeZone) },
-                    { label: 'Service', value: <span className="capitalize">{appointment.serviceType || 'Service'}</span> },
+                    { label: 'Service', value: <span className="capitalize">{appointment.servicePackage?.name || appointment.serviceType || 'Service'}</span> },
                     appointment.description ? { label: 'Request', value: appointment.description } : null,
                     appointment.advisorNotes ? { label: 'Advisor notes', value: appointment.advisorNotes } : null,
                   ]}

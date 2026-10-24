@@ -10,6 +10,7 @@ import { submitStorefrontTestDrive } from '../actions/submissions'
 import { PageHeader } from '../components/PageHeader'
 import { useStorefrontBusiness } from '../components/StorefrontBusinessProvider'
 import { customerRequestReference } from '../lib/customerRequests'
+import { fillBlankFields, useCustomerPrefill } from '../lib/useCustomerPrefill'
 import { fetchListedInventoryOptions, type InventoryOption } from '../lib/data/inventory-facets'
 import { formatPrice } from '../lib/format'
 import { DEFAULT_TEST_DRIVE_SLOTS, closedDayLabel, dayAvailability, localDateString } from '../lib/bookingSlots'
@@ -54,6 +55,12 @@ export function TestDrivePage() {
   const [submittedSummary, setSubmittedSummary] = useState<TestDriveSummary | null>(null)
   const [inventoryOptions, setInventoryOptions] = useState<InventoryOption[] | null>(null)
   const [inventoryError, setInventoryError] = useState(false)
+  const prefill = useCustomerPrefill()
+
+  useEffect(() => {
+    if (!prefill) return
+    setFormData((prev) => fillBlankFields(prev, { customerName: prefill.name, customerEmail: prefill.email, customerPhone: prefill.phone }))
+  }, [prefill])
 
   useEffect(() => {
     let active = true
@@ -117,9 +124,9 @@ export function TestDrivePage() {
       setSubmitStatus('success')
       setIdempotencyKey(crypto.randomUUID())
       setFormData({
-        customerName: '',
-        customerEmail: '',
-        customerPhone: '',
+        customerName: prefill?.name || '',
+        customerEmail: prefill?.email || '',
+        customerPhone: prefill?.phone || '',
         preferredDate: '',
         preferredTime: '',
         vehicleId: '',

@@ -25,6 +25,20 @@ const SERVICES: Record<string, { serviceType: string; label: string; duration: n
   other: { serviceType: 'diagnostic', label: 'Other / Initial Diagnosis', duration: 90 },
 }
 
+// ServiceAppointment.serviceType is a coarse category. A booked menu package sets it from the
+// package itself, so the category never comes from an unrelated storefront type.
+const PACKAGE_CATEGORIES: [RegExp, string][] = [
+  [/\brecall/i, 'recall'],
+  [/\bwarranty/i, 'warranty'],
+  [/\binspection\b/i, 'inspection'],
+  [/\bdiagnos/i, 'diagnostic'],
+  [/\b(repair|brake)/i, 'repair'],
+]
+
+function packageServiceType(name: string) {
+  return PACKAGE_CATEGORIES.find(([pattern]) => pattern.test(name))?.[1] ?? 'maintenance'
+}
+
 export async function submitServiceBooking(_root: unknown, { data }: { data: any }, context: any) {
   const customerName = requiredText(data.customerName, 'Customer name', 200)
   const email = validEmail(data.customerEmail)
@@ -82,6 +96,7 @@ export async function submitServiceBooking(_root: unknown, { data }: { data: any
         : null
       if (servicePackageId && !servicePackage) throw new SubmissionError('The selected service package is unavailable.')
       const rooftop = { connect: { id: rooftopId } }
+      const requestedLabel = servicePackage?.name || service.label
       const { customer } = await resolveCustomerInTransaction(transactionContext, {
         rooftopId,
         firstName,
@@ -94,7 +109,7 @@ export async function submitServiceBooking(_root: unknown, { data }: { data: any
           rooftop,
           ...(requestingAccountId(context) ? { requestedBy: { connect: { id: requestingAccountId(context)! } } } : {}),
           appointmentDate: scheduled.iso,
-          serviceType: service.serviceType,
+          serviceType: servicePackage ? packageServiceType(servicePackage.name) : service.serviceType,
           status: 'scheduled',
           vehicleVin: vin || '',
           transportationNeed: 'drop-off',
@@ -104,7 +119,7 @@ export async function submitServiceBooking(_root: unknown, { data }: { data: any
           estimatedDuration: servicePackage?.estimatedDuration || service.duration,
           ...(servicePackage ? { servicePackage: { connect: { id: servicePackage.id } } } : {}),
           advisorNotes: [
-            `Requested service: ${service.label}`,
+            `Requested service: ${requestedLabel}`,
             ...(servicePackage ? [`Service package: ${servicePackage.name}`] : []),
             `Requested slot: ${scheduled.date} at ${scheduled.time}`,
             vin ? `Customer vehicle VIN: ${vin}` : 'Customer vehicle VIN not provided',
@@ -121,7 +136,7 @@ export async function submitServiceBooking(_root: unknown, { data }: { data: any
               status: 'new',
               timeframe: 'immediately',
               notes: [
-                `Service appointment request for ${service.label}.`,
+                `Service appointment request for ${requestedLabel}.`,
                 `Customer vehicle: ${vehicleDescription}.`,
                 `Requested slot: ${scheduled.date} at ${scheduled.time}.`,
                 `Customer concern: ${concern}`,
@@ -137,7 +152,7 @@ export async function submitServiceBooking(_root: unknown, { data }: { data: any
         appointmentDate: new Date(appointment.appointmentDate),
         serviceType: appointment.serviceType,
         status: appointment.status,
-        requestedServiceLabel: appointment.servicePackage?.name || service.label,
+        requestedServiceLabel: appointment.servicePackage?.name || requestedLabel,
         servicePackageId: appointment.servicePackage?.id || null,
       }
     },

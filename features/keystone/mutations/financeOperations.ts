@@ -8,6 +8,7 @@ import { currentDealAuthority, fundingBinding, lockDeal, readLockedFunding, work
 import { assertReviewedPrerequisites, readCurrentPrerequisites } from '../lifecycle/financePrerequisites'
 import { calculateDealPrice } from '../lifecycle/dealPricing'
 import { dealReceivedCents, formatUsdCents } from '../lifecycle/cashPayment'
+import { dealPaymentMethod } from '../lifecycle/paymentMethods'
 import { operatorCommand } from './operatorCommandErrors'
 import { financingPrerequisiteCapability } from '../../integrations/financing'
 
@@ -206,13 +207,14 @@ async function manageFinanceFundingCaseCommand(_root: unknown, { data }: any, co
   // Cash: funding is "payment received", recorded with the amount actually taken.
   const paymentAmountCents = data.paymentAmountCents == null ? null : Number(data.paymentAmountCents)
   if (paymentAmountCents != null && (!Number.isSafeInteger(paymentAmountCents) || paymentAmountCents < 0 || paymentAmountCents > 2_147_483_647)) throw new Error('Payment amount must be a non-negative amount in cents')
+  const paymentMethod = data.paymentMethod == null || String(data.paymentMethod).trim() === '' ? null : dealPaymentMethod(data.paymentMethod)
   const expectedUpdatedAt = commandDate(data.expectedUpdatedAt)
   const expectedFundingUpdatedAt = data.expectedFundingUpdatedAt == null ? null : commandDate(data.expectedFundingUpdatedAt)
   if (!Number.isInteger(data.worksheetVersion) || data.worksheetVersion < 1) throw new Error('Current worksheet version is required')
   const eventKey = `finance-funding:${key(data.idempotencyKey)}`
   const request = { dealId: visible.id, status, checklist, exceptions, fundingReference,
     worksheetVersion: data.worksheetVersion, expectedUpdatedAt: expectedUpdatedAt.toISOString(), expectedFundingUpdatedAt: expectedFundingUpdatedAt?.toISOString() ?? null,
-    ...(paymentAmountCents != null ? { paymentAmountCents } : {}) }
+    ...(paymentAmountCents != null ? { paymentAmountCents } : {}), ...(paymentMethod ? { paymentMethod } : {}) }
   return context.transaction(async (tx: any) => {
     await lockDeal(tx, visible.id)
     const authority = await currentDealAuthority(tx, context.session, visible.id, ['canManageFinancing'])
@@ -255,7 +257,7 @@ async function manageFinanceFundingCaseCommand(_root: unknown, { data }: any, co
     const evidence = { version: 2, request, dealId: deal.id, binding, status, checklist, exceptions, fundingReference,
       evidenceSource: 'operator-recorded', prerequisites, fundedAt: status === 'funded' ? now.toISOString() : null,
       previousEvidenceHash: existing ? domainEventRequestHash(existing.immutableEvidence) : null,
-      ...(cashPayment ? { payment: cashPayment } : {}) }
+      ...(cashPayment ? { payment: { ...cashPayment, paymentMethod } } : {}) }
     const values = { status, checklist, exceptions, fundingReference, fundedAt: status === 'funded' ? now : null, immutableEvidence: evidence }
     let id: string
     if (existing) {
@@ -268,9 +270,13 @@ async function manageFinanceFundingCaseCommand(_root: unknown, { data }: any, co
     if (cashPayment && cashPayment.amountCents > 0) {
       // A cash sale's money is a PaymentTransaction like any other deal payment, so reporting and
       // reconciliation see it. Operator-recorded: no processor was involved.
-      await tx.prisma.paymentTransaction.create({ data: { rooftopId: deal.rooftopId, dealId: deal.id, sourceType: 'deal', amountCents: cashPayment.amountCents,
-        currency: 'usd', providerKey: 'operator-recorded', providerTransactionId: fundingReference, status: 'captured', capturedCents: cashPayment.amountCents,
-        idempotencyKey: cashPayment.paymentIdempotencyKey } })
+      if (!paymentMethod) throw new Error('Choose how the payment was made')
+      if ((await tx.prisma.paymentTransaction.findFirst({ where: { providerTransactionId: fundingReference }, select: { id: true } }))?.id) throw new Error('That receipt reference is already recorded on another payment')
+      const payment = await tx.prisma.paymentTransaction.create({ data: { rooftopId: deal.rooftopId, dealId: deal.id, sourceType: 'deal', amountCents: cashPayment.amountCents,
+        currency: 'usd', providerKey: 'operator-recorded', paymentMethod, providerTransactionId: fundingReference, status: 'captured', capturedCents: cashPayment.amountCents,
+        idempotencyKey: cashPayment.paymentIdempotencyKey }, select: { id: true } })
+      // Keystone's Prisma extension resolves failed queries to an error object instead of throwing.
+      if (!payment?.id || payment instanceof Error) throw new Error('Nothing was saved: the payment could not be recorded')
     }
     await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: 'FinanceFundingCase', aggregateId: deal.id, action: `status:${status}`, topic: 'finance-funding.updated', actorId: context.session.itemId, beforeSnapshot: undefined, afterSnapshot: evidence, payload: { rooftopId: deal.rooftopId, dealId: deal.id, status } })
     return authority.context.db.FinanceFundingCase.findOne({ where: { id } })

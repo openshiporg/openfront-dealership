@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import { permissions } from '../access'
 import { inventoryCommand } from './inventoryCommandErrors'
+import { assertActiveInventory } from './inventoryActiveStatus'
 import { commandDate } from '../lifecycle/commandDate'
 import { assertMerchandisingContent, assertPublishableInventory, loadInventoryPublication, lockInventoryStock, merchandisingSnapshot } from '../lifecycle/inventoryPublication'
 import { resolveInventoryChannel } from '../../integrations/inventory-channel'
@@ -48,7 +49,7 @@ async function commandResult(context: any, stockId: string, id: string, reused: 
 async function updateInventoryMerchandisingDraftCommand(_root: unknown, { data }: any, context: any) {
   requireInventory(context)
   const stock = await stockAccess(context, String(data.stockId || ''))
-  if (!['available', 'service'].includes(stock.vehicle.status)) throw new Error('Only active inventory can be edited')
+  assertActiveInventory(stock.vehicle.status)
   const priceCents = nonNegativeInteger(data.priceCents, 'Retail price')
   const listPriceCents = data.listPriceCents == null ? priceCents : nonNegativeInteger(data.listPriceCents, 'List price')
   const mileage = data.mileage == null ? null : nonNegativeInteger(data.mileage, 'Mileage')
@@ -77,7 +78,7 @@ async function updateInventoryMerchandisingDraftCommand(_root: unknown, { data }
     const recorded = await recordDomainEventInTransaction(tx, event)
     if (recorded.reused) return true
     const current = await loadInventoryPublication(tx, stock.id)
-    if (!['available', 'service'].includes(current.vehicle.status)) throw new Error('Only active inventory can be edited')
+    assertActiveInventory(current.vehicle.status)
     const changed = await tx.prisma.inventoryStock.updateMany({
       where: { id: stock.id, rooftopId: stock.rooftop.id, updatedAt: expectedUpdatedAt },
       data: { merchandisingStatus: 'draft', approvedRevisionHash: '', feedStatus: 'not-published' },
@@ -106,6 +107,8 @@ async function submitInventoryMerchandisingCommand(_root: unknown, { data }: any
   const idempotencyKey = key(data.idempotencyKey)
   const eventKey = `inventory-merchandising-submit:${idempotencyKey}`
   const reason = required(data.reason, 'Audit reason')
+  // A replay of an accepted submission still answers; a new one is refused before any work on inactive stock.
+  if (!(await context.sudo().prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { id: true } }))) assertActiveInventory(stock.vehicle.status)
   const command = await context.transaction(async (tx: any) => {
     await lockInventoryStock(tx, stock.id)
     await tx.prisma.$queryRaw`SELECT 1 AS "locked" FROM pg_advisory_xact_lock(hashtextextended(${`command:${eventKey}`}, 0))`
@@ -118,6 +121,7 @@ async function submitInventoryMerchandisingCommand(_root: unknown, { data }: any
       return { id: versionId, reused: true }
     }
     const current = await loadInventoryPublication(tx, stock.id)
+    assertActiveInventory(current.vehicle.status)
     if (current.merchandisingStatus === 'submitted') throw new Error('Merchandising review is already pending')
     if (commandDate(current.updatedAt).getTime() !== commandDate(data.expectedUpdatedAt ?? stock.updatedAt).getTime()) throw new Error('Inventory changed concurrently; reload before submitting')
     const snapshot = assertMerchandisingContent(current)
@@ -136,7 +140,7 @@ async function submitInventoryMerchandisingCommand(_root: unknown, { data }: any
 
 async function decideInventoryMerchandisingCommand(_root: unknown, { data }: any, context: any) {
   requireInventory(context)
-  const version = await context.query.InventoryMerchandisingVersion.findOne({ where: { id: String(data.id || '') }, query: 'id version status updatedAt stock { id rooftop { id } }' })
+  const version = await context.query.InventoryMerchandisingVersion.findOne({ where: { id: String(data.id || '') }, query: 'id version status updatedAt stock { id rooftop { id } vehicle { status } }' })
   if (!version?.stock?.rooftop?.id) throw new Error('Merchandising version not found or not accessible')
   await assertSessionRooftopPermission(context, version.stock.rooftop.id, 'canManageInventory')
   const decision = String(data.decision || '')
@@ -149,12 +153,15 @@ async function decideInventoryMerchandisingCommand(_root: unknown, { data }: any
   const reapproval = decision === 'approved' && version.status === 'approved'
   const priorEvent = await context.sudo().prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { id: true } })
   if (!priorEvent && !reapproval) assertMerchandisingTransition(version.status, decision)
+  // Rejecting a stale review on a sold unit is clean-up; approving one would put it back on sale.
+  if (!priorEvent && decision === 'approved') assertActiveInventory(version.stock.vehicle?.status)
   const reused = await context.transaction(async (tx: any) => {
     await lockInventoryStock(tx, version.stock.id)
     const event: DomainEventInput = { eventKey, rooftopId: version.stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: version.stock.id, action: reapproval ? 'merchandising-reapproved' : `merchandising-${decision}`, topic: 'inventory-merchandising.decided', actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: version.stock.rooftop.id, ...evidence } }
     const recorded = await recordDomainEventInTransaction(tx, event)
     if (recorded.reused) return true
     const current = await loadInventoryPublication(tx, version.stock.id)
+    if (decision === 'approved') assertActiveInventory(current.vehicle.status)
     const latest = current.merchandisingVersions[0]
     if (reapproval) {
       if (current.merchandisingStatus !== 'approved' || current.approvedRevisionHash !== '' || latest?.id !== version.id || latest.status !== 'approved') throw new Error('This listing is not awaiting re-approval; reload the current revision')

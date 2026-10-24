@@ -5,6 +5,7 @@ import { appendInventoryPriceHistory } from '../lifecycle/inventoryPriceHistory'
 import { loadInventoryPublication, lockInventoryStock } from '../lifecycle/inventoryPublication'
 import { assertSessionRooftopPermission } from '../tenantRecords'
 import { inventoryCommand } from './inventoryCommandErrors'
+import { assertActiveInventory } from './inventoryActiveStatus'
 
 const CONDITIONS = new Set(['new', 'used', 'certified'])
 const MAX_CENTS = 2_147_483_647
@@ -115,7 +116,7 @@ async function updateInventoryVehicleDetailsCommand(_root: unknown, { data }: an
     const after: Record<string, unknown> = { ...next, description: next.description ?? before.description }
     const changes = Object.fromEntries(TRACKED_FIELDS.filter(field => !sameValue(before[field], after[field])).map(field => [field, { from: before[field] ?? null, to: after[field] ?? null }]))
     const evidence = { stockId: stock.id, vehicleId: vehicle.id, changes, expectedUpdatedAt: expectedUpdatedAt.toISOString(), reason }
-    if (!['available', 'service'].includes(String(vehicle.status))) throw new Error('Only active inventory can be edited')
+    assertActiveInventory(vehicle.status)
     if (Object.keys(changes).length === 0) throw new Error('No changes to save')
     if (next.vin !== vehicle.vin) {
       const duplicate = await tx.prisma.vehicle.findFirst({ where: { vin: next.vin, id: { not: vehicle.id } }, select: { id: true } })

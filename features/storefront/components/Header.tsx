@@ -101,10 +101,11 @@ export function Header() {
         className="border-b backdrop-blur-md"
         style={{ background: 'oklch(0.987 0.002 255 / 0.9)', borderColor: 'var(--sf-rule)' }}
       >
-        <Container className="flex h-16 items-center gap-4 md:h-[4.5rem]">
-          <Link href="/" className="flex min-w-0 flex-1 items-center gap-2.5 xl:flex-initial" aria-label={`${business.shortName} home`} title={business.shortName}>
+        <Container className="flex h-16 items-center gap-2 sm:gap-4 md:h-[4.5rem]">
+          {/* Phones: the name may wrap to two lines rather than truncate; it keeps a floor width so it never collapses to the logo. */}
+          <Link href="/" className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5 xl:flex-initial" aria-label={`${business.shortName} home`} title={business.shortName}>
             <StoreLogo svg={business.logoIcon} color={business.logoColor} className="size-7 shrink-0" />
-            <span className="sf-heading min-w-[6rem] truncate whitespace-nowrap text-[1rem] md:text-[1.1875rem]">{business.shortName}</span>
+            <span className="sf-heading line-clamp-2 min-w-[6rem] break-words text-[0.9375rem] leading-tight sm:line-clamp-1 sm:text-[1rem] md:text-[1.1875rem]">{business.shortName}</span>
           </Link>
 
           <nav className="ml-4 hidden shrink-0 items-center gap-1 xl:flex" aria-label="Primary">
@@ -127,7 +128,7 @@ export function Header() {
             })}
           </nav>
 
-          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1.5">
             <form onSubmit={onSearch} className="relative hidden md:block" role="search">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" style={{ color: 'var(--sf-ink-3)' }} aria-hidden="true" />
               <input
@@ -140,9 +141,10 @@ export function Header() {
               />
             </form>
 
+            {/* On phones Compare lives in the menu (and the compare bar) until something is selected. */}
             <Link
               href="/compare"
-              className="relative grid size-11 place-items-center rounded-full transition-colors hover:bg-[var(--sf-paper-2)]"
+              className={`relative size-11 place-items-center rounded-full transition-colors hover:bg-[var(--sf-paper-2)] ${savedCount > 0 ? 'grid' : 'hidden sm:grid'}`}
               aria-label={`Compare vehicles${savedCount ? `, ${savedCount} selected` : ''}`}
             >
               <SquareStack className="size-5" aria-hidden="true" />

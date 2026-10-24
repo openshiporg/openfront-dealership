@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import { permissions } from '../access'
 import { commandDate } from '../lifecycle/commandDate'
+import { assertActiveInventory } from './inventoryActiveStatus'
 import { inventoryCommand } from './inventoryCommandErrors'
 import { recordDomainEventInTransaction, type DomainEventInput } from '../lifecycle/domainEvents'
 import { assertReconTransition, inventoryStockKey, nonNegativeCents, normalizeStockNumber } from '../lifecycle/inventoryOperationsLifecycle'
@@ -28,7 +29,7 @@ function requireInventory(context: any) {
 async function accessibleStock(context: any, id: string) {
   const stock = await context.query.InventoryStock.findOne({
     where: { id },
-    query: 'id stockNumber locationCode locationLabel reconStatus merchandisingStatus feedStatus stockedAt updatedAt rooftop { id } vehicle { id vin stockNumber } acquisition { id }',
+    query: 'id stockNumber locationCode locationLabel reconStatus merchandisingStatus feedStatus stockedAt updatedAt rooftop { id } vehicle { id vin stockNumber status } acquisition { id }',
   })
   if (!stock?.rooftop?.id) throw new Error('Inventory stock not found or not accessible')
   await assertSessionRooftopPermission(context, stock.rooftop.id, 'canManageInventory')
@@ -229,6 +230,7 @@ async function recordInventoryCostCommand(_root: unknown, { data }: any, context
 async function openInventoryReconWorkItemCommand(_root: unknown, { data }: any, context: any) {
   requireInventory(context)
   const stock = await accessibleStock(context, String(data.stockId || ''))
+  assertActiveInventory(stock.vehicle?.status)
   const title = text(data.title, 'Work item title', 200)
   const category = String(data.category || '')
   if (!['mechanical', 'body', 'detail', 'tires', 'inspection', 'other'].includes(category)) throw new Error('Unsupported reconditioning category')
@@ -263,8 +265,9 @@ async function openInventoryReconWorkItemCommand(_root: unknown, { data }: any, 
 
 async function transitionInventoryReconWorkItemCommand(_root: unknown, { data }: any, context: any) {
   requireInventory(context)
-  const item = await context.query.InventoryReconWorkItem.findOne({ where: { id: String(data.id || '') }, query: 'id status updatedAt stock { id rooftop { id } }' })
+  const item = await context.query.InventoryReconWorkItem.findOne({ where: { id: String(data.id || '') }, query: 'id status updatedAt stock { id rooftop { id } vehicle { status } }' })
   if (!item?.stock?.rooftop?.id) throw new Error('Reconditioning work item not found or not accessible')
+  if (String(data.toStatus || '') !== 'cancelled') assertActiveInventory(item.stock.vehicle?.status)
   await assertSessionRooftopPermission(context, item.stock.rooftop.id, 'canManageInventory')
   const toStatus = String(data.toStatus || '')
   const actualCostCents = data.actualCostCents == null ? null : nonNegativeCents(data.actualCostCents, 'Actual cost')

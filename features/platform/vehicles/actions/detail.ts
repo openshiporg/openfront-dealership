@@ -43,7 +43,9 @@ export type VehicleDetailStock = {
   reconStatus: string
   merchandisingStatus: string
   feedStatus: string
-  daysInStock: number
+  /** Frozen at the sale date once sold; null when a sold unit has no recorded sale date. */
+  daysInStock: number | null
+  soldAt: string | null
   cost: { purchaseCostCents: number; reconCostCents: number; otherCostCents: number; totalCostCents: number } | null
   publicListing: InventoryPublicListing
 }
@@ -120,7 +122,7 @@ export type VehicleAcquisition = {
   events: AcquisitionEvent[]
 }
 export type PriceHistoryEntry = { id: string; effectiveDate: string; previousPriceCents: number | null; newPriceCents: number; changeReason: string; notes: string; changedBy: Person }
-export type VehicleDeal = { id: string; status: string; createdAt: string; vehiclePriceCents: number | null; lead: { firstName: string | null; lastName: string | null } | null; salesperson: Person }
+export type VehicleDeal = { id: string; status: string; createdAt: string; saleDate: string | null; vehiclePriceCents: number | null; lead: { firstName: string | null; lastName: string | null } | null; salesperson: Person }
 export type StaffOption = { id: string; name: string }
 
 /** Each section loads on its own: a role that cannot read one (dealer cost, deals) still sees the rest. */
@@ -222,16 +224,22 @@ export async function getInventoryVehicleDetail(id: string): Promise<VehicleDeta
     `, { id }, { cache: 'no-store' }),
     keystoneClient<{ deals: any[] }>(`
       query VehicleDeals($id: ID!) {
-        deals(where: { vehicle: { id: { equals: $id } } }, orderBy: { createdAt: desc }, take: 10) { id status createdAt vehiclePriceCents lead { firstName lastName } salesperson { id name } }
+        deals(where: { vehicle: { id: { equals: $id } } }, orderBy: { createdAt: desc }, take: 10) { id status createdAt saleDate vehiclePriceCents lead { firstName lastName } salesperson { id name } }
       }
     `, { id }, { cache: 'no-store' }),
   ])
 
   const row = workspace.success ? (workspace.data?.inventoryWorkspace?.items || []).find((item: any) => item.id === stockId) : null
+  const sold = raw.status === 'sold'
+  const soldAt: string | null = sold && deals.success
+    ? ((deals.data?.deals || []) as VehicleDeal[]).find(deal => deal.status !== 'cancelled' && deal.saleDate)?.saleDate ?? null
+    : null
+  const runningDays = row?.daysInStock ?? (raw.inventoryStock ? Math.max(0, Math.floor((Date.now() - new Date(raw.inventoryStock.stockedAt).getTime()) / 86_400_000)) : 0)
   const stock: VehicleDetailStock | null = raw.inventoryStock ? {
     ...raw.inventoryStock,
     locationLabel: raw.inventoryStock.locationLabel || null,
-    daysInStock: row?.daysInStock ?? Math.max(0, Math.floor((Date.now() - new Date(raw.inventoryStock.stockedAt).getTime()) / 86_400_000)),
+    daysInStock: !sold ? runningDays : soldAt ? Math.max(0, Math.floor((new Date(soldAt).getTime() - new Date(raw.inventoryStock.stockedAt).getTime()) / 86_400_000)) : null,
+    soldAt,
     cost: row?.cost ?? null,
     publicListing: {
       live: Boolean(row?.publicListing?.live),

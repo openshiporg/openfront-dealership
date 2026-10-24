@@ -1,5 +1,5 @@
 import { storefrontRooftopSlug } from '../../tenantRecords'
-import { assertPublishableInventory } from '../../lifecycle/inventoryPublication'
+import { assertCurrentInventoryApproval, assertPublishableInventory } from '../../lifecycle/inventoryPublication'
 
 const MAX_CANDIDATES = 5_000
 const PUBLIC_INVENTORY_UNAVAILABLE = 'Public inventory is currently unavailable.'
@@ -197,3 +197,81 @@ export async function publicInventoryCount(_root: unknown, { where }: Pick<Publi
   return result.totalCount
 }
 
+
+const CLOSED_LISTING_STATUSES = new Set(['pending', 'sold'])
+
+/**
+ * Read-only record of a unit that WAS publicly listed and has since gone pending or sold, so shared
+ * links and cached search results land on a "Sale pending" / "Sold" page instead of a 404.
+ *
+ * The listing evidence is the same server-side gate the live storefront uses (current merchandising
+ * approval whose revision hash matches the unit's content, completed recon, frontline), with only the
+ * lot status relaxed to pending/sold. A unit that never passed that gate, or whose content changed
+ * after approval, resolves to null. Price is withheld, and the VIN is withheld once sold.
+ */
+export async function publicInventoryVehicleRecord(_root: unknown, { id }: { id: string }, context: any) {
+  const vehicleId = String(id || '').trim()
+  if (!vehicleId) return null
+  const slug = await storefrontRooftopSlug(context)
+  if (!slug) throw new Error(PUBLIC_INVENTORY_UNAVAILABLE)
+
+  const sudo = context.sudo()
+  const rooftops = await sudo.prisma.rooftop.findMany({
+    where: { publicSlug: slug, status: 'active', dealerGroup: { is: { status: 'active' } } },
+    select: { id: true, dealerGroupId: true },
+    take: 2,
+  })
+  if (rooftops.length !== 1 || !rooftops[0].dealerGroupId) throw new Error(PUBLIC_INVENTORY_UNAVAILABLE)
+
+  const stocks = await sudo.prisma.inventoryStock.findMany({
+    where: {
+      rooftopId: rooftops[0].id,
+      vehicleId,
+      reconStatus: 'completed',
+      merchandisingStatus: 'approved',
+      approvedRevisionHash: { not: '' },
+      frontlineAt: { not: null },
+      vehicle: { is: { status: { in: [...CLOSED_LISTING_STATUSES] } } },
+    },
+    include: {
+      vehicle: { include: { images: true } },
+      merchandisingVersions: { orderBy: { version: 'desc' }, take: 1 },
+    },
+    take: 2,
+  })
+  if (stocks.length !== 1) return null
+  const stock = stocks[0]
+  const vehicle = stock.vehicle
+  if (!vehicle || !CLOSED_LISTING_STATUSES.has(String(vehicle.status))) return null
+  try {
+    assertCurrentInventoryApproval(stock)
+  } catch {
+    return null
+  }
+
+  const imageUrlById = await loadPublicInventoryImageUrls(sudo, (vehicle.images || []).map((image: any) => image.id))
+  const sold = vehicle.status === 'sold'
+  return {
+    id: vehicle.id,
+    vin: sold ? null : vehicle.vin,
+    stockNumber: vehicle.stockNumber,
+    year: vehicle.year,
+    make: vehicle.make,
+    model: vehicle.model,
+    trim: vehicle.trim,
+    exteriorColor: vehicle.exteriorColor,
+    mileage: vehicle.mileage,
+    price: null,
+    status: vehicle.status,
+    condition: vehicle.condition,
+    features: vehicle.features,
+    description: vehicle.description,
+    images: (vehicle.images || []).map((image: any) => ({
+      id: image.id,
+      imagePath: image.imagePath,
+      image: image.image_id ? { url: imageUrlById.get(image.id) || null } : null,
+      isPrimary: image.isPrimary,
+      sortOrder: image.sortOrder,
+    })).sort((a: any, b: any) => Number(b.isPrimary) - Number(a.isPrimary) || a.sortOrder - b.sortOrder || a.id.localeCompare(b.id)),
+  }
+}

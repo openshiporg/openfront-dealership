@@ -22,6 +22,7 @@ import {
   type DeskTone,
 } from '@/features/platform/components/desk'
 import { getAnalyticsData, type AnalyticsData } from '../actions'
+import { monthLabel } from '../lib/monthLabel'
 
 const ACCENT = '#0ea5e9'
 
@@ -160,7 +161,7 @@ export function AnalyticsDashboardPageClient({ initialData, timeZone }: { initia
   }
 
   const allMonths = salesMetrics?.salesByMonth || []
-  const months = period === 'all' ? allMonths : allMonths.slice(-Number(period))
+  const months = (period === 'all' ? allMonths : allMonths.slice(-Number(period))).map(month => ({ ...month, label: monthLabel(month.month) }))
   const latestMonth = months[months.length - 1]?.month
   const periodUnits = months.reduce((sum, month) => sum + month.count, 0)
   const periodRevenue = months.reduce((sum, month) => sum + month.revenue, 0)
@@ -213,7 +214,7 @@ export function AnalyticsDashboardPageClient({ initialData, timeZone }: { initia
                     <ChartContainer config={chartConfig} className="h-[220px] w-full">
                       <BarChart data={months} margin={{ left: 0, right: 0, top: 8 }}>
                         <CartesianGrid vertical={false} strokeDasharray="2 4" />
-                        <XAxis dataKey="month" {...axis} />
+                        <XAxis dataKey="label" {...axis} />
                         <YAxis width={32} allowDecimals={false} {...axis} />
                         <ChartTooltip content={<ChartTooltipContent />} />
                         <Bar dataKey="count" radius={[6, 6, 2, 2]} maxBarSize={36}>
@@ -227,7 +228,7 @@ export function AnalyticsDashboardPageClient({ initialData, timeZone }: { initia
                     <ChartContainer config={chartConfig} className="h-[220px] w-full">
                       <BarChart data={months} margin={{ left: 0, right: 0, top: 8 }}>
                         <CartesianGrid vertical={false} strokeDasharray="2 4" />
-                        <XAxis dataKey="month" {...axis} />
+                        <XAxis dataKey="label" {...axis} />
                         <YAxis width={56} {...axis} tickFormatter={(v) => compactCurrency.format(Number(v))} />
                         <ChartTooltip content={<ChartTooltipContent />} />
                         <Bar dataKey="revenue" radius={[6, 6, 2, 2]} maxBarSize={36}>
@@ -272,7 +273,7 @@ export function AnalyticsDashboardPageClient({ initialData, timeZone }: { initia
                   <div key={idx} className="flex min-w-0 items-center gap-3 px-4 py-2.5 text-sm">
                     <span className="w-5 shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{String(idx + 1).padStart(2, '0')}</span>
                     <span className="min-w-0 flex-1 truncate">{vehicle.year} {vehicle.make} {vehicle.model}</span>
-                    <span className="shrink-0 font-mono text-xs tabular-nums">{vehicle.count} sold</span>
+                    <span className="shrink-0 text-right font-mono text-xs tabular-nums">{vehicle.count} sold · {formatCurrency(vehicle.revenue)}</span>
                   </div>
                 ))}
               </Panel>

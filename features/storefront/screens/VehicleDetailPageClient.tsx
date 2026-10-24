@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Check, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import { fetchGraphQL } from '@/features/storefront/lib/data/graphql-client'
-import { GET_VEHICLE_BY_ID } from '@/features/storefront/lib/data/queries'
 import { Vehicle } from '@/features/storefront/lib/types'
 import { getComparisonCount } from '@/features/storefront/lib/comparison'
 import { submitStorefrontInquiry, submitStorefrontTestDrive } from '../actions/submissions'
@@ -15,7 +14,7 @@ import { VehicleNotFound } from '../components/vdp/VehicleNotFound'
 import { useStorefrontBusiness } from '../components/StorefrontBusinessProvider'
 import { formatMileage, formatPrice, vehicleTitle } from '../lib/format'
 import { customerRequestReference } from '../lib/customerRequests'
-import { classifyVehicleDetailResponse, parseVehicleFeatures } from '../lib/data/vehicle-detail-response'
+import { parseVehicleFeatures, resolveVehicleDetail } from '../lib/data/vehicle-detail-response'
 import { vehicleConditionLabel, vehicleStatus } from '../lib/vehicleStatus'
 
 export type VehicleDetailPageState =
@@ -23,6 +22,7 @@ export type VehicleDetailPageState =
   | { id: string; status: 'error' }
   | { id: string; status: 'not-found' }
   | { id: string; status: 'available'; vehicle: Vehicle }
+  | { id: string; status: 'unlisted'; vehicle: Vehicle }
 
 const emptyFeedback: LeadSubmissionFeedback = { status: 'idle' }
 
@@ -68,23 +68,18 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
     if (retryToken === 0) return
     let isCurrentRequest = true
     setLoadState({ id, status: 'loading' })
-    void fetchGraphQL<unknown>(GET_VEHICLE_BY_ID, { id })
-      .then((response) => {
-        if (!isCurrentRequest) return
-        const result = classifyVehicleDetailResponse<Vehicle>(response, id)
-        if (result.status === 'available') setLoadState({ id, status: 'available', vehicle: result.vehicle })
-        else if (result.status === 'not-found') setLoadState({ id, status: 'not-found' })
-        else setLoadState({ id, status: 'error' })
-      })
-      .catch(() => {
-        if (isCurrentRequest) setLoadState({ id, status: 'error' })
+    void resolveVehicleDetail(id, (query, variables) => fetchGraphQL<unknown>(query, variables))
+      .then((result) => {
+        if (isCurrentRequest) setLoadState(result)
       })
     return () => {
       isCurrentRequest = false
     }
   }, [id, retryToken])
 
-  const vehicle = loadState.id === id && loadState.status === 'available' ? loadState.vehicle : null
+  const vehicle = loadState.id === id && (loadState.status === 'available' || loadState.status === 'unlisted') ? loadState.vehicle : null
+  // Pending or sold: the page stays up for shared links, read-only, with no request actions.
+  const readOnly = loadState.id === id && loadState.status === 'unlisted'
   const loading = loadState.id !== id || loadState.status === 'loading'
 
   const retryVehicleLoad = () => {
@@ -211,7 +206,11 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
   const status = vehicleStatus(vehicle.status)
   const conditionLabel = vehicleConditionLabel(vehicle.condition)
   const hasPublicPrice = typeof vehicle.price === 'number' && Number.isFinite(vehicle.price) && vehicle.price >= 0
-  const displayPrice = hasPublicPrice ? formatPrice(vehicle.price, business.currencyCode) : 'Price unavailable'
+  const displayPrice = readOnly ? status.label : hasPublicPrice ? formatPrice(vehicle.price, business.currencyCode) : 'Price unavailable'
+  const similarParams = new URLSearchParams()
+  if (vehicle.make) similarParams.set('make', vehicle.make)
+  if (vehicle.model) similarParams.set('model', vehicle.model)
+  const similarHref = `/inventory${similarParams.size ? `?${similarParams.toString()}` : ''}`
   const financingHref = `/financing?vehicleId=${encodeURIComponent(vehicle.id)}${hasPublicPrice ? `&price=${encodeURIComponent(String(vehicle.price))}` : ''}`
   const tradeInHref = `/trade-in?vehicleId=${vehicle.id}`
 
@@ -241,18 +240,19 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
           </div>
 
           <aside className="min-w-0 lg:sticky lg:top-28 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start">
-            <h1 className="sf-title-line">
+            <h1 className="sf-title-line flex-wrap">
               <span className="sf-dot" data-tone={status.tone} aria-hidden="true" />
               <span className="sf-display text-[length:var(--sf-text-2xl)]">{name}</span>
+              {readOnly && <span className="sf-chip shrink-0">{status.label}</span>}
             </h1>
             <p className="sf-muted mt-1 pl-4 text-[length:var(--sf-text-md)]">
-              <span className="sr-only">{status.label}. </span>
+              {!readOnly && <span className="sr-only">{status.label}. </span>}
               {vehicle.trim}
             </p>
 
             <div className="sf-sticker mt-6">
               <div className="sf-sticker-head">
-                <span>Price</span>
+                <span>{readOnly ? 'Status' : 'Price'}</span>
                 <span>{status.label}</span>
               </div>
               <div className="px-4 pb-4 pt-5" style={{ borderBottom: '1.5px solid var(--sf-ink)' }}>
@@ -265,7 +265,7 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
                 </div>
                 <div className="sf-sticker-row">
                   <dt>VIN</dt>
-                  <dd className="text-[length:var(--sf-text-xs)]">{vehicle.vin}</dd>
+                  <dd className="text-[length:var(--sf-text-xs)]">{vehicle.vin || 'Not listed'}</dd>
                 </div>
                 <div className="sf-sticker-row">
                   <dt>Mileage</dt>
@@ -282,6 +282,14 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
               </dl>
             </div>
 
+            {readOnly ? (
+              <div className="mt-5 sf-track sf-track-block">
+                <Link href={similarHref} className="sf-pill sf-pill-primary min-h-11 flex-auto gap-2 px-3">
+                  <Search className="size-4" aria-hidden="true" />
+                  See similar vehicles
+                </Link>
+              </div>
+            ) : (
             <div className="mt-5 space-y-2">
               <div className="sf-track sf-track-block">
                 <button
@@ -324,6 +332,7 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
                 <Link href={tradeInHref} className="sf-pill flex-auto px-3">Trade-in</Link>
               </div>
             </div>
+            )}
           </aside>
 
           <div className="min-w-0 lg:col-start-1 lg:row-start-2">
@@ -365,9 +374,10 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
           </div>
         </div>
 
-        <div className={compareCount > 0 ? 'h-40 lg:hidden' : 'h-20 lg:hidden'} aria-hidden="true" />
+        {!readOnly && <div className={compareCount > 0 ? 'h-40 lg:hidden' : 'h-20 lg:hidden'} aria-hidden="true" />}
       </Container>
 
+      {!readOnly && (
       <div
         className={`fixed inset-x-3 z-40 lg:hidden ${compareCount > 0 ? 'bottom-[7.25rem] md:bottom-[5.25rem]' : 'bottom-12'}`}
         role="region"
@@ -399,8 +409,9 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
           </div>
         </div>
       </div>
+      )}
 
-      {intent && (
+      {intent && !readOnly && (
         <LeadCaptureModal
           vehicle={vehicle}
           intent={intent}

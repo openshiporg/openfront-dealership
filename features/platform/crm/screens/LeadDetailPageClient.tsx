@@ -794,8 +794,17 @@ export function LeadDetailPageClient({
                         <p className="pl-4 text-xs capitalize text-muted-foreground">{deal.status}</p>
                       </div>
                       <div className="shrink-0 text-right tabular-nums">
-                        <p className="text-sm font-medium">{formatCurrency(deal.vehiclePrice)}</p>
-                        <p className="text-xs text-muted-foreground">{formatCurrency(deal.monthlyPayment)}/mo</p>
+                        {deal.structureType === 'cash' ? (
+                          <>
+                            <p className="text-sm font-medium">{formatCurrency(deal.totalPrice ?? deal.vehiclePrice)}</p>
+                            <p className="text-xs text-muted-foreground">Cash</p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-sm font-medium">{formatCurrency(deal.vehiclePrice)}</p>
+                            <p className="text-xs text-muted-foreground">{deal.monthlyPayment ? `${formatCurrency(deal.monthlyPayment)}/mo` : 'Finance'}</p>
+                          </>
+                        )}
                       </div>
                     </Link>
                   ))}

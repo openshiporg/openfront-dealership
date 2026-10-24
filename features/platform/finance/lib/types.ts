@@ -59,6 +59,7 @@ export type FundingCase = { id: string; deal: { id: string } | null; status: str
 export type Deal = {
   id: string
   worksheetVersion: number
+  structureType?: string | null
   financeEvidence: DeskFinanceEvidence | null
   rooftop: { id: string; name: string } | null
   vehiclePrice: number | null

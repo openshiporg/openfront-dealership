@@ -70,9 +70,10 @@ import { manageDeliveryCase, manageWeOweItem } from './deliveryOperations';
 import { createWalkInTradeIn, setDealTradeIn } from './tradeInDealCommands';
 import { keystoneItemResult } from './keystoneItemResult';
 import { configureFinanceProduct, decideFinanceMenu, manageFinanceContractPackage, manageFinanceFundingCase, presentFinanceMenu, recordFinanceComplianceCheck, recordFinanceProductCancellation, recordFinanceProductQuote } from './financeOperations';
+import { recordCashDealDeposit } from './cashDealDeposits';
 import { recordLenderSubmissionStatus } from './lenderSubmissionOperations';
 import { intakeInventoryVehicle } from './intakeInventoryVehicle';
-import { publicInventoryCount, publicInventoryVehicle, publicInventoryVehicles } from '../integrations/inventory/publicStorefrontInventory';;
+import { publicInventoryCount, publicInventoryVehicle, publicInventoryVehicleRecord, publicInventoryVehicles } from '../integrations/inventory/publicStorefrontInventory';;
 
 const graphql = String.raw;
 
@@ -425,7 +426,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
       input UpdateLeadDetailsInput { leadId: ID!, expectedUpdatedAt: DateTime!, firstName: String!, lastName: String!, email: String, phone: String, source: String!, budgetRange: String, timeframe: String, tradeInVehicle: String, notes: String, interestedVehicleId: ID, idempotencyKey: String! }
       input UpdateCustomerContactInput { customerId: ID!, expectedUpdatedAt: DateTime!, firstName: String!, lastName: String!, primaryEmail: String, primaryPhone: String, idempotencyKey: String! }
       input UnlinkCustomerHouseholdInput { customerId: ID!, expectedUpdatedAt: DateTime!, reason: String!, idempotencyKey: String! }
-      type DealVehicleResult { id: ID!, vin: String, stockNumber: String, year: Int, make: String, model: String, trim: String, exteriorColor: String, status: String, priceCents: Int }
+      type DealVehicleResult { id: ID!, vin: String, stockNumber: String, year: Int, make: String, model: String, trim: String, exteriorColor: String, condition: String, status: String, priceCents: Int }
       type DealLeadResult { id: ID!, firstName: String!, lastName: String!, status: String }
       type DealApprovalResult { id: ID!, decision: String, notes: String, approvalDate: DateTime, approver: OperatorPersonResult }
       type DealWorkspaceRecord { id: ID!, financeEvidence: JSON, status: String, structureType: String, worksheetVersion: Int, vehiclePriceCents: Int, tradeInValueCents: Int, downPaymentCents: Int, financingAmountCents: Int, monthlyPaymentCents: Int, taxAmountCents: Int, totalPriceCents: Int!, loanTerm: Int, apr: Float, residualValueCents: Int, moneyFactorBasisPoints: Int, grossCents: Int, fees: JSON, rebates: JSON, products: JSON, taxLines: JSON, presentedSnapshot: JSON, presentedAt: DateTime, acceptedSnapshot: JSON, acceptedAt: DateTime, evidenceSnapshot: JSON, lockedAt: DateTime, saleDate: DateTime, createdAt: DateTime!, updatedAt: DateTime!, vehicle: DealVehicleResult, lead: DealLeadResult, salesperson: OperatorPersonResult, approvals: [DealApprovalResult!]! }
@@ -439,10 +440,10 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
       type FinanceTaskResult { id: ID!, title: String, dueDate: DateTime, completed: Boolean, priority: String }
       type FinanceLeadResult { id: ID!, rooftop: InventoryRooftopResult, firstName: String, lastName: String, email: String, phone: String, status: String, createdAt: DateTime, interestedVehicle: DealVehicleResult, tasks: [FinanceTaskResult!]! }
       type FinanceApplicationResult { id: ID!, reference: String, status: String, applicantName: String, applicantEmail: String, applicantPhone: String, employmentStatus: String, annualIncomeCents: Int, selfReportedCreditTier: String, requestedAmountCents: Int, plannedMonthlyPaymentCents: Int, plannedDownPaymentCents: Int, tradeInValueCents: Int, aprBasisPoints: Int, loanTermMonths: Int, consentAt: DateTime, submittedAt: DateTime, updatedAt: DateTime, vehicle: DealVehicleResult, lead: FinanceLeadResult, submissions: [FinanceSubmissionResult!]!, decisions: [FinanceDecisionResult!]! }
-      type FinanceDealLeadResult { id: ID!, firstName: String, lastName: String }
+      type FinanceDealLeadResult { id: ID!, firstName: String, lastName: String, email: String, phone: String }
       type FinanceDealVehicleResult { id: ID!, year: Int, make: String, model: String, stockNumber: String, vin: String, purchasePrice: Float }
       type FinanceDealApprovalResult { id: ID!, decision: String, approvalDate: DateTime, notes: String, approver: OperatorPersonResult }
-      type FinanceDealResult { id: ID!, worksheetVersion: Int, financeEvidence: JSON, rooftop: InventoryRooftopResult, vehiclePrice: Float, tradeInValue: Float, downPayment: Float, financingAmount: Float, monthlyPayment: Float, loanTerm: Int, apr: Float, taxAmount: Float, status: String, totalPrice: Float, profit: Float, createdAt: DateTime, updatedAt: DateTime, salesperson: OperatorPersonResult, lead: FinanceDealLeadResult, vehicle: FinanceDealVehicleResult, approvals: [FinanceDealApprovalResult!]! }
+      type FinanceDealResult { id: ID!, worksheetVersion: Int, structureType: String, financeEvidence: JSON, rooftop: InventoryRooftopResult, vehiclePrice: Float, tradeInValue: Float, downPayment: Float, financingAmount: Float, monthlyPayment: Float, loanTerm: Int, apr: Float, taxAmount: Float, status: String, totalPrice: Float, profit: Float, createdAt: DateTime, updatedAt: DateTime, salesperson: OperatorPersonResult, lead: FinanceDealLeadResult, vehicle: FinanceDealVehicleResult, approvals: [FinanceDealApprovalResult!]! }
       type FinanceWorkspaceSummary { visibleCount: Int!, submittedCount: Int!, reviewCount: Int!, approvedCount: Int! }
       type FinanceProductResult { id: ID!, rooftop: InventoryRooftopResult!, code: String!, name: String!, category: String!, providerKey: String!, active: Boolean!, retailPriceCents: Int!, costCents: Int, updatedAt: DateTime! }
       type FinanceProductQuoteResult { id: ID!, deal: FinanceDealResult, product: FinanceProductResult, providerKey: String!, status: String!, retailPriceCents: Int, evidenceReference: String, requestedAt: DateTime!, completedAt: DateTime }
@@ -460,7 +461,8 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
       type FixedOpsLineResult { id: ID!, itemType: String!, description: String!, partNumber: String, quantity: Float!, unitPriceCents: Int!, priceCents: Int! }
       type FixedOpsLeadResult { id: ID!, firstName: String!, lastName: String!, email: String, phone: String }
       type FixedOpsAppointmentOrderResult { id: ID!, status: String, grandTotalCents: Int }
-      type FixedOpsAppointmentResult { id: ID!, appointmentDate: DateTime, serviceType: String, status: String, vehicleVin: String, transportationNeed: String, capacitySlot: String, customerVehicleDescription: String, description: String, estimatedDuration: Int, mileageIn: Int, advisorNotes: String, rooftop: InventoryRooftopResult, lead: FixedOpsLeadResult, assignedTech: OperatorPersonResult, serviceOrder: FixedOpsAppointmentOrderResult }
+      type FixedOpsServicePackageResult { id: ID!, name: String }
+      type FixedOpsAppointmentResult { id: ID!, appointmentDate: DateTime, serviceType: String, servicePackage: FixedOpsServicePackageResult, status: String, vehicleVin: String, transportationNeed: String, capacitySlot: String, customerVehicleDescription: String, description: String, estimatedDuration: Int, mileageIn: Int, advisorNotes: String, rooftop: InventoryRooftopResult, lead: FixedOpsLeadResult, assignedTech: OperatorPersonResult, serviceOrder: FixedOpsAppointmentOrderResult }
       type FixedOpsLaborResult { id: ID!, operationCode: String!, description: String!, status: String!, technician: OperatorPersonResult, soldHours: Float, actualMinutes: Int, timePunches: JSON, startedAt: DateTime, completedAt: DateTime }
       type FixedOpsOrderResult { id: ID!, rooftop: InventoryRooftopResult, status: String, concern: String!, cause: String!, correction: String!, payType: String!, authorizationStatus: String!, authorizationEvidence: JSON, inspectionEvidence: JSON, declinedWork: JSON, invoiceNumber: String, diagnosis: String!, workPerformed: String!, recommendations: String!, laborTotalCents: Int!, partsTotalCents: Int!, taxCents: Int!, grandTotalCents: Int!, completedAt: DateTime, settledAt: DateTime, updatedAt: DateTime, appointment: FixedOpsAppointmentResult, laborOperations: [FixedOpsLaborResult!]!, lineItems: [FixedOpsLineResult!]! }
       type FixedOpsWorkspaceSummary { openOrderCount: Int!, awaitingOrderCount: Int! }
@@ -514,7 +516,9 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
       input RecordFinanceComplianceInput { dealId: ID!, expectedUpdatedAt: DateTime!, checkType: String!, providerKey: String!, status: String!, resultCode: String, evidenceReference: String, idempotencyKey: String! }
       input ManageFinanceContractInput { dealId: ID!, expectedUpdatedAt: DateTime!, action: String!, providerKey: String, requiredDocuments: JSON, documentChecklist: JSON, providerStatus: String, envelopeReference: String, evidenceSource: String, evidenceReference: String, webhookEventId: String, idempotencyKey: String! }
       input ReviewFinancePrerequisitesInput { dealId: ID!, worksheetVersion: Int!, expectedUpdatedAt: DateTime!, expectedPrerequisiteDigest: String!, providerKey: String!, reviewReference: String!, policyReference: String!, policyVersion: String!, reviewerAuthorityReference: String!, idempotencyKey: String! }
-      input ManageFinanceFundingInput { dealId: ID!, worksheetVersion: Int!, expectedUpdatedAt: DateTime!, expectedFundingUpdatedAt: DateTime, status: String!, checklist: JSON!, exceptions: JSON!, fundingReference: String, paymentAmountCents: Int, idempotencyKey: String! }
+      input ManageFinanceFundingInput { dealId: ID!, worksheetVersion: Int!, expectedUpdatedAt: DateTime!, expectedFundingUpdatedAt: DateTime, status: String!, checklist: JSON!, exceptions: JSON!, fundingReference: String, paymentAmountCents: Int, paymentMethod: String, idempotencyKey: String! }
+      input RecordCashDealDepositInput { dealId: ID!, amountCents: Int!, paymentMethod: String!, receiptReference: String!, idempotencyKey: String! }
+      type CashDealDepositResult { id: ID!, dealId: ID!, amountCents: Int!, paymentMethod: String!, receiptReference: String!, remainingCents: Int!, form8300Required: Boolean!, reused: Boolean! }
       input RecordFinanceProductCancellationInput { dealId: ID!, menuId: ID!, productCode: String!, status: String!, reason: String!, refundCents: Int, refundBasis: JSON, evidenceReference: String, idempotencyKey: String! }
 
       type AccountingWorkspaceResult { mappings: [AccountingMapping!]!, batches: [AccountingBatch!]!, payments: [PaymentTransaction!]!, refunds: [PaymentRefund!]! }
@@ -593,6 +597,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         redirectToInit: Boolean
         publicInventoryVehicles(where: JSON, orderBy: JSON, take: Int, skip: Int): PublicInventoryResult!
         publicInventoryVehicle(id: ID!): PublicInventoryVehicle
+        publicInventoryVehicleRecord(id: ID!): PublicInventoryVehicle
         publicInventoryCount(where: JSON): Int!
         storefrontProfile(rooftopSlug: String): StorefrontProfilePayload!
         domainTimeline(aggregateType: String!, aggregateId: ID!, limit: Int = 50): [DomainAuditEvent!]!
@@ -688,6 +693,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         manageFinanceContractPackage(data: ManageFinanceContractInput!): FinanceContractPackage!
         reviewFinancePrerequisites(data: ReviewFinancePrerequisitesInput!): OperatorCommandResult!
         manageFinanceFundingCase(data: ManageFinanceFundingInput!): FinanceFundingCase!
+        recordCashDealDeposit(data: RecordCashDealDepositInput!): CashDealDepositResult!
         recordFinanceProductCancellation(data: RecordFinanceProductCancellationInput!): FinanceProductCancellation!
         intakeInventoryVehicle(data: IntakeInventoryVehicleInput!): InventoryIntakeResult!
         establishInventoryStock(data: EstablishInventoryStockInput!): InventoryCommandResult!
@@ -734,6 +740,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         redirectToInit,
         publicInventoryVehicles,
         publicInventoryVehicle,
+        publicInventoryVehicleRecord,
         publicInventoryCount,
         storefrontProfile,
         domainTimeline,
@@ -819,6 +826,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         manageFinanceContractPackage: keystoneItemResult('FinanceContractPackage', manageFinanceContractPackage),
         reviewFinancePrerequisites,
         manageFinanceFundingCase,
+        recordCashDealDeposit,
         recordFinanceProductCancellation,
         intakeInventoryVehicle,
         establishInventoryStock,

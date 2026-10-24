@@ -1,3 +1,4 @@
+import { assertTestDriveVehicleCapacity } from './bookingCapacity'
 import { requestingAccountId } from './customerAccount'
 import { resolveCustomerInTransaction } from './customerIdentity'
 import { runPublicSubmission } from './publicSubmissionPolicy'
@@ -56,6 +57,7 @@ export async function submitTestDrive(_root: unknown, { data }: { data: SubmitTe
       const location = await transactionContext.prisma.rooftop.findUnique({ where: { id: rooftopId }, select: { timezone: true } })
       const scheduled = parseScheduledTime(requestedDate, requestedTime, 'Preferred', location?.timezone || 'UTC')
       const vehicle = await resolveAvailableVehicle(transactionContext, data.vehicleId, rooftopId)
+      if (vehicle) await assertTestDriveVehicleCapacity(transactionContext, vehicle.id, scheduled.iso)
       const rooftop = { connect: { id: rooftopId } }
       const { customer } = await resolveCustomerInTransaction(transactionContext, {
         rooftopId,

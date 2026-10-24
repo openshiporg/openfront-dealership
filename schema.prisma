@@ -67,6 +67,7 @@ model User {
   from_InventoryMerchandisingVersion_submittedBy InventoryMerchandisingVersion[]  @relation("InventoryMerchandisingVersion_submittedBy")
   from_InventoryMerchandisingVersion_decidedBy   InventoryMerchandisingVersion[]  @relation("InventoryMerchandisingVersion_decidedBy")
   from_InventoryFeedRun_recordedBy               InventoryFeedRun[]               @relation("InventoryFeedRun_recordedBy")
+  from_Customer_account                          Customer[]                       @relation("Customer_account")
   from_WeOweItem_owner                           WeOweItem[]                      @relation("WeOweItem_owner")
   from_ServiceLaborOperation_technician          ServiceLaborOperation[]          @relation("ServiceLaborOperation_technician")
   from_SavedReport_owner                         SavedReport[]                    @relation("SavedReport_owner")
@@ -353,24 +354,25 @@ model Task {
 }
 
 model TestDrive {
-  id                    String   @id @default(cuid())
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @default(now()) @updatedAt
-  rooftop               Rooftop  @relation("TestDrive_rooftop", fields: [rooftopId], references: [id])
-  rooftopId             String   @map("rooftop")
-  requestedBy           User?    @relation("TestDrive_requestedBy", fields: [requestedById], references: [id])
-  requestedById         String?  @map("requestedBy")
-  lead                  Lead?    @relation("TestDrive_lead", fields: [leadId], references: [id])
-  leadId                String?  @map("lead")
-  vehicle               Vehicle? @relation("TestDrive_vehicle", fields: [vehicleId], references: [id])
-  vehicleId             String?  @map("vehicle")
-  salesperson           User?    @relation("TestDrive_salesperson", fields: [salespersonId], references: [id])
-  salespersonId         String?  @map("salesperson")
+  id                    String    @id @default(cuid())
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @default(now()) @updatedAt
+  rooftop               Rooftop   @relation("TestDrive_rooftop", fields: [rooftopId], references: [id])
+  rooftopId             String    @map("rooftop")
+  requestedBy           User?     @relation("TestDrive_requestedBy", fields: [requestedById], references: [id])
+  requestedById         String?   @map("requestedBy")
+  lead                  Lead?     @relation("TestDrive_lead", fields: [leadId], references: [id])
+  leadId                String?   @map("lead")
+  vehicle               Vehicle?  @relation("TestDrive_vehicle", fields: [vehicleId], references: [id])
+  vehicleId             String?   @map("vehicle")
+  salesperson           User?     @relation("TestDrive_salesperson", fields: [salespersonId], references: [id])
+  salespersonId         String?   @map("salesperson")
   scheduledTime         DateTime
-  completed             Boolean  @default(false)
-  noShow                Boolean  @default(false)
-  driverLicenseVerified Boolean  @default(false)
-  feedback              String   @default("")
+  completed             Boolean   @default(false)
+  noShow                Boolean   @default(false)
+  cancelledAt           DateTime?
+  driverLicenseVerified Boolean   @default(false)
+  feedback              String    @default("")
   interestedLevel       String?
 
   @@index([rooftopId])
@@ -493,37 +495,40 @@ model TradeIn {
 }
 
 model ServiceAppointment {
-  id                         String        @id @default(cuid())
-  createdAt                  DateTime      @default(now())
-  updatedAt                  DateTime      @default(now()) @updatedAt
-  rooftop                    Rooftop       @relation("ServiceAppointment_rooftop", fields: [rooftopId], references: [id])
-  rooftopId                  String        @map("rooftop")
-  requestedBy                User?         @relation("ServiceAppointment_requestedBy", fields: [requestedById], references: [id])
-  requestedById              String?       @map("requestedBy")
-  lead                       Lead?         @relation("ServiceAppointment_lead", fields: [leadId], references: [id])
-  leadId                     String?       @map("lead")
-  customer                   User?         @relation("ServiceAppointment_customer", fields: [customerId], references: [id])
-  customerId                 String?       @map("customer")
-  vehicleVin                 String        @default("")
-  transportationNeed         String?       @default("none")
-  capacitySlot               String        @default("")
-  customerVehicleDescription String        @default("")
+  id                         String          @id @default(cuid())
+  createdAt                  DateTime        @default(now())
+  updatedAt                  DateTime        @default(now()) @updatedAt
+  rooftop                    Rooftop         @relation("ServiceAppointment_rooftop", fields: [rooftopId], references: [id])
+  rooftopId                  String          @map("rooftop")
+  requestedBy                User?           @relation("ServiceAppointment_requestedBy", fields: [requestedById], references: [id])
+  requestedById              String?         @map("requestedBy")
+  lead                       Lead?           @relation("ServiceAppointment_lead", fields: [leadId], references: [id])
+  leadId                     String?         @map("lead")
+  customer                   User?           @relation("ServiceAppointment_customer", fields: [customerId], references: [id])
+  customerId                 String?         @map("customer")
+  servicePackage             ServicePackage? @relation("ServiceAppointment_servicePackage", fields: [servicePackageId], references: [id])
+  servicePackageId           String?         @map("servicePackage")
+  vehicleVin                 String          @default("")
+  transportationNeed         String?         @default("none")
+  capacitySlot               String          @default("")
+  customerVehicleDescription String          @default("")
   appointmentDate            DateTime
   serviceType                String?
-  description                String        @default("")
+  description                String          @default("")
   estimatedDuration          Int?
-  assignedTech               User?         @relation("ServiceAppointment_assignedTech", fields: [assignedTechId], references: [id])
-  assignedTechId             String?       @map("assignedTech")
-  status                     String?       @default("scheduled")
+  assignedTech               User?           @relation("ServiceAppointment_assignedTech", fields: [assignedTechId], references: [id])
+  assignedTechId             String?         @map("assignedTech")
+  status                     String?         @default("scheduled")
   mileageIn                  Int?
-  advisorNotes               String        @default("")
-  serviceOrder               ServiceOrder? @relation("ServiceAppointment_serviceOrder", fields: [serviceOrderId], references: [id])
-  serviceOrderId             String?       @unique @map("serviceOrder")
+  advisorNotes               String          @default("")
+  serviceOrder               ServiceOrder?   @relation("ServiceAppointment_serviceOrder", fields: [serviceOrderId], references: [id])
+  serviceOrderId             String?         @unique @map("serviceOrder")
 
   @@index([rooftopId])
   @@index([requestedById])
   @@index([leadId])
   @@index([customerId])
+  @@index([servicePackageId])
   @@index([assignedTechId])
 }
 
@@ -584,16 +589,17 @@ model RepairOrderLineItem {
 }
 
 model ServicePackage {
-  id                String   @id @default(cuid())
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @default(now()) @updatedAt
-  rooftop           Rooftop  @relation("ServicePackage_rooftop", fields: [rooftopId], references: [id])
-  rooftopId         String   @map("rooftop")
-  name              String   @default("")
-  description       String   @default("")
-  priceCents        Int
-  estimatedDuration Int?
-  includedServices  Json?    @default("[]")
+  id                                     String               @id @default(cuid())
+  createdAt                              DateTime             @default(now())
+  updatedAt                              DateTime             @default(now()) @updatedAt
+  rooftop                                Rooftop              @relation("ServicePackage_rooftop", fields: [rooftopId], references: [id])
+  rooftopId                              String               @map("rooftop")
+  name                                   String               @default("")
+  description                            String               @default("")
+  priceCents                             Int
+  estimatedDuration                      Int?
+  includedServices                       Json?                @default("[]")
+  from_ServiceAppointment_servicePackage ServiceAppointment[] @relation("ServiceAppointment_servicePackage")
 
   @@index([rooftopId])
 }
@@ -1182,6 +1188,8 @@ model Customer {
   contactPreferenceUpdatedAt DateTime?
   suppressionReason          String                           @default("")
   suppressionSource          String                           @default("")
+  account                    User?                            @relation("Customer_account", fields: [accountId], references: [id])
+  accountId                  String?                          @map("account")
   household                  CustomerHousehold?               @relation("Customer_household", fields: [householdId], references: [id])
   householdId                String?                          @map("household")
   contactPreferenceEvents    CustomerContactPreferenceEvent[] @relation("CustomerContactPreferenceEvent_customer")
@@ -1197,6 +1205,7 @@ model Customer {
   @@index([rooftopId])
   @@index([normalizedEmail])
   @@index([normalizedPhone])
+  @@index([accountId])
   @@index([householdId])
   @@index([mergedIntoId])
 }

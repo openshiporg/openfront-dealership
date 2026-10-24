@@ -1,0 +1,872 @@
+'use client'
+
+import { useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
+import { Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { PageContainer } from '@/features/dashboard/components/PageContainer'
+import { basePath } from '@/features/dashboard/lib/config'
+import {
+  Code,
+  DeskHeader,
+  DeskSection,
+  Facts,
+  Notice,
+  Pill,
+  Readout,
+  ReadoutStrip,
+  TitleLine,
+  Track,
+} from '@/features/platform/components/desk'
+import { formatCentsForInput, parseDollarsToCents } from '@/features/platform/deals/lib/moneyInput'
+import { formatPhone } from '@/features/platform/lib/format'
+import {
+  addServiceOrderLineItem,
+  getRooftopStaff,
+  getServiceOrderDetail,
+  getServicePartOptions,
+  manageLaborOperation,
+  recordServiceOrderEvidence,
+  removeServiceOrderLineItem,
+  setServiceOrderTax,
+  transitionServiceOrder,
+  updateServiceOrderLineItem,
+} from '../actions'
+import { ServiceFormDialog, type ServiceFormField } from '../components/ServiceFormDialog'
+import { createAttemptKeys } from '../lib/attemptKeys'
+import { formatCents, formatDateTime, formatQuantity, parseQuantity, parseWhole } from '../lib/serviceFormat'
+import { repairOrderTotalsCheck } from '../lib/serviceTasks'
+import {
+  APPOINTMENT_STATUS_LABELS,
+  LABOR_ACTION_LABELS,
+  LABOR_STATUS_LABELS,
+  LABOR_TONES,
+  LINE_TYPE_LABELS,
+  NEXT_ORDER_STATUS,
+  ORDER_ACTION_LABELS,
+  ORDER_EDITABLE_STATUSES,
+  ORDER_STATUS_LABELS,
+  STATUS_TONES,
+  customerName,
+  laborActions,
+  orderTransitionBlock,
+  roReference,
+  settledNetCents,
+  type LaborAction,
+} from '../lib/serviceStatus'
+import type { FixedOpsLineItem, ServiceLaborOperationDetail, ServiceOrderDetail, ServicePartOption } from '../lib/types'
+
+type FormKind =
+  | 'evidence'
+  | 'line'
+  | 'line-remove'
+  | 'tax'
+  | 'labor-create'
+  | 'labor-dispatch'
+  | 'labor-complete'
+  | 'labor-cancel'
+  | 'invoice'
+  | 'confirm-transition'
+
+type FormState = {
+  kind: FormKind
+  title: string
+  key: string
+  values: Record<string, string>
+  errors: Record<string, string>
+  formError: string | null
+  lineId?: string
+  operationId?: string
+  toStatus?: string
+  submitLabel?: string
+  variant?: 'primary' | 'danger'
+}
+
+type CommandResponse = { success: boolean; error?: string; rejected?: boolean }
+
+const PAY_TYPES = [
+  { value: 'customer', label: 'Customer' },
+  { value: 'warranty', label: 'Warranty' },
+  { value: 'internal', label: 'Internal' },
+]
+const AUTHORIZATION_STATUSES = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'authorized', label: 'Authorized' },
+  { value: 'declined', label: 'Declined' },
+]
+const LINE_TYPES = [
+  { value: 'labor', label: 'Labor' },
+  { value: 'part', label: 'Part' },
+  { value: 'sublet', label: 'Sublet' },
+]
+const PAYMENT_LABELS: Record<string, string> = {
+  creating: 'Creating',
+  pending: 'Pending',
+  authorized: 'Authorized',
+  captured: 'Captured',
+  failed: 'Failed',
+  canceled: 'Canceled',
+  'partially-refunded': 'Partially refunded',
+  refunded: 'Refunded',
+}
+
+function newKey(prefix: string) {
+  return `${prefix}:${crypto.randomUUID()}`
+}
+
+export function ServiceOrderDetailPageClient({
+  id,
+  initialOrder,
+  initialError,
+  timeZone,
+  taxRateBps,
+}: {
+  id: string
+  initialOrder: ServiceOrderDetail | null
+  initialError: string | null
+  timeZone: string
+  taxRateBps: number | null
+}) {
+  const [order, setOrder] = useState<ServiceOrderDetail | null>(initialOrder)
+  const [loadError, setLoadError] = useState<string | null>(initialError)
+  const [loading, setLoading] = useState(false)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [notice, setNotice] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
+  const [form, setForm] = useState<FormState | null>(null)
+  const [staff, setStaff] = useState<Array<{ value: string; label: string }>>([])
+  const [parts, setParts] = useState<ServicePartOption[] | null>(null)
+  const attemptKeys = useRef(createAttemptKeys('service-order')).current
+
+  const reload = async () => {
+    setLoading(true)
+    const response = await getServiceOrderDetail(id)
+    if (response.success) {
+      setOrder(response.data)
+      setLoadError(null)
+    } else {
+      setLoadError(response.error)
+    }
+    setLoading(false)
+  }
+
+  const breadcrumbs = (label: string) => [
+    { type: 'link' as const, label: 'Dashboard', href: basePath },
+    { type: 'page' as const, label: 'Platform' },
+    { type: 'link' as const, label: 'Service', href: `${basePath}/platform/service` },
+    { type: 'page' as const, label },
+  ]
+
+  const totals = useMemo(() => (order ? repairOrderTotalsCheck({ ...order, lineItems: order.lineItems || [] }) : null), [order])
+
+  if (!order) {
+    return (
+      <PageContainer title="Repair order" header={<DeskHeader eyebrow="Repair order" title="Repair order unavailable" tone="bad" status="Unavailable" />} breadcrumbs={breadcrumbs('Repair order')}>
+        <div className="space-y-3 px-4 pb-24 md:px-6">
+          <Notice tone="bad">{loadError || 'Repair order not found'}</Notice>
+          <Track>
+            <Pill className="max-sm:h-11" onClick={reload} disabled={loading}>{loading ? 'Loading…' : 'Retry'}</Pill>
+            <Pill className="max-sm:h-11" asChild>
+              <Link href={`${basePath}/platform/service`}>Service desk</Link>
+            </Pill>
+          </Track>
+        </div>
+      </PageContainer>
+    )
+  }
+
+  const status = order.status || 'estimate'
+  const editable = ORDER_EDITABLE_STATUSES.includes(status)
+  const lockedReason = editable ? null : 'Locked after completion'
+  const appointment = order.appointment
+  const lead = appointment?.lead || null
+  const name = customerName(lead)
+  const reference = roReference(order.id)
+  const vehicle = appointment?.customerVehicleDescription || 'Vehicle not set'
+  const nextStatus = NEXT_ORDER_STATUS[status]
+  const nextBlock = nextStatus && nextStatus !== 'invoiced' ? orderTransitionBlock(order, nextStatus) : null
+  const openOps = order.laborOperations.filter(operation => !['completed', 'cancelled'].includes(operation.status)).length
+  const lineSubtotal = (totals?.lineLaborCents ?? 0) + (totals?.linePartsCents ?? 0)
+
+  const run = async (scope: string, action: () => Promise<CommandResponse>, success: string) => {
+    setBusy(scope)
+    setNotice(null)
+    const response = await action()
+    attemptKeys.settle(scope, response)
+    if (response.success) {
+      setNotice({ tone: 'ok', text: success })
+      await reload()
+    } else {
+      setNotice({ tone: 'bad', text: response.error || 'Unable to save' })
+    }
+    setBusy(null)
+  }
+
+  const transition = (toStatus: string, invoiceNumber?: string) => {
+    const scope = `transition:${toStatus}`
+    return transitionServiceOrder({ id: order.id, toStatus, idempotencyKey: attemptKeys.key(scope), ...(invoiceNumber ? { invoiceNumber } : {}) })
+      .then(response => { attemptKeys.settle(scope, response); return response })
+  }
+
+  const startTransition = (toStatus: string) => {
+    if (toStatus === 'invoiced') {
+      openForm({ kind: 'invoice', title: 'Invoice repair order', values: { invoiceNumber: order.invoiceNumber || '' }, submitLabel: 'Invoice', toStatus })
+      return
+    }
+    if (toStatus === 'completed' || toStatus === 'paid') {
+      openForm({ kind: 'confirm-transition', title: toStatus === 'completed' ? 'Complete repair and lock lines' : `Mark ${reference} paid`, values: {}, submitLabel: ORDER_ACTION_LABELS[toStatus], toStatus })
+      return
+    }
+    void run(`transition:${toStatus}`, () => transitionServiceOrder({ id: order.id, toStatus, idempotencyKey: attemptKeys.key(`transition:${toStatus}`) }), `${ORDER_STATUS_LABELS[toStatus]}`)
+  }
+
+  const openForm = (next: Omit<FormState, 'key' | 'errors' | 'formError'>) => {
+    setForm({ ...next, key: newKey(`service-${next.kind}`), errors: {}, formError: null })
+  }
+
+  const ensureParts = async () => {
+    if (parts || !order.rooftop?.id) return
+    const response = await getServicePartOptions(order.rooftop.id)
+    setParts(response.success ? response.data.partsInventories || [] : [])
+  }
+
+  const openLine = (line?: FixedOpsLineItem) => {
+    openForm({
+      kind: 'line',
+      title: line ? 'Edit line' : 'Add line',
+      lineId: line?.id,
+      submitLabel: line ? 'Save line' : 'Add line',
+      values: line
+        ? { itemType: line.itemType, partId: '', partNumber: line.partNumber || '', description: line.description, quantity: formatQuantity(line.quantity), unitPrice: formatCentsForInput(line.unitPriceCents) }
+        : { itemType: 'labor', partId: '', partNumber: '', description: '', quantity: '1', unitPrice: '' },
+    })
+    if (line?.itemType === 'part') void ensureParts()
+  }
+
+  const openDispatch = async (operation: ServiceLaborOperationDetail) => {
+    openForm({ kind: 'labor-dispatch', title: `Dispatch ${operation.operationCode}`, operationId: operation.id, submitLabel: 'Dispatch', values: { technicianId: appointmentTechId() } })
+    setStaff([])
+    if (!order.rooftop?.id) return
+    const response = await getRooftopStaff(order.rooftop.id)
+    if (response.success) {
+      setStaff(response.data.users.map(user => ({ value: user.id, label: user.name })))
+      if (!response.data.users.length) setForm(current => (current ? { ...current, formError: 'No eligible staff at this location' } : current))
+    } else {
+      setForm(current => (current ? { ...current, formError: response.error || 'Unable to load staff' } : current))
+    }
+  }
+  const appointmentTechId = () => appointment?.assignedTech?.id || ''
+
+  const laborAction = (operation: ServiceLaborOperationDetail, action: LaborAction) => {
+    if (action === 'dispatch') { void openDispatch(operation); return }
+    if (action === 'complete') {
+      openForm({ kind: 'labor-complete', title: `Complete ${operation.operationCode}`, operationId: operation.id, submitLabel: 'Complete', values: { actualMinutes: operation.actualMinutes != null ? String(operation.actualMinutes) : '' } })
+      return
+    }
+    if (action === 'cancel') {
+      openForm({ kind: 'labor-cancel', title: `Cancel ${operation.operationCode}`, operationId: operation.id, submitLabel: 'Cancel operation', variant: 'danger', values: {} })
+      return
+    }
+    const scope = `labor:${operation.id}:${action}`
+    void run(scope, () => manageLaborOperation({ serviceOrderId: order.id, operationId: operation.id, action, idempotencyKey: attemptKeys.key(scope) }), `${operation.operationCode} ${LABOR_STATUS_LABELS[action === 'start' ? 'in-progress' : 'paused'].toLowerCase()}`)
+  }
+
+  const formFields = (state: FormState): ServiceFormField[] => {
+    switch (state.kind) {
+      case 'evidence':
+        return [
+          { name: 'concern', label: 'Concern', type: 'textarea' },
+          { name: 'cause', label: 'Cause', type: 'textarea' },
+          { name: 'correction', label: 'Correction', type: 'textarea' },
+          { name: 'payType', label: 'Pay type', type: 'select', options: PAY_TYPES },
+          { name: 'authorizationStatus', label: 'Authorization', type: 'select', options: AUTHORIZATION_STATUSES },
+          { name: 'reference', label: state.values.authorizationStatus === 'pending' ? 'Authorization reference (optional)' : 'Authorization reference', placeholder: 'Signed estimate, call log' },
+          { name: 'invoiceNumber', label: 'Invoice number (optional)' },
+        ]
+      case 'line': {
+        const isPart = state.values.itemType === 'part'
+        const partOptions = (parts || []).map(part => ({ value: part.id, label: `${part.partNumber || 'Part'} · ${part.description || ''} · ${Math.max(0, (part.quantity ?? 0) - (part.committedQuantity ?? 0))} available` }))
+        return [
+          { name: 'itemType', label: 'Type', type: 'select', options: LINE_TYPES },
+          ...(isPart && partOptions.length ? [{ name: 'partId', label: 'Catalog part', type: 'select' as const, options: partOptions, placeholder: 'Select a part' }] : []),
+          ...(isPart ? [{ name: 'partNumber', label: 'Part number' }] : []),
+          { name: 'description', label: 'Description', wide: true },
+          { name: 'quantity', label: state.values.itemType === 'labor' ? 'Hours' : 'Quantity', inputMode: 'decimal' },
+          { name: 'unitPrice', label: state.values.itemType === 'labor' ? 'Rate' : 'Unit price', type: 'money', placeholder: '$0.00' },
+        ]
+      }
+      case 'tax':
+        return [{ name: 'tax', label: 'Tax', type: 'money', placeholder: '$0.00' }]
+      case 'labor-create':
+        return [
+          { name: 'operationCode', label: 'Operation code', placeholder: '01A' },
+          { name: 'soldHours', label: 'Sold hours', inputMode: 'decimal' },
+          { name: 'description', label: 'Description', wide: true },
+        ]
+      case 'labor-dispatch':
+        return [{ name: 'technicianId', label: 'Technician', type: 'select', options: staff, placeholder: staff.length ? 'Select technician' : 'Loading staff' }]
+      case 'labor-complete':
+        return [{ name: 'actualMinutes', label: 'Actual minutes', inputMode: 'numeric' }]
+      case 'invoice':
+        return [{ name: 'invoiceNumber', label: 'Invoice number' }]
+      default:
+        return []
+    }
+  }
+
+  const changeFormValues = (values: Record<string, string>) => {
+    setForm(current => {
+      if (!current) return current
+      const next = { ...values }
+      if (current.kind === 'line') {
+        if (next.itemType === 'part' && current.values.itemType !== 'part') void ensureParts()
+        if (next.itemType !== 'part') { next.partId = ''; next.partNumber = '' }
+        if (next.partId && next.partId !== current.values.partId) {
+          const part = parts?.find(item => item.id === next.partId)
+          if (part) {
+            next.partNumber = part.partNumber || ''
+            next.description = part.description || next.description
+            next.unitPrice = formatCentsForInput(part.priceCents ?? 0)
+          }
+        }
+      }
+      return { ...current, values: next }
+    })
+  }
+
+  const validate = (state: FormState): { errors: Record<string, string>; data?: Record<string, unknown> } => {
+    const values = state.values
+    const errors: Record<string, string> = {}
+    const text = (key: string) => (values[key] || '').trim()
+    if (state.kind === 'evidence') {
+      if (!text('concern')) errors.concern = 'Concern is required'
+      if (!text('cause')) errors.cause = 'Cause is required'
+      if (!text('correction')) errors.correction = 'Correction is required'
+      if (!text('payType')) errors.payType = 'Choose a pay type'
+      if (!text('authorizationStatus')) errors.authorizationStatus = 'Choose an authorization status'
+      if (text('authorizationStatus') && text('authorizationStatus') !== 'pending' && !text('reference')) errors.reference = 'Reference is required once authorized or declined'
+      if (text('reference').length > 200) errors.reference = 'At most 200 characters'
+      if (text('invoiceNumber').length > 100) errors.invoiceNumber = 'At most 100 characters'
+      return { errors, data: { concern: text('concern'), cause: text('cause'), correction: text('correction'), payType: text('payType'), authorizationStatus: text('authorizationStatus'), authorizationEvidence: { reference: text('reference'), channel: 'operator-recorded' }, invoiceNumber: text('invoiceNumber'), inspectionEvidence: [], declinedWork: [] } }
+    }
+    if (state.kind === 'line') {
+      if (!['labor', 'part', 'sublet'].includes(text('itemType'))) errors.itemType = 'Choose a line type'
+      if (!text('description')) errors.description = 'Description is required'
+      else if (text('description').length > 500) errors.description = 'At most 500 characters'
+      const quantity = parseQuantity(values.quantity || '')
+      if (quantity === null) errors.quantity = 'Enter a quantity above 0, up to 10,000'
+      const unitPriceCents = text('unitPrice') ? parseDollarsToCents(values.unitPrice || '') : null
+      if (unitPriceCents === null) errors.unitPrice = 'Enter an amount like $125.00'
+      if (text('itemType') === 'part' && text('partNumber').length > 100) errors.partNumber = 'At most 100 characters'
+      return { errors, data: { itemType: text('itemType'), description: text('description'), partNumber: text('itemType') === 'part' ? text('partNumber') : '', quantity, unitPriceCents } }
+    }
+    if (state.kind === 'tax') {
+      const taxCents = parseDollarsToCents(values.tax || '')
+      if (taxCents === null) errors.tax = 'Enter an amount like $42.50'
+      return { errors, data: { taxCents } }
+    }
+    if (state.kind === 'labor-create') {
+      if (!text('operationCode')) errors.operationCode = 'Operation code is required'
+      else if (text('operationCode').length > 80) errors.operationCode = 'At most 80 characters'
+      if (!text('description')) errors.description = 'Description is required'
+      const soldHours = Number(text('soldHours'))
+      if (!text('soldHours') || !Number.isFinite(soldHours) || soldHours < 0 || !/^\d*(\.\d{1,2})?$/.test(text('soldHours'))) errors.soldHours = 'Enter hours like 1.5'
+      return { errors, data: { operationCode: text('operationCode'), description: text('description'), soldHours } }
+    }
+    if (state.kind === 'labor-dispatch') {
+      if (!text('technicianId')) errors.technicianId = 'Choose a technician'
+      return { errors, data: { technicianId: text('technicianId') } }
+    }
+    if (state.kind === 'labor-complete') {
+      const actualMinutes = parseWhole(values.actualMinutes || '')
+      if (actualMinutes === null) errors.actualMinutes = 'Enter whole minutes'
+      return { errors, data: { actualMinutes } }
+    }
+    if (state.kind === 'invoice') {
+      if (!text('invoiceNumber')) errors.invoiceNumber = 'Invoice number is required'
+      else if (text('invoiceNumber').length > 100) errors.invoiceNumber = 'At most 100 characters'
+      return { errors, data: { invoiceNumber: text('invoiceNumber') } }
+    }
+    return { errors, data: {} }
+  }
+
+  const submitForm = async () => {
+    if (!form) return
+    const { errors, data = {} } = validate(form)
+    if (Object.keys(errors).length) {
+      setForm({ ...form, errors, formError: null })
+      return
+    }
+    setForm({ ...form, errors: {}, formError: null })
+    setBusy('form')
+    const base = { serviceOrderId: order.id, idempotencyKey: form.key }
+    const locked = { ...base, expectedUpdatedAt: order.updatedAt }
+    let response: CommandResponse
+    let success = 'Saved'
+    switch (form.kind) {
+      case 'evidence':
+        response = await recordServiceOrderEvidence({ ...locked, ...data })
+        success = 'Repair evidence saved'
+        break
+      case 'line':
+        response = form.lineId
+          ? await updateServiceOrderLineItem({ ...locked, lineItemId: form.lineId, ...data })
+          : await addServiceOrderLineItem({ ...locked, ...data })
+        success = form.lineId ? 'Line updated' : 'Line added'
+        break
+      case 'line-remove':
+        response = await removeServiceOrderLineItem({ ...locked, lineItemId: form.lineId })
+        success = 'Line removed'
+        break
+      case 'tax':
+        response = await setServiceOrderTax({ ...locked, ...data })
+        success = 'Tax saved'
+        break
+      case 'labor-create':
+        response = await manageLaborOperation({ ...base, action: 'create', ...data })
+        success = 'Labor operation added'
+        break
+      case 'labor-dispatch':
+        response = await manageLaborOperation({ ...base, action: 'dispatch', operationId: form.operationId, ...data })
+        success = 'Labor dispatched'
+        break
+      case 'labor-complete':
+        response = await manageLaborOperation({ ...base, action: 'complete', operationId: form.operationId, ...data })
+        success = 'Labor completed'
+        break
+      case 'labor-cancel':
+        response = await manageLaborOperation({ ...base, action: 'cancel', operationId: form.operationId })
+        success = 'Labor cancelled'
+        break
+      case 'invoice':
+        response = await transition('invoiced', String(data.invoiceNumber))
+        success = 'Invoiced'
+        break
+      case 'confirm-transition':
+        response = await transition(form.toStatus || '')
+        success = ORDER_STATUS_LABELS[form.toStatus || ''] || 'Saved'
+        break
+      default:
+        response = { success: false, error: 'Unsupported action' }
+    }
+    setBusy(null)
+    if (!response.success) {
+      setForm(current => (current ? { ...current, formError: response.error || 'Unable to save' } : current))
+      return
+    }
+    setForm(null)
+    setNotice({ tone: 'ok', text: success })
+    await reload()
+  }
+
+  const formExtra = (() => {
+    if (!form) return null
+    if (form.kind === 'line') {
+      const quantity = parseQuantity(form.values.quantity || '')
+      const unit = parseDollarsToCents(form.values.unitPrice || '')
+      return (
+        <p className="flex items-baseline justify-between border-t pt-3 text-sm">
+          <span className="text-muted-foreground">Line total</span>
+          <span className="font-mono tabular-nums">{quantity !== null && unit !== null ? formatCents(Math.round(unit * quantity)) : '-'}</span>
+        </p>
+      )
+    }
+    if (form.kind === 'tax') {
+      const suggested = taxRateBps ? Math.round((lineSubtotal * taxRateBps) / 10_000) : null
+      return (
+        <div className="space-y-2 border-t pt-3 text-sm">
+          <p className="flex items-baseline justify-between"><span className="text-muted-foreground">Line subtotal</span><span className="font-mono tabular-nums">{formatCents(lineSubtotal)}</span></p>
+          {suggested !== null && (
+            <Track>
+              <Pill size="sm" className="max-sm:h-11" onClick={() => changeFormValues({ ...form.values, tax: formatCentsForInput(suggested) })}>
+                Apply {(taxRateBps! / 100).toFixed(2).replace(/\.?0+$/, '')}% · {formatCents(suggested)}
+              </Pill>
+            </Track>
+          )}
+        </div>
+      )
+    }
+    if (form.kind === 'line-remove') {
+      const line = order.lineItems.find(item => item.id === form.lineId)
+      return line ? <p className="text-sm">{line.description} · {formatCents(line.priceCents)}</p> : null
+    }
+    if (form.kind === 'confirm-transition' && form.toStatus === 'paid') {
+      return <p className="text-sm">{formatCents(order.grandTotalCents)} · verified {formatCents(settledNetCents(order.payments || []))}</p>
+    }
+    return null
+  })()
+
+  const header = (
+    <DeskHeader
+      eyebrow={`Repair order · ${reference}`}
+      title={vehicle}
+      tone={STATUS_TONES[status] || 'idle'}
+      status={ORDER_STATUS_LABELS[status] || status}
+      meta={
+        <span className="flex flex-wrap gap-x-2">
+          <span className="text-foreground">{ORDER_STATUS_LABELS[status] || status}</span>
+          {name && <span>· {name}</span>}
+          {order.rooftop?.name && <span>· {order.rooftop.name}</span>}
+          <span>· {appointment?.assignedTech?.name || 'Unassigned'}</span>
+        </span>
+      }
+      actions={
+        <Track>
+          <Pill className="max-sm:h-11" onClick={reload} disabled={loading} aria-label="Refresh">
+            <RefreshCw className={loading ? 'animate-spin' : undefined} />
+            Refresh
+          </Pill>
+          {nextStatus && (
+            <Pill className="max-sm:h-11" variant="primary" disabled={Boolean(nextBlock) || Boolean(busy)} onClick={() => startTransition(nextStatus)}>
+              {ORDER_ACTION_LABELS[nextStatus]}
+            </Pill>
+          )}
+        </Track>
+      }
+    />
+  )
+
+  return (
+    <PageContainer title={`${reference} ${vehicle}`} header={header} breadcrumbs={breadcrumbs(reference)}>
+      <div className="min-w-0 max-w-full space-y-8 px-4 pb-24 md:px-6">
+        {(notice || loadError || (nextStatus && nextBlock)) && (
+          <div className="space-y-2">
+            {notice && (
+              <Notice tone={notice.tone}>
+                <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
+                  <p className="min-w-0">{notice.text}</p>
+                  <Track><Pill size="sm" variant="plain" className="max-sm:h-11" onClick={() => setNotice(null)}>Dismiss</Pill></Track>
+                </div>
+              </Notice>
+            )}
+            {loadError && <Notice tone="bad">{loadError}</Notice>}
+            {nextStatus && nextBlock && <Notice tone="warn">{ORDER_ACTION_LABELS[nextStatus]}: {nextBlock}</Notice>}
+          </div>
+        )}
+
+        <ReadoutStrip>
+          <Readout label="Total" value={formatCents(order.grandTotalCents)} sub={`Tax ${formatCents(order.taxCents)}`} />
+          <Readout label="Line sum" value={formatCents(lineSubtotal)} sub={`${order.lineItems.length} lines`} tone={totals?.matches ? 'ok' : 'warn'} />
+          <Readout label="Labor ops" value={`${order.laborOperations.length - openOps}/${order.laborOperations.length}`} sub="Closed" tone={openOps ? 'warn' : 'ok'} />
+          <Readout label="Authorization" value={<span className="capitalize">{order.authorizationStatus || 'pending'}</span>} tone={order.authorizationStatus === 'authorized' ? 'ok' : order.authorizationStatus === 'declined' ? 'bad' : 'warn'} />
+        </ReadoutStrip>
+
+        <div className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+          <div className="min-w-0 space-y-8">
+            <DeskSection
+              title="Labor operations"
+              count={order.laborOperations.length}
+              actions={
+                <Track>
+                  <Pill size="sm" className="max-sm:h-11" disabled={!editable || Boolean(busy)} title={lockedReason || undefined} onClick={() => openForm({ kind: 'labor-create', title: 'Add labor operation', submitLabel: 'Add operation', values: { operationCode: '', description: '', soldHours: '' } })}>
+                    <Plus />
+                    Add operation
+                  </Pill>
+                </Track>
+              }
+            >
+              {order.laborOperations.length === 0 ? (
+                <p className="py-3 text-sm text-muted-foreground">No labor operations</p>
+              ) : (
+                <ul className="divide-y text-sm">
+                  {order.laborOperations.map(operation => {
+                    const actions = laborActions(order, operation.status)
+                    const blocked = actions.find(item => item.blocked)?.blocked
+                    return (
+                      <li key={operation.id} className="flex min-w-0 flex-col gap-2 py-3">
+                        <div className="flex min-w-0 items-start justify-between gap-4">
+                          <div className="min-w-0">
+                            <TitleLine as="p" tone={LABOR_TONES[operation.status] || 'idle'} status={LABOR_STATUS_LABELS[operation.status] || operation.status} className="font-medium">
+                              <Code className="text-foreground">{operation.operationCode}</Code> {operation.description}
+                            </TitleLine>
+                            <p className="pl-4 text-xs text-muted-foreground">
+                              {[
+                                LABOR_STATUS_LABELS[operation.status] || operation.status,
+                                operation.technician?.name || 'Unassigned',
+                                operation.startedAt ? `Started ${formatDateTime(operation.startedAt, timeZone)}` : null,
+                                operation.completedAt ? `Done ${formatDateTime(operation.completedAt, timeZone)}` : null,
+                              ].filter(Boolean).join(' · ')}
+                            </p>
+                          </div>
+                          <div className="shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                            <p>{operation.soldHours ?? 0} h sold</p>
+                            {operation.actualMinutes != null && <p>{operation.actualMinutes} min actual</p>}
+                          </div>
+                        </div>
+                        {actions.length > 0 && (
+                          <div className="flex min-w-0 flex-wrap items-center gap-2 pl-4">
+                            <Track>
+                              {actions.map(({ action, blocked: reason }) => (
+                                <Pill key={action} size="sm" className="max-sm:h-11" disabled={Boolean(reason) || Boolean(busy)} title={reason || undefined} onClick={() => laborAction(operation, action)}>
+                                  {LABOR_ACTION_LABELS[action]}
+                                </Pill>
+                              ))}
+                            </Track>
+                            {blocked && <span className="text-xs text-muted-foreground">{blocked}</span>}
+                          </div>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </DeskSection>
+
+            <DeskSection
+              title="Line items"
+              count={order.lineItems.length}
+              actions={
+                <Track>
+                  <Pill size="sm" className="max-sm:h-11" disabled={!editable || Boolean(busy)} title={lockedReason || undefined} onClick={() => openLine()}>
+                    <Plus />
+                    Add line
+                  </Pill>
+                </Track>
+              }
+            >
+              {!editable && <p className="pb-2 text-xs text-muted-foreground">{lockedReason}</p>}
+              {order.lineItems.length === 0 ? (
+                <p className="py-3 text-sm text-muted-foreground">No line items</p>
+              ) : (
+                <ul className="divide-y text-sm">
+                  {order.lineItems.map(line => (
+                    <li key={line.id} className="flex min-w-0 items-start justify-between gap-3 py-2.5">
+                      <div className="min-w-0">
+                        <p className="break-words font-medium">{line.description}</p>
+                        <p className="break-words text-xs text-muted-foreground">
+                          {[LINE_TYPE_LABELS[line.itemType] || line.itemType, line.partNumber ? `#${line.partNumber}` : null, `${formatQuantity(line.quantity)} × ${formatCents(line.unitPriceCents)}`].filter(Boolean).join(' · ')}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <p className="font-mono text-[13px] tabular-nums">{formatCents(line.priceCents)}</p>
+                        {editable && (
+                          <Track>
+                            <Pill size="sm" variant="plain" className="max-sm:h-11 max-sm:w-11" aria-label={`Edit ${line.description}`} disabled={Boolean(busy)} onClick={() => openLine(line)}>
+                              <Pencil />
+                            </Pill>
+                            <Pill size="sm" variant="plain" className="max-sm:h-11 max-sm:w-11" aria-label={`Remove ${line.description}`} disabled={Boolean(busy)} onClick={() => openForm({ kind: 'line-remove', title: 'Remove line', lineId: line.id, submitLabel: 'Remove line', variant: 'danger', values: {} })}>
+                              <Trash2 />
+                            </Pill>
+                          </Track>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </DeskSection>
+
+            <DeskSection
+              title="Totals"
+              actions={
+                <Track>
+                  <Pill size="sm" className="max-sm:h-11" disabled={!editable || Boolean(busy)} title={lockedReason || undefined} onClick={() => openForm({ kind: 'tax', title: 'Set tax', submitLabel: 'Save tax', values: { tax: formatCentsForInput(order.taxCents ?? 0) } })}>
+                    Set tax
+                  </Pill>
+                </Track>
+              }
+            >
+              {totals && !totals.matches && (
+                <Notice tone="warn" className="mb-2">
+                  <div className="min-w-0">
+                    <p className="font-medium">Totals don&apos;t match line items</p>
+                    <p className="mt-0.5 font-mono text-xs tabular-nums text-muted-foreground">
+                      Lines: Labor {formatCents(totals.lineLaborCents)} · Parts {formatCents(totals.linePartsCents)}
+                    </p>
+                  </div>
+                </Notice>
+              )}
+              <dl className="divide-y text-sm">
+                <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 pb-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                  <dt />
+                  <dd className="text-right">Lines</dd>
+                  <dd className="w-24 text-right">Recorded</dd>
+                </div>
+                {([
+                  ['Labor and sublet', totals?.lineLaborCents ?? 0, order.laborTotalCents ?? 0],
+                  ['Parts', totals?.linePartsCents ?? 0, order.partsTotalCents ?? 0],
+                  ['Tax', order.taxCents ?? 0, order.taxCents ?? 0],
+                ] as const).map(([label, line, recorded]) => (
+                  <div key={label} className="grid grid-cols-[1fr_auto_auto] items-baseline gap-x-4 py-2">
+                    <dt className="text-muted-foreground">{label}</dt>
+                    <dd className="text-right font-mono text-[13px] tabular-nums text-muted-foreground">{formatCents(line)}</dd>
+                    <dd className={`w-24 text-right font-mono text-[13px] tabular-nums ${line !== recorded ? 'text-amber-700 dark:text-amber-300' : ''}`}>{formatCents(recorded)}</dd>
+                  </div>
+                ))}
+                <div className="grid grid-cols-[1fr_auto_auto] items-baseline gap-x-4 border-t border-foreground/20 py-2.5">
+                  <dt className="font-semibold">Total</dt>
+                  <dd className="text-right font-mono text-[13px] tabular-nums text-muted-foreground">{formatCents(lineSubtotal + (order.taxCents ?? 0))}</dd>
+                  <dd className="w-24 text-right font-mono text-sm font-semibold tabular-nums">{formatCents(order.grandTotalCents)}</dd>
+                </div>
+              </dl>
+            </DeskSection>
+
+            {order.partsMovements.length > 0 && (
+              <DeskSection title="Parts movements" count={order.partsMovements.length}>
+                <ul className="divide-y text-sm">
+                  {order.partsMovements.map(movement => (
+                    <li key={movement.id} className="flex min-w-0 items-start justify-between gap-4 py-2.5">
+                      <div className="min-w-0">
+                        <p className="break-words font-medium">{movement.part?.description || movement.part?.partNumber || 'Part'}</p>
+                        <p className="text-xs capitalize text-muted-foreground">{movement.movementType} · {movement.reference} · {formatDateTime(movement.occurredAt, timeZone)}</p>
+                      </div>
+                      <p className="shrink-0 font-mono text-[13px] tabular-nums">{movement.quantityDelta > 0 ? '+' : ''}{movement.quantityDelta}</p>
+                    </li>
+                  ))}
+                </ul>
+              </DeskSection>
+            )}
+          </div>
+
+          <div className="min-w-0 space-y-8">
+            <DeskSection title="Customer and vehicle">
+              <Facts
+                items={[
+                  { label: 'Customer', value: lead ? <Link className="hover:underline" href={`${basePath}/platform/crm/${lead.id}`}>{name}</Link> : 'Not linked' },
+                  lead?.phone ? { label: 'Phone', value: <a className="hover:underline" href={`tel:${lead.phone}`}>{formatPhone(lead.phone)}</a>, mono: true } : null,
+                  lead?.email ? { label: 'Email', value: lead.email } : null,
+                  { label: 'Vehicle', value: vehicle },
+                  appointment?.vehicleVin ? { label: 'VIN', value: appointment.vehicleVin, mono: true } : null,
+                  appointment?.mileageIn != null ? { label: 'Mileage in', value: appointment.mileageIn.toLocaleString('en-US'), mono: true } : null,
+                  appointment?.transportationNeed && appointment.transportationNeed !== 'none' ? { label: 'Transportation', value: <span className="capitalize">{appointment.transportationNeed}</span> } : null,
+                ]}
+              />
+            </DeskSection>
+
+            <DeskSection
+              title="Appointment"
+              actions={appointment ? (
+                <Track>
+                  <Pill size="sm" className="max-sm:h-11" asChild>
+                    <Link href={`${basePath}/platform/service/appointments/${appointment.id}`}>Open</Link>
+                  </Pill>
+                </Track>
+              ) : undefined}
+            >
+              {appointment ? (
+                <Facts
+                  items={[
+                    { label: 'Status', value: <TitleLine as="span" tone={STATUS_TONES[appointment.status || ''] || 'idle'} className="justify-end">{APPOINTMENT_STATUS_LABELS[appointment.status || ''] || appointment.status}</TitleLine> },
+                    { label: 'Date', value: formatDateTime(appointment.appointmentDate, timeZone) },
+                    { label: 'Service', value: <span className="capitalize">{appointment.serviceType || 'Service'}</span> },
+                    appointment.description ? { label: 'Request', value: appointment.description } : null,
+                    appointment.advisorNotes ? { label: 'Advisor notes', value: appointment.advisorNotes } : null,
+                  ]}
+                />
+              ) : (
+                <p className="py-3 text-sm text-muted-foreground">No appointment</p>
+              )}
+            </DeskSection>
+
+            <DeskSection
+              title="Authorization and repair"
+              actions={
+                <Track>
+                  <Pill
+                    size="sm"
+                    className="max-sm:h-11"
+                    disabled={!editable || Boolean(busy)}
+                    title={lockedReason || undefined}
+                    onClick={() => openForm({
+                      kind: 'evidence',
+                      title: 'Concern, cause, correction',
+                      submitLabel: 'Save',
+                      values: {
+                        concern: order.concern || appointment?.description || '',
+                        cause: order.cause || '',
+                        correction: order.correction || '',
+                        payType: order.payType || 'customer',
+                        authorizationStatus: order.authorizationStatus || 'pending',
+                        reference: order.authorizationEvidence?.reference || '',
+                        invoiceNumber: order.invoiceNumber || '',
+                      },
+                    })}
+                  >
+                    <Pencil />
+                    Edit
+                  </Pill>
+                </Track>
+              }
+            >
+              <Facts
+                items={[
+                  {
+                    label: 'Authorization',
+                    value: (
+                      <TitleLine as="span" tone={order.authorizationStatus === 'authorized' ? 'ok' : order.authorizationStatus === 'declined' ? 'bad' : 'warn'} className="justify-end capitalize">
+                        {order.authorizationStatus || 'pending'}
+                      </TitleLine>
+                    ),
+                  },
+                  order.authorizationEvidence?.reference ? { label: 'Reference', value: order.authorizationEvidence.reference, mono: true } : null,
+                  { label: 'Pay type', value: <span className="capitalize">{order.payType || 'customer'}</span> },
+                  { label: 'Concern', value: order.concern || '-' },
+                  { label: 'Cause', value: order.cause || '-' },
+                  { label: 'Correction', value: order.correction || '-' },
+                  { label: 'Invoice', value: order.invoiceNumber || '-', mono: Boolean(order.invoiceNumber) },
+                  order.completedAt ? { label: 'Completed', value: formatDateTime(order.completedAt, timeZone) } : null,
+                  order.settledAt ? { label: 'Paid', value: formatDateTime(order.settledAt, timeZone) } : null,
+                ]}
+              />
+            </DeskSection>
+
+            <DeskSection
+              title="Payments"
+              count={order.payments?.length}
+              actions={
+                <Track>
+                  <Pill size="sm" className="max-sm:h-11" asChild>
+                    <Link href={`${basePath}/platform/payments`}>Payments</Link>
+                  </Pill>
+                </Track>
+              }
+            >
+              {order.payments === null ? (
+                <p className="py-3 text-sm text-muted-foreground">Requires reporting permission</p>
+              ) : order.payments.length === 0 ? (
+                <p className="py-3 text-sm text-muted-foreground">No payments</p>
+              ) : (
+                <>
+                  <ul className="divide-y text-sm">
+                    {order.payments.map(payment => (
+                      <li key={payment.id} className="flex min-w-0 items-start justify-between gap-4 py-2.5">
+                        <div className="min-w-0">
+                          <TitleLine as="p" tone={['captured', 'partially-refunded'].includes(payment.status) && payment.providerTransactionId ? 'ok' : payment.status === 'failed' ? 'bad' : 'idle'} status={PAYMENT_LABELS[payment.status] || payment.status} className="font-medium">
+                            {PAYMENT_LABELS[payment.status] || payment.status}
+                          </TitleLine>
+                          <p className="pl-4 text-xs text-muted-foreground">{payment.providerKey} · {formatDateTime(payment.createdAt, timeZone, '-')}</p>
+                        </div>
+                        <div className="shrink-0 text-right font-mono text-[13px] tabular-nums">
+                          <p>{formatCents(payment.capturedCents)}</p>
+                          {payment.refundedCents > 0 && <p className="text-xs text-muted-foreground">-{formatCents(payment.refundedCents)}</p>}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="flex items-baseline justify-between border-t pt-2 text-sm">
+                    <span className="text-muted-foreground">Verified net</span>
+                    <span className="font-mono tabular-nums">{formatCents(settledNetCents(order.payments))} of {formatCents(order.grandTotalCents)}</span>
+                  </p>
+                </>
+              )}
+            </DeskSection>
+          </div>
+        </div>
+
+        <ServiceFormDialog
+          open={Boolean(form)}
+          title={form?.title || ''}
+          fields={form ? formFields(form) : []}
+          values={form?.values || {}}
+          errors={form?.errors || {}}
+          formError={form?.formError}
+          busy={busy === 'form'}
+          submitLabel={form?.submitLabel}
+          submitVariant={form?.variant}
+          extra={formExtra}
+          onValuesChange={changeFormValues}
+          onSubmit={submitForm}
+          onOpenChange={open => { if (!open) setForm(null) }}
+        />
+      </div>
+    </PageContainer>
+  )
+}

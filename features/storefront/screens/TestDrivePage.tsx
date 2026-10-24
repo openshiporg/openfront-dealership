@@ -10,6 +10,8 @@ import { submitStorefrontTestDrive } from '../actions/submissions'
 import { PageHeader } from '../components/PageHeader'
 import { useStorefrontBusiness } from '../components/StorefrontBusinessProvider'
 import { customerRequestReference } from '../lib/customerRequests'
+import { fetchListedInventoryOptions, type InventoryOption } from '../lib/data/inventory-facets'
+import { formatPrice } from '../lib/format'
 import { DEFAULT_TEST_DRIVE_SLOTS, closedDayLabel, dayAvailability, localDateString } from '../lib/bookingSlots'
 import {
   Field,
@@ -48,19 +50,43 @@ export function TestDrivePage() {
   const [requestReference, setRequestReference] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null)
+  const [submittedVehicle, setSubmittedVehicle] = useState<Vehicle | null>(null)
   const [submittedSummary, setSubmittedSummary] = useState<TestDriveSummary | null>(null)
+  const [inventoryOptions, setInventoryOptions] = useState<InventoryOption[] | null>(null)
+  const [inventoryError, setInventoryError] = useState(false)
 
   useEffect(() => {
-    if (!vehicleId) {
+    let active = true
+    void fetchListedInventoryOptions()
+      .then((items) => { if (active) setInventoryOptions(items) })
+      .catch(() => { if (active) { setInventoryOptions([]); setInventoryError(true) } })
+    return () => { active = false }
+  }, [])
+
+  useEffect(() => {
+    if (vehicleId) setFormData((prev) => ({ ...prev, vehicleId }))
+  }, [vehicleId])
+
+  useEffect(() => {
+    const id = formData.vehicleId
+    if (!id) {
       setSelectedVehicle(null)
       return
     }
+    let active = true
+    void fetchGraphQL<{ publicInventoryVehicle: Vehicle | null }>(GET_VEHICLE_BY_ID, { id })
+      .then((data) => { if (active) setSelectedVehicle(data.publicInventoryVehicle ?? null) })
+      .catch(() => { if (active) setSelectedVehicle(null) })
+    return () => { active = false }
+  }, [formData.vehicleId])
 
-    setFormData((prev) => ({ ...prev, vehicleId }))
-    void fetchGraphQL<{ publicInventoryVehicle: Vehicle | null }>(GET_VEHICLE_BY_ID, { id: vehicleId })
-      .then((data) => setSelectedVehicle(data.publicInventoryVehicle ?? null))
-      .catch(() => setSelectedVehicle(null))
-  }, [vehicleId])
+  const optionLabel = (item: InventoryOption) => [
+    [item.year, item.make, item.model, item.trim].filter(Boolean).join(' '),
+    item.stockNumber ? `Stock ${item.stockNumber}` : null,
+    item.price ? formatPrice(item.price, business.currencyCode) : null,
+  ].filter(Boolean).join(' · ')
+  const pickerOptions = inventoryOptions ?? []
+  const missingSelected = formData.vehicleId && !pickerOptions.some((item) => item.id === formData.vehicleId)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -86,6 +112,7 @@ export function TestDrivePage() {
         date: formData.preferredDate,
         time: formData.preferredTime,
       })
+      setSubmittedVehicle(selectedVehicle)
       setRequestReference(customerRequestReference('test-drive', result.data.testDriveId))
       setSubmitStatus('success')
       setIdempotencyKey(crypto.randomUUID())
@@ -127,16 +154,16 @@ export function TestDrivePage() {
               { label: 'Phone', value: submittedSummary?.phone },
             ]}
           >
-            {selectedVehicle && <StickerVehicle vehicle={selectedVehicle} label="Vehicle" />}
+            {submittedVehicle && <StickerVehicle vehicle={submittedVehicle} label="Vehicle" />}
           </Sticker>
         }
         actions={
           <>
             <Link
-              href={selectedVehicle ? `/inventory/${selectedVehicle.id}` : '/inventory'}
+              href={submittedVehicle ? `/inventory/${submittedVehicle.id}` : '/inventory'}
               className={`sf-pill sf-pill-primary ${PILL_TARGET}`}
             >
-              {selectedVehicle ? 'Return to vehicle' : 'Browse inventory'}
+              {submittedVehicle ? 'Return to vehicle' : 'Browse inventory'}
             </Link>
             <Link href="/financing" className={`sf-pill ${PILL_TARGET}`}>Financing</Link>
             <Link href="/trade-in" className={`sf-pill ${PILL_TARGET}`}>Trade-in</Link>
@@ -213,9 +240,33 @@ export function TestDrivePage() {
             </div>
           </FormSection>
 
-          {vehicleId && <input type="hidden" name="vehicleId" value={formData.vehicleId} />}
+          <FormSection step="02" title="Vehicle">
+            <Field label="Vehicle" htmlFor="vehicleId" optional>
+              <select
+                id="vehicleId"
+                name="vehicleId"
+                value={formData.vehicleId}
+                onChange={handleChange}
+                className="sf-input"
+                aria-busy={inventoryOptions === null}
+              >
+                <option value="">{inventoryOptions === null ? 'Loading inventory' : 'No specific vehicle'}</option>
+                {missingSelected && selectedVehicle && (
+                  <option value={formData.vehicleId}>
+                    {[selectedVehicle.year, selectedVehicle.make, selectedVehicle.model, selectedVehicle.trim].filter(Boolean).join(' ')}
+                  </option>
+                )}
+                {pickerOptions.map((item) => (
+                  <option key={item.id} value={item.id}>{optionLabel(item)}</option>
+                ))}
+              </select>
+            </Field>
+            {inventoryError && (
+              <p className="sf-muted mt-2 text-[length:var(--sf-text-sm)]" role="status">Inventory list unavailable.</p>
+            )}
+          </FormSection>
 
-          <FormSection step="02" title="Contact">
+          <FormSection step="03" title="Contact">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Full name" htmlFor="customerName" className="sm:col-span-2">
                 <input

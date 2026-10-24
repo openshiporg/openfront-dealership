@@ -142,6 +142,7 @@ export async function submitStorefrontFinancing(input: CommonSubmissionInput & {
   loanTerm?: number
   vehicleId?: string
   consent: boolean
+  privacyAcknowledged: boolean
 }) {
   return executeSubmission<SubmissionPayload & {
     applicationId?: string
@@ -176,6 +177,7 @@ export async function submitStorefrontService(input: CommonSubmissionInput & {
   vehicleModel: string
   vehicleVin?: string
   description?: string
+  servicePackageId?: string
 }) {
   return executeSubmission<SubmissionPayload & {
     serviceAppointmentId?: string

@@ -27,7 +27,7 @@ export async function createDealPencil(_root: unknown, { data }: { data: any }, 
     context.query.Rooftop.findOne({ where: { id: rooftopId }, query: 'id status' }),
     context.query.Vehicle.findOne({ where: { id: vehicleId }, query: 'id status rooftop { id } vin stockNumber year make model trim' }),
     leadId ? context.query.Lead.findOne({ where: { id: leadId }, query: 'id rooftop { id } assignedSalesperson { id }' }) : null,
-    tradeInId ? context.query.TradeIn.findOne({ where: { id: tradeInId }, query: 'id rooftop { id } lead { id } deal { id }' }) : null,
+    tradeInId ? context.query.TradeIn.findOne({ where: { id: tradeInId }, query: 'id rooftop { id } lead { id } deal { id } offerAmountCents vin year make model trim mileage' }) : null,
     context.sudo().query.DealershipProfile.findOne({ where: { id: 1 }, query: 'salesTaxRateBps docFeeCents' }),
   ])
   if (!rooftop || rooftop.status !== 'active') throw new Error('Rooftop not found or not accessible')
@@ -43,7 +43,11 @@ export async function createDealPencil(_root: unknown, { data }: { data: any }, 
   }
 
   const vehiclePriceCents = cents(data.vehiclePriceCents, 'Vehicle price')
-  const tradeInValueCents = cents(data.tradeInValueCents, 'Trade-in value')
+  // A picked trade-in record brings its recorded offer as the trade credit unless one is entered.
+  const tradeInValueCents = cents(data.tradeInValueCents ?? tradeIn?.offerAmountCents, 'Trade-in value')
+  const tradeInDetails = tradeIn
+    ? { tradeInId: tradeIn.id, vin: tradeIn.vin || null, year: tradeIn.year || null, make: tradeIn.make || null, model: tradeIn.model || null, trim: tradeIn.trim || null, mileage: tradeIn.mileage ?? null, offerAmountCents: tradeIn.offerAmountCents ?? null }
+    : {}
   // The dealership's configured doc fee and sales tax seed the pencil; staff edit them on the worksheet.
   const { fees, taxLines } = applyDealDefaults({ vehiclePriceCents, tradeInValueCents, rebates: [], fees: [], taxLines: [] }, profile)
   const terms = {
@@ -91,6 +95,7 @@ export async function createDealPencil(_root: unknown, { data }: { data: any }, 
         leadId,
         salespersonId,
         tradeInVehicleId: tradeInId,
+        tradeInDetails,
         status: 'pencil',
         ...terms,
       },

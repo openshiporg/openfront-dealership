@@ -11,7 +11,7 @@ import { PageHeader } from '../components/PageHeader'
 import { useStorefrontBusiness } from '../components/StorefrontBusinessProvider'
 import { formatMileage, formatPrice } from '../lib/format'
 import { customerRequestReference } from '../lib/customerRequests'
-import { transitionTradeInStep } from '../lib/tradeInForm'
+import { transitionTradeInStep, TRADE_IN_ESTIMATE_DISCLAIMER } from '../lib/tradeInForm'
 import { currencySymbol } from '../lib/format'
 import {
   Field,
@@ -82,6 +82,7 @@ export function TradeInPage() {
   const [stepError, setStepError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [interestedVehicle, setInterestedVehicle] = useState<Vehicle | null>(null)
+  const [estimate, setEstimate] = useState<{ min: number; max: number } | null>(null)
 
   useEffect(() => {
     if (!interestedVehicleId) {
@@ -110,6 +111,12 @@ export function TradeInPage() {
       })
       if (!result.success) throw new Error(result.error)
       setSubmissionReference(customerRequestReference('trade-in', result.data.tradeInId))
+      const { estimatedMin, estimatedMax } = result.data
+      setEstimate(
+        Number.isFinite(estimatedMin) && Number.isFinite(estimatedMax) && Number(estimatedMax) > 0
+          ? { min: Number(estimatedMin), max: Number(estimatedMax) }
+          : null
+      )
       setIdempotencyKey(crypto.randomUUID())
       setSubmitted(true)
     } catch (error) {
@@ -145,6 +152,7 @@ export function TradeInPage() {
     setStep(1)
     setFormData(EMPTY)
     setSubmissionReference(null)
+    setEstimate(null)
     setStepError(null)
     setSubmitError(null)
     setIdempotencyKey(crypto.randomUUID())
@@ -175,8 +183,17 @@ export function TradeInPage() {
       <RequestReceived
         eyebrow="Trade-in"
         reference={submissionReference}
-        note="Any offer, if made, will be shared separately after inspection and dealership review."
+        note={estimate
+          ? TRADE_IN_ESTIMATE_DISCLAIMER
+          : 'Any offer, if made, will be shared separately after inspection and dealership review.'}
         summary={sticker([
+          ...(estimate
+            ? [{
+                label: 'Preliminary range',
+                value: <span className="sf-figure">{formatPrice(estimate.min, business.currencyCode)} to {formatPrice(estimate.max, business.currencyCode)}</span>,
+                strong: true,
+              }]
+            : []),
           ...vehicleRows,
           { label: 'Name', value: contactName },
           { label: 'Email', value: formData.email },

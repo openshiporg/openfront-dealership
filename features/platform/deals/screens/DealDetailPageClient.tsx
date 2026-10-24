@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, type FormEvent, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ArrowRight, Check, Pencil, Save, X } from 'lucide-react'
+import { ArrowRight, Calculator, Check, Link2, Pencil, Save, Unlink, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
@@ -24,14 +24,18 @@ import {
 } from '@/features/platform/components/desk'
 import {
   acceptDealWorksheet,
+  getAttachableTradeIns,
   getDealLenderOffers,
   getDealWorkspace,
   presentDealWorksheet,
   reopenDealWorksheet,
   saveDealWorksheet,
   selectDealLenderOffer,
+  setDealTradeIn,
   transitionDeal,
   type DealLenderOffer,
+  type DealTradeIn,
+  type DealTradeInOption,
   type DealWorksheetVersion,
 } from '../actions'
 import { applyDealDefaults, calculateDealPrice, assertValidDealPrice, normalizeMoneyLines, repriceRateTaxLines, sumMoneyLines, type MoneyLine } from '@/features/keystone/lifecycle/dealPricing'
@@ -131,6 +135,26 @@ function worksheetFieldErrors(deal: Pick<Deal, 'fees' | 'products' | 'rebates' |
   return errors
 }
 
+/** Lease rate is stored as APR-equivalent basis points; money factor = APR% / 2400. */
+function moneyFactorFromBps(bps: number | null | undefined) {
+  return (Number(bps) || 0) / 100 / 2400
+}
+
+/** Standard lease payment: depreciation plus rent charge on the net capitalized cost. */
+function leasePaymentCents(capCostCents: number, residualCents: number, termMonths: number, rateBps: number) {
+  if (!termMonths || termMonths < 1) return 0
+  const moneyFactor = moneyFactorFromBps(rateBps)
+  const depreciation = (capCostCents - residualCents) / termMonths
+  const rent = (capCostCents + residualCents) * moneyFactor
+  return Math.max(0, Math.round(depreciation + rent))
+}
+
+function tradeInName(tradeIn: Pick<DealTradeIn, 'year' | 'make' | 'model' | 'trim'>) {
+  return [tradeIn.year, tradeIn.make, tradeIn.model, tradeIn.trim].filter(Boolean).join(' ') || 'Trade-in'
+}
+
+const CANCELLABLE_STATUSES = ['pencil', 'approved', 'financed']
+
 /** Only an optimistic-concurrency rejection means someone else changed the deal. */
 function isVersionConflict(message: string) {
   return /changed concurrently|reload and retry/i.test(message)
@@ -172,6 +196,17 @@ export function DealDetailPageClient({ id }: { id: string }) {
   const reopenIdempotencyKeyRef = useRef<string | null>(null)
   const [approvalIntent, setApprovalIntent] = useState<{ toStatus: string; notes: string; idempotencyKey: string; title: string; submitLabel: string } | null>(null)
   const [approvalError, setApprovalError] = useState<string | null>(null)
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const [cancelValues, setCancelValues] = useState({ reason: '' })
+  const [cancelError, setCancelError] = useState<string | null>(null)
+  const cancelIdempotencyKeyRef = useRef<string | null>(null)
+  const [dealTradeIn, setDealTradeInRecord] = useState<DealTradeIn | null>(null)
+  const [dealRooftopId, setDealRooftopId] = useState<string | null>(null)
+  const [tradeInDialog, setTradeInDialog] = useState<'attach' | 'detach' | null>(null)
+  const [tradeInOptions, setTradeInOptions] = useState<DealTradeInOption[] | null>(null)
+  const [tradeInValues, setTradeInValues] = useState({ tradeInId: '', reason: '' })
+  const [tradeInError, setTradeInError] = useState<string | null>(null)
+  const tradeInIdempotencyKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     loadDeal()
@@ -183,6 +218,8 @@ export function DealDetailPageClient({ id }: { id: string }) {
     const response = await getDealWorkspace(id)
     if (response.success && response.data?.dealWorkspace?.deal) {
       const value = response.data.dealWorkspace.deal
+      setDealTradeInRecord(response.data.tradeIn)
+      setDealRooftopId(response.data.rooftopId)
       value.financeEvidence = readFinanceEvidence(value.financeEvidence)
       for (const key of ['fees', 'rebates', 'products', 'taxLines']) value[key] = Array.isArray(value[key]) ? value[key] : []
       if (!value.taxLines.length && value.taxAmountCents > 0) value.taxLines = [{ code: 'legacy-tax', name: 'Tax', amountCents: value.taxAmountCents, source: 'operator-recorded' }]
@@ -465,6 +502,79 @@ export function DealDetailPageClient({ id }: { id: string }) {
     setApprovalError(null)
   }
 
+  const openCancelDeal = () => {
+    setCancelValues({ reason: '' })
+    setCancelError(null)
+    cancelIdempotencyKeyRef.current = `deal-cancel:${id}:${crypto.randomUUID()}`
+    setCancelDialogOpen(true)
+  }
+
+  const submitCancelDeal = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const reason = cancelValues.reason.trim()
+    if (!reason) {
+      setCancelError('A cancellation reason is required.')
+      return
+    }
+    if (!cancelIdempotencyKeyRef.current) {
+      setCancelError('Close and reopen this dialog to try again.')
+      return
+    }
+    setCancelError(null)
+    const failure = await transitionDealStatus('cancelled', reason, cancelIdempotencyKeyRef.current)
+    if (failure) {
+      setCancelError(failure)
+      return
+    }
+    cancelIdempotencyKeyRef.current = null
+    setCancelDialogOpen(false)
+  }
+
+  const openTradeInDialog = async (kind: 'attach' | 'detach') => {
+    if (!deal) return
+    setTradeInError(null)
+    setTradeInValues({ tradeInId: '', reason: '' })
+    tradeInIdempotencyKeyRef.current = `deal-trade-in:${deal.id}:${crypto.randomUUID()}`
+    setTradeInDialog(kind)
+    if (kind === 'attach') {
+      setTradeInOptions(null)
+      if (!dealRooftopId) {
+        setTradeInOptions([])
+        return
+      }
+      const response = await getAttachableTradeIns(dealRooftopId, deal.lead?.id || null)
+      if (response.success) setTradeInOptions(response.data.tradeIns)
+      else {
+        setTradeInOptions([])
+        setTradeInError(response.error || 'Unable to load trade-ins.')
+      }
+    }
+  }
+
+  const submitTradeIn = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!deal || !tradeInDialog) return
+    const tradeInId = tradeInDialog === 'attach' ? tradeInValues.tradeInId : null
+    const reason = tradeInValues.reason.trim()
+    if (tradeInDialog === 'attach' && !tradeInId) return setTradeInError('Select a trade-in.')
+    if (tradeInDialog === 'detach' && !reason) return setTradeInError('A reason is required.')
+    if (!tradeInIdempotencyKeyRef.current) return setTradeInError('Close and reopen this dialog to try again.')
+    setUpdating(true)
+    setTradeInError(null)
+    try {
+      const response = await setDealTradeIn({ dealId: deal.id, tradeInId, expectedUpdatedAt: deal.updatedAt, reason: reason || undefined, idempotencyKey: tradeInIdempotencyKeyRef.current })
+      if (!response.success) {
+        setTradeInError(response.error)
+        return
+      }
+      tradeInIdempotencyKeyRef.current = null
+      setTradeInDialog(null)
+      await loadDeal()
+    } finally {
+      setUpdating(false)
+    }
+  }
+
   const formatCurrency = (value: number | null | undefined) => formatUsd(value)
 
   const formatDate = (date: string | null) => {
@@ -598,6 +708,12 @@ export function DealDetailPageClient({ id }: { id: string }) {
           </Link>
         </Pill>
       )}
+      {CANCELLABLE_STATUSES.includes(deal.status) && (
+        <Pill onClick={openCancelDeal} disabled={updating}>
+          <X />
+          Cancel deal
+        </Pill>
+      )}
     </Track>
   )
   const hasStatusActions = ['pencil', 'submitted', 'approved', 'financed'].includes(deal.status)
@@ -643,7 +759,7 @@ export function DealDetailPageClient({ id }: { id: string }) {
             <Readout label="Total price" value={formatCurrency(savedPricing.totalPriceCents / 100)} sub={worksheetSaved ? `Worksheet v${deal.worksheetVersion}` : 'Not saved'} />
             <Readout label="Amount due" value={formatCurrency(savedPricing.cashPayableCents / 100)} sub={isCash && savedPricing.downPaymentCents > 0 ? `Due at signing · includes ${formatCurrency(savedPricing.downPaymentCents / 100)} down` : 'Due at signing'} tone={savedPricing.cashPayableCents > 0 ? 'warn' : 'idle'} />
             {savedPricing.loanTerm > 0 ? (
-              <Readout label="Payment" value={`${formatCurrency(savedPricing.monthlyPaymentCents / 100)}/mo`} sub={`${savedPricing.apr}% APR · ${savedPricing.loanTerm} mo`} />
+              <Readout label="Payment" value={`${formatCurrency(savedPricing.monthlyPaymentCents / 100)}/mo`} sub={deal.structureType === 'lease' ? `Lease · ${savedPricing.loanTerm} mo` : `${savedPricing.apr}% APR · ${savedPricing.loanTerm} mo`} />
             ) : (
               <Readout label="Amount financed" value={formatCurrency(savedPricing.financingAmountCents / 100)} sub={deal.structureType === 'cash' ? 'Cash' : undefined} />
             )}
@@ -692,7 +808,7 @@ export function DealDetailPageClient({ id }: { id: string }) {
                     <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t bg-muted/40 px-4 py-3">
                       {savedPricing.loanTerm > 0 && (
                         <>
-                          <span className="text-xs text-muted-foreground">{savedPricing.apr}% APR · {savedPricing.loanTerm} months · estimated payment</span>
+                          <span className="text-xs text-muted-foreground">{deal.structureType === 'lease' ? `Lease · residual ${formatCurrency((deal.residualValueCents || 0) / 100)} · money factor ${moneyFactorFromBps(deal.moneyFactorBasisPoints).toFixed(5)}` : `${savedPricing.apr}% APR`} · {savedPricing.loanTerm} months · estimated payment</span>
                           <span className="font-mono text-lg font-semibold tabular-nums">{formatCurrency(savedPricing.monthlyPaymentCents / 100)}/mo</span>
                         </>
                       )}
@@ -713,9 +829,14 @@ export function DealDetailPageClient({ id }: { id: string }) {
                     <Segmented
                       label="Deal structure"
                       size="sm"
-                      value={deal.structureType === 'finance' ? 'finance' : 'cash'}
-                      onChange={(structureType) => editWorksheet({ structureType, ...(structureType === 'cash' ? { loanTerm: 0, apr: 0, financingAmount: 0, monthlyPayment: 0 } : {}) })}
-                      options={[{ value: 'cash', label: 'Cash', disabled: updating }, { value: 'finance', label: 'Finance', disabled: updating }]}
+                      value={deal.structureType === 'finance' || deal.structureType === 'lease' ? deal.structureType : 'cash'}
+                      onChange={(structureType) => editWorksheet({
+                        structureType,
+                        ...(structureType === 'cash' ? { loanTerm: 0, apr: 0, financingAmount: 0, monthlyPayment: 0, residualValueCents: null, moneyFactorBasisPoints: null } : {}),
+                        ...(structureType === 'finance' ? { residualValueCents: null, moneyFactorBasisPoints: null } : {}),
+                        ...(structureType === 'lease' ? { apr: 0, residualValueCents: deal.residualValueCents ?? 0, moneyFactorBasisPoints: deal.moneyFactorBasisPoints ?? 0 } : {}),
+                      })}
+                      options={[{ value: 'cash', label: 'Cash', disabled: updating }, { value: 'finance', label: 'Finance', disabled: updating }, { value: 'lease', label: 'Lease', disabled: updating }]}
                     />
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -733,6 +854,41 @@ export function DealDetailPageClient({ id }: { id: string }) {
                       <>
                         <label className="grid min-w-0 gap-1.5"><span className={fieldLabel}>APR (%)</span><Input disabled={updating} aria-label="APR percentage" className="text-right tabular-nums" type="number" min="0" max="100" step="0.01" value={deal.apr || 0} onChange={(event) => editWorksheet({ apr: Number(event.target.value) })} /></label>
                         <label className="grid min-w-0 gap-1.5"><span className={fieldLabel}>Term (months)</span><Input disabled={updating} aria-label="Term in months" className="text-right tabular-nums" type="number" min="1" max="120" step="1" value={deal.loanTerm || 0} onChange={(event) => editWorksheet({ loanTerm: Number(event.target.value) })} /></label>
+                      </>
+                    )}
+                    {deal.structureType === 'lease' && (
+                      <>
+                        <label className="grid min-w-0 gap-1.5"><span className={fieldLabel}>Term (months)</span><Input disabled={updating} aria-label="Lease term in months" className="text-right tabular-nums" type="number" min="1" max="120" step="1" value={deal.loanTerm || 0} onChange={(event) => editWorksheet({ loanTerm: Number(event.target.value) })} /></label>
+                        <label className="grid min-w-0 gap-1.5"><span className={fieldLabel}>Residual value</span><MoneyInput disabled={updating} aria-label="Residual value" cents={deal.residualValueCents || 0} onCentsChange={(cents) => editWorksheet({ residualValueCents: cents })} /></label>
+                        <label className="grid min-w-0 gap-1.5">
+                          <span className={fieldLabel}>Lease rate (APR %)</span>
+                          <Input disabled={updating} aria-label="Lease rate as APR percentage" aria-describedby="lease-money-factor" className="text-right tabular-nums" type="number" min="0" max="100" step="0.01" value={(deal.moneyFactorBasisPoints || 0) / 100} onChange={(event) => editWorksheet({ moneyFactorBasisPoints: Math.max(0, Math.round(Number(event.target.value) * 100)) })} />
+                          <span id="lease-money-factor" className="text-xs tabular-nums text-muted-foreground">Money factor {moneyFactorFromBps(deal.moneyFactorBasisPoints).toFixed(5)}</span>
+                        </label>
+                        <label className="grid min-w-0 gap-1.5">
+                          <span className={fieldLabel}>Monthly payment</span>
+                          <MoneyInput disabled={updating} aria-label="Lease monthly payment" cents={Math.round(Number(deal.monthlyPayment || 0) * 100)} onCentsChange={(cents) => editWorksheet({ monthlyPayment: cents / 100 })} />
+                        </label>
+                        <div className="flex items-end">
+                          <Track>
+                            <Pill
+                              size="sm"
+                              disabled={updating || !deal.loanTerm}
+                              onClick={() => {
+                                try {
+                                  const lines = { fees: deal.fees, rebates: deal.rebates, products: deal.products, taxLines: deal.taxLines }
+                                  const price = calculateDealPrice({ vehiclePriceCents: Math.round(deal.vehiclePrice * 100), tradeInValueCents: Math.round(deal.tradeInValue * 100), downPaymentCents: Math.round(deal.downPayment * 100), ...lines, taxAmountCents: sumMoneyLines(deal.taxLines) })
+                                  editWorksheet({ monthlyPayment: leasePaymentCents(Math.max(0, price.balanceCents), deal.residualValueCents || 0, deal.loanTerm, deal.moneyFactorBasisPoints || 0) / 100 })
+                                } catch {
+                                  setError('Check the worksheet amounts')
+                                }
+                              }}
+                            >
+                              <Calculator />
+                              Calculate payment
+                            </Pill>
+                          </Track>
+                        </div>
                       </>
                     )}
                   </div>
@@ -882,16 +1038,47 @@ export function DealDetailPageClient({ id }: { id: string }) {
               )}
             </DeskSection>
 
-            <DeskSection title="Trade and down">
-              {savedPricing ? (
-                <Facts items={[
-                  { label: 'Trade-in credit', value: formatCurrency(savedPricing.tradeInValueCents / 100), mono: true },
-                  { label: downPaymentLabel, value: formatCurrency(savedPricing.downPaymentCents / 100), mono: true },
-                  { label: 'Structure', value: <span className="capitalize">{deal.structureType || 'cash'}</span> },
-                ]} />
-              ) : (
-                <p className="py-2 text-sm text-muted-foreground">No saved worksheet</p>
-              )}
+            <DeskSection
+              title="Trade and down"
+              actions={dealTradeIn ? <Link href={`${basePath}/platform/trade-ins/${dealTradeIn.id}`} className="text-xs font-medium text-muted-foreground hover:text-foreground">Open trade-in</Link> : undefined}
+            >
+              <div className="space-y-3">
+                {dealTradeIn ? (
+                  <TitleLine as="p" tone="ok" status="Trade-in attached" className="text-sm font-medium">
+                    {tradeInName(dealTradeIn)}
+                    <span className="font-normal text-muted-foreground"> · offer {formatCurrency((dealTradeIn.offerAmountCents || 0) / 100)}</span>
+                  </TitleLine>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No trade-in record</p>
+                )}
+                {savedPricing ? (
+                  <Facts items={[
+                    { label: 'Trade-in credit', value: formatCurrency(savedPricing.tradeInValueCents / 100), mono: true },
+                    { label: downPaymentLabel, value: formatCurrency(savedPricing.downPaymentCents / 100), mono: true },
+                    { label: 'Structure', value: <span className="capitalize">{deal.structureType || 'cash'}</span> },
+                  ]} />
+                ) : (
+                  <p className="py-2 text-sm text-muted-foreground">No saved worksheet</p>
+                )}
+                {deal.status === 'pencil' && (
+                  <div className="space-y-1">
+                    <Track>
+                      {dealTradeIn ? (
+                        <Pill size="sm" onClick={() => openTradeInDialog('detach')} disabled={updating || worksheetDirty} aria-describedby={worksheetDirty ? 'deal-trade-in-blocked' : undefined}>
+                          <Unlink />
+                          Detach trade-in
+                        </Pill>
+                      ) : (
+                        <Pill size="sm" onClick={() => openTradeInDialog('attach')} disabled={updating || worksheetDirty} aria-describedby={worksheetDirty ? 'deal-trade-in-blocked' : undefined}>
+                          <Link2 />
+                          Attach trade-in
+                        </Pill>
+                      )}
+                    </Track>
+                    {worksheetDirty && <p id="deal-trade-in-blocked" className="text-xs text-muted-foreground">Save the worksheet first</p>}
+                  </div>
+                )}
+              </div>
             </DeskSection>
 
             <DeskSection
@@ -958,6 +1145,50 @@ export function DealDetailPageClient({ id }: { id: string }) {
           onValuesChange={values => setReopenValues({ reason: values.reason || '' })}
           onSubmit={submitReopenWorksheet}
           onOpenChange={handleReopenDialogOpenChange}
+        />
+        <OperatorActionDialog
+          open={cancelDialogOpen}
+          title="Cancel deal"
+          description={deal.status === 'pencil' ? 'The deal is closed as cancelled.' : 'The deal is closed as cancelled, the vehicle is released and any open delivery is cancelled.'}
+          fields={[{ name: 'reason', label: 'Cancellation reason', type: 'textarea', required: true, maxLength: 1000 }]}
+          values={cancelValues}
+          error={cancelError}
+          busy={updating}
+          submitLabel="Cancel deal"
+          onValuesChange={values => setCancelValues({ reason: values.reason || '' })}
+          onSubmit={submitCancelDeal}
+          onOpenChange={open => {
+            setCancelDialogOpen(open)
+            if (!open) setCancelError(null)
+          }}
+        />
+        <OperatorActionDialog
+          open={tradeInDialog !== null}
+          title={tradeInDialog === 'attach' ? 'Attach trade-in' : 'Detach trade-in'}
+          description={tradeInDialog === 'attach' ? 'The appraisal offer becomes the trade credit; tax and payment are repriced.' : 'Trade credit returns to $0; tax and payment are repriced.'}
+          fields={tradeInDialog === 'attach'
+            ? [
+                {
+                  name: 'tradeInId',
+                  label: 'Trade-in',
+                  type: 'select',
+                  placeholder: tradeInOptions === null ? 'Loading trade-ins' : tradeInOptions.length === 0 ? 'No available trade-ins' : 'Select trade-in',
+                  options: (tradeInOptions || []).filter(option => option.offerAmountCents != null).map(option => ({ value: option.id, label: `${tradeInName(option)} · ${formatCurrency((option.offerAmountCents || 0) / 100)}` })),
+                },
+                { name: 'reason', label: 'Note (optional)', type: 'textarea', required: false, maxLength: 500 },
+              ]
+            : [{ name: 'reason', label: 'Reason', type: 'textarea', required: true, maxLength: 500 }]}
+          values={tradeInValues}
+          error={tradeInError}
+          busy={updating}
+          submitLabel={tradeInDialog === 'attach' ? 'Attach' : 'Detach'}
+          onValuesChange={values => setTradeInValues({ tradeInId: values.tradeInId || '', reason: values.reason || '' })}
+          onSubmit={submitTradeIn}
+          onOpenChange={open => {
+            if (open) return
+            setTradeInDialog(null)
+            setTradeInError(null)
+          }}
         />
       </div>
     </PageContainer>

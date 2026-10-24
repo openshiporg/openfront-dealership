@@ -153,6 +153,9 @@ export function ServicePage() {
           ? [`Service package: ${selectedPackage}`, formData.description].filter(Boolean).join('\n\n')
           : formData.description,
         vehicleYear: parseInt(formData.vehicleYear),
+        servicePackageId: serviceMenu.kind === 'ready' && selectedPackage
+          ? serviceMenu.packages.find((pkg) => pkg.name === selectedPackage)?.id
+          : undefined,
         rooftopSlug: business.rooftopSlug,
         idempotencyKey,
       })

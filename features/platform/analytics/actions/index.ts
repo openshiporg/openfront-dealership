@@ -9,6 +9,7 @@ import {
   type SalesMetrics,
   type ServiceMetrics,
 } from './metrics'
+import { getDealershipTimeZone } from '@/features/platform/lib/dealershipTimeZone'
 
 export type { InventoryMetrics, SalesMetrics, ServiceMetrics }
 
@@ -33,10 +34,11 @@ export type AnalyticsData = {
 }
 
 export async function getAnalyticsData(): Promise<AnalyticsData> {
+  const timeZone = await getDealershipTimeZone()
   const [salesRes, invRes, serviceRes, operationsRes] = await Promise.all([
     getSalesMetrics(),
     getInventoryMetrics(),
-    getServiceMetrics(),
+    getServiceMetrics(timeZone),
     keystoneClient<{
       operationalReport: AnalyticsOperations | null
       dealershipProfile: { currencyCode: string | null } | null

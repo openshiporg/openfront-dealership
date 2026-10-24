@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 
 import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
+import { operatorCommandRequest } from '@/features/platform/lib/operatorCommandClient'
 import { ROOFTOP_STAFF_QUERY } from '@/features/platform/lib/rooftopStaffQuery'
 import type { DealDefaults, MoneyLine } from '@/features/keystone/lifecycle/dealPricing'
 
@@ -42,7 +43,30 @@ export type DealSetupVehicle = {
   rooftop: { id: string }
 }
 
-export type DealSetupLead = { id: string; firstName: string; lastName: string; email: string; phone: string }
+export type DealSetupLead = {
+  id: string
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+  rooftop: { id: string } | null
+  interestedVehicle: { id: string } | null
+  assignedSalesperson: { id: string } | null
+}
+
+export type DealTradeInOption = {
+  id: string
+  year: string | null
+  make: string | null
+  model: string | null
+  trim: string | null
+  vin: string | null
+  offerAmountCents: number | null
+  lead: { id: string } | null
+  rooftop: { id: string } | null
+}
+
+export type DealTradeIn = { id: string; year: string | null; make: string | null; model: string | null; trim: string | null; vin: string | null; offerAmountCents: number | null }
 
 export type DomainTimelineEntry = { id: string; action: string; occurredAt: string; afterSnapshot: unknown; actor: { name: string } | null }
 
@@ -64,15 +88,17 @@ export async function getDealDeskWorkspace(status: string) {
 }
 
 const DEAL_DEFAULTS_FIELDS = 'salesTaxRateBps docFeeCents'
+const TRADE_IN_OPTION_FIELDS = 'id year make model trim vin offerAmountCents lead { id } rooftop { id }'
 
 function dealDefaults(profile: Partial<DealDefaults> | null | undefined): DealDefaults {
   return { salesTaxRateBps: Number(profile?.salesTaxRateBps) || 0, docFeeCents: Number(profile?.docFeeCents) || 0 }
 }
 
 export async function getDealWorkspace(id: string) {
-  const response = await keystoneClient<{ dealWorkspace: { deal: any; worksheetVersions: DealWorksheetVersion[] }; dealershipProfile: Partial<DealDefaults> | null }>(`
+  const response = await keystoneClient<{ dealWorkspace: { deal: any; worksheetVersions: DealWorksheetVersion[] }; dealershipProfile: Partial<DealDefaults> | null; dealTradeIn: { rooftop: { id: string } | null; tradeInVehicle: DealTradeIn | null } | null }>(`
     query DealWorkspace($id: ID!) {
       dealershipProfile { ${DEAL_DEFAULTS_FIELDS} }
+      dealTradeIn: deal(where: { id: $id }) { rooftop { id } tradeInVehicle { id year make model trim vin offerAmountCents } }
       dealWorkspace(id: $id) {
         deal { id financeEvidence vehiclePriceCents tradeInValueCents downPaymentCents financingAmountCents monthlyPaymentCents loanTerm apr taxAmountCents totalPriceCents fees rebates products taxLines residualValueCents moneyFactorBasisPoints status structureType worksheetVersion presentedAt acceptedAt saleDate createdAt updatedAt salesperson { id name } lead { id firstName lastName } vehicle { id year make model trim exteriorColor stockNumber vin priceCents } approvals { id decision approvalDate notes approver { name } } }
         worksheetVersions { id snapshot occurredAt }
@@ -80,7 +106,15 @@ export async function getDealWorkspace(id: string) {
     }
   `, { id }, { cache: 'no-store' })
   if (!response.success) return response
-  return { ...response, data: { ...response.data, dealDefaults: dealDefaults(response.data.dealershipProfile) } }
+  return {
+    ...response,
+    data: {
+      ...response.data,
+      dealDefaults: dealDefaults(response.data.dealershipProfile),
+      rooftopId: response.data.dealTradeIn?.rooftop?.id ?? null,
+      tradeIn: response.data.dealTradeIn?.tradeInVehicle ?? null,
+    },
+  }
 }
 
 export async function getDealLenderOffers(dealId: string) {
@@ -102,15 +136,18 @@ export async function getDealTimeline(aggregateType: 'Deal' | 'FinanceFundingCas
 }
 
 export async function getDealSetupOptions() {
-  const [vehicles, leads, profile] = await Promise.all([
+  const [vehicles, leads, profile, tradeIns] = await Promise.all([
     keystoneClient<{ vehicles: DealSetupVehicle[] }>(`
       query DealSetupVehicles { vehicles(where: { status: { equals: "available" } }) { id stockNumber year make model price purchasePrice rooftop { id } } }
     `, {}, { cache: 'no-store' }),
     keystoneClient<{ leads: DealSetupLead[] }>(`
-      query DealSetupLeads { leads(where: { status: { not: { equals: "closed-lost" } } }) { id firstName lastName email phone } }
+      query DealSetupLeads { leads(where: { status: { not: { equals: "closed-lost" } } }) { id firstName lastName email phone rooftop { id } interestedVehicle { id } assignedSalesperson { id } } }
     `, {}, { cache: 'no-store' }),
     keystoneClient<{ dealershipProfile: Partial<DealDefaults> | null }>(`
       query DealSetupDefaults { dealershipProfile { ${DEAL_DEFAULTS_FIELDS} } }
+    `, {}, { cache: 'no-store' }),
+    keystoneClient<{ tradeIns: DealTradeInOption[] }>(`
+      query DealSetupTradeIns { tradeIns(where: { deal: null }, orderBy: { createdAt: desc }, take: 200) { ${TRADE_IN_OPTION_FIELDS} } }
     `, {}, { cache: 'no-store' }),
   ])
   if (!vehicles.success) return { success: false as const, error: vehicles.error }
@@ -120,6 +157,7 @@ export async function getDealSetupOptions() {
     data: {
       vehicles: vehicles.data.vehicles || [],
       leads: leads.data.leads || [],
+      tradeIns: tradeIns.success ? tradeIns.data.tradeIns || [] : [],
       // The server applies the same defaults when it creates the pencil; this is the preview.
       dealDefaults: dealDefaults(profile.success ? profile.data.dealershipProfile : null),
     },
@@ -135,12 +173,13 @@ export async function createDealPencil(data: {
   vehicleId: string
   leadId?: string
   salespersonId?: string
+  tradeInId?: string
   vehiclePriceCents: number
   tradeInValueCents: number
   downPaymentCents: number
   idempotencyKey: string
 }) {
-  const response = await keystoneClient<{ createDealPencil: { id: string } | null }>(`
+  const response = await operatorCommandRequest<{ createDealPencil: { id: string } | null }>(`
     mutation CreateDealPencil($data: CreateDealPencilInput!) {
       createDealPencil(data: $data) { id }
     }
@@ -218,11 +257,35 @@ export async function reopenDealWorksheet(data: { dealId: string; expectedUpdate
 }
 
 export async function transitionDeal(input: { id: string; toStatus: string; notes: string; idempotencyKey: string }) {
-  const response = await keystoneClient<{ transitionDeal: { id: string; status: string; saleDate: string | null; lockedAt: string | null } | null }>(`
+  const response = await operatorCommandRequest<{ transitionDeal: { id: string; status: string; saleDate: string | null; lockedAt: string | null } | null }>(`
     mutation TransitionDeal($id: ID!, $toStatus: String!, $notes: String, $idempotencyKey: String!) {
       transitionDeal(id: $id, toStatus: $toStatus, notes: $notes, idempotencyKey: $idempotencyKey) { id status saleDate lockedAt }
     }
   `, input)
   if (response.success) revalidateDeal(input.id)
+  return response
+}
+
+/** Trade-ins a pencil deal can take: same rooftop, not on another deal, and the deal's lead or none. */
+export async function getAttachableTradeIns(rooftopId: string, leadId: string | null) {
+  const response = await keystoneClient<{ tradeIns: DealTradeInOption[] }>(`
+    query DealAttachableTradeIns($rooftopId: ID!) {
+      tradeIns(where: { deal: null, rooftop: { id: { equals: $rooftopId } } }, orderBy: { createdAt: desc }, take: 100) { ${TRADE_IN_OPTION_FIELDS} }
+    }
+  `, { rooftopId }, { cache: 'no-store' })
+  if (!response.success) return response
+  return { ...response, data: { tradeIns: (response.data.tradeIns || []).filter(tradeIn => !leadId || !tradeIn.lead || tradeIn.lead.id === leadId) } }
+}
+
+export async function setDealTradeIn(data: { dealId: string; tradeInId: string | null; expectedUpdatedAt: string; reason?: string; idempotencyKey: string }) {
+  const response = await operatorCommandRequest<{ setDealTradeIn: DealCommandResult }>(`
+    mutation SetDealTradeIn($data: SetDealTradeInInput!) {
+      setDealTradeIn(data: $data) { id status reused updatedAt }
+    }
+  `, { data })
+  if (response.success) {
+    revalidateDeal(data.dealId)
+    revalidatePath('/dashboard/platform/trade-ins')
+  }
   return response
 }

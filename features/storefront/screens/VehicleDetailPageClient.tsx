@@ -49,6 +49,7 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
   const [formData, setFormData] = useState(emptyForm)
   const testDriveOpenerRef = useRef<HTMLButtonElement>(null)
   const quoteOpenerRef = useRef<HTMLButtonElement>(null)
+  const reserveOpenerRef = useRef<HTMLButtonElement>(null)
   const contactOpenerRef = useRef<HTMLButtonElement>(null)
   const barTestDriveOpenerRef = useRef<HTMLButtonElement>(null)
   const barContactOpenerRef = useRef<HTMLButtonElement>(null)
@@ -140,7 +141,7 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
           email: formData.email,
           phone: formData.phone,
           preferredContact: 'email',
-          intent: intent === 'get-quote' ? 'get-quote' : 'vehicle-question',
+          intent: intent === 'get-quote' ? 'get-quote' : intent === 'reserve' ? 'reserve-vehicle' : 'vehicle-question',
           message: formData.message,
           vehicleId: vehicle.id,
           website: formData.website,
@@ -152,7 +153,9 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
           status: 'success',
           message: intent === 'get-quote'
             ? `${business.fullName} received your price-quote request.`
-            : `${business.fullName} received your question.`,
+            : intent === 'reserve'
+              ? `${business.fullName} received your reservation request. The vehicle is held once the dealership confirms.`
+              : `${business.fullName} received your question.`,
           reference: customerRequestReference('inquiry', result.data.leadId),
         })
       }
@@ -296,6 +299,16 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
                   className="sf-pill sf-pill-raised min-h-11 flex-auto px-3"
                 >
                   Get price quote
+                </button>
+              </div>
+              <div className="sf-track sf-track-block">
+                <button
+                  ref={reserveOpenerRef}
+                  type="button"
+                  onClick={() => openLead('reserve', reserveOpenerRef)}
+                  className="sf-pill min-h-11 flex-auto px-3"
+                >
+                  Reserve this vehicle
                 </button>
               </div>
               <div className="sf-track sf-track-block hidden lg:flex">

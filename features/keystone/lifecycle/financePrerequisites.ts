@@ -48,7 +48,7 @@ export type PrerequisiteStore = { prisma: {
 } }
 type StepStore = PrerequisiteStore & { prisma: {
   financeProduct: { findMany(input: { where: { rooftopId: string; active: boolean }; select: { id: true }; take: number }): Promise<Array<{ id: string }>> }
-  financeProductQuote: { findMany(input: { where: { dealId: string; rooftopId: string; status: string }; select: { productId: true; evidenceReference: true }; take: number }): Promise<Array<{ productId: string; evidenceReference: string | null }>> }
+  financeProductQuote: { findMany(input: { where: { dealId: string; rooftopId: string; status: { in: string[] } }; orderBy: Array<Record<string, 'asc' | 'desc'>>; select: { productId: true; status: true; evidenceReference: true }; take: number }): Promise<Array<{ productId: string; status: string; evidenceReference: string | null }>> }
 } }
 type PrerequisiteDeal = { id: string; rooftopId: string; structureType?: unknown } & Record<string, unknown>
 export type ArtifactRevision = { id: string; status: string; updatedAt: string; revisionHash: string; providerKey?: string }
@@ -206,9 +206,16 @@ export async function financeSteps(tx: StepStore, deal: PrerequisiteDeal & { sta
   const [inspection, products, quotes] = await Promise.all([
     inspectPrerequisites(tx, deal),
     tx.prisma.financeProduct.findMany({ where: { rooftopId: deal.rooftopId, active: true }, select: { id: true }, take: 100 }),
-    tx.prisma.financeProductQuote.findMany({ where: { dealId: deal.id, rooftopId: deal.rooftopId, status: 'quoted' }, select: { productId: true, evidenceReference: true }, take: 200 }),
+    tx.prisma.financeProductQuote.findMany({ where: { dealId: deal.id, rooftopId: deal.rooftopId, status: { in: ['quoted', 'failed'] } }, orderBy: [{ completedAt: 'desc' }, { id: 'desc' }], select: { productId: true, status: true, evidenceReference: true }, take: 200 }),
   ])
-  const quoted = new Set(quotes.filter(quote => String(quote.evidenceReference || '').trim()).map(quote => quote.productId))
+  // Latest answer per product wins; a provider that cannot quote ("failed") resolves the product too.
+  const quoted = new Set<string>()
+  const seen = new Set<string>()
+  for (const quote of quotes) {
+    if (seen.has(quote.productId)) continue
+    seen.add(quote.productId)
+    if (quote.status === 'failed' || String(quote.evidenceReference || '').trim()) quoted.add(quote.productId)
+  }
   const quotesDone = products.every(product => quoted.has(product.id))
   const approved = status !== 'submitted'
   const fundable = ['approved', 'financed'].includes(status)

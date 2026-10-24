@@ -71,6 +71,7 @@ function FinancingContent() {
     annualIncome: '',
     creditTier: '',
     consent: false,
+    privacyAcknowledged: false,
     website: '',
   })
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID())
@@ -211,6 +212,7 @@ function FinancingContent() {
         annualIncome: '',
         creditTier: '',
         consent: false,
+        privacyAcknowledged: false,
         website: '',
       })
     } catch (error) {
@@ -668,6 +670,16 @@ function FinancingContent() {
                     className="mt-0.5 size-5 shrink-0 accent-[var(--sf-accent)]"
                   />
                   <span>I agree to be contacted about financing options.</span>
+                </label>
+                <label className="sf-muted flex min-h-11 cursor-pointer items-start gap-3 text-[length:var(--sf-text-sm)] sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={applicationForm.privacyAcknowledged}
+                    onChange={(e) => setApplicationForm((prev) => ({ ...prev, privacyAcknowledged: e.target.checked }))}
+                    className="mt-0.5 size-5 shrink-0 accent-[var(--sf-accent)]"
+                  />
+                  <span>I acknowledge that {business.fullName} stores this application to review financing options with lenders.</span>
                 </label>
                 <input
                   type="text"

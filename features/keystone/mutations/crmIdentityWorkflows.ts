@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { operatorDateFields } from './operatorProjections'
+import { findMatchingRoutingRule } from './leadRouting'
 
 import { permissions } from '../access'
 import { recordDomainEventInTransaction } from '../lifecycle/domainEvents'
@@ -205,23 +206,35 @@ export async function configureLeadRoutingRule(_root: unknown, { data }: any, co
   await assertUserRooftopAccess(context, assigneeId, rooftopId)
   const routeKey = `${rooftopId}:${source}:${name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`
   const eventKey = `lead-route-rule:${commandKey(data.idempotencyKey)}`
-  const ruleId = randomUUID()
+  const active = data.active !== false
+  // With ruleId the command edits that rule in place, so a rename or source change does not leave the old rule behind.
+  const existingRuleId = data.ruleId ? String(data.ruleId) : null
+  const ruleId = existingRuleId || randomUUID()
 
   return context.transaction(async (tx: any) => {
     await tx.prisma.$queryRaw`SELECT 1 AS "locked" FROM pg_advisory_xact_lock(hashtextextended(${`command:${eventKey}`}, 0))`
     const replay = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { metadata: true, afterSnapshot: true } })
     if (replay) {
       const prior = (replay.afterSnapshot || {}) as any
-      if (prior.routeKey !== routeKey || prior.source !== source || prior.priority !== priority || prior.firstResponseMinutes !== firstResponseMinutes || prior.assigneeId !== assigneeId || prior.active !== (data.active !== false)) {
+      if (prior.routeKey !== routeKey || prior.source !== source || prior.priority !== priority || prior.firstResponseMinutes !== firstResponseMinutes || prior.assigneeId !== assigneeId || prior.active !== active || (existingRuleId && prior.ruleId !== existingRuleId)) {
         throw new Error('Lead routing rule idempotency key was reused with different evidence')
       }
       return { id: String((replay.metadata as any)?.ruleId || ''), status: prior.active ? 'active' : 'inactive', updatedAt: new Date(), reused: true }
     }
-    const rule = await tx.prisma.leadRoutingRule.upsert({
-      where: { routeKey },
-      create: { id: ruleId, rooftopId, routeKey, name, source, priority, firstResponseMinutes, assigneeId, active: true },
-      update: { name, source, priority, firstResponseMinutes, assigneeId, active: data.active !== false },
-    })
+    let rule
+    if (existingRuleId) {
+      const current = await tx.prisma.leadRoutingRule.findUnique({ where: { id: existingRuleId }, select: { id: true, rooftopId: true } })
+      if (!current || current.rooftopId !== rooftopId) throw new Error('Routing rule not found for this rooftop')
+      const clash = await tx.prisma.leadRoutingRule.findUnique({ where: { routeKey }, select: { id: true } })
+      if (clash && clash.id !== existingRuleId) throw new Error('Another rule already uses this name and source')
+      rule = await tx.prisma.leadRoutingRule.update({ where: { id: existingRuleId }, data: { routeKey, name, source, priority, firstResponseMinutes, assigneeId, active } })
+    } else {
+      rule = await tx.prisma.leadRoutingRule.upsert({
+        where: { routeKey },
+        create: { id: ruleId, rooftopId, routeKey, name, source, priority, firstResponseMinutes, assigneeId, active },
+        update: { name, source, priority, firstResponseMinutes, assigneeId, active },
+      })
+    }
     await recordDomainEventInTransaction(tx, {
       eventKey, rooftopId, aggregateType: 'LeadRoutingRule', aggregateId: rule.id, action: 'configured', topic: 'lead-routing.configured', actorId: context.session.itemId,
       afterSnapshot: { ruleId: rule.id, routeKey, source, priority, firstResponseMinutes, assigneeId, active: rule.active }, metadata: { ruleId: rule.id }, payload: { rooftopId, ruleId: rule.id, source, assigneeId },
@@ -242,10 +255,7 @@ export async function routeLead(_root: unknown, { data }: any, context: any) {
   return context.transaction(async (tx: any) => {
     await tx.prisma.$queryRaw`SELECT 1 AS "locked" FROM pg_advisory_xact_lock(hashtextextended(${`command:${eventKey}`}, 0))`
     const replay = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { afterSnapshot: true } })
-    const rule = await tx.prisma.leadRoutingRule.findFirst({
-      where: { rooftopId: lead.rooftop.id, active: true, source: { in: [lead.source || 'any', 'any'] } },
-      orderBy: [{ priority: 'desc' }, { routeKey: 'asc' }],
-    })
+    const rule = await findMatchingRoutingRule(tx, lead.rooftop.id, lead.source)
     if (!rule) throw new Error('No active routing rule matches this lead')
     if (replay) {
       const prior = (replay.afterSnapshot || {}) as any

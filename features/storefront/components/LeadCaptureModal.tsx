@@ -14,7 +14,7 @@ import { vehicleTitle } from '../lib/format'
 import { DEFAULT_TEST_DRIVE_SLOTS, closedDayLabel, dayAvailability, localDateString } from '../lib/bookingSlots'
 import { useStorefrontBusiness } from './StorefrontBusinessProvider'
 
-export type LeadIntent = 'contact' | 'test-drive' | 'get-quote'
+export type LeadIntent = 'contact' | 'test-drive' | 'get-quote' | 'reserve'
 
 export type LeadSubmissionFeedback = {
   status: 'idle' | 'success' | 'error'
@@ -113,6 +113,7 @@ export function LeadCaptureModal({
     contact: 'Contact about this vehicle',
     'test-drive': 'Schedule a test drive',
     'get-quote': 'Request a price quote',
+    reserve: 'Reserve this vehicle',
   }
 
   const fieldId = (name: string) => `lead-${name}`

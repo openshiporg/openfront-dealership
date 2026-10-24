@@ -29,6 +29,7 @@ import {
   getRooftopSalespeople,
   type DealSetupLead,
   type DealSetupVehicle,
+  type DealTradeInOption,
 } from '../actions'
 import { formatUsd, formatUsdCredit } from '../lib/formatMoney'
 import { MoneyInput } from '../components/MoneyInput'
@@ -83,16 +84,44 @@ function previewDeal(form: { vehiclePrice: number; tradeInValue: number; downPay
   }
 }
 
+const NO_TRADE_IN = 'none'
+
+function tradeInLabel(tradeIn: DealTradeInOption) {
+  return [tradeIn.year, tradeIn.make, tradeIn.model, tradeIn.trim].filter(Boolean).join(' ') || 'Trade-in'
+}
+
+/** The pencil a CRM link opens: its lead, the lead's interested vehicle when available, and a picked trade-in. */
+function prefilledForm(vehicles: Vehicle[], leads: Lead[], tradeIns: DealTradeInOption[], leadId: string, tradeInId: string) {
+  const lead = leads.find(item => item.id === leadId)
+  const vehicle = lead?.interestedVehicle ? vehicles.find(item => item.id === lead.interestedVehicle?.id) : undefined
+  const tradeIn = tradeIns.find(item => item.id === tradeInId && item.offerAmountCents != null && (!item.lead || item.lead.id === lead?.id))
+  return {
+    vehicleId: vehicle?.id || '',
+    leadId: lead?.id || '',
+    salespersonId: '',
+    tradeInId: tradeIn?.id || '',
+    vehiclePrice: vehicle?.price || 0,
+    tradeInValue: tradeIn ? (tradeIn.offerAmountCents || 0) / 100 : 0,
+    downPayment: 0,
+  }
+}
+
 export function DealCreatePageClient({
   initialVehicles,
   initialLeads,
+  initialTradeIns,
   initialDealDefaults,
   initialError,
+  prefillLeadId = '',
+  prefillTradeInId = '',
 }: {
   initialVehicles: Vehicle[]
   initialLeads: Lead[]
+  initialTradeIns: DealTradeInOption[]
   initialDealDefaults: DealDefaults
   initialError: string | null
+  prefillLeadId?: string
+  prefillTradeInId?: string
 }) {
   const router = useRouter()
   const idempotencyKeyRef = useRef(`deal-pencil:${crypto.randomUUID()}`)
@@ -102,18 +131,12 @@ export function DealCreatePageClient({
   const [saveError, setSaveError] = useState<string | null>(null)
   const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles)
   const [leads, setLeads] = useState<Lead[]>(initialLeads)
+  const [tradeIns, setTradeIns] = useState<DealTradeInOption[]>(initialTradeIns)
   const [dealDefaults, setDealDefaults] = useState<DealDefaults>(initialDealDefaults || NO_DEFAULTS)
   const [salesReps, setSalesReps] = useState<User[]>([])
   const [salesRepsLoading, setSalesRepsLoading] = useState(false)
 
-  const [formData, setFormData] = useState({
-    vehicleId: '',
-    leadId: '',
-    salespersonId: '',
-    vehiclePrice: 0,
-    tradeInValue: 0,
-    downPayment: 0,
-  })
+  const [formData, setFormData] = useState(() => prefilledForm(initialVehicles, initialLeads, initialTradeIns, prefillLeadId, prefillTradeInId))
 
   const calculated = previewDeal(formData, dealDefaults)
 
@@ -129,6 +152,13 @@ export function DealCreatePageClient({
         setSalesRepsLoading(false)
         if (response.success && response.data) setSalesReps(response.data.users)
         else setError(response.error || 'Unable to load sales reps.')
+        // The lead's assigned salesperson is the only one the server accepts.
+        if (response.success && response.data) {
+          setFormData(previous => {
+            const assigned = leads.find(lead => lead.id === previous.leadId)?.assignedSalesperson?.id
+            return assigned && response.data.users.some(user => user.id === assigned) ? { ...previous, salespersonId: assigned } : previous
+          })
+        }
       })
     }
     return () => { current = false }
@@ -142,6 +172,7 @@ export function DealCreatePageClient({
     if (response.success) {
       setVehicles(response.data.vehicles)
       setLeads(response.data.leads)
+      setTradeIns(response.data.tradeIns)
       setDealDefaults(response.data.dealDefaults)
     } else {
       setError(response.error || 'Unable to load deal options.')
@@ -151,11 +182,11 @@ export function DealCreatePageClient({
 
   const handleVehicleChange = (vehicleId: string) => {
     const vehicle = vehicles.find(v => v.id === vehicleId)
-    setFormData(prev => ({
-      ...prev,
-      vehicleId,
-      vehiclePrice: vehicle?.price || 0,
-    }))
+    setFormData(prev => {
+      const tradeIn = tradeIns.find(item => item.id === prev.tradeInId)
+      const keepTradeIn = !tradeIn || tradeIn.rooftop?.id === vehicle?.rooftop.id
+      return { ...prev, vehicleId, vehiclePrice: vehicle?.price || 0, ...(keepTradeIn ? {} : { tradeInId: '', tradeInValue: 0 }) }
+    })
   }
 
   const handleSave = async () => {
@@ -173,6 +204,12 @@ export function DealCreatePageClient({
       setSaveError('The selected vehicle has no rooftop.')
       return
     }
+    const lead = leads.find(item => item.id === formData.leadId)
+    if (lead?.rooftop?.id && lead.rooftop.id !== selectedVehicle.rooftop.id) {
+      setSaving(false)
+      setSaveError('The customer and vehicle are at different rooftops.')
+      return
+    }
 
     const data: Parameters<typeof createDealPencil>[0] = {
       rooftopId: selectedVehicle.rooftop.id,
@@ -185,6 +222,7 @@ export function DealCreatePageClient({
 
     if (formData.leadId) data.leadId = formData.leadId
     if (formData.salespersonId) data.salespersonId = formData.salespersonId
+    if (formData.tradeInId) data.tradeInId = formData.tradeInId
 
     const response = await createDealPencil(data)
 
@@ -203,6 +241,30 @@ export function DealCreatePageClient({
 
   const selectedVehicle = vehicles.find(v => v.id === formData.vehicleId)
   const selectedLead = leads.find(l => l.id === formData.leadId)
+  const tradeInOptions = tradeIns.filter(tradeIn =>
+    (!selectedVehicle || tradeIn.rooftop?.id === selectedVehicle.rooftop.id) &&
+    (!tradeIn.lead || tradeIn.lead.id === formData.leadId)
+  )
+  const selectedTradeIn = tradeIns.find(tradeIn => tradeIn.id === formData.tradeInId)
+
+  const chooseLead = (leadId: string) => setFormData(previous => {
+    const assigned = leads.find(lead => lead.id === leadId)?.assignedSalesperson?.id
+    const tradeIn = tradeIns.find(item => item.id === previous.tradeInId)
+    const keepTradeIn = !tradeIn?.lead || tradeIn.lead.id === leadId
+    return {
+      ...previous,
+      leadId,
+      salespersonId: assigned && salesReps.some(user => user.id === assigned) ? assigned : previous.salespersonId,
+      ...(keepTradeIn ? {} : { tradeInId: '', tradeInValue: 0 }),
+    }
+  })
+
+  const chooseTradeIn = (value: string) => {
+    const tradeIn = tradeIns.find(item => item.id === value)
+    setFormData(previous => tradeIn
+      ? { ...previous, tradeInId: tradeIn.id, tradeInValue: (tradeIn.offerAmountCents || 0) / 100 }
+      : { ...previous, tradeInId: '', tradeInValue: 0 })
+  }
 
   const breadcrumbs = [
     { type: 'link' as const, label: 'Dashboard', href: basePath },
@@ -270,7 +332,7 @@ export function DealCreatePageClient({
               <Step index={1} title="Customer" done={Boolean(formData.leadId)} optional>
                 <label className="grid min-w-0 gap-1.5">
                   <span className={fieldLabel}>Customer (lead)</span>
-                  <Select value={formData.leadId} onValueChange={(v) => setFormData(prev => ({ ...prev, leadId: v }))}>
+                  <Select value={formData.leadId} onValueChange={chooseLead}>
                     <SelectTrigger aria-label="Customer">
                       <SelectValue placeholder="Select customer" />
                     </SelectTrigger>
@@ -339,7 +401,35 @@ export function DealCreatePageClient({
                 </label>
               </Step>
 
-              <Step index={3} title="Numbers" done={formData.vehiclePrice > 0}>
+              <Step index={3} title="Trade-in" done={Boolean(formData.tradeInId)} optional>
+                <label className="grid min-w-0 gap-1.5">
+                  <span className={fieldLabel}>Trade-in record</span>
+                  <Select value={formData.tradeInId || NO_TRADE_IN} onValueChange={(value) => chooseTradeIn(value === NO_TRADE_IN ? '' : value)}>
+                    <SelectTrigger aria-label="Trade-in record">
+                      <SelectValue placeholder="No trade-in record" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_TRADE_IN}>No trade-in record</SelectItem>
+                      {tradeInOptions.map(tradeIn => (
+                        <SelectItem key={tradeIn.id} value={tradeIn.id} disabled={tradeIn.offerAmountCents == null}>
+                          {tradeInLabel(tradeIn)}{tradeIn.offerAmountCents != null ? ` · ${formatPrice(tradeIn.offerAmountCents / 100)}` : ' · not appraised'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+                {selectedTradeIn && (
+                  <Panel className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="font-medium">{tradeInLabel(selectedTradeIn)}</p>
+                      <Code>{selectedTradeIn.vin || 'VIN not entered'}</Code>
+                    </div>
+                    <Link href={`${basePath}/platform/trade-ins/${selectedTradeIn.id}`} className="text-xs font-medium text-muted-foreground hover:text-foreground">Open trade-in</Link>
+                  </Panel>
+                )}
+              </Step>
+
+              <Step index={4} title="Numbers" done={formData.vehiclePrice > 0}>
                 <div className="grid gap-4 sm:grid-cols-3">
                   <label htmlFor="deal-negotiated-price" className="grid min-w-0 gap-1.5">
                     <span className={fieldLabel}>Negotiated price</span>
@@ -357,7 +447,10 @@ export function DealCreatePageClient({
                       cents={Math.round(formData.tradeInValue * 100)}
                       onCentsChange={(cents) => setFormData(prev => ({ ...prev, tradeInValue: cents / 100 }))}
                       placeholder="0"
+                      disabled={Boolean(formData.tradeInId)}
+                      aria-describedby={formData.tradeInId ? 'deal-trade-in-value-source' : undefined}
                     />
+                    {formData.tradeInId && <span id="deal-trade-in-value-source" className="text-xs text-muted-foreground">Appraisal offer</span>}
                   </label>
                   <label htmlFor="deal-down-payment" className="grid min-w-0 gap-1.5">
                     <span className={fieldLabel}>Down payment</span>

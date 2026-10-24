@@ -24,3 +24,17 @@ export function buildDeliveryChecklistEntry(code: string, evidenceReference: str
 
   return { code, status: 'complete' as const, evidenceReference: reference }
 }
+
+/** A staff-recorded checklist item can be waived; the waiver reason is kept as its evidence reference. */
+export function buildDeliveryWaiverEntry(code: string, reason: string) {
+  if (!DELIVERY_CHECKLIST_ITEMS.some(item => item.code === code)) {
+    throw new Error('Select one valid delivery checklist item.')
+  }
+
+  const text = reason.trim()
+  if (!text || text.length > 200) {
+    throw new Error('A waiver reason is required (maximum 200 characters).')
+  }
+
+  return { code, status: 'waived' as const, evidenceReference: text }
+}

@@ -69,7 +69,20 @@ export const Deal = list({
       assertRelationshipUnchanged('lead', resolvedData, item.leadId)
       assertRelationshipUnchanged('vehicle', resolvedData, item.vehicleId)
       assertRelationshipUnchanged('salesperson', resolvedData, item.salespersonId)
-      assertRelationshipUnchanged('tradeInVehicle', resolvedData, item.tradeInVehicleId)
+      // The trade-in can change only while the deal is a pencil draft (setDealTradeIn reprices the
+      // trade credit); from submission on it is part of the deal evidence.
+      if (item.status === 'pencil') {
+        const nextTradeInId = connectedId(resolvedData.tradeInVehicle)
+        if (nextTradeInId) {
+          const tradeIn = await assertAccessibleRelationship(context, 'TradeIn', nextTradeInId, 'id lead { id } deal { id }')
+          if (tradeIn?.deal && String(tradeIn.deal.id) !== String(item.id)) throw new Error('Trade-in is already attached to another deal')
+          if (item.leadId && tradeIn?.lead && String(tradeIn.lead.id) !== String(item.leadId)) {
+            throw new Error('Deal and trade-in must belong to the same lead')
+          }
+        }
+      } else {
+        assertRelationshipUnchanged('tradeInVehicle', resolvedData, item.tradeInVehicleId)
+      }
       if (resolvedData.status !== undefined) {
         throw new Error('Deal status changes must use transitionDeal')
       }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import Link from 'next/link'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -17,7 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { MoreHorizontal, Plus, RefreshCw, Search, Upload } from 'lucide-react'
+import { ClipboardList, History, MoreHorizontal, Plus, RefreshCw, Search, Upload } from 'lucide-react'
 import { LiveVehiclePhotos, reorderPhotoIds, uploadVehiclePhoto, VehiclePhotoEditor } from '../components/VehiclePhotos'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
@@ -53,6 +54,7 @@ import {
   updateInventoryMerchandisingDraft,
 } from '../actions'
 import { selectPublicFeedRunCandidates } from '../lib/publicFeedCandidates'
+import { ACQUISITION_SOURCES, COST_TYPES, RECON_CATEGORIES, acquisitionSourceLabels, costTypeLabels, reconCategoryLabels } from '../lib/inventoryLabels'
 import {
   createMerchandisingCommandAttempt,
   merchandisingCommandResultMessage,
@@ -280,11 +282,11 @@ export function VehicleListPageClient({
     const fields: Record<string, string> = type === 'intake' ? {
       vin: '', stockNumber: '', year: String(new Date().getFullYear()), condition: 'used', makeChoice: '', make: '', model: '', trim: '',
       exteriorColor: '', interiorColor: '', features: '',
-      purchaseDollars: '', retailDollars: '', mileage: '0', description: '', locationCode: 'INTAKE',
+      purchaseDollars: '', retailDollars: '', mileage: '0', description: '', locationCode: 'INTAKE', acquisitionSource: 'dealer-transfer', sourceReference: '',
     } : type === 'edit' && vehicle ? {
       retailDollars: vehicle.price.toFixed(2), mileage: String(vehicle.mileage), description: vehicle.description,
-    } : type === 'photos' ? {} : type === 'move' && vehicle ? { locationCode: vehicle.locationCode } : type === 'cost' ? { dollars: '100', reference: '' } :
-      type === 'recon-open' ? { title: '', estimatedDollars: '0' } : { actualDollars: '0' }
+    } : type === 'photos' ? {} : type === 'move' && vehicle ? { locationCode: vehicle.locationCode } : type === 'cost' ? { costType: 'other', dollars: '100', reference: '' } :
+      type === 'recon-open' ? { title: '', category: 'inspection', estimatedDollars: '0' } : { actualDollars: '0' }
     setTaskError(null)
     setActionMessage(null)
     if (type === 'intake') clearIntakePhotos()
@@ -378,7 +380,7 @@ export function VehicleListPageClient({
         }
         const intakeResponse = await intakeInventoryVehicle({
           rooftopId: intakeRooftopId, idempotencyKey: task.idempotencyKey,
-          reason: 'Vehicle acquired and stocked from inventory operations desk', acquisitionSource: 'dealer-transfer', sourceReference: 'operator-recorded',
+          reason: 'Vehicle acquired and stocked from inventory operations desk', acquisitionSource: ACQUISITION_SOURCES.includes(field('acquisitionSource') as typeof ACQUISITION_SOURCES[number]) ? field('acquisitionSource') : 'dealer-transfer', sourceReference: field('sourceReference') || 'operator-recorded',
           vin, stockNumber, year, make, model, trim: field('trim'), exteriorColor: field('exteriorColor'), interiorColor: field('interiorColor'),
           mileage, purchasePriceCents, listPriceCents: priceCents, priceCents,
           condition, description: field('description'), features: featureList(task.fields.features || ''), imagePath: '', locationCode, locationLabel: locationCode,
@@ -410,12 +412,12 @@ export function VehicleListPageClient({
       } else if (task.type === 'cost' && task.vehicle) {
         const amountCents = money('dollars', 'Inventory cost')
         if (amountCents <= 0) throw new Error('Enter a positive inventory cost.')
-        response = await recordInventoryCost({ stockId: task.vehicle.inventoryStockId, costType: 'other', amountCents, reference: field('reference') || undefined, reason: 'Cost recorded from inventory operations desk', idempotencyKey: task.idempotencyKey })
+        response = await recordInventoryCost({ stockId: task.vehicle.inventoryStockId, costType: COST_TYPES.includes(field('costType') as typeof COST_TYPES[number]) ? field('costType') : 'other', amountCents, reference: field('reference') || undefined, reason: 'Cost recorded from inventory operations desk', idempotencyKey: task.idempotencyKey })
       } else if (task.type === 'recon-open' && task.vehicle) {
         const title = field('title')
         if (!title) throw new Error('A reconditioning work item is required.')
         const estimatedCostCents = money('estimatedDollars', 'Estimated recon cost')
-        response = await openInventoryReconWorkItem({ stockId: task.vehicle.inventoryStockId, title, category: 'other', estimatedCostCents, reason: 'Opened from inventory operations desk', idempotencyKey: task.idempotencyKey })
+        response = await openInventoryReconWorkItem({ stockId: task.vehicle.inventoryStockId, title, category: RECON_CATEGORIES.includes(field('category') as typeof RECON_CATEGORIES[number]) ? field('category') : 'other', estimatedCostCents, reason: 'Opened from inventory operations desk', idempotencyKey: task.idempotencyKey })
       } else if (task.type === 'recon-complete' && task.vehicle && task.reconWorkItem) {
         const attempt = resolveReconCompletionAttempt(task.reconCompletionAttempt ?? null, () => createReconCompletionAttempt(
           task.reconWorkItem!.id,
@@ -640,6 +642,19 @@ export function VehicleListPageClient({
       <Input id={`inventory-task-${name}`} type={options.type || 'text'} inputMode={options.inputMode} min={options.min} step={options.step} maxLength={options.maxLength} required={options.required ?? true} disabled={options.disabled} list={options.list} value={task?.fields[name] || ''} onChange={event => updateTaskField(name, event.target.value)} />
     </label>
   )
+  const taskSelect = (name: string, label: string, options: ReadonlyArray<{ value: string; label: string }>) => (
+    <label key={name} htmlFor={`inventory-task-${name}`} className="grid gap-1.5 text-sm">
+      <span className={fieldLabelClass}>{label}</span>
+      <Select value={task?.fields[name] || ''} onValueChange={value => updateTaskField(name, value)}>
+        <SelectTrigger id={`inventory-task-${name}`}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </label>
+  )
   const taskTitle = task?.type === 'intake' ? 'Intake vehicle' : task?.type === 'edit' ? 'Edit listing draft' : task?.type === 'photos' ? 'Photos' : task?.type === 'move' ? 'Move inventory' : task?.type === 'cost' ? 'Record inventory cost' : task?.type === 'recon-open' ? 'Add recon work item' : 'Finish recon work item'
   const intakeMakeChoice = task?.type === 'intake' ? task.fields.makeChoice || '' : ''
   const intakeModels = makes.find(make => make.name === intakeMakeChoice)?.models || []
@@ -691,6 +706,12 @@ export function VehicleListPageClient({
               <RefreshCw className={loading ? 'animate-spin' : undefined} />
               <span className="max-sm:sr-only">Refresh</span>
             </Pill>
+            <Pill asChild>
+              <Link href={`${basePath}/platform/vehicles/acquisitions`}><ClipboardList /><span className="max-sm:sr-only">Acquisitions</span></Link>
+            </Pill>
+            <Pill asChild>
+              <Link href={`${basePath}/platform/vehicles/feed`}><History /><span className="max-sm:sr-only">Feed</span></Link>
+            </Pill>
             <Pill onClick={intakeVehicle} disabled={actionId === 'intake' || !intakeRooftopId}>
               <Plus /> Intake
             </Pill>
@@ -734,6 +755,7 @@ export function VehicleListPageClient({
       </div>
       <div className="lg:col-span-2">
         <Track>
+          <Pill size="sm" asChild><Link href={`${basePath}/platform/vehicles/${vehicle.id}`}>Open vehicle</Link></Pill>
           <Pill size="sm" onClick={() => managePhotos(vehicle)}>Photos</Pill>
           <Pill size="sm" variant="plain" onClick={() => setSelectedVehicle(null)}>Close details</Pill>
         </Track>
@@ -885,8 +907,10 @@ export function VehicleListPageClient({
                   <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-start md:justify-between md:gap-6">
                     <div className="min-w-0 flex-1">
                       <TitleLine as="h3" tone={statusTones[stage] || 'idle'} status={statusLabels[stage] || stage} className="text-sm font-medium text-foreground">
-                        {vehicle.year} {vehicle.make} {vehicle.model}
-                        {vehicle.trim && <span className="font-normal text-muted-foreground"> {vehicle.trim}</span>}
+                        <Link href={`${basePath}/platform/vehicles/${vehicle.id}`} className="hover:underline">
+                          {vehicle.year} {vehicle.make} {vehicle.model}
+                          {vehicle.trim && <span className="font-normal text-muted-foreground"> {vehicle.trim}</span>}
+                        </Link>
                       </TitleLine>
                       <p className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 pl-4 text-xs text-muted-foreground">
                         <Code className="text-foreground">{vehicle.stockNumber}</Code>
@@ -931,6 +955,7 @@ export function VehicleListPageClient({
                           </Pill>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem asChild><Link href={`${basePath}/platform/vehicles/${vehicle.id}`}>Open vehicle</Link></DropdownMenuItem>
                           <DropdownMenuItem disabled={busy} onClick={() => moveStock(vehicle)}>Move</DropdownMenuItem>
                           <DropdownMenuItem disabled={busy} onClick={() => addInventoryCost(vehicle)}>Cost</DropdownMenuItem>
                           <DropdownMenuItem disabled={busy} onClick={() => editMerchandisingDraft(vehicle)}>Edit listing</DropdownMenuItem>
@@ -1006,6 +1031,8 @@ export function VehicleListPageClient({
                 {taskInput('purchaseDollars', `Purchase cost (${currencyCode})`, { inputMode: 'decimal' })}
                 {taskInput('retailDollars', `Retail price (${currencyCode})`, { inputMode: 'decimal' })}
                 {taskInput('locationCode', 'Lot location')}
+                {taskSelect('acquisitionSource', 'Acquired from', ACQUISITION_SOURCES.map(value => ({ value, label: acquisitionSourceLabels[value] })))}
+                {taskInput('sourceReference', 'Source reference (optional)', { required: false, maxLength: 200 })}
               </>}
               {task?.type === 'edit' && <>
                 {taskInput('retailDollars', `Retail price (${currencyCode})`, { inputMode: 'decimal' })}
@@ -1013,11 +1040,13 @@ export function VehicleListPageClient({
               </>}
               {task?.type === 'move' && taskInput('locationCode', 'New lot location')}
               {task?.type === 'cost' && <>
+                {taskSelect('costType', 'Cost type', COST_TYPES.map(value => ({ value, label: costTypeLabels[value] })))}
                 {taskInput('dollars', `Cost amount (${currencyCode})`, { inputMode: 'decimal' })}
                 {taskInput('reference', 'Invoice or reference (optional)', { required: false })}
               </>}
               {task?.type === 'recon-open' && <>
                 {taskInput('title', 'Work item')}
+                {taskSelect('category', 'Category', RECON_CATEGORIES.map(value => ({ value, label: reconCategoryLabels[value] })))}
                 {taskInput('estimatedDollars', `Estimated cost (${currencyCode})`, { inputMode: 'decimal' })}
               </>}
               {task?.type === 'recon-complete' && taskInput('actualDollars', `Actual cost (${currencyCode})`, { inputMode: 'decimal', disabled: Boolean(task.reconCompletionAttempt) })}

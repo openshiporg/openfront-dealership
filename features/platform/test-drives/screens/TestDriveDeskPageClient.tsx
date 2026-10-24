@@ -87,6 +87,7 @@ function formatDay(value: string | null | undefined, timeZone: string) {
 }
 
 function driveState(testDrive: TestDrive): { tone: DeskTone; label: string } {
+  if (testDrive.cancelledAt) return { tone: 'idle', label: 'Cancelled' }
   if (testDrive.noShow) return { tone: 'idle', label: 'No-show' }
   if (testDrive.completed) return { tone: 'ok', label: 'Completed' }
   if (isPastDue(testDrive)) return { tone: 'bad', label: 'Past due' }
@@ -424,8 +425,8 @@ export function TestDriveDeskPageClient({
                   </div>
 
                   <div className="col-span-2 min-w-0 md:col-span-1">
-                    {testDrive.noShow ? (
-                      <p className="text-xs text-muted-foreground">No-show</p>
+                    {testDrive.cancelledAt || testDrive.noShow ? (
+                      <p className="text-xs text-muted-foreground">{testDrive.cancelledAt ? 'Cancelled by customer' : 'No-show'}</p>
                     ) : testDrive.completed ? (
                       <div className="text-xs">
                         <p className="font-medium text-foreground">{interestLabels[testDrive.interestedLevel || ''] || testDrive.interestedLevel || '-'}</p>

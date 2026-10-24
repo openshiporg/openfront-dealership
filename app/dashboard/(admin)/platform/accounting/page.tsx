@@ -1,3 +1,3 @@
-import { AccountingWorkspacePage } from '@/features/platform/accounting/screens/AccountingWorkspacePage'
+import { AccountingPage } from '@/features/platform/accounting/screens/AccountingPage'
 
-export default AccountingWorkspacePage
+export default AccountingPage

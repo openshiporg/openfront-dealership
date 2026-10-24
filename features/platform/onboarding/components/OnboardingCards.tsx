@@ -100,7 +100,7 @@ export function OnboardingCards({
     if (hidden) return;
     let active = true;
     getStoreSetupState()
-      .then((state) => active && setStoreConfigured(!state.success || state.configured))
+      .then((state) => active && setStoreConfigured(!state.success || (state.configured && !state.resumable)))
       .catch(() => active && setStoreConfigured(true));
     return () => {
       active = false;
@@ -124,6 +124,7 @@ export function OnboardingCards({
   }
 
   // A store that already has a rooftop is set up; onboarding would seed a second dealership.
+  // A run left in progress by a partial failure stays visible so it can be retried.
   if (storeConfigured !== false) {
     return null;
   }

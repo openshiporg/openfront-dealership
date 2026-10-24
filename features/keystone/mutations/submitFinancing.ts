@@ -45,7 +45,10 @@ export async function submitFinancing(_root: unknown, { data }: { data: any }, c
   if (data.consent !== true) {
     throw new SubmissionError('Contact consent is required.')
   }
-  const privacyAcknowledged = data.privacyAcknowledged === true
+  if (data.privacyAcknowledged !== true) {
+    throw new SubmissionError('Privacy acknowledgement is required.')
+  }
+  const privacyAcknowledged = true
 
   const idempotencyKey = publicSubmissionIdempotencyKey(data.idempotencyKey)
   const { firstName, lastName } = splitCustomerName(fullName, 'Finance', 'Applicant')

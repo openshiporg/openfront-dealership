@@ -120,6 +120,10 @@ async function transitionDealCommand(
       return sessionContext.db.Deal.findOne({ where: { id } })
     }
     assertDealTransition(deal.status, toStatus, transitionPermissions(sessionContext.session))
+    // Rejecting a submitted deal keeps its optional approval note; any other cancellation needs a reason.
+    if (toStatus === 'cancelled' && deal.status !== 'submitted' && !String(notes || '').trim()) {
+      throw new Error('A cancellation reason is required')
+    }
 
     const now = new Date()
     const update: Record<string, unknown> = { status: toStatus }
@@ -173,6 +177,30 @@ async function transitionDealCommand(
         data: { status: 'available' },
       })
       if (released.count !== 1) throw new Error('Reserved vehicle could not be released')
+    }
+
+    if (toStatus === 'cancelled') {
+      const reason = String(notes || '').trim()
+      // An open delivery appointment cannot outlive its deal.
+      const activeCase = await transactionContext.prisma.deliveryCase.findFirst({ where: { dealId: id, status: { in: ['scheduled', 'arrived', 'ready'] } } })
+      if (activeCase) {
+        const caseEvidence = { version: 2, dealId: id, action: 'cancel', status: 'cancelled', reason, source: 'deal-cancelled', priorStatus: activeCase.status }
+        await transactionContext.prisma.deliveryCase.update({ where: { id: activeCase.id }, data: { status: 'cancelled', acknowledgedAt: null, customerAcknowledgment: '', deliverySnapshot: caseEvidence } })
+        await recordDomainEventInTransaction(transactionContext, {
+          eventKey: `${eventKey}:delivery-case`, rooftopId: deal.rooftop.id, aggregateType: 'DeliveryCase', aggregateId: id,
+          action: 'cancel', topic: 'delivery-case.updated', actorId: context.session.itemId,
+          afterSnapshot: caseEvidence, payload: { rooftopId: deal.rooftop.id, dealId: id, status: 'cancelled' },
+        })
+      }
+      // Release the trade-in so it can be appraised again or put on another deal.
+      if (rawDeal.tradeInVehicleId) {
+        await transactionContext.prisma.deal.update({ where: { id }, data: { tradeInVehicleId: null } })
+        await recordDomainEventInTransaction(transactionContext, {
+          eventKey: `${eventKey}:trade-in`, rooftopId: deal.rooftop.id, aggregateType: 'TradeIn', aggregateId: rawDeal.tradeInVehicleId,
+          action: 'released-from-deal', topic: 'trade-in.released', actorId: context.session.itemId,
+          afterSnapshot: { tradeInId: rawDeal.tradeInVehicleId, dealId: id, reason }, payload: { rooftopId: deal.rooftop.id, dealId: id, tradeInId: rawDeal.tradeInVehicleId },
+        })
+      }
     }
 
     await recordDomainEventInTransaction(transactionContext, {

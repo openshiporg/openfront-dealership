@@ -3,6 +3,7 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Plus, RefreshCw, Search } from 'lucide-react'
+import { DealMenuPanel, type MenuRequest } from '../components/DealMenuPanel'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
@@ -27,17 +28,12 @@ import { centsToDollarInput, parseDollarsToCents, readDeskFinanceEvidence, type 
 import { FinanceEvidenceHistory } from '@/features/platform/deals/components/FinanceEvidenceHistory'
 import { cn } from '@/lib/utils'
 import {
-  configureFinanceProduct,
-  decideFinanceMenu,
   getFinanceWorkspace,
   manageFinanceContractPackage,
   manageFinanceFundingCase,
   openFinanceFollowUp,
-  presentFinanceMenu,
   queueFinancingApplication,
   recordFinanceComplianceCheck,
-  recordFinanceProductCancellation,
-  recordFinanceProductQuote,
   recordLenderDecision,
   reviewFinancePrerequisites,
   transitionDeal,
@@ -54,7 +50,6 @@ import type {
   FinanceWorkspace,
   FundingCase,
   ProductCancellation,
-  ProductQuote,
 } from '../lib/types'
 
 type FinanceTask = { kind: string; deal?: Deal; application?: FinanceApplication; menu?: FinanceMenu; submission?: FinanceSubmission; decision?: string; nextStatus?: string; fields: Record<string, string>; idempotencyKey: string }
@@ -213,7 +208,6 @@ export function FinanceDeskPageClient({
   const [search, setSearch] = useState('')
   const [sortOrder, setSortOrder] = useState('recent')
   const [products, setProducts] = useState<FinanceProduct[]>(initialWorkspace?.products || [])
-  const [productQuotes, setProductQuotes] = useState<ProductQuote[]>(initialWorkspace?.productQuotes || [])
   const [productCancellations, setProductCancellations] = useState<ProductCancellation[]>(initialWorkspace?.productCancellations || [])
   const [menus, setMenus] = useState<FinanceMenu[]>(initialWorkspace?.menus || [])
   const [complianceChecks, setComplianceChecks] = useState<ComplianceCheck[]>(initialWorkspace?.complianceChecks || [])
@@ -223,6 +217,7 @@ export function FinanceDeskPageClient({
   const [taskError, setTaskError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [menuRequest, setMenuRequest] = useState<MenuRequest | null>(null)
 
   const loadDeals = async () => {
     setLoading(true)
@@ -234,7 +229,6 @@ export function FinanceDeskPageClient({
       setDeals(normalizeDeals(response.data.financeWorkspace.deals))
       setApplications(response.data.financeWorkspace.applications || [])
       setProducts(response.data.financeWorkspace.products || [])
-      setProductQuotes(response.data.financeWorkspace.productQuotes || [])
       setProductCancellations(response.data.financeWorkspace.productCancellations || [])
       setMenus(response.data.financeWorkspace.menus || [])
       setComplianceChecks(response.data.financeWorkspace.complianceChecks || [])
@@ -313,39 +307,6 @@ export function FinanceDeskPageClient({
     })
   }
 
-  const configureProduct = () => {
-    const rooftopId = deals[0]?.rooftop?.id || applications[0]?.lead?.rooftop?.id
-    if (!rooftopId) { setNotice('Add a deal or finance application before configuring products.'); return }
-    openFinanceTask({ kind: 'configure-product', fields: { rooftopId, code: '', name: '', category: 'service-contract', retail: '', cost: '' } })
-  }
-
-  // Menus and quotes are per rooftop; only this deal's rooftop products can be offered.
-  const productsFor = (deal: Deal) => products.filter(product => !product.rooftop?.id || product.rooftop.id === deal.rooftop?.id)
-
-  const recordProductQuotes = (deal: Deal) => {
-    if (!productsFor(deal).length) { setNotice('Configure at least one active F&I product first.'); return }
-    openFinanceTask({ kind: 'product-quotes', deal, fields: { evidenceReference: '' } })
-  }
-
-  const presentMenu = async (deal: Deal) => {
-    setUpdatingId(deal.id)
-    const response = await presentFinanceMenu({
-      dealId: deal.id,
-      expectedUpdatedAt: deal.updatedAt,
-      productCodes: productsFor(deal).map(product => product.code),
-      idempotencyKey: `finance-menu:${deal.id}:${crypto.randomUUID()}`,
-    })
-    setNotice(response.success ? 'Menu presented.' : `Unable to present menu: ${response.error}`)
-    await loadDeals(); setUpdatingId(null)
-  }
-
-  const decideMenu = (deal: Deal) => {
-    const menu = menus.find(item => item.deal?.id === deal.id && item.status === 'presented')
-    if (!menu) { setNotice('No presented menu is awaiting a decision.'); return }
-    const hasOptions = (menu.optionsSnapshot || []).length > 0
-    openFinanceTask({ kind: 'menu-decision', deal, menu, fields: { decision: hasOptions ? '' : 'declined', acknowledgment: '' } })
-  }
-
   const requiredChecks = (deal: Deal) => deal.financeEvidence?.structureType === 'cash' ? ['identity', 'ofac', 'privacy'] : ['identity', 'ofac', 'red-flag', 'privacy']
 
   const recordCompliance = (deal: Deal, checkType?: string) => openFinanceTask({ kind: 'compliance', deal, fields: { checkType: checkType || requiredChecks(deal)[0], status: 'completed', evidenceReference: '' } })
@@ -386,9 +347,7 @@ export function FinanceDeskPageClient({
   /** Runs the action for one server step; the step list and the highlighted next action both use it. */
   const runStep = (deal: Deal, code: FinanceStepCode) => {
     if (code === 'approve') return recordApprovalAndStatus(deal, 'approved', 'approved')
-    if (code === 'quotes') return recordProductQuotes(deal)
-    if (code === 'present-menu') return presentMenu(deal)
-    if (code === 'decide-menu') return decideMenu(deal)
+    if (code === 'quotes' || code === 'present-menu' || code === 'decide-menu') return setMenuRequest({ kind: code, nonce: Date.now() })
     if (code.startsWith('check:')) return recordCompliance(deal, code.slice('check:'.length))
     if (code === 'contract') {
       if (deal.financeEvidence?.structureType === 'cash') return openFinanceTask({ kind: 'buyers-order', deal, fields: { reference: '' } })
@@ -398,13 +357,6 @@ export function FinanceDeskPageClient({
     if (code === 'funding') return updateFunding(deal)
     if (code === 'payment') return recordPayment(deal)
     if (code === 'mark-financed') return updateDealStatus(deal, 'financed')
-  }
-
-  const recordCancellation = (deal: Deal) => {
-    const menu = menus.find(item => item.deal?.id === deal.id && item.status === 'accepted')
-    const productCode = (menu?.optionsSnapshot || [])[0]?.code
-    if (!menu || !productCode) { setNotice('An accepted product menu is required.'); return }
-    openFinanceTask({ kind: 'cancellation', deal, menu, fields: { productCode, status: 'requested', reason: '', evidenceReference: '', refund: '0' } })
   }
 
   const taskFields: OperatorActionField[] = !task ? [] : task.kind === 'deal-approval' ? [
@@ -419,15 +371,6 @@ export function FinanceDeskPageClient({
       { name: 'termMonths', label: 'Approved term (months)', type: 'number' as const, min: 1, max: 120, step: 1 },
       { name: 'monthlyPayment', label: 'Approved monthly payment (USD)', type: 'number' as const, min: 0, step: 0.01 },
     ] : []),
-  ] : task.kind === 'configure-product' ? [
-    { name: 'code', label: 'Product code', maxLength: 80 }, { name: 'name', label: 'Product name', maxLength: 200 },
-    { name: 'category', label: 'Category', type: 'select', options: ['service-contract', 'gap', 'maintenance', 'appearance', 'tire-wheel', 'other'].map(value => ({ value, label: value })) },
-    { name: 'retail', label: 'Retail price ($)', placeholder: '1,299.50', maxLength: 20 }, { name: 'cost', label: 'Dealer cost ($)', placeholder: '899', maxLength: 20 },
-  ] : task.kind === 'product-quotes' ? [
-    { name: 'evidenceReference', label: 'Quote reference', maxLength: 200 },
-  ] : task.kind === 'menu-decision' ? [
-    ...((task.menu?.optionsSnapshot || []).length > 0 ? [{ name: 'decision', label: 'Customer decision', type: 'select' as const, options: [{ value: 'accepted', label: 'Accepted products' }, { value: 'declined', label: 'Declined products' }] }] : []),
-    { name: 'acknowledgment', label: 'Disclosure acknowledgment', type: 'textarea', maxLength: 1000 },
   ] : task.kind === 'compliance' ? [
     { name: 'checkType', label: 'Check type', type: 'select', options: (task.deal ? requiredChecks(task.deal) : ['identity', 'ofac', 'red-flag', 'privacy']).map(value => ({ value, label: checkLabels[value] || value })) },
     { name: 'status', label: 'Check status', type: 'select', options: ['requested', 'completed', 'failed', 'manual-review'].map(value => ({ value, label: value })) },
@@ -453,19 +396,10 @@ export function FinanceDeskPageClient({
     { name: 'amount', label: 'Amount received ($)', maxLength: 20, description: task.deal?.financeEvidence?.payment ? `Due ${formatCurrencyCents(task.deal.financeEvidence.payment.remainingCents)}` : undefined },
     { name: 'receiptReference', label: 'Receipt reference', maxLength: 200 },
     { name: 'attestPayment', label: 'Payment received', type: 'checkbox' as const, description: 'Payment received in full' },
-  ] : task.kind === 'cancellation' ? [
-    { name: 'productCode', label: 'Accepted menu product', maxLength: 80 },
-    { name: 'status', label: 'Cancellation state', type: 'select', options: ['requested', 'completed', 'denied'].map(value => ({ value, label: value })) },
-    { name: 'reason', label: 'Cancellation reason', type: 'textarea', maxLength: 1000 },
-    { name: 'refund', label: 'Refund amount ($, 0 if none)', maxLength: 20 },
-    ...(task.fields.status === 'completed' ? [{ name: 'evidenceReference', label: 'Cancellation reference', maxLength: 200 }] : []),
   ] : []
   const taskTitles: Record<string, string> = {
     'deal-approval': task?.decision === 'approved' ? 'Approve deal' : 'Review deal',
     'lender-decision': 'Record lender decision',
-    'configure-product': 'Configure F&I product',
-    'product-quotes': 'Record product quotes',
-    'menu-decision': 'Record menu decision',
     'buyers-order': 'Record signed buyer\'s order',
     payment: 'Record payment',
     compliance: 'Record compliance check',
@@ -473,7 +407,6 @@ export function FinanceDeskPageClient({
     'contract-provider': 'Record contract status',
     'prerequisite-review': 'Review funding prerequisites',
     funding: 'Update funding case',
-    cancellation: 'Record product cancellation',
   }
   const taskTitle = (task && taskTitles[task.kind]) || 'Finance task'
 
@@ -483,7 +416,7 @@ export function FinanceDeskPageClient({
     const value = (name: string) => task.fields[name]?.trim() || ''
     // Dollars, commas allowed ("1,299.50"); converted to cents here.
     const centsFromDollars = (name: string, label: string) => parseDollarsToCents(value(name), label)
-    const { deal, application, submission, menu } = task
+    const { deal, application, submission } = task
     setTaskError(null)
     setUpdatingId(deal?.id || application?.id || 'finance-task')
     try {
@@ -514,53 +447,6 @@ export function FinanceDeskPageClient({
           termMonths,
           monthlyPaymentCents,
           reasonCodes,
-        })
-      } else if (task.kind === 'configure-product') {
-        const rooftopId = value('rooftopId')
-        const code = value('code').toUpperCase()
-        const category = value('category')
-        if (!/^[A-Z0-9][A-Z0-9_-]{1,79}$/.test(code) || !value('name')) throw new Error('Enter a product code and name.')
-        response = await configureFinanceProduct({
-          rooftopId,
-          code,
-          name: value('name'),
-          category,
-          providerKey: 'operator-recorded',
-          retailPriceCents: centsFromDollars('retail', 'Retail price'),
-          costCents: centsFromDollars('cost', 'Dealer cost'),
-          active: true,
-          idempotencyKey: task.idempotencyKey,
-        })
-      } else if (task.kind === 'product-quotes' && deal) {
-        if (!value('evidenceReference')) throw new Error('Quote reference is required.')
-        const dealProducts = productsFor(deal)
-        if (!dealProducts.length) throw new Error('Configure at least one active F&I product first.')
-        if (dealProducts.some(product => !Number.isSafeInteger(product.costCents) || (product.costCents ?? -1) < 0)) throw new Error('Every product needs a dealer cost before quotes can be recorded.')
-        for (const product of dealProducts) {
-          response = await recordFinanceProductQuote({
-            dealId: deal.id,
-            productId: product.id,
-            status: 'quoted',
-            retailPriceCents: product.retailPriceCents,
-            costCents: product.costCents,
-            evidenceReference: `${value('evidenceReference')}:${product.code}`,
-            idempotencyKey: `${task.idempotencyKey}:${product.id}`,
-          })
-          if (!response.success) throw new Error(response.error || `Unable to record quote for ${product.code}.`)
-        }
-      } else if (task.kind === 'menu-decision' && deal && menu) {
-        if (!['accepted', 'declined'].includes(value('decision'))) throw new Error('Select the customer decision.')
-        if (!value('acknowledgment')) throw new Error('Disclosure acknowledgment is required.')
-        const codes = (menu.optionsSnapshot || []).map(option => option.code)
-        const accept = value('decision') === 'accepted' && codes.length > 0
-        response = await decideFinanceMenu({
-          dealId: deal.id,
-          expectedUpdatedAt: deal.updatedAt,
-          menuId: menu.id,
-          selectedProductCodes: accept ? codes : [],
-          declinedProductCodes: accept ? [] : codes,
-          disclosureAcknowledgment: value('acknowledgment'),
-          idempotencyKey: task.idempotencyKey,
         })
       } else if (task.kind === 'compliance' && deal) {
         const status = value('status')
@@ -665,19 +551,6 @@ export function FinanceDeskPageClient({
           fundingReference: value('fundingReference') || undefined,
           idempotencyKey: task.idempotencyKey,
         })
-      } else if (task.kind === 'cancellation' && deal && menu) {
-        const status = value('status')
-        if (!value('reason') || status === 'completed' && !value('evidenceReference')) throw new Error('Enter a cancellation reason, and a reference for completed cancellations.')
-        response = await recordFinanceProductCancellation({
-          dealId: deal.id,
-          menuId: menu.id,
-          productCode: value('productCode'),
-          status,
-          reason: value('reason'),
-          refundCents: centsFromDollars('refund', 'Refund amount'),
-          evidenceReference: value('evidenceReference') || undefined,
-          idempotencyKey: task.idempotencyKey,
-        })
       }
       if (response && !response.success) { setTaskError(response.error || 'Unable to save. Your entries are preserved.'); return }
       if (!response) throw new Error('Something went wrong. Close and reopen this task.')
@@ -751,8 +624,11 @@ export function FinanceDeskPageClient({
             <RefreshCw className={loading ? 'animate-spin' : undefined} />
             Refresh
           </Pill>
-          <Pill onClick={configureProduct} disabled={updatingId === 'product'}>
-            Configure product
+          <Pill asChild>
+            <Link href={`${basePath}/platform/finance/products`}>Products</Link>
+          </Pill>
+          <Pill asChild>
+            <Link href={`${basePath}/platform/finance/cancellations`}>Cancellations</Link>
           </Pill>
           <Pill asChild variant="primary">
             <Link href={`${basePath}/platform/deals/create`}>
@@ -793,8 +669,6 @@ export function FinanceDeskPageClient({
     const approvals = visibleApprovals(deal.approvals)
     const fundingStatusOpen = ['approved', 'financed'].includes(deal.status || '') && Boolean(evidence?.prerequisites?.current)
     const hasAcceptedMenu = menus.some(item => item.deal?.id === deal.id && item.status === 'accepted')
-    const dealMenus = menus.filter(item => item.deal?.id === deal.id)
-    const dealQuotes = productQuotes.filter(item => item.deal?.id === deal.id)
     const dealCancellations = productCancellations.filter(item => item.deal?.id === deal.id)
     const dealChecks = complianceChecks.filter(item => item.deal?.id === deal.id)
     const contract = contractPackages.find(item => item.deal?.id === deal.id)
@@ -850,7 +724,11 @@ export function FinanceDeskPageClient({
             {!cash && fundingStatusOpen && (
               <Pill size="sm" onClick={() => updateFunding(deal, 'pending')} disabled={busy}>Update funding</Pill>
             )}
-            {hasAcceptedMenu && <Pill size="sm" onClick={() => recordCancellation(deal)} disabled={busy}>Product cancellation</Pill>}
+            {hasAcceptedMenu && (
+              <Pill size="sm" asChild>
+                <Link href={`${basePath}/platform/finance/cancellations?deal=${deal.id}`}>Product cancellation</Link>
+              </Pill>
+            )}
           </Track>
           )}
           {next && !next.available && next.blockedReason && (
@@ -973,39 +851,34 @@ export function FinanceDeskPageClient({
           </Ledger>
         </DeskSection>
 
-        <DeskSection title="Products" count={dealMenus.length}>
-          <Ledger empty="No menu">
-            {[
-              ...dealMenus.map(menu => (
-                <li key={menu.id} className="flex min-w-0 items-start justify-between gap-4 py-2.5">
-                  <div className="min-w-0">
-                    <TitleLine as="p" tone={stateTone(menu.status)} status={menu.status} className="font-medium">
-                      Menu v{menu.version}
-                    </TitleLine>
-                    <p className="pl-4 text-xs text-muted-foreground">{(menu.optionsSnapshot || []).map(option => option.code).join(', ') || 'No options'}</p>
-                  </div>
-                  <p className="shrink-0 text-xs capitalize text-muted-foreground">{menu.status}</p>
-                </li>
-              )),
-              ...dealQuotes.map(quote => (
-                <li key={quote.id} className="flex min-w-0 items-center justify-between gap-4 py-2">
-                  <TitleLine as="p" tone={stateTone(quote.status)} status={quote.status}>
-                    Quote <Code>{quote.product?.code || '-'}</Code>
-                  </TitleLine>
-                  <p className="shrink-0 text-xs capitalize text-muted-foreground">{quote.status}</p>
-                </li>
-              )),
-              ...dealCancellations.map(cancellation => (
+        <DealMenuPanel
+          key={deal.id}
+          deal={deal}
+          timeZone={timeZone}
+          request={menuRequest}
+          presentStep={stepFor(deal, 'present-menu')}
+          decideStep={stepFor(deal, 'decide-menu')}
+          onChanged={async message => { setNotice(message); await loadDeals() }}
+        />
+
+        {dealCancellations.length > 0 && (
+          <DeskSection
+            title="Cancellations"
+            count={dealCancellations.length}
+            actions={<Track><Pill size="sm" asChild><Link href={`${basePath}/platform/finance/cancellations?deal=${deal.id}`}>Open</Link></Pill></Track>}
+          >
+            <Ledger empty="None">
+              {dealCancellations.map(cancellation => (
                 <li key={cancellation.id} className="flex min-w-0 items-center justify-between gap-4 py-2">
                   <TitleLine as="p" tone={stateTone(cancellation.status)} status={cancellation.status}>
-                    Cancellation <Code>{cancellation.productCode}</Code>
+                    <Code>{cancellation.productCode}</Code>
                   </TitleLine>
                   <p className="shrink-0 text-xs capitalize text-muted-foreground">{cancellation.status}</p>
                 </li>
-              )),
-            ]}
-          </Ledger>
-        </DeskSection>
+              ))}
+            </Ledger>
+          </DeskSection>
+        )}
 
         <DeskSection title="Compliance" count={dealChecks.length}>
           <Ledger empty="No checks">
@@ -1208,13 +1081,9 @@ export function FinanceDeskPageClient({
                     <div className="flex min-w-0 flex-1 items-start justify-between gap-4">
                       <div className="min-w-0">
                         <TitleLine as="p" tone={stateTone(application.status)} status={application.status} className="text-sm font-medium">
-                          {lead ? (
-                            <Link href={`${basePath}/platform/crm/${lead.id}`} className="hover:underline">
-                              {applicantName}
-                            </Link>
-                          ) : (
-                            applicantName
-                          )}
+                          <Link href={`${basePath}/platform/finance/applications/${application.id}`} className="hover:underline">
+                            {applicantName}
+                          </Link>
                           {' · '}
                           {vehicleName}
                         </TitleLine>
@@ -1253,6 +1122,9 @@ export function FinanceDeskPageClient({
                           Record decision
                         </Pill>
                       )}
+                      <Pill size="sm" asChild>
+                        <Link href={`${basePath}/platform/finance/applications/${application.id}`}>Open</Link>
+                      </Pill>
                       {lead && (
                         <Pill size="sm" variant="plain" asChild>
                           <Link href={`${basePath}/platform/crm/${lead.id}`}>Open lead</Link>

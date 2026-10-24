@@ -1,11 +1,13 @@
 import Link from 'next/link'
+import { ChevronRight } from 'lucide-react'
 
-import { openfrontClient } from '../lib/config'
-import { getAuthHeaders } from '../lib/data/cookies'
 import { getCustomer } from '../actions/account'
+import { getCustomerEmailLink, getCustomerRequestHistory } from '../actions/customerRecords'
+import { EmailLinkPanel } from '../components/account/EmailLinkPanel'
 import { customerRequestReference, customerRequestStatusLabel, type CustomerRequestKind } from '../lib/customerRequests'
+import { customerRequestPath, formatCents, formatDateTime, isCustomerRequestKind, statusTone, type CustomerRequestRow } from '../lib/accountRecords'
 
-type CustomerRequest = { id: string; kind: string; scheduledAt: string; status: string; timezone?: string | null }
+type CustomerRequest = CustomerRequestRow
 
 const KIND_KEYS: Record<string, CustomerRequestKind> = {
   'test drive': 'test-drive',
@@ -18,50 +20,18 @@ const KIND_KEYS: Record<string, CustomerRequestKind> = {
   contact: 'inquiry',
 }
 
-async function getRequestHistory() {
-  try {
-    const data = await openfrontClient.request<{ customerRequestHistory: CustomerRequest[] }>(
-      `query CustomerHistory { customerRequestHistory { id kind scheduledAt status timezone } }`,
-      {},
-      await getAuthHeaders()
-    )
-    return data.customerRequestHistory ?? []
-  } catch {
-    return null
-  }
-}
-
-function formatRequestTime(item: CustomerRequest) {
-  const date = new Date(item.scheduledAt)
-  try {
-    return date.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: item.timezone || undefined, timeZoneName: 'short' })
-  } catch {
-    return date.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZoneName: 'short' })
-  }
+function kindKey(item: CustomerRequest): CustomerRequestKind | null {
+  if (isCustomerRequestKind(item.kindKey)) return item.kindKey
+  return KIND_KEYS[item.kind.trim().toLowerCase()] ?? null
 }
 
 function requestReference(item: CustomerRequest) {
-  const kind = KIND_KEYS[item.kind.trim().toLowerCase()]
+  const kind = kindKey(item)
   return kind ? customerRequestReference(kind, item.id) : null
 }
 
-type Tone = 'ok' | 'warn' | 'bad' | 'accent' | 'idle'
-
-const OK_STATUSES = new Set(['completed', 'appraised', 'approved', 'funded', 'won', 'closed-won', 'sold', 'delivered'])
-const BAD_STATUSES = new Set(['cancelled', 'canceled', 'declined', 'rejected', 'lost', 'closed-lost', 'no-show', 'expired'])
-const ACTIVE_STATUSES = new Set(['checked-in', 'in-progress', 'waiting-parts', 'contacted', 'qualified', 'in-review', 'reviewing', 'submitted-to-lender', 'conditional'])
-
-function statusTone(status: string): Tone {
-  const key = status.trim().toLowerCase().replaceAll(' ', '-').replaceAll('_', '-')
-  if (!key) return 'idle'
-  if (OK_STATUSES.has(key)) return 'ok'
-  if (BAD_STATUSES.has(key)) return 'bad'
-  if (ACTIVE_STATUSES.has(key)) return 'accent'
-  return 'warn'
-}
-
 function isScheduledKind(item: CustomerRequest) {
-  return ['test-drive', 'service'].includes(KIND_KEYS[item.kind.trim().toLowerCase()] ?? '')
+  return ['test-drive', 'service'].includes(kindKey(item) ?? '')
 }
 
 const NEW_REQUESTS = [
@@ -72,7 +42,7 @@ const NEW_REQUESTS = [
 ]
 
 export async function AccountPage() {
-  const [customer, history] = await Promise.all([getCustomer(), getRequestHistory()])
+  const [customer, history, emailLink] = await Promise.all([getCustomer(), getCustomerRequestHistory(), getCustomerEmailLink()])
 
   if (!customer) {
     return (
@@ -104,6 +74,8 @@ export async function AccountPage() {
         <h1 className="sf-display mt-3 text-[length:var(--sf-text-display)]">{customer.name || 'Account'}</h1>
         {customer.email && <p className="sf-muted mt-2 break-all">{customer.email}</p>}
       </header>
+
+      <EmailLinkPanel link={emailLink} />
 
       {counts.length > 0 && (
         <dl className="sf-spec">
@@ -147,27 +119,42 @@ export async function AccountPage() {
             {history.map((item) => {
               const reference = requestReference(item)
               const status = customerRequestStatusLabel(item.kind, item.status)
-              return (
-                <li
-                  key={`${item.kind}-${item.id}`}
-                  className="grid gap-x-6 gap-y-1 border-b py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-baseline"
-                  style={{ borderColor: 'var(--sf-rule)' }}
-                >
+              const kind = kindKey(item)
+              const amount = formatCents(item.amountCents)
+              const row = (
+                <>
                   <div className="min-w-0">
                     <h3 className="sf-title-line">
                       <span className="sf-dot" data-tone={statusTone(item.status)} aria-hidden="true" />
                       <span className="sf-heading text-[length:var(--sf-text-lg)]">{item.kind}</span>
                       <span className="sf-muted text-[length:var(--sf-text-sm)]">{status}</span>
                     </h3>
+                    {item.vehicle && <p className="mt-1 pl-4 text-[length:var(--sf-text-sm)]">{item.vehicle}</p>}
                     <p className="sf-muted mt-1 pl-4 text-[length:var(--sf-text-sm)]">
                       {isScheduledKind(item) ? 'Requested time' : 'Submitted'}{' '}
                       <time dateTime={item.scheduledAt} className="sf-figure text-[var(--sf-ink)]">
-                        {formatRequestTime(item)}
+                        {formatDateTime(item.scheduledAt, item.timezone)}
                       </time>
+                      {amount && <> · <span className="sf-figure text-[var(--sf-ink)]">{amount}</span></>}
                     </p>
                   </div>
-                  {reference && (
-                    <p className="sf-figure sf-muted pl-4 text-[length:var(--sf-text-sm)] sm:pl-0 sm:text-right">{reference}</p>
+                  <div className="flex items-center justify-between gap-3 pl-4 sm:justify-end sm:pl-0">
+                    {reference && <span className="sf-figure sf-muted text-[length:var(--sf-text-sm)]">{reference}</span>}
+                    {kind && <ChevronRight className="sf-faint size-4 shrink-0" aria-hidden="true" />}
+                  </div>
+                </>
+              )
+              return (
+                <li key={`${item.kind}-${item.id}`} className="border-b" style={{ borderColor: 'var(--sf-rule)' }}>
+                  {kind ? (
+                    <Link
+                      href={customerRequestPath(kind, item.id)}
+                      className="grid min-h-11 gap-x-6 gap-y-1 px-1 py-4 transition-colors hover:bg-[var(--sf-paper-2)] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                    >
+                      {row}
+                    </Link>
+                  ) : (
+                    <div className="grid gap-x-6 gap-y-1 px-1 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">{row}</div>
                   )}
                 </li>
               )

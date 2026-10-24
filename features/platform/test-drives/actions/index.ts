@@ -9,6 +9,7 @@ export type TestDrive = {
   scheduledTime: string | null
   completed: boolean | null
   noShow: boolean | null
+  cancelledAt: string | null
   driverLicenseVerified: boolean | null
   feedback: string | null
   interestedLevel: string | null
@@ -27,6 +28,7 @@ export async function getTestDrives() {
         scheduledTime
         completed
         noShow
+        cancelledAt
         driverLicenseVerified
         feedback
         interestedLevel

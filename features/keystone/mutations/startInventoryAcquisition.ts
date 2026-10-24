@@ -3,6 +3,7 @@ import { recordDomainEventInTransaction } from '../lifecycle/domainEvents'
 import { buildAcquisitionEvidence } from '../lifecycle/inventoryAcquisitionLifecycle'
 import { assertSessionRooftopPermission } from '../tenantRecords'
 import { requiredText } from './submissionUtils'
+import { inventoryCommand } from './inventoryCommandErrors'
 
 const SOURCES = new Set(['trade-in', 'auction', 'wholesale', 'consumer-purchase', 'oem-distributor', 'dealer-transfer'])
 
@@ -13,7 +14,7 @@ function nonNegativeInteger(value: unknown, label: string, required = false) {
   return number
 }
 
-export async function startInventoryAcquisition(_root: unknown, { data }: { data: any }, context: any) {
+async function startInventoryAcquisitionCommand(_root: unknown, { data }: { data: any }, context: any) {
   if (!context.session?.itemId || !permissions.canManageInventory({ session: context.session })) {
     throw new Error('Inventory management permission is required')
   }
@@ -120,3 +121,6 @@ export async function startInventoryAcquisition(_root: unknown, { data }: { data
 
   return context.db.InventoryAcquisition.findOne({ where: { id: acquisitionId } })
 }
+
+/** Validation and gate errors reach the desk as INVENTORY_COMMAND_REJECTED with their message. */
+export const startInventoryAcquisition = inventoryCommand(startInventoryAcquisitionCommand)

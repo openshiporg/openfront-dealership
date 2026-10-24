@@ -137,6 +137,9 @@ export const TradeIn = list({
       label: 'Customer Lead',
     }),
     deal: relationship({
+      // Written only by createDealPencil and setDealTradeIn, which enforce the pencil-only rule;
+      // a write from this side would skip the Deal hooks.
+      access: { create: denyAll, update: denyAll },
       ref: 'Deal.tradeInVehicle',
       ui: {
         displayMode: 'select',

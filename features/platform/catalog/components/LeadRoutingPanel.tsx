@@ -1,0 +1,282 @@
+'use client'
+
+import { useMemo, useState } from 'react'
+import { Pencil, Plus, Power, Trash2 } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
+import { Code, DeskSection, Notice, Panel, Pill, Segmented, TitleLine, Track } from '@/features/platform/components/desk'
+import { type CatalogRooftop, type CatalogRoutingRule, configureRoutingRule, deleteRoutingRule, getRoutingStaff } from '../actions'
+import { ConfirmDialog, EmptyRow, Field, FormDialog, TAP, TAP_INPUT, TAP_SM } from './formKit'
+
+export const ROUTING_SOURCES = [
+  { value: 'any', label: 'Any source' },
+  { value: 'walk-in', label: 'Walk-in' },
+  { value: 'website', label: 'Website' },
+  { value: 'phone', label: 'Phone' },
+  { value: 'referral', label: 'Referral' },
+  { value: 'ad', label: 'Advertisement' },
+  { value: 'social', label: 'Social media' },
+  { value: 'third-party', label: 'Third party' },
+]
+const sourceLabel = (value: string) => ROUTING_SOURCES.find(source => source.value === value)?.label || value
+
+type StateFilter = 'active' | 'inactive' | 'all'
+type Draft = { ruleId?: string; rooftopId: string; name: string; source: string; assigneeId: string; priority: string; firstResponseMinutes: string; active: boolean }
+
+function formatMinutes(minutes: number) {
+  if (minutes < 60) return `${minutes} min`
+  if (minutes % 1440 === 0) return `${minutes / 1440} d`
+  if (minutes % 60 === 0) return `${minutes / 60} h`
+  return `${Math.floor(minutes / 60)} h ${minutes % 60} min`
+}
+
+export function LeadRoutingPanel({
+  rules,
+  rooftops,
+  error,
+  onReload,
+}: {
+  rules: CatalogRoutingRule[]
+  rooftops: CatalogRooftop[]
+  error: string | null
+  onReload: () => Promise<void>
+}) {
+  const [stateFilter, setStateFilter] = useState<StateFilter>('all')
+  const [sourceFilter, setSourceFilter] = useState('all')
+  const [draft, setDraft] = useState<Draft | null>(null)
+  const [idempotencyKey, setIdempotencyKey] = useState('')
+  const [staff, setStaff] = useState<Array<{ id: string; name: string }>>([])
+  const [staffError, setStaffError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [formError, setFormError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [togglingId, setTogglingId] = useState<string | null>(null)
+  const [pending, setPending] = useState<CatalogRoutingRule | null>(null)
+  const [notice, setNotice] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
+
+  const counts = { active: rules.filter(rule => rule.active).length, inactive: rules.filter(rule => !rule.active).length, all: rules.length }
+  const groups = useMemo(() => {
+    const filtered = rules
+      .filter(rule => stateFilter === 'all' || (stateFilter === 'active' ? rule.active : !rule.active))
+      .filter(rule => sourceFilter === 'all' || rule.source === sourceFilter || (sourceFilter !== 'any' && rule.source === 'any'))
+    const byRooftop = new Map<string, { rooftop: CatalogRooftop | null; rules: CatalogRoutingRule[] }>()
+    for (const rule of filtered) {
+      const key = rule.rooftop?.id || 'none'
+      if (!byRooftop.has(key)) byRooftop.set(key, { rooftop: rule.rooftop, rules: [] })
+      byRooftop.get(key)!.rules.push(rule)
+    }
+    // Same order routeLead evaluates: highest priority first, then route key.
+    for (const group of byRooftop.values()) group.rules.sort((left, right) => right.priority - left.priority || left.routeKey.localeCompare(right.routeKey))
+    return [...byRooftop.values()]
+  }, [rules, stateFilter, sourceFilter])
+
+  const loadStaff = async (rooftopId: string) => {
+    setStaff([]); setStaffError(null)
+    if (!rooftopId) return
+    const response = await getRoutingStaff(rooftopId)
+    if (response.success) setStaff(response.users)
+    else setStaffError(response.error)
+  }
+
+  const open = (rule?: CatalogRoutingRule) => {
+    setFieldErrors({}); setFormError(null)
+    setIdempotencyKey(`desk-routing-rule:${crypto.randomUUID()}`)
+    const next: Draft = rule
+      ? { ruleId: rule.id, rooftopId: rule.rooftop?.id || '', name: rule.name, source: rule.source, assigneeId: rule.assignee?.id || '', priority: String(rule.priority), firstResponseMinutes: String(rule.firstResponseMinutes), active: rule.active }
+      : { rooftopId: rooftops[0]?.id || '', name: '', source: 'any', assigneeId: '', priority: '100', firstResponseMinutes: '30', active: true }
+    setDraft(next)
+    void loadStaff(next.rooftopId)
+  }
+
+  const submit = async () => {
+    if (!draft) return
+    const errors: Record<string, string> = {}
+    const name = draft.name.trim()
+    const priority = Number(draft.priority)
+    const minutes = Number(draft.firstResponseMinutes)
+    if (!draft.rooftopId) errors.rooftopId = 'Choose a rooftop'
+    if (!name) errors.name = 'Name is required'
+    else if (name.length > 200) errors.name = 'Name is too long'
+    if (!draft.assigneeId) errors.assigneeId = 'Choose who receives these leads'
+    if (!draft.priority.trim() || !Number.isInteger(priority) || priority < 0 || priority > 10000) errors.priority = 'Whole number from 0 to 10000'
+    if (!draft.firstResponseMinutes.trim() || !Number.isInteger(minutes) || minutes < 1 || minutes > 10080) errors.firstResponseMinutes = 'Whole number from 1 to 10080'
+    setFieldErrors(errors)
+    if (Object.keys(errors).length) return
+    setBusy(true); setFormError(null)
+    const response = await configureRoutingRule({ ruleId: draft.ruleId, rooftopId: draft.rooftopId, name, source: draft.source, assigneeId: draft.assigneeId, priority, firstResponseMinutes: minutes, active: draft.active, idempotencyKey })
+    setBusy(false)
+    if (!response.success) { setFormError(response.error); return }
+    setNotice({ tone: 'ok', text: draft.ruleId ? `Saved ${name}` : `Added ${name}` })
+    setDraft(null)
+    await onReload()
+  }
+
+  const toggle = async (rule: CatalogRoutingRule) => {
+    if (!rule.rooftop?.id || !rule.assignee?.id) return
+    setTogglingId(rule.id); setNotice(null)
+    const response = await configureRoutingRule({
+      ruleId: rule.id,
+      rooftopId: rule.rooftop.id,
+      name: rule.name,
+      source: rule.source,
+      assigneeId: rule.assignee.id,
+      priority: rule.priority,
+      firstResponseMinutes: rule.firstResponseMinutes,
+      active: !rule.active,
+      idempotencyKey: `desk-routing-rule:${rule.id}:${rule.active ? 'off' : 'on'}:${rule.updatedAt}`,
+    })
+    setTogglingId(null)
+    if (!response.success) { setNotice({ tone: 'bad', text: response.error }); return }
+    setNotice({ tone: 'ok', text: `${rule.name} ${rule.active ? 'deactivated' : 'activated'}` })
+    await onReload()
+  }
+
+  const confirmDelete = async () => {
+    if (!pending) return
+    setBusy(true); setFormError(null)
+    const response = await deleteRoutingRule(pending.id)
+    setBusy(false)
+    if (!response.success) { setFormError(response.error); return }
+    setNotice({ tone: 'ok', text: `Deleted ${pending.name}` })
+    setPending(null)
+    await onReload()
+  }
+
+  const staffOptions = draft?.assigneeId && !staff.some(user => user.id === draft.assigneeId)
+    ? [...staff, { id: draft.assigneeId, name: rules.find(rule => rule.id === draft.ruleId)?.assignee?.name || 'Current assignee' }]
+    : staff
+
+  return (
+    <div className="space-y-4">
+      {error && <Notice tone="bad">{error}</Notice>}
+      {notice && <Notice tone={notice.tone}>{notice.text}</Notice>}
+      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <Segmented<StateFilter>
+          label="Filter rules"
+          value={stateFilter}
+          onChange={setStateFilter}
+          size="sm"
+          options={[
+            { value: 'all', label: 'All', count: counts.all },
+            { value: 'active', label: 'Active', count: counts.active, tone: 'ok' },
+            { value: 'inactive', label: 'Inactive', count: counts.inactive, tone: 'idle' },
+          ]}
+        />
+        <Select value={sourceFilter} onValueChange={setSourceFilter}>
+          <SelectTrigger className={`${TAP_INPUT} w-full sm:w-48`} aria-label="Lead source"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All sources</SelectItem>
+            {ROUTING_SOURCES.map(source => <SelectItem key={source.value} value={source.value}>{source.value === 'any' ? 'Any-source rules' : source.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Track className="sm:ml-auto">
+          <Pill variant="primary" className={TAP} disabled={rooftops.length === 0} onClick={() => open()}>
+            <Plus />
+            Add rule
+          </Pill>
+        </Track>
+      </div>
+
+      {groups.length === 0 ? (
+        <Panel><EmptyRow>{rules.length === 0 ? 'No routing rules yet' : 'No rules match'}</EmptyRow></Panel>
+      ) : groups.map(group => {
+        let activeRank = 0
+        return (
+          <DeskSection key={group.rooftop?.id || 'none'} title={rooftops.length > 1 ? group.rooftop?.name || 'No rooftop' : 'Evaluation order'} count={group.rules.length}>
+            <Panel className="overflow-hidden">
+              <ol className="divide-y">
+                {group.rules.map(rule => {
+                  if (rule.active) activeRank += 1
+                  return (
+                    <li key={rule.id} className="flex min-w-0 flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex min-w-0 items-baseline gap-3">
+                        <span className="w-6 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">{rule.active ? activeRank : '-'}</span>
+                        <div className="min-w-0">
+                          <TitleLine as="p" tone={rule.active ? 'ok' : 'idle'} status={rule.active ? 'Active' : 'Inactive'} className="text-sm font-medium">{rule.name}</TitleLine>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {sourceLabel(rule.source)} · {rule.assignee?.name || rule.assignee?.email || 'No assignee'} · First response {formatMinutes(rule.firstResponseMinutes)}
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">Priority <Code>{rule.priority}</Code></p>
+                        </div>
+                      </div>
+                      <Track className="shrink-0 self-start sm:self-center">
+                        <Pill size="sm" className={TAP_SM} disabled={togglingId === rule.id || !rule.assignee?.id} title={!rule.assignee?.id ? 'Assign someone first' : undefined} onClick={() => toggle(rule)}>
+                          <Power />
+                          {togglingId === rule.id ? 'Saving…' : rule.active ? 'Deactivate' : 'Activate'}
+                        </Pill>
+                        <Pill size="sm" className={TAP_SM} onClick={() => open(rule)}>
+                          <Pencil />
+                          Edit
+                        </Pill>
+                        <Pill size="sm" className={TAP_SM} aria-label={`Delete ${rule.name}`} onClick={() => { setFormError(null); setPending(rule) }}>
+                          <Trash2 />
+                        </Pill>
+                      </Track>
+                    </li>
+                  )
+                })}
+              </ol>
+            </Panel>
+          </DeskSection>
+        )
+      })}
+
+      <FormDialog
+        open={draft !== null}
+        title={draft?.ruleId ? 'Edit routing rule' : 'Add routing rule'}
+        busy={busy}
+        error={formError}
+        onSubmit={submit}
+        onOpenChange={value => { if (!value) setDraft(null) }}
+        wide
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          {!draft?.ruleId && rooftops.length > 1 && (
+            <Field id="rule-rooftop" label="Rooftop" error={fieldErrors.rooftopId} className="sm:col-span-2">
+              <Select value={draft?.rooftopId || ''} onValueChange={value => { setDraft(current => current && { ...current, rooftopId: value, assigneeId: '' }); void loadStaff(value) }}>
+                <SelectTrigger id="rule-rooftop" className={TAP_INPUT}><SelectValue placeholder="Select rooftop" /></SelectTrigger>
+                <SelectContent>{rooftops.map(rooftop => <SelectItem key={rooftop.id} value={rooftop.id}>{rooftop.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </Field>
+          )}
+          <Field id="rule-name" label="Name" error={fieldErrors.name} className="sm:col-span-2">
+            <Input id="rule-name" className={TAP_INPUT} maxLength={200} value={draft?.name || ''} aria-invalid={Boolean(fieldErrors.name)} onChange={event => setDraft(current => current && { ...current, name: event.target.value })} />
+          </Field>
+          <Field id="rule-source" label="Lead source">
+            <Select value={draft?.source || 'any'} onValueChange={value => setDraft(current => current && { ...current, source: value })}>
+              <SelectTrigger id="rule-source" className={TAP_INPUT}><SelectValue /></SelectTrigger>
+              <SelectContent>{ROUTING_SOURCES.map(source => <SelectItem key={source.value} value={source.value}>{source.label}</SelectItem>)}</SelectContent>
+            </Select>
+          </Field>
+          <Field id="rule-assignee" label="Assign to" error={fieldErrors.assigneeId || staffError}>
+            <Select value={draft?.assigneeId || ''} onValueChange={value => setDraft(current => current && { ...current, assigneeId: value })}>
+              <SelectTrigger id="rule-assignee" className={TAP_INPUT}><SelectValue placeholder={staffOptions.length ? 'Select person' : 'No eligible staff'} /></SelectTrigger>
+              <SelectContent>{staffOptions.map(user => <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </Field>
+          <Field id="rule-priority" label="Priority" error={fieldErrors.priority} hint="Higher runs first">
+            <Input id="rule-priority" className={TAP_INPUT} inputMode="numeric" value={draft?.priority || ''} aria-invalid={Boolean(fieldErrors.priority)} onChange={event => setDraft(current => current && { ...current, priority: event.target.value })} />
+          </Field>
+          <Field id="rule-response" label="First response (minutes)" error={fieldErrors.firstResponseMinutes}>
+            <Input id="rule-response" className={TAP_INPUT} inputMode="numeric" value={draft?.firstResponseMinutes || ''} aria-invalid={Boolean(fieldErrors.firstResponseMinutes)} onChange={event => setDraft(current => current && { ...current, firstResponseMinutes: event.target.value })} />
+          </Field>
+          <label htmlFor="rule-active" className="flex min-h-11 items-center gap-3 text-sm sm:col-span-2">
+            <Switch id="rule-active" checked={draft?.active ?? true} onCheckedChange={checked => setDraft(current => current && { ...current, active: checked })} />
+            Active
+          </label>
+        </div>
+      </FormDialog>
+
+      <ConfirmDialog
+        open={pending !== null}
+        title={`Delete ${pending?.name || 'rule'}?`}
+        confirmLabel="Delete"
+        busy={busy}
+        error={formError}
+        onConfirm={confirmDelete}
+        onOpenChange={value => { if (!value) { setPending(null); setFormError(null) } }}
+      />
+    </div>
+  )
+}

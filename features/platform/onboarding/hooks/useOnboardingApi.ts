@@ -41,6 +41,8 @@ export function useOnboardingApi({
   resetOnboardingState,
 }: OnboardingApiProps) {
   const running = useRef(false)
+  // Set once this dialog has passed the setup check, so a retry of the same run is never refused.
+  const startedRun = useRef(false)
 
   const runOnboarding = async () => {
     if (running.current) return
@@ -55,7 +57,8 @@ export function useOnboardingApi({
       validateDealershipSeed(currentJsonData)
       const setup = await getStoreSetupState()
       if (!setup.success) throw new Error('Store setup status could not be checked')
-      if (setup.configured) throw new Error('This store is already set up')
+      if (setup.configured && !setup.resumable && !startedRun.current) throw new Error('This store is already set up')
+      startedRun.current = true
       const client = new GraphQLClient(GRAPHQL_ENDPOINT, { headers: { 'Content-Type': 'application/json' } })
       const data = currentJsonData
       let rooftopId = ''

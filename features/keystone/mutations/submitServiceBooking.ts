@@ -1,3 +1,4 @@
+import { assertServiceSlotCapacity } from './bookingCapacity'
 import { requestingAccountId } from './customerAccount'
 import { resolveCustomerInTransaction } from './customerIdentity'
 import { runPublicSubmission } from './publicSubmissionPolicy'
@@ -44,6 +45,7 @@ export async function submitServiceBooking(_root: unknown, { data }: { data: any
   }
   const requestedDate = requiredText(data.appointmentDate, 'Appointment date', 10)
   const requestedTime = requiredText(data.appointmentTime, 'Appointment time', 20)
+  const servicePackageId = optionalText(data.servicePackageId, 100, 'Service package')
   const concern = optionalText(data.description, 4000, 'Service concern') || `${service.label} requested from storefront.`
   const vehicleDescription = `${year} ${make} ${model}${vin ? ` · VIN ${vin}` : ''}`
   const { firstName, lastName } = splitCustomerName(customerName, 'Service', 'Customer')
@@ -63,6 +65,7 @@ export async function submitServiceBooking(_root: unknown, { data }: { data: any
       model,
       vin,
       serviceKey,
+      servicePackageId,
       requestedDate,
       requestedTime,
       concern,
@@ -73,21 +76,11 @@ export async function submitServiceBooking(_root: unknown, { data }: { data: any
     handler: async (transactionContext, { rooftopId }) => {
       const location = await transactionContext.prisma.rooftop.findUnique({ where: { id: rooftopId }, select: { timezone: true } })
       const scheduled = parseScheduledTime(requestedDate, requestedTime, 'Appointment', location?.timezone || 'UTC')
-      const slotStart = new Date(scheduled.iso)
-      slotStart.setUTCMinutes(0, 0, 0)
-      const slotEnd = new Date(slotStart.getTime() + 60 * 60 * 1000)
-      const capacitySlot = slotStart.toISOString()
-      await transactionContext.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`service-capacity:${rooftopId}:${capacitySlot}`}, 0))`
-      const scheduledCount = await transactionContext.prisma.serviceAppointment.count({
-        where: {
-          rooftopId,
-          appointmentDate: { gte: slotStart, lt: slotEnd },
-          status: { not: 'cancelled' },
-        },
-      })
-      if (scheduledCount >= 4) {
-        throw new SubmissionError('That service capacity slot is full. Choose another time.')
-      }
+      const capacitySlot = await assertServiceSlotCapacity(transactionContext, rooftopId, scheduled.iso)
+      const servicePackage = servicePackageId
+        ? await transactionContext.prisma.servicePackage.findFirst({ where: { id: servicePackageId, rooftopId }, select: { id: true, name: true, estimatedDuration: true } })
+        : null
+      if (servicePackageId && !servicePackage) throw new SubmissionError('The selected service package is unavailable.')
       const rooftop = { connect: { id: rooftopId } }
       const { customer } = await resolveCustomerInTransaction(transactionContext, {
         rooftopId,
@@ -108,9 +101,11 @@ export async function submitServiceBooking(_root: unknown, { data }: { data: any
           capacitySlot,
           customerVehicleDescription: vehicleDescription,
           description: concern,
-          estimatedDuration: service.duration,
+          estimatedDuration: servicePackage?.estimatedDuration || service.duration,
+          ...(servicePackage ? { servicePackage: { connect: { id: servicePackage.id } } } : {}),
           advisorNotes: [
             `Requested service: ${service.label}`,
+            ...(servicePackage ? [`Service package: ${servicePackage.name}`] : []),
             `Requested slot: ${scheduled.date} at ${scheduled.time}`,
             vin ? `Customer vehicle VIN: ${vin}` : 'Customer vehicle VIN not provided',
           ].join('\n'),
@@ -134,7 +129,7 @@ export async function submitServiceBooking(_root: unknown, { data }: { data: any
             },
           },
         },
-        query: 'id appointmentDate serviceType status lead { id }',
+        query: 'id appointmentDate serviceType status lead { id } servicePackage { id name }',
       })
       return {
         serviceAppointmentId: appointment.id,
@@ -142,7 +137,8 @@ export async function submitServiceBooking(_root: unknown, { data }: { data: any
         appointmentDate: new Date(appointment.appointmentDate),
         serviceType: appointment.serviceType,
         status: appointment.status,
-        requestedServiceLabel: service.label,
+        requestedServiceLabel: appointment.servicePackage?.name || service.label,
+        servicePackageId: appointment.servicePackage?.id || null,
       }
     },
   })

@@ -45,7 +45,7 @@ async function getMakes(): Promise<Make[]> {
 }
 
 const LANES = [
-  { href: '/financing', label: 'Financing', action: 'Get pre-qualified', icon: Landmark },
+  { href: '/financing', label: 'Financing', action: 'Estimate a payment', icon: Landmark },
   { href: '/trade-in', label: 'Trade-in', action: 'Value your vehicle', icon: Repeat2 },
   { href: '/test-drive', label: 'Test drive', action: 'Pick a time', icon: KeyRound },
   { href: '/service', label: 'Service', action: 'Book an appointment', icon: Wrench },

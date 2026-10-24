@@ -50,10 +50,20 @@ export async function completeOnboarding() {
   return updateOnboardingStatus('completed');
 }
 
+/**
+ * `configured` means a rooftop already exists. `resumable` means this user has a setup run
+ * in progress (a partial failure leaves the status at `in_progress`), so a retry may reuse
+ * the records it already saved instead of being refused as a second dealership.
+ */
 export async function getStoreSetupState() {
-  const response = await keystoneClient(`query StoreSetupState { rooftopsCount }`);
+  const response = await keystoneClient(`query StoreSetupState { rooftopsCount authenticatedItem { ... on User { id onboardingStatus } } }`);
   if (!response.success) {
-    return { success: false as const, configured: false };
+    return { success: false as const, configured: false, resumable: false };
   }
-  return { success: true as const, configured: (response.data?.rooftopsCount ?? 0) > 0 };
+  const onboardingStatus = response.data?.authenticatedItem?.onboardingStatus ?? null;
+  return {
+    success: true as const,
+    configured: (response.data?.rooftopsCount ?? 0) > 0,
+    resumable: onboardingStatus === 'in_progress',
+  };
 }

@@ -65,6 +65,9 @@ export const Customer = list({
     contactPreferenceUpdatedAt: timestamp({ access: { create: denyAll, update: denyAll } }),
     suppressionReason: text({ access: { create: denyAll, update: denyAll } }),
     suppressionSource: text({ access: { create: denyAll, update: denyAll } }),
+    // The storefront login that proved ownership of primaryEmail. Written only by
+    // confirmCustomerEmailVerification (customerEmailVerification.ts); never from submitted data.
+    account: relationship({ ref: 'User', access: { create: denyAll, update: denyAll } }),
     household: relationship({ ref: 'CustomerHousehold.members', access: { create: denyAll, update: denyAll } }),
     contactPreferenceEvents: relationship({ ref: 'CustomerContactPreferenceEvent.customer', many: true, access: { update: denyAll } }),
     salesVisits: relationship({ ref: 'SalesVisit.customer', many: true, access: { update: denyAll } }),

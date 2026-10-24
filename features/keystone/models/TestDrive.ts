@@ -83,6 +83,11 @@ export const TestDrive = list({
       defaultValue: false,
       label: 'No-show',
     }),
+    // A customer cancellation closes the drive (completed is also set), like a no-show.
+    cancelledAt: timestamp({
+      access: { create: denyAll, update: () => false },
+      label: 'Cancelled At',
+    }),
     driverLicenseVerified: checkbox({
       access: { update: () => false },
       defaultValue: false,

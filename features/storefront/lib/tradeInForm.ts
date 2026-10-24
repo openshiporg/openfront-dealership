@@ -1,3 +1,6 @@
+export const TRADE_IN_ESTIMATE_DISCLAIMER =
+  'Preliminary range, not a provider-backed valuation or dealership offer. Any offer, if made, will be shared separately after inspection and dealership review.'
+
 export type TradeInDraft = {
   year: string
   make: string

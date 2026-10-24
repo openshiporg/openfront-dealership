@@ -1,7 +1,10 @@
 import { mergeSchemas } from "@graphql-tools/schema";
 import type { GraphQLSchema } from 'graphql';
 import redirectToInit from "./redirectToInit";
-import { registerCustomerAccount, customerRequestHistory } from './customerAccount';
+import { registerCustomerAccount } from './customerAccount';
+import { customerPayments, customerPurchases, customerRequestDetail, customerRequestHistory, customerServiceHistory, customerServiceOrder } from './customerRecords';
+import { cancelCustomerBooking, rescheduleCustomerBooking } from './customerBookings';
+import { confirmCustomerEmailVerification, customerEmailLinkStatus, requestCustomerEmailVerification } from './customerEmailVerification';
 import updateActiveUser from "./updateActiveUser";
 import { submitInquiry } from './submitInquiry';
 import { submitTestDrive } from './submitTestDrive';
@@ -16,10 +19,12 @@ import { ensureDealershipOnboardingRecord } from './ensureDealershipOnboardingRe
 import { queueFinancingApplication } from './queueFinancingApplication';
 import { recordLenderDecision } from './recordLenderDecision';
 import { changeDealerMembership } from './changeDealerMembership';
+import { configureRetentionPolicy } from './configureRetentionPolicy';
 import { startInventoryAcquisition } from './startInventoryAcquisition';
 import { transitionInventoryAcquisition } from './transitionInventoryAcquisition';
 import { createDealPencil } from './createDealPencil';
 import { openServiceOrder } from './openServiceOrder';
+import { removeServiceOrderLineItem, setServiceOrderTax, updateServiceOrderLineItem } from './serviceOrderLineCommands';
 import {
   completeTask,
   createLeadTask,
@@ -45,10 +50,13 @@ import {
   updateInventoryMerchandisingDraft,
 } from './inventoryPublishingCommands';
 import { addInventoryVehiclePhoto, arrangeInventoryVehiclePhotos, removeInventoryVehiclePhoto } from './inventoryPhotoCommands';
+import { updateInventoryVehicleDetails } from './updateInventoryVehicleDetails';
 import { crmWorkspace, dealDeskWorkspace, dealWorkspace, deliveryWorkspace, financeWorkspace, fixedOpsWorkspace } from './operatorWorkspaces';
 import { acceptDealWorksheet, addServiceOrderLineItem, completeDealDelivery, openFinanceFollowUp, presentDealWorksheet, reopenDealWorksheet, saveDealWorksheet, selectDealLenderOffer, transferLeadOwnership } from './operatorCommands';
 import { configureLeadRoutingRule, customerDuplicateCandidates, mergeCustomers, routeLead } from './crmIdentityWorkflows';
 import { advanceLeadCadence, enrollLeadCadence, linkCustomerHousehold, manageSalesVisit, updateCustomerCommunicationPreferences } from './crmEngagementWorkflows';
+import { createLead, updateLeadDetails } from './crmLeadCommands';
+import { unlinkCustomerHousehold, updateCustomerContact } from './crmCustomerCommands';
 import { dealLenderOffers } from './dealLenderOffers';
 import { configureAccountingMapping, manageAccountingBatch, stageAccountingBatch } from './accountingOperations';
 import { accountingWorkspace } from './accountingWorkspace';
@@ -59,8 +67,10 @@ import { configurePart, manageLaborOperation, managePartsPurchaseOrder, recordPa
 import { reviewFinancePrerequisites } from './financePrerequisiteReview';
 import { operatorCommand } from './operatorCommandErrors';
 import { manageDeliveryCase, manageWeOweItem } from './deliveryOperations';
+import { createWalkInTradeIn, setDealTradeIn } from './tradeInDealCommands';
 import { keystoneItemResult } from './keystoneItemResult';
 import { configureFinanceProduct, decideFinanceMenu, manageFinanceContractPackage, manageFinanceFundingCase, presentFinanceMenu, recordFinanceComplianceCheck, recordFinanceProductCancellation, recordFinanceProductQuote } from './financeOperations';
+import { recordLenderSubmissionStatus } from './lenderSubmissionOperations';
 import { intakeInventoryVehicle } from './intakeInventoryVehicle';
 import { publicInventoryCount, publicInventoryVehicle, publicInventoryVehicles } from '../integrations/inventory/publicStorefrontInventory';;
 
@@ -250,6 +260,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         vehicleModel: String!
         vehicleVin: String
         description: String
+        servicePackageId: ID
         rooftopSlug: String
         idempotencyKey: String!
         website: String
@@ -265,6 +276,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         serviceType: String
         status: String
         requestedServiceLabel: String
+        servicePackageId: ID
         reused: Boolean
       }
 
@@ -368,6 +380,16 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         updatedAt: DateTime!
       }
 
+      input ConfigureRetentionPolicyInput {
+        rooftopId: ID!
+        category: String!
+        retentionDays: Int!
+        legalHold: Boolean!
+        rationale: String!
+        idempotencyKey: String!
+        expectedUpdatedAt: DateTime
+      }
+
       input RecordLenderDecisionInput {
         applicationId: ID!
         submissionId: ID
@@ -391,13 +413,18 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
       type CustomerDuplicateCandidate { id: ID!, firstName: String!, lastName: String!, primaryEmail: String, primaryPhone: String, status: String!, createdAt: DateTime!, updatedAt: DateTime!, leadsCount: Int! }
       type CustomerMergeResult { id: ID!, duplicateId: ID!, movedLeadCount: Int!, movedSalesVisitCount: Int!, reused: Boolean! }
       input MergeCustomersInput { survivorId: ID!, duplicateId: ID!, survivorExpectedUpdatedAt: DateTime!, duplicateExpectedUpdatedAt: DateTime!, reason: String!, idempotencyKey: String! }
-      input ConfigureLeadRoutingRuleInput { rooftopId: ID!, name: String!, source: String = "any", assigneeId: ID!, priority: Int = 100, firstResponseMinutes: Int = 30, active: Boolean = true, idempotencyKey: String! }
+      input ConfigureLeadRoutingRuleInput { rooftopId: ID!, ruleId: ID, name: String!, source: String = "any", assigneeId: ID!, priority: Int = 100, firstResponseMinutes: Int = 30, active: Boolean = true, idempotencyKey: String! }
       input RouteLeadInput { leadId: ID!, expectedUpdatedAt: DateTime!, idempotencyKey: String! }
       input UpdateCustomerCommunicationPreferencesInput { customerId: ID!, expectedUpdatedAt: DateTime!, emailConsent: Boolean!, smsConsent: Boolean!, phoneConsent: Boolean!, emailSuppressed: Boolean!, smsSuppressed: Boolean!, phoneSuppressed: Boolean!, preferredChannel: String!, source: String!, reason: String!, idempotencyKey: String! }
       input EnrollLeadCadenceInput { leadId: ID!, expectedUpdatedAt: DateTime!, cadenceKey: String!, campaignKey: String!, idempotencyKey: String! }
       input AdvanceLeadCadenceInput { leadId: ID!, expectedUpdatedAt: DateTime!, idempotencyKey: String! }
       input LinkCustomerHouseholdInput { primaryCustomerId: ID!, memberCustomerId: ID!, primaryExpectedUpdatedAt: DateTime!, memberExpectedUpdatedAt: DateTime!, displayName: String!, idempotencyKey: String! }
       input ManageSalesVisitInput { action: String!, visitId: ID, leadId: ID, kind: String, vehicleId: ID, managerId: ID, scheduledAt: DateTime, expectedUpdatedAt: DateTime, outcome: String, notes: String, idempotencyKey: String! }
+      input OpenLeadInput { rooftopId: ID!, firstName: String!, lastName: String!, email: String, phone: String, source: String!, budgetRange: String, timeframe: String, tradeInVehicle: String, notes: String, interestedVehicleId: ID, assignedToId: ID, idempotencyKey: String! }
+      type OpenLeadResult { id: ID!, customerId: ID!, assignedToId: ID, routeKey: String, firstResponseDueAt: DateTime, reused: Boolean! }
+      input UpdateLeadDetailsInput { leadId: ID!, expectedUpdatedAt: DateTime!, firstName: String!, lastName: String!, email: String, phone: String, source: String!, budgetRange: String, timeframe: String, tradeInVehicle: String, notes: String, interestedVehicleId: ID, idempotencyKey: String! }
+      input UpdateCustomerContactInput { customerId: ID!, expectedUpdatedAt: DateTime!, firstName: String!, lastName: String!, primaryEmail: String, primaryPhone: String, idempotencyKey: String! }
+      input UnlinkCustomerHouseholdInput { customerId: ID!, expectedUpdatedAt: DateTime!, reason: String!, idempotencyKey: String! }
       type DealVehicleResult { id: ID!, vin: String, stockNumber: String, year: Int, make: String, model: String, trim: String, exteriorColor: String, status: String, priceCents: Int }
       type DealLeadResult { id: ID!, firstName: String!, lastName: String!, status: String }
       type DealApprovalResult { id: ID!, decision: String, notes: String, approvalDate: DateTime, approver: OperatorPersonResult }
@@ -451,13 +478,15 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
       input SelectDealLenderOfferInput { dealId: ID!, lenderDecisionId: ID!, expectedUpdatedAt: DateTime!, idempotencyKey: String! }
       input ReopenDealWorksheetInput { dealId: ID!, expectedUpdatedAt: DateTime!, reason: String!, idempotencyKey: String! }
       input CompleteDealDeliveryInput { dealId: ID!, expectedFundingUpdatedAt: DateTime!, expectedDeliveryCaseUpdatedAt: DateTime!, identityVerified: Boolean, insuranceVerified: Boolean, fundingVerified: Boolean, vehicleReleased: Boolean, notes: String, expectedUpdatedAt: DateTime!, idempotencyKey: String! }
-      input ManageDeliveryCaseInput { dealId: ID!, action: String!, appointmentAt: DateTime, checklist: JSON, customerAcknowledgment: String, idempotencyKey: String! }
+      input ManageDeliveryCaseInput { dealId: ID!, action: String!, appointmentAt: DateTime, checklist: JSON, customerAcknowledgment: String, reason: String, idempotencyKey: String! }
+      input CreateWalkInTradeInInput { rooftopId: ID!, leadId: ID, vin: String, year: String!, make: String!, model: String!, trim: String, mileage: Int, condition: String, exteriorCondition: String, interiorCondition: String, mechanicalIssues: String, idempotencyKey: String! }
+      input SetDealTradeInInput { dealId: ID!, tradeInId: ID, expectedUpdatedAt: DateTime!, reason: String, idempotencyKey: String! }
       input ManageWeOweItemInput { dealId: ID!, itemId: ID, action: String!, description: String, promisedAt: DateTime, ownerId: ID, estimatedCostCents: Int, fulfillmentEvidence: String, customerAcknowledgment: String, idempotencyKey: String! }
       input RecordServiceOrderEvidenceInput { serviceOrderId: ID!, concern: String!, cause: String!, correction: String!, payType: String!, authorizationStatus: String!, authorizationEvidence: JSON!, inspectionEvidence: JSON!, declinedWork: JSON!, invoiceNumber: String, expectedUpdatedAt: DateTime!, idempotencyKey: String! }
       input ManageLaborOperationInput { serviceOrderId: ID!, operationId: ID, action: String!, operationCode: String, description: String, soldHours: Float, technicianId: ID, actualMinutes: Int, idempotencyKey: String! }
-      input ConfigurePartInput { rooftopId: ID!, partNumber: String!, description: String!, binLocation: String, minimumQuantity: Int, costCents: Int!, priceCents: Int!, supplier: String, idempotencyKey: String! }
+      input ConfigurePartInput { partId: ID, rooftopId: ID, partNumber: String!, description: String!, binLocation: String, minimumQuantity: Int, costCents: Int!, priceCents: Int!, supplier: String, supplierPartNumber: String, expectedUpdatedAt: DateTime, idempotencyKey: String! }
       input RecordPartsMovementInput { partId: ID!, serviceOrderId: ID, movementType: String!, quantity: Int!, quantityDelta: Int, reference: String!, reason: String!, idempotencyKey: String! }
-      input ManagePartsPurchaseOrderInput { purchaseOrderId: ID, rooftopId: ID, action: String!, reference: String, supplier: String, lines: JSON, idempotencyKey: String! }
+      input ManagePartsPurchaseOrderInput { purchaseOrderId: ID, rooftopId: ID, action: String!, reference: String, supplier: String, lines: JSON, receiptLines: JSON, expectedUpdatedAt: DateTime, idempotencyKey: String! }
       input ConfigureAccountingMappingInput { rooftopId: ID!, sourceType: String!, sourceCode: String!, debitAccount: String!, creditAccount: String!, providerKey: String!, idempotencyKey: String! }
       input StageAccountingBatchInput { sourceType: String!, sourceId: ID!, providerKey: String!, idempotencyKey: String! }
       input ManageAccountingBatchInput { batchId: ID!, action: String!, externalReference: String, errorCode: String, reconciliationReference: String, idempotencyKey: String! }
@@ -470,19 +499,23 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
       input CreatePaymentCheckoutInput { sourceType: String!, sourceId: ID!, amountCents: Int!, providerKey: String!, idempotencyKey: String! }
       input RequestPaymentRefundInput { transactionId: ID!, amountCents: Int!, reason: String!, idempotencyKey: String! }
       input ReconcilePaymentInput { transactionId: ID!, reconciliationReference: String!, idempotencyKey: String! }
-      input SaveOperationalReportInput { rooftopId: ID!, name: String!, reportType: String!, filters: JSON, exportFormat: String!, schedule: String!, idempotencyKey: String! }
-      input RunSavedReportInput { reportId: ID!, idempotencyKey: String! }
+      input SaveOperationalReportInput { rooftopId: ID!, reportId: ID, name: String!, reportType: String!, filters: JSON, exportFormat: String!, schedule: String!, active: Boolean = true, expectedUpdatedAt: String, idempotencyKey: String! }
+      input RunSavedReportInput { reportId: ID!, runId: ID, idempotencyKey: String! }
       input AddServiceOrderLineInput { serviceOrderId: ID!, itemType: String!, description: String!, partNumber: String, quantity: Float!, unitPriceCents: Int!, costCents: Int, expectedUpdatedAt: DateTime!, idempotencyKey: String! }
+      input UpdateServiceOrderLineInput { serviceOrderId: ID!, lineItemId: ID!, itemType: String!, description: String!, partNumber: String, quantity: Float!, unitPriceCents: Int!, costCents: Int, expectedUpdatedAt: DateTime!, idempotencyKey: String! }
+      input RemoveServiceOrderLineInput { serviceOrderId: ID!, lineItemId: ID!, expectedUpdatedAt: DateTime!, idempotencyKey: String! }
+      input SetServiceOrderTaxInput { serviceOrderId: ID!, taxCents: Int!, expectedUpdatedAt: DateTime!, idempotencyKey: String! }
       input OpenFinanceFollowUpInput { leadId: ID!, reason: String!, idempotencyKey: String! }
-      input ConfigureFinanceProductInput { rooftopId: ID!, code: String!, name: String!, category: String!, providerKey: String!, retailPriceCents: Int!, costCents: Int!, active: Boolean, idempotencyKey: String! }
-      input RecordFinanceProductQuoteInput { dealId: ID!, productId: ID!, status: String!, retailPriceCents: Int, costCents: Int, evidenceReference: String, idempotencyKey: String! }
+      input ConfigureFinanceProductInput { rooftopId: ID!, code: String!, name: String!, category: String!, providerKey: String!, retailPriceCents: Int!, costCents: Int, active: Boolean, expectNew: Boolean, idempotencyKey: String! }
+      input RecordFinanceProductQuoteInput { dealId: ID!, productId: ID!, status: String!, retailPriceCents: Int, costCents: Int, termMonths: Int, evidenceReference: String, idempotencyKey: String! }
+      input RecordLenderSubmissionStatusInput { submissionId: ID!, status: String!, externalReference: String, errorCode: String, idempotencyKey: String! }
       input PresentFinanceMenuInput { dealId: ID!, expectedUpdatedAt: DateTime!, productCodes: JSON!, idempotencyKey: String! }
       input DecideFinanceMenuInput { dealId: ID!, expectedUpdatedAt: DateTime!, menuId: ID!, selectedProductCodes: JSON!, declinedProductCodes: JSON!, disclosureAcknowledgment: String!, idempotencyKey: String! }
       input RecordFinanceComplianceInput { dealId: ID!, expectedUpdatedAt: DateTime!, checkType: String!, providerKey: String!, status: String!, resultCode: String, evidenceReference: String, idempotencyKey: String! }
       input ManageFinanceContractInput { dealId: ID!, expectedUpdatedAt: DateTime!, action: String!, providerKey: String, requiredDocuments: JSON, documentChecklist: JSON, providerStatus: String, envelopeReference: String, evidenceSource: String, evidenceReference: String, webhookEventId: String, idempotencyKey: String! }
       input ReviewFinancePrerequisitesInput { dealId: ID!, worksheetVersion: Int!, expectedUpdatedAt: DateTime!, expectedPrerequisiteDigest: String!, providerKey: String!, reviewReference: String!, policyReference: String!, policyVersion: String!, reviewerAuthorityReference: String!, idempotencyKey: String! }
       input ManageFinanceFundingInput { dealId: ID!, worksheetVersion: Int!, expectedUpdatedAt: DateTime!, expectedFundingUpdatedAt: DateTime, status: String!, checklist: JSON!, exceptions: JSON!, fundingReference: String, paymentAmountCents: Int, idempotencyKey: String! }
-      input RecordFinanceProductCancellationInput { dealId: ID!, menuId: ID!, productCode: String!, status: String!, reason: String!, refundCents: Int, evidenceReference: String, idempotencyKey: String! }
+      input RecordFinanceProductCancellationInput { dealId: ID!, menuId: ID!, productCode: String!, status: String!, reason: String!, refundCents: Int, refundBasis: JSON, evidenceReference: String, idempotencyKey: String! }
 
       type AccountingWorkspaceResult { mappings: [AccountingMapping!]!, batches: [AccountingBatch!]!, payments: [PaymentTransaction!]!, refunds: [PaymentRefund!]! }
       type OperationalReportResult { generatedAt: String!, metrics: JSON!, exceptions: JSON! }
@@ -505,11 +538,12 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
       type InventoryFeedCommandResult { id: ID!, rooftopId: ID!, channelKey: String!, status: String!, attemptedCount: Int!, succeededCount: Int!, failedCount: Int!, errorCount: Int!, completedAt: DateTime!, reused: Boolean! }
 
       input IntakeInventoryVehicleInput { rooftopId: ID!, idempotencyKey: String!, reason: String!, acquisitionSource: String!, sourceReference: String, vin: String!, stockNumber: String!, year: Int!, make: String!, model: String!, trim: String, exteriorColor: String, interiorColor: String, mileage: Int, purchasePriceCents: Int!, listPriceCents: Int!, priceCents: Int!, condition: String!, description: String, features: JSON, imagePath: String, locationCode: String!, locationLabel: String }
-      input EstablishInventoryStockInput { vehicleId: ID!, acquisitionId: ID, stockNumber: String!, locationCode: String!, locationLabel: String, purchaseCostCents: Int, reason: String!, idempotencyKey: String! }
+      input EstablishInventoryStockInput { vehicleId: ID, acquisitionId: ID, stockNumber: String!, locationCode: String!, locationLabel: String, purchaseCostCents: Int, condition: String, trim: String, exteriorColor: String, interiorColor: String, reason: String!, idempotencyKey: String! }
       input MoveInventoryStockInput { stockId: ID!, locationCode: String!, locationLabel: String, expectedUpdatedAt: DateTime!, reason: String!, idempotencyKey: String! }
       input RecordInventoryCostInput { stockId: ID!, costType: String!, amountCents: Int!, reference: String, reason: String!, idempotencyKey: String! }
-      input CreateInventoryReconWorkInput { stockId: ID!, title: String!, category: String!, estimatedCostCents: Int, assignedToId: ID, dueAt: DateTime, reason: String!, idempotencyKey: String! }
+      input CreateInventoryReconWorkInput { stockId: ID!, title: String!, category: String!, estimatedCostCents: Int, vendorName: String, assignedToId: ID, dueAt: DateTime, reason: String!, idempotencyKey: String! }
       input TransitionInventoryReconWorkInput { id: ID!, toStatus: String!, actualCostCents: Int, expectedUpdatedAt: DateTime!, reason: String!, idempotencyKey: String! }
+      input UpdateInventoryVehicleDetailsInput { stockId: ID!, vin: String!, year: Int!, make: String!, model: String!, trim: String, exteriorColor: String, interiorColor: String, condition: String!, mileage: Int, features: JSON, listPriceCents: Int, priceCents: Int!, description: String, priceChangeReason: String, expectedUpdatedAt: DateTime!, reason: String!, idempotencyKey: String! }
       input UpdateInventoryMerchandisingDraftInput { stockId: ID!, priceCents: Int!, listPriceCents: Int, mileage: Int, description: String!, imagePath: String, expectedUpdatedAt: DateTime!, reason: String!, idempotencyKey: String! }
       input AddInventoryVehiclePhotoInput { stockId: ID!, photo: ImageFieldInput, imageUrl: String, reason: String!, idempotencyKey: String! }
       input ArrangeInventoryVehiclePhotosInput { stockId: ID!, imageIds: [ID!]!, reason: String!, idempotencyKey: String! }
@@ -544,9 +578,18 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
       }
 
       type CustomerAccountResult { id: ID! }
-      type CustomerRequest { id: ID!, kind: String!, scheduledAt: DateTime!, status: String!, timezone: String }
+      type CustomerRequest { id: ID!, kind: String!, kindKey: String, scheduledAt: DateTime!, status: String!, timezone: String, vehicle: String, amountCents: Int }
+      type CustomerBookingResult { id: ID!, kind: String!, status: String!, scheduledAt: DateTime }
+      type CustomerEmailLinkResult { email: String!, linkedCustomerCount: Int!, newlyLinkedCount: Int, verified: Boolean! }
+      type CustomerEmailVerificationRequest { sent: Boolean!, email: String! }
       type Query {
         customerRequestHistory: [CustomerRequest!]!
+        customerRequestDetail(kind: String!, id: ID!): JSON
+        customerPurchases: JSON!
+        customerServiceHistory: JSON!
+        customerServiceOrder(id: ID!): JSON
+        customerPayments: JSON!
+        customerEmailLinkStatus: CustomerEmailLinkResult!
         redirectToInit: Boolean
         publicInventoryVehicles(where: JSON, orderBy: JSON, take: Int, skip: Int): PublicInventoryResult!
         publicInventoryVehicle(id: ID!): PublicInventoryVehicle
@@ -563,12 +606,16 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         fixedOpsWorkspace(limit: Int = 50, offset: Int = 0): FixedOpsWorkspaceResult!
         accountingWorkspace(limit: Int = 50): AccountingWorkspaceResult!
         operationalReport: OperationalReportResult!
-        auditSearch(aggregateType: String, aggregateId: ID, action: String, limit: Int = 50): [DomainAuditEvent!]!
+        auditSearch(aggregateType: String, aggregateId: ID, action: String, actorId: ID, rooftopId: ID, since: String, until: String, limit: Int = 50): [DomainAuditEvent!]!
         customerDuplicateCandidates(customerId: ID!, limit: Int = 20): [CustomerDuplicateCandidate!]!
       }
 
       type Mutation {
         registerCustomerAccount(name: String!, email: String!, password: String!): CustomerAccountResult!
+        requestCustomerEmailVerification: CustomerEmailVerificationRequest!
+        confirmCustomerEmailVerification(token: String!): CustomerEmailLinkResult!
+        cancelCustomerBooking(kind: String!, id: ID!, idempotencyKey: String!): CustomerBookingResult!
+        rescheduleCustomerBooking(kind: String!, id: ID!, date: String!, time: String!, idempotencyKey: String!): CustomerBookingResult!
         updateActiveUser(data: UserUpdateProfileInput!): ActiveUserProfile
         submitInquiry(data: SubmitInquiryInput!): SubmitInquiryPayload!
         submitTestDrive(data: SubmitTestDriveInput!): SubmitTestDrivePayload!
@@ -576,10 +623,12 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         submitFinancing(data: SubmitFinancingInput!): SubmitFinancingPayload!
         submitServiceBooking(data: SubmitServiceBookingInput!): SubmitServiceBookingPayload!
         transitionDeal(id: ID!, toStatus: String!, notes: String, idempotencyKey: String!): Deal
-        transitionServiceOrder(id: ID!, toStatus: String!, idempotencyKey: String!): ServiceOrder
+        transitionServiceOrder(id: ID!, toStatus: String!, idempotencyKey: String!, invoiceNumber: String): ServiceOrder
         queueFinancingApplication(applicationId: ID!, providerKey: String!, idempotencyKey: String!): LenderSubmission
         recordLenderDecision(data: RecordLenderDecisionInput!): LenderDecision
+        recordLenderSubmissionStatus(data: RecordLenderSubmissionStatusInput!): LenderSubmission!
         changeDealerMembership(data: ChangeDealerMembershipInput!): DealerMembershipChangePayload!
+        configureRetentionPolicy(data: ConfigureRetentionPolicyInput!): RetentionPolicy!
         createDealPencil(data: CreateDealPencilInput!): Deal
         openServiceOrder(data: OpenServiceOrderInput!): ServiceOrder
         transitionLead(id: ID!, toStatus: String!, lostReasonCode: String, lostReasonDetails: String, idempotencyKey: String!): Lead
@@ -608,6 +657,8 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         reopenDealWorksheet(data: ReopenDealWorksheetInput!): OperatorCommandResult!
         manageDeliveryCase(data: ManageDeliveryCaseInput!): DeliveryCase!
         manageWeOweItem(data: ManageWeOweItemInput!): WeOweItem!
+        createWalkInTradeIn(data: CreateWalkInTradeInInput!): OperatorCommandResult!
+        setDealTradeIn(data: SetDealTradeInInput!): OperatorCommandResult!
         completeDealDelivery(data: CompleteDealDeliveryInput!): OperatorCommandResult!
         recordServiceOrderEvidence(data: RecordServiceOrderEvidenceInput!): ServiceOrder!
         manageLaborOperation(data: ManageLaborOperationInput!): ServiceLaborOperation!
@@ -625,6 +676,9 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         runSavedReport(data: RunSavedReportInput!): ReportRun!
         queueDueSavedReports: ScheduledReportDispatchResult!
         addServiceOrderLineItem(data: AddServiceOrderLineInput!): OperatorCommandResult!
+        updateServiceOrderLineItem(data: UpdateServiceOrderLineInput!): OperatorCommandResult!
+        removeServiceOrderLineItem(data: RemoveServiceOrderLineInput!): OperatorCommandResult!
+        setServiceOrderTax(data: SetServiceOrderTaxInput!): OperatorCommandResult!
         openFinanceFollowUp(data: OpenFinanceFollowUpInput!): OperatorCommandResult!
         configureFinanceProduct(data: ConfigureFinanceProductInput!): FinanceProduct!
         recordFinanceProductQuote(data: RecordFinanceProductQuoteInput!): FinanceProductQuote!
@@ -648,6 +702,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         addInventoryVehiclePhoto(data: AddInventoryVehiclePhotoInput!): InventoryCommandResult!
         arrangeInventoryVehiclePhotos(data: ArrangeInventoryVehiclePhotosInput!): InventoryCommandResult!
         removeInventoryVehiclePhoto(data: RemoveInventoryVehiclePhotoInput!): InventoryCommandResult!
+        updateInventoryVehicleDetails(data: UpdateInventoryVehicleDetailsInput!): InventoryCommandResult!
         mergeCustomers(data: MergeCustomersInput!): CustomerMergeResult!
         configureLeadRoutingRule(data: ConfigureLeadRoutingRuleInput!): OperatorCommandResult!
         routeLead(data: RouteLeadInput!): OperatorCommandResult!
@@ -656,6 +711,10 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         advanceLeadCadence(data: AdvanceLeadCadenceInput!): OperatorCommandResult!
         linkCustomerHousehold(data: LinkCustomerHouseholdInput!): OperatorCommandResult!
         manageSalesVisit(data: ManageSalesVisitInput!): OperatorCommandResult!
+        openLead(data: OpenLeadInput!): OpenLeadResult!
+        updateLeadDetails(data: UpdateLeadDetailsInput!): OperatorCommandResult!
+        updateCustomerContact(data: UpdateCustomerContactInput!): OperatorCommandResult!
+        unlinkCustomerHousehold(data: UnlinkCustomerHouseholdInput!): OperatorCommandResult!
         ensureDealershipOnboardingRecord(entity: String!, data: JSON!): JSON!
       }
     `,
@@ -665,7 +724,13 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         updatedAt: (result: { updatedAt: Date | string }) => new Date(result.updatedAt),
       },
       Query: {
-        customerRequestHistory,
+        customerRequestHistory: operatorCommand(customerRequestHistory),
+        customerRequestDetail: operatorCommand(customerRequestDetail),
+        customerPurchases: operatorCommand(customerPurchases),
+        customerServiceHistory: operatorCommand(customerServiceHistory),
+        customerServiceOrder: operatorCommand(customerServiceOrder),
+        customerPayments: operatorCommand(customerPayments),
+        customerEmailLinkStatus: operatorCommand(customerEmailLinkStatus),
         redirectToInit,
         publicInventoryVehicles,
         publicInventoryVehicle,
@@ -682,11 +747,15 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         fixedOpsWorkspace,
         accountingWorkspace,
         operationalReport,
-        auditSearch,
-        customerDuplicateCandidates,
+        auditSearch: operatorCommand(auditSearch),
+        customerDuplicateCandidates: operatorCommand(customerDuplicateCandidates),
       },
       Mutation: {
         registerCustomerAccount,
+        requestCustomerEmailVerification: operatorCommand(requestCustomerEmailVerification),
+        confirmCustomerEmailVerification: operatorCommand(confirmCustomerEmailVerification),
+        cancelCustomerBooking: operatorCommand(cancelCustomerBooking),
+        rescheduleCustomerBooking: operatorCommand(rescheduleCustomerBooking),
         updateActiveUser,
         submitInquiry: publicSubmissionResolver(submitInquiry),
         submitTestDrive: publicSubmissionResolver(submitTestDrive),
@@ -694,22 +763,24 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         submitFinancing: publicSubmissionResolver(submitFinancing),
         submitServiceBooking: publicSubmissionResolver(submitServiceBooking),
         transitionDeal,
-        transitionServiceOrder,
+        transitionServiceOrder: operatorCommand(transitionServiceOrder),
         queueFinancingApplication: operatorCommand(queueFinancingApplication),
         recordLenderDecision: operatorCommand(recordLenderDecision),
-        changeDealerMembership,
+        recordLenderSubmissionStatus,
+        changeDealerMembership: operatorCommand(changeDealerMembership),
+        configureRetentionPolicy: operatorCommand(configureRetentionPolicy),
         startInventoryAcquisition,
         transitionInventoryAcquisition,
-        createDealPencil,
-        openServiceOrder,
-        transitionLead,
-        recordLeadInteraction,
+        createDealPencil: operatorCommand(createDealPencil),
+        openServiceOrder: operatorCommand(openServiceOrder),
+        transitionLead: operatorCommand(transitionLead),
+        recordLeadInteraction: operatorCommand(recordLeadInteraction),
         updateTestDriveWorkflow,
-        transitionServiceAppointment,
-        recordTradeInAppraisal,
-        createLeadTask,
-        completeTask,
-        transferLeadOwnership,
+        transitionServiceAppointment: operatorCommand(transitionServiceAppointment),
+        recordTradeInAppraisal: operatorCommand(recordTradeInAppraisal),
+        createLeadTask: operatorCommand(createLeadTask),
+        completeTask: operatorCommand(completeTask),
+        transferLeadOwnership: operatorCommand(transferLeadOwnership),
         saveDealWorksheet,
         presentDealWorksheet,
         acceptDealWorksheet,
@@ -717,23 +788,28 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         reopenDealWorksheet,
         manageDeliveryCase,
         manageWeOweItem,
+        createWalkInTradeIn,
+        setDealTradeIn,
         completeDealDelivery: operatorCommand(completeDealDelivery),
-        recordServiceOrderEvidence,
-        manageLaborOperation,
-        configurePart,
-        recordPartsMovement,
-        managePartsPurchaseOrder,
-        configureAccountingMapping,
-        stageAccountingBatch,
-        manageAccountingBatch,
-        createPaymentCheckout,
-        requestPaymentRefund,
-        reconcilePaymentTransaction,
+        recordServiceOrderEvidence: operatorCommand(recordServiceOrderEvidence),
+        manageLaborOperation: operatorCommand(manageLaborOperation),
+        configurePart: operatorCommand(configurePart),
+        recordPartsMovement: operatorCommand(recordPartsMovement),
+        managePartsPurchaseOrder: operatorCommand(managePartsPurchaseOrder),
+        configureAccountingMapping: operatorCommand(configureAccountingMapping),
+        stageAccountingBatch: operatorCommand(stageAccountingBatch),
+        manageAccountingBatch: operatorCommand(manageAccountingBatch),
+        createPaymentCheckout: operatorCommand(createPaymentCheckout),
+        requestPaymentRefund: operatorCommand(requestPaymentRefund),
+        reconcilePaymentTransaction: operatorCommand(reconcilePaymentTransaction),
         handlePaymentProviderWebhook,
-        saveOperationalReport,
-        runSavedReport,
+        saveOperationalReport: operatorCommand(saveOperationalReport),
+        runSavedReport: operatorCommand(runSavedReport),
         queueDueSavedReports,
-        addServiceOrderLineItem,
+        addServiceOrderLineItem: operatorCommand(addServiceOrderLineItem),
+        updateServiceOrderLineItem: operatorCommand(updateServiceOrderLineItem),
+        removeServiceOrderLineItem: operatorCommand(removeServiceOrderLineItem),
+        setServiceOrderTax: operatorCommand(setServiceOrderTax),
         openFinanceFollowUp: operatorCommand(openFinanceFollowUp),
         configureFinanceProduct,
         recordFinanceProductQuote,
@@ -757,14 +833,19 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         addInventoryVehiclePhoto,
         arrangeInventoryVehiclePhotos,
         removeInventoryVehiclePhoto,
-        mergeCustomers,
-        configureLeadRoutingRule,
-        routeLead,
-        updateCustomerCommunicationPreferences,
-        enrollLeadCadence,
-        advanceLeadCadence,
-        linkCustomerHousehold,
-        manageSalesVisit,
+        updateInventoryVehicleDetails,
+        mergeCustomers: operatorCommand(mergeCustomers),
+        configureLeadRoutingRule: operatorCommand(configureLeadRoutingRule),
+        routeLead: operatorCommand(routeLead),
+        updateCustomerCommunicationPreferences: operatorCommand(updateCustomerCommunicationPreferences),
+        enrollLeadCadence: operatorCommand(enrollLeadCadence),
+        advanceLeadCadence: operatorCommand(advanceLeadCadence),
+        linkCustomerHousehold: operatorCommand(linkCustomerHousehold),
+        manageSalesVisit: operatorCommand(manageSalesVisit),
+        openLead: operatorCommand(createLead),
+        updateLeadDetails: operatorCommand(updateLeadDetails),
+        updateCustomerContact: operatorCommand(updateCustomerContact),
+        unlinkCustomerHousehold: operatorCommand(unlinkCustomerHousehold),
         ensureDealershipOnboardingRecord,
       },
     },

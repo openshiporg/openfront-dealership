@@ -89,7 +89,12 @@ async function manageDeliveryCaseCommand(_r: unknown, { data }: any, context: an
       customerAcknowledgment = req(data.customerAcknowledgment, 'Customer acknowledgment')
       acknowledgedAt = now; status = 'ready'
     }
-    if (action === 'cancel') { status = 'cancelled'; acknowledgedAt = null; customerAcknowledgment = '' }
+    if (action === 'cancel') {
+      if (!existing) throw new Error('Delivery case is required')
+      if (existing.status === 'cancelled') throw new Error('Delivery is already cancelled')
+      req(data.reason, 'Cancellation reason', 500)
+      status = 'cancelled'; acknowledgedAt = null; customerAcknowledgment = ''
+    }
     const evidence = { version: 2, request, binding, dealId: deal.id, action, status,
       appointmentAt: appointmentAt?.toISOString() || null, arrivedAt: arrivedAt?.toISOString() || null,
       checklist, customerAcknowledgment: customerAcknowledgment || null, acknowledgedAt: acknowledgedAt?.toISOString() || null }
@@ -101,7 +106,78 @@ async function manageDeliveryCaseCommand(_r: unknown, { data }: any, context: an
     return authority.context.db.DeliveryCase.findOne({ where: { id: saved.id } })
   }, { timeout: 30_000, isolationLevel: 'Serializable' })
 }
-async function manageWeOweItemCommand(_r:unknown,{data}:any,context:any){const deal=await deliveryDeal(context,data.dealId),action=req(data.action,'We-owe action',30);if(!['create','fulfill','waive'].includes(action))throw new Error('Invalid we-owe action');const delivery=await context.sudo().prisma.deliveryCase.findFirst({where:{dealId:deal.id},select:{id:true}});if(!delivery)throw new Error('Delivery case is required');const existing=data.itemId?await context.sudo().prisma.weOweItem.findFirst({where:{id:String(data.itemId),deliveryCaseId:delivery.id}}):null;let status=existing?.status||'open',description=existing?.description||'',promisedAt=existing?.promisedAt||null,ownerId=existing?.ownerId||null,estimatedCostCents=existing?.estimatedCostCents||0,fulfillmentEvidence=existing?.fulfillmentEvidence||'',customerAcknowledgment=existing?.customerAcknowledgment||'',fulfilledAt=existing?.fulfilledAt||null;if(action==='create'){description=req(data.description,'Description');promisedAt=new Date(String(data.promisedAt||''));if(Number.isNaN(promisedAt.getTime()))throw new Error('Promised date is invalid');ownerId=req(data.ownerId,'Owner ID',100);const owner=await context.query.User.findOne({where:{id:ownerId},query:'id'});if(!owner)throw new Error('Owner is not accessible');await assertUserRooftopAccess(context,ownerId,deal.rooftop.id);estimatedCostCents=Number(data.estimatedCostCents||0);if(!Number.isInteger(estimatedCostCents)||estimatedCostCents<0)throw new Error('Estimated cost is invalid')}else{if(!existing||existing.status!=='open')throw new Error('Open we-owe item is required');status=action==='fulfill'?'fulfilled':'waived';fulfillmentEvidence=req(data.fulfillmentEvidence,'Fulfillment evidence');customerAcknowledgment=req(data.customerAcknowledgment,'Customer acknowledgment');fulfilledAt=new Date()}const eventKey=`we-owe:${ik(data.idempotencyKey)}`,evidence={dealId:deal.id,deliveryCaseId:delivery.id,itemId:existing?.id||null,action,status,description,promisedAt:promisedAt?.toISOString(),ownerId,estimatedCostCents,fulfillmentEvidence:fulfillmentEvidence||null,customerAcknowledgment:customerAcknowledgment||null,fulfilledAt:fulfilledAt?.toISOString()||null};const id=await context.transaction(async(tx:any)=>{await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${eventKey},0))`;const recorded=await recordDomainEventInTransaction(tx,{eventKey,rooftopId:deal.rooftop.id,aggregateType:'WeOweItem',aggregateId:existing?.id||deal.id,action,topic:'we-owe.updated',actorId:context.session.itemId,afterSnapshot:evidence,payload:{rooftopId:deal.rooftop.id,dealId:deal.id,status}});if(recorded.reused){const found=await tx.prisma.weOweItem.findUnique({where:{idempotencyKey:ik(data.idempotencyKey)},select:{id:true}});if(found)return found.id;if(existing)return existing.id;throw new Error('We-owe replay missing')}const values={status,description,promisedAt,ownerId,estimatedCostCents,fulfillmentEvidence,customerAcknowledgment,fulfilledAt};return existing?(await tx.prisma.weOweItem.update({where:{id:existing.id},data:values,select:{id:true}})).id:(await tx.prisma.weOweItem.create({data:{...values,rooftopId:deal.rooftop.id,deliveryCaseId:delivery.id,idempotencyKey:ik(data.idempotencyKey)},select:{id:true}})).id},{timeout:30000});return context.db.WeOweItem.findOne({ where: {id} })}
+async function manageWeOweItemCommand(_r: unknown, { data }: any, context: any) {
+  const deal = await deliveryDeal(context, data.dealId)
+  const action = req(data.action, 'We-owe action', 30)
+  if (!['create', 'update', 'fulfill', 'waive'].includes(action)) throw new Error('Invalid we-owe action')
+  const delivery = await context.sudo().prisma.deliveryCase.findFirst({ where: { dealId: deal.id }, select: { id: true } })
+  if (!delivery) throw new Error('Delivery case is required')
+  const existing = data.itemId ? await context.sudo().prisma.weOweItem.findFirst({ where: { id: String(data.itemId), deliveryCaseId: delivery.id } }) : null
+  let status = existing?.status || 'open'
+  let description = existing?.description || ''
+  let promisedAt: Date | null = existing?.promisedAt || null
+  let ownerId: string | null = existing?.ownerId || null
+  let estimatedCostCents: number = existing?.estimatedCostCents || 0
+  let fulfillmentEvidence = existing?.fulfillmentEvidence || ''
+  let customerAcknowledgment = existing?.customerAcknowledgment || ''
+  let fulfilledAt: Date | null = existing?.fulfilledAt || null
+  const assignOwner = async (value: unknown) => {
+    const id = req(value, 'Owner ID', 100)
+    const owner = await context.query.User.findOne({ where: { id }, query: 'id' })
+    if (!owner) throw new Error('Owner is not accessible')
+    await assertUserRooftopAccess(context, id, deal.rooftop.id)
+    return id
+  }
+  const readCost = (value: unknown) => {
+    const cost = Number(value || 0)
+    if (!Number.isInteger(cost) || cost < 0 || cost > 2_147_483_647) throw new Error('Estimated cost is invalid')
+    return cost
+  }
+  const readPromisedAt = (value: unknown) => {
+    const date = new Date(String(value || ''))
+    if (Number.isNaN(date.getTime())) throw new Error('Promised date is invalid')
+    return date
+  }
+  if (action === 'create') {
+    description = req(data.description, 'Description')
+    promisedAt = readPromisedAt(data.promisedAt)
+    ownerId = await assignOwner(data.ownerId)
+    estimatedCostCents = readCost(data.estimatedCostCents)
+  } else if (action === 'update') {
+    // Owner, cost and promised date can be corrected while the promise is open.
+    if (!existing || existing.status !== 'open') throw new Error('Open we-owe item is required')
+    if (data.ownerId == null && data.estimatedCostCents == null && data.promisedAt == null) throw new Error('Nothing to update')
+    if (data.ownerId != null) ownerId = await assignOwner(data.ownerId)
+    if (data.estimatedCostCents != null) estimatedCostCents = readCost(data.estimatedCostCents)
+    if (data.promisedAt != null) promisedAt = readPromisedAt(data.promisedAt)
+  } else {
+    if (!existing || existing.status !== 'open') throw new Error('Open we-owe item is required')
+    status = action === 'fulfill' ? 'fulfilled' : 'waived'
+    fulfillmentEvidence = req(data.fulfillmentEvidence, 'Fulfillment evidence')
+    customerAcknowledgment = req(data.customerAcknowledgment, 'Customer acknowledgment')
+    fulfilledAt = new Date()
+  }
+  const eventKey = `we-owe:${ik(data.idempotencyKey)}`
+  const evidence = { dealId: deal.id, deliveryCaseId: delivery.id, itemId: existing?.id || null, action, status, description, promisedAt: promisedAt?.toISOString(), ownerId, estimatedCostCents, fulfillmentEvidence: fulfillmentEvidence || null, customerAcknowledgment: customerAcknowledgment || null, fulfilledAt: fulfilledAt?.toISOString() || null }
+  const id = await context.transaction(async (tx: any) => {
+    await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${eventKey},0))`
+    const recorded = await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftop.id, aggregateType: 'WeOweItem', aggregateId: existing?.id || deal.id, action, topic: 'we-owe.updated', actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: deal.rooftop.id, dealId: deal.id, status } })
+    if (recorded.reused) {
+      const found = await tx.prisma.weOweItem.findUnique({ where: { idempotencyKey: ik(data.idempotencyKey) }, select: { id: true } })
+      if (found) return found.id
+      if (existing) return existing.id
+      throw new Error('We-owe replay missing')
+    }
+    const values = { status, description, promisedAt, ownerId, estimatedCostCents, fulfillmentEvidence, customerAcknowledgment, fulfilledAt }
+    if (existing) {
+      const changed = await tx.prisma.weOweItem.updateMany({ where: { id: existing.id, status: 'open', updatedAt: existing.updatedAt }, data: values })
+      if (changed.count !== 1) throw new Error('We-owe item changed concurrently; reload and retry')
+      return existing.id
+    }
+    return (await tx.prisma.weOweItem.create({ data: { ...values, rooftopId: deal.rooftop.id, deliveryCaseId: delivery.id, idempotencyKey: ik(data.idempotencyKey) }, select: { id: true } })).id
+  }, { timeout: 30000 })
+  return context.db.WeOweItem.findOne({ where: { id } })
+}
 
 export const manageDeliveryCase = operatorCommand(manageDeliveryCaseCommand)
 export const manageWeOweItem = operatorCommand(manageWeOweItemCommand)

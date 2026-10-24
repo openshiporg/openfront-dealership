@@ -6,6 +6,13 @@ import {
   ClipboardList,
   CreditCard,
   DollarSign,
+  FileBarChart,
+  KeyRound,
+  Building2,
+  Boxes,
+  Tags,
+  Contact,
+  Receipt,
   Gauge,
   Landmark,
   LucideIcon,
@@ -45,17 +52,24 @@ export const platformNavItems: PlatformNavItem[] = [
   { title: 'CRM',            href: '/platform/crm',            color: 'purple',  description: 'Manage leads, contacts, follow-up, and sales opportunities.',   icon: Users,         group: 'sales' },
   { title: 'Test Drives',    href: '/platform/test-drives',    color: 'cyan',    description: 'Schedule and track test drive appointments.',                   icon: CalendarClock, group: 'sales' },
   { title: 'Trade-Ins',      href: '/platform/trade-ins',      color: 'amber',   description: 'Evaluate trade-in vehicles and acquisition opportunities.',     icon: CarFront,      group: 'sales' },
+  { title: 'Customers',      href: '/platform/customers',      color: 'pink',    description: 'Customer records, households, duplicates and history.',         icon: Contact,       group: 'sales' },
 
   // Finance
   { title: 'Finance',        href: '/platform/finance',        color: 'indigo',  description: 'Review finance applications and lender workflows.',             icon: CreditCard,    group: 'finance' },
   { title: 'Delivery',       href: '/platform/delivery',       color: 'teal',    description: 'Schedule deliveries and complete handoff checklists.',          icon: PackageCheck,  group: 'finance' },
-  { title: 'Accounting',     href: '/platform/accounting',     color: 'sky',     description: 'Export accounting batches and reconcile payments.',             icon: Landmark,      group: 'finance' },
+  { title: 'Payments',       href: '/platform/payments',       color: 'green',   description: 'Transactions, refunds, reconciliation and providers.',          icon: Receipt,       group: 'finance' },
+  { title: 'Accounting',     href: '/platform/accounting',     color: 'sky',     description: 'Journal batches and GL mappings.',                              icon: Landmark,      group: 'finance' },
 
   // Service
   { title: 'Service',        href: '/platform/service',        color: 'orange',  description: 'Coordinate service appointments and repair work.',              icon: Wrench,        group: 'service' },
+  { title: 'Parts',          href: '/platform/parts',          color: 'stone',   description: 'Parts catalog, stock movements and purchase orders.',           icon: Boxes,         group: 'service' },
 
   // Operations
   { title: 'Staff',          href: '/platform/users',          color: 'purple',  description: 'Manage staff accounts, roles, and permissions.',                icon: Users,         group: 'operations' },
+  { title: 'Organization',   href: '/platform/organization',   color: 'slate',   description: 'Dealer group, rooftops, access, roles and retention.',          icon: Building2,     group: 'operations' },
+  { title: 'Catalog',        href: '/platform/catalog',        color: 'lime',    description: 'Makes, models, service packages and lead routing.',             icon: Tags,          group: 'operations' },
+  { title: 'Reports',        href: '/platform/reports',        color: 'violet',  description: 'Saved reports, runs, audit search and outbox.',                 icon: FileBarChart,  group: 'operations' },
+  { title: 'API Keys',       href: '/platform/api-keys',       color: 'zinc',    description: 'Create, scope and revoke API keys.',                            icon: KeyRound,      group: 'operations' },
 ]
 
 export const platformStandaloneItems = platformNavItems.filter((item) => item.group === 'standalone')

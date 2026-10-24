@@ -284,6 +284,9 @@ export async function openInventoryReconWorkItem(data: {
   title: string
   category: string
   estimatedCostCents: number
+  vendorName?: string
+  assignedToId?: string | null
+  dueAt?: string | null
   reason: string
   idempotencyKey: string
 }) {
@@ -315,12 +318,14 @@ export async function transitionInventoryAcquisition(variables: {
   expectedUpdatedAt: string
   reason: string
   idempotencyKey: string
+  purchaseCents?: number | null
+  reconEstimateCents?: number | null
 }) {
   return runInventoryMutation(`
-    mutation TransitionInventoryAcquisition($id: ID!, $toStatus: String!, $expectedUpdatedAt: DateTime!, $reason: String!, $idempotencyKey: String!) {
-      transitionInventoryAcquisition(id: $id, toStatus: $toStatus, expectedUpdatedAt: $expectedUpdatedAt, reason: $reason, idempotencyKey: $idempotencyKey) { id status updatedAt }
+    mutation TransitionInventoryAcquisition($id: ID!, $toStatus: String!, $expectedUpdatedAt: DateTime!, $reason: String!, $purchaseCents: Int, $reconEstimateCents: Int, $idempotencyKey: String!) {
+      transitionInventoryAcquisition(id: $id, toStatus: $toStatus, expectedUpdatedAt: $expectedUpdatedAt, reason: $reason, purchaseCents: $purchaseCents, reconEstimateCents: $reconEstimateCents, idempotencyKey: $idempotencyKey) { id status updatedAt }
     }
-  `, variables)
+  `, { ...variables, purchaseCents: variables.purchaseCents ?? null, reconEstimateCents: variables.reconEstimateCents ?? null })
 }
 
 export async function decideInventoryMerchandising(data: {

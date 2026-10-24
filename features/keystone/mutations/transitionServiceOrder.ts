@@ -22,7 +22,7 @@ const SERVICE_ORDER_EVIDENCE_QUERY = `
 
 export async function transitionServiceOrder(
   _root: unknown,
-  { id, toStatus, idempotencyKey }: { id: string; toStatus: ServiceOrderStatus; idempotencyKey: string },
+  { id, toStatus, idempotencyKey, invoiceNumber }: { id: string; toStatus: ServiceOrderStatus; idempotencyKey: string; invoiceNumber?: string | null },
   context: any
 ) {
   if (!context.session?.itemId || !permissions.canManageService({ session: context.session })) {
@@ -30,6 +30,10 @@ export async function transitionServiceOrder(
   }
   const commandKey = String(idempotencyKey || '').trim()
   if (commandKey.length < 8 || commandKey.length > 200) throw new Error('A valid idempotency key is required')
+  // The invoice number can be assigned at invoicing, after completion has locked the evidence.
+  const assignedInvoiceNumber = String(invoiceNumber || '').trim()
+  if (assignedInvoiceNumber && toStatus !== 'invoiced') throw new Error('An invoice number can only be assigned when invoicing')
+  if (assignedInvoiceNumber.length > 100) throw new Error('Invoice number must be at most 100 characters')
 
   return context.transaction(async (transactionContext: any) => {
     await lockServiceOrder(transactionContext, id)
@@ -42,7 +46,7 @@ export async function transitionServiceOrder(
     if (!order?.rooftop?.id) throw new Error('Service order not found or not accessible')
     await assertSessionRooftopPermission(sessionContext, order.rooftop.id, 'canManageService')
     const eventKey = `service-order-transition:${commandKey}`
-    const requestEvidence = { serviceOrderId: id, toStatus }
+    const requestEvidence = assignedInvoiceNumber ? { serviceOrderId: id, toStatus, invoiceNumber: assignedInvoiceNumber } : { serviceOrderId: id, toStatus }
     const replay = await transactionContext.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { aggregateId: true, actorId: true, rooftopId: true, afterSnapshot: true, metadata: true } })
     if (replay) {
       if (replay.aggregateId !== id || replay.actorId !== context.session.itemId || replay.rooftopId !== authority.rooftopId || stableJson(replay.afterSnapshot) !== stableJson(requestEvidence)) throw new Error('Service transition retry differs from the original actor, scope or request')
@@ -64,7 +68,7 @@ export async function transitionServiceOrder(
     assertServiceOrderTransition(order.status, toStatus)
     if (toStatus === 'approved' && (!String(order.concern || '').trim() || order.authorizationStatus !== 'authorized')) throw new Error('Authorized customer concern evidence is required before repair approval')
     if (toStatus === 'completed' && (!String(order.cause || '').trim() || !String(order.correction || '').trim() || order.laborOperations.some((operation: any) => !['completed', 'cancelled'].includes(operation.status)))) throw new Error('Cause, correction, and completed labor operations are required')
-    if (toStatus === 'invoiced' && !String(order.invoiceNumber || '').trim()) throw new Error('Invoice number is required before invoicing')
+    if (toStatus === 'invoiced' && !assignedInvoiceNumber && !String(order.invoiceNumber || '').trim()) throw new Error('Invoice number is required before invoicing')
 
     if (toStatus === 'paid') {
       await assertSessionRooftopPermission(sessionContext, authority.rooftopId, 'canViewReports')
@@ -79,6 +83,7 @@ export async function transitionServiceOrder(
       update.evidenceSnapshot = buildServiceOrderEvidenceSnapshot(order)
     }
     if (toStatus === 'paid') update.settledAt = now
+    if (assignedInvoiceNumber) update.invoiceNumber = assignedInvoiceNumber
 
     const changed = await transactionContext.prisma.serviceOrder.updateMany({
       where: { id, status: order.status },

@@ -7,6 +7,9 @@ const INTENTS: Record<string, string> = {
   'general-contact': 'General contact request',
   'vehicle-question': 'Vehicle question',
   'get-quote': 'Price quote request',
+  // Reserve this vehicle: a hold request for staff. It does not change the vehicle's status;
+  // only a deal moves inventory to pending, so an anonymous request cannot pull a car offline.
+  'reserve-vehicle': 'Vehicle reservation request',
 }
 const CONTACTS = new Set(['email', 'phone', 'text'])
 
@@ -74,7 +77,7 @@ export async function submitInquiry(_root: unknown, { data }: { data: any }, con
           phone,
           source: 'website',
           status: 'new',
-          ...(intent === 'get-quote' ? { timeframe: 'immediately' } : {}),
+          ...(intent === 'get-quote' || intent === 'reserve-vehicle' ? { timeframe: 'immediately' } : {}),
           notes: [
             `${intentLabel} submitted from storefront.`,
             `Preferred contact: ${preferredContact}.`,

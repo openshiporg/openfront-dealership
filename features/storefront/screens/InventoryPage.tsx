@@ -7,6 +7,7 @@ import { fetchGraphQL } from '@/features/storefront/lib/data/graphql-client'
 import { GET_VEHICLES } from '@/features/storefront/lib/data/queries'
 import { Vehicle } from '@/features/storefront/lib/types'
 import { buildVehicleOrderBy, buildVehicleWhereInput } from '@/features/storefront/lib/data/vehicle-inventory'
+import { buildInventoryFacets, facetModels, fetchListedInventoryOptions, type InventoryFacets } from '@/features/storefront/lib/data/inventory-facets'
 import { INVENTORY_PAGE_SIZE, parseInventoryPage, resolveInventoryPage } from '@/features/storefront/lib/data/inventory-pagination'
 import { Container } from '../components/Container'
 import { VehicleCard } from '../components/VehicleCard'
@@ -64,6 +65,15 @@ export function InventoryPage() {
     condition: '',
   })
   const [sortBy, setSortBy] = useState('year-desc')
+  const [facets, setFacets] = useState<InventoryFacets | null>(null)
+
+  useEffect(() => {
+    let active = true
+    void fetchListedInventoryOptions()
+      .then((items) => { if (active) setFacets(buildInventoryFacets(items)) })
+      .catch(() => { if (active) setFacets({ makes: [], modelsByMake: {} }) })
+    return () => { active = false }
+  }, [])
 
   useEffect(() => {
     if (lastWrittenQuery.current === searchKey) return
@@ -200,7 +210,13 @@ export function InventoryPage() {
   }
 
   const handleFilterChange = (key: string, value: string) => {
-    setFilters((prev) => ({ ...prev, [key]: value }))
+    setFilters((prev) => {
+      const next = { ...prev, [key]: value }
+      if (key === 'make' && facets && prev.model && !facetModels(facets, value).some((model) => model.toLowerCase() === prev.model.toLowerCase())) {
+        next.model = ''
+      }
+      return next
+    })
     setCurrentPage(1)
     setInvalidPage(false)
     setPageNotice(null)
@@ -235,6 +251,10 @@ export function InventoryPage() {
   const totalPages = Math.ceil(totalCount / itemsPerPage)
   const firstVisiblePage = Math.min(Math.max(1, currentPage - 2), Math.max(1, totalPages - 4))
   const visiblePageCount = Math.min(5, totalPages)
+  const withCurrent = (options: string[], current: string) =>
+    current && !options.some((option) => option.toLowerCase() === current.toLowerCase()) ? [current, ...options] : options
+  const makeOptions = withCurrent(facets?.makes ?? [], filters.make)
+  const modelOptions = withCurrent(facets ? facetModels(facets, filters.make) : [], filters.model)
   const currentYear = new Date().getFullYear()
   const years = Array.from({ length: 20 }, (_, i) => currentYear - i)
 
@@ -456,25 +476,33 @@ export function InventoryPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="min-w-0">
                   <label htmlFor="inventory-make" className="sf-label">Make</label>
-                  <input
+                  <select
                     id="inventory-make"
-                    type="text"
                     value={filters.make}
                     onChange={(e) => handleFilterChange('make', e.target.value)}
-                    placeholder="Any"
                     className="sf-input"
-                  />
+                    aria-busy={!facets}
+                  >
+                    <option value="">{facets ? 'Any' : 'Loading'}</option>
+                    {makeOptions.map((make) => (
+                      <option key={make} value={make}>{make}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="min-w-0">
                   <label htmlFor="inventory-model" className="sf-label">Model</label>
-                  <input
+                  <select
                     id="inventory-model"
-                    type="text"
                     value={filters.model}
                     onChange={(e) => handleFilterChange('model', e.target.value)}
-                    placeholder="Any"
                     className="sf-input"
-                  />
+                    aria-busy={!facets}
+                  >
+                    <option value="">{facets ? 'Any' : 'Loading'}</option>
+                    {modelOptions.map((model) => (
+                      <option key={model} value={model}>{model}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

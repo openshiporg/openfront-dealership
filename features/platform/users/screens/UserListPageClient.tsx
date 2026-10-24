@@ -18,7 +18,8 @@ import { CreateItemDrawerClientWrapper } from '@/features/platform/components/Cr
 import { useDashboard } from '../../../dashboard/context/DashboardProvider'
 import { useSelectedFields } from '../../../dashboard/hooks/useSelectedFields'
 import { useSort } from '../../../dashboard/hooks/useSort'
-import { useListItemsQuery } from '../../../dashboard/hooks/useListItems.query'
+import { useQuery } from '@tanstack/react-query'
+import { getUsers } from '../actions'
 import { buildOrderByClause } from '../../../dashboard/lib/buildOrderByClause'
 import { buildWhereClause } from '../../../dashboard/lib/buildWhereClause'
 import { DeskHeader, Notice, Panel, Pill, Track } from '../../components/desk'
@@ -110,36 +111,18 @@ export function UserListPageClient({
     }
   }, [list, currentSearchParams, currentPage, pageSize, searchString])
 
-  // For staff, use raw GraphQL string to include relationship counts
-  const querySelectedFields = `
-    id
-    name
-    email
-    phone
-    isSalesperson
-    isServiceAdvisor
-    isFinanceManager
-    role {
-      id
-      name
-    }
-    assignedLeadsCount
-    dealsCount
-    createdAt
-  `
-
-  // Use React Query hook with server-side initial data
-  // Use React Query hook with server-side initial data
-  const { data: queryData, error: queryError, isLoading, isFetching } = useListItemsQuery(
-    {
-      listKey: list.key,
-      variables,
-      selectedFields: querySelectedFields
+  // Refetch through the same staff-only server action as the first render, so storefront
+  // shoppers (Users without a role or dealership membership) never enter the list.
+  const { data: queryData, error: queryError } = useQuery({
+    queryKey: ['platform', 'staff', variables],
+    queryFn: async () => {
+      const response = await getUsers(variables.where, variables.take, variables.skip, variables.orderBy)
+      if (!response.success) throw new Error(response.error || 'Failed to fetch users')
+      return response.data
     },
-    {
-      initialData: initialError ? undefined : initialData,
-    }
-  )
+    initialData: initialError ? undefined : initialData,
+    staleTime: 30 * 1000,
+  })
 
   // Use query data, fallback to initial data
   const data = queryData || initialData

@@ -2115,6 +2115,7 @@ type TestDrive {
   scheduledTime: DateTime
   completed: Boolean
   noShow: Boolean
+  cancelledAt: DateTime
   driverLicenseVerified: Boolean
   feedback: String
   interestedLevel: String
@@ -2139,6 +2140,7 @@ input TestDriveWhereInput {
   scheduledTime: DateTimeFilter
   completed: BooleanFilter
   noShow: BooleanFilter
+  cancelledAt: DateTimeNullableFilter
   driverLicenseVerified: BooleanFilter
   feedback: StringFilter
   interestedLevel: StringNullableFilter
@@ -2151,6 +2153,7 @@ input TestDriveOrderByInput {
   scheduledTime: OrderDirection
   completed: OrderDirection
   noShow: OrderDirection
+  cancelledAt: OrderDirection
   driverLicenseVerified: OrderDirection
   feedback: OrderDirection
   interestedLevel: OrderDirection
@@ -2167,6 +2170,7 @@ input TestDriveUpdateInput {
   scheduledTime: DateTime
   completed: Boolean
   noShow: Boolean
+  cancelledAt: DateTime
   driverLicenseVerified: Boolean
   feedback: String
   interestedLevel: String
@@ -2188,6 +2192,7 @@ input TestDriveCreateInput {
   scheduledTime: DateTime
   completed: Boolean
   noShow: Boolean
+  cancelledAt: DateTime
   driverLicenseVerified: Boolean
   feedback: String
   interestedLevel: String
@@ -2800,6 +2805,7 @@ type ServiceAppointment {
   requestedBy: User
   lead: Lead
   customer: User
+  servicePackage: ServicePackage
   vehicleVin: String
   transportationNeed: String
   capacitySlot: String
@@ -2831,6 +2837,7 @@ input ServiceAppointmentWhereInput {
   requestedBy: UserWhereInput
   lead: LeadWhereInput
   customer: UserWhereInput
+  servicePackage: ServicePackageWhereInput
   vehicleVin: StringFilter
   transportationNeed: StringNullableFilter
   capacitySlot: StringFilter
@@ -2870,6 +2877,7 @@ input ServiceAppointmentUpdateInput {
   requestedBy: UserRelateToOneForUpdateInput
   lead: LeadRelateToOneForUpdateInput
   customer: UserRelateToOneForUpdateInput
+  servicePackage: ServicePackageRelateToOneForUpdateInput
   vehicleVin: String
   transportationNeed: String
   capacitySlot: String
@@ -2883,6 +2891,12 @@ input ServiceAppointmentUpdateInput {
   mileageIn: Int
   advisorNotes: String
   serviceOrder: ServiceOrderRelateToOneForUpdateInput
+}
+
+input ServicePackageRelateToOneForUpdateInput {
+  create: ServicePackageCreateInput
+  connect: ServicePackageWhereUniqueInput
+  disconnect: Boolean
 }
 
 input ServiceOrderRelateToOneForUpdateInput {
@@ -2903,6 +2917,7 @@ input ServiceAppointmentCreateInput {
   requestedBy: UserRelateToOneForCreateInput
   lead: LeadRelateToOneForCreateInput
   customer: UserRelateToOneForCreateInput
+  servicePackage: ServicePackageRelateToOneForCreateInput
   vehicleVin: String
   transportationNeed: String
   capacitySlot: String
@@ -2916,6 +2931,11 @@ input ServiceAppointmentCreateInput {
   mileageIn: Int
   advisorNotes: String
   serviceOrder: ServiceOrderRelateToOneForCreateInput
+}
+
+input ServicePackageRelateToOneForCreateInput {
+  create: ServicePackageCreateInput
+  connect: ServicePackageWhereUniqueInput
 }
 
 input ServiceOrderRelateToOneForCreateInput {
@@ -5530,6 +5550,7 @@ type Customer {
   contactPreferenceUpdatedAt: DateTime
   suppressionReason: String
   suppressionSource: String
+  account: User
   household: CustomerHousehold
   contactPreferenceEvents(where: CustomerContactPreferenceEventWhereInput! = {}, orderBy: [CustomerContactPreferenceEventOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: CustomerContactPreferenceEventWhereUniqueInput): [CustomerContactPreferenceEvent!]
   contactPreferenceEventsCount(where: CustomerContactPreferenceEventWhereInput! = {}): Int
@@ -5578,6 +5599,7 @@ input CustomerWhereInput {
   contactPreferenceUpdatedAt: DateTimeNullableFilter
   suppressionReason: StringFilter
   suppressionSource: StringFilter
+  account: UserWhereInput
   household: CustomerHouseholdWhereInput
   contactPreferenceEvents: CustomerContactPreferenceEventManyRelationFilter
   salesVisits: SalesVisitManyRelationFilter
@@ -5642,6 +5664,7 @@ input CustomerUpdateInput {
   contactPreferenceUpdatedAt: DateTime
   suppressionReason: String
   suppressionSource: String
+  account: UserRelateToOneForUpdateInput
   household: CustomerHouseholdRelateToOneForUpdateInput
   contactPreferenceEvents: CustomerContactPreferenceEventRelateToManyForUpdateInput
   salesVisits: SalesVisitRelateToManyForUpdateInput
@@ -5693,6 +5716,7 @@ input CustomerCreateInput {
   contactPreferenceUpdatedAt: DateTime
   suppressionReason: String
   suppressionSource: String
+  account: UserRelateToOneForCreateInput
   household: CustomerHouseholdRelateToOneForCreateInput
   contactPreferenceEvents: CustomerContactPreferenceEventRelateToManyForCreateInput
   salesVisits: SalesVisitRelateToManyForCreateInput
@@ -8812,6 +8836,10 @@ type Mutation {
   sendUserPasswordResetLink(email: String!): Boolean!
   redeemUserPasswordResetToken(email: String!, token: String!, password: String!): RedeemUserPasswordResetTokenResult
   registerCustomerAccount(name: String!, email: String!, password: String!): CustomerAccountResult!
+  requestCustomerEmailVerification: CustomerEmailVerificationRequest!
+  confirmCustomerEmailVerification(token: String!): CustomerEmailLinkResult!
+  cancelCustomerBooking(kind: String!, id: ID!, idempotencyKey: String!): CustomerBookingResult!
+  rescheduleCustomerBooking(kind: String!, id: ID!, date: String!, time: String!, idempotencyKey: String!): CustomerBookingResult!
   updateActiveUser(data: UserUpdateProfileInput!): ActiveUserProfile
   submitInquiry(data: SubmitInquiryInput!): SubmitInquiryPayload!
   submitTestDrive(data: SubmitTestDriveInput!): SubmitTestDrivePayload!
@@ -8819,10 +8847,12 @@ type Mutation {
   submitFinancing(data: SubmitFinancingInput!): SubmitFinancingPayload!
   submitServiceBooking(data: SubmitServiceBookingInput!): SubmitServiceBookingPayload!
   transitionDeal(id: ID!, toStatus: String!, notes: String, idempotencyKey: String!): Deal
-  transitionServiceOrder(id: ID!, toStatus: String!, idempotencyKey: String!): ServiceOrder
+  transitionServiceOrder(id: ID!, toStatus: String!, idempotencyKey: String!, invoiceNumber: String): ServiceOrder
   queueFinancingApplication(applicationId: ID!, providerKey: String!, idempotencyKey: String!): LenderSubmission
   recordLenderDecision(data: RecordLenderDecisionInput!): LenderDecision
+  recordLenderSubmissionStatus(data: RecordLenderSubmissionStatusInput!): LenderSubmission!
   changeDealerMembership(data: ChangeDealerMembershipInput!): DealerMembershipChangePayload!
+  configureRetentionPolicy(data: ConfigureRetentionPolicyInput!): RetentionPolicy!
   createDealPencil(data: CreateDealPencilInput!): Deal
   openServiceOrder(data: OpenServiceOrderInput!): ServiceOrder
   transitionLead(id: ID!, toStatus: String!, lostReasonCode: String, lostReasonDetails: String, idempotencyKey: String!): Lead
@@ -8842,6 +8872,8 @@ type Mutation {
   reopenDealWorksheet(data: ReopenDealWorksheetInput!): OperatorCommandResult!
   manageDeliveryCase(data: ManageDeliveryCaseInput!): DeliveryCase!
   manageWeOweItem(data: ManageWeOweItemInput!): WeOweItem!
+  createWalkInTradeIn(data: CreateWalkInTradeInInput!): OperatorCommandResult!
+  setDealTradeIn(data: SetDealTradeInInput!): OperatorCommandResult!
   completeDealDelivery(data: CompleteDealDeliveryInput!): OperatorCommandResult!
   recordServiceOrderEvidence(data: RecordServiceOrderEvidenceInput!): ServiceOrder!
   manageLaborOperation(data: ManageLaborOperationInput!): ServiceLaborOperation!
@@ -8859,6 +8891,9 @@ type Mutation {
   runSavedReport(data: RunSavedReportInput!): ReportRun!
   queueDueSavedReports: ScheduledReportDispatchResult!
   addServiceOrderLineItem(data: AddServiceOrderLineInput!): OperatorCommandResult!
+  updateServiceOrderLineItem(data: UpdateServiceOrderLineInput!): OperatorCommandResult!
+  removeServiceOrderLineItem(data: RemoveServiceOrderLineInput!): OperatorCommandResult!
+  setServiceOrderTax(data: SetServiceOrderTaxInput!): OperatorCommandResult!
   openFinanceFollowUp(data: OpenFinanceFollowUpInput!): OperatorCommandResult!
   configureFinanceProduct(data: ConfigureFinanceProductInput!): FinanceProduct!
   recordFinanceProductQuote(data: RecordFinanceProductQuoteInput!): FinanceProductQuote!
@@ -8882,6 +8917,7 @@ type Mutation {
   addInventoryVehiclePhoto(data: AddInventoryVehiclePhotoInput!): InventoryCommandResult!
   arrangeInventoryVehiclePhotos(data: ArrangeInventoryVehiclePhotosInput!): InventoryCommandResult!
   removeInventoryVehiclePhoto(data: RemoveInventoryVehiclePhotoInput!): InventoryCommandResult!
+  updateInventoryVehicleDetails(data: UpdateInventoryVehicleDetailsInput!): InventoryCommandResult!
   mergeCustomers(data: MergeCustomersInput!): CustomerMergeResult!
   configureLeadRoutingRule(data: ConfigureLeadRoutingRuleInput!): OperatorCommandResult!
   routeLead(data: RouteLeadInput!): OperatorCommandResult!
@@ -8890,6 +8926,10 @@ type Mutation {
   advanceLeadCadence(data: AdvanceLeadCadenceInput!): OperatorCommandResult!
   linkCustomerHousehold(data: LinkCustomerHouseholdInput!): OperatorCommandResult!
   manageSalesVisit(data: ManageSalesVisitInput!): OperatorCommandResult!
+  openLead(data: OpenLeadInput!): OpenLeadResult!
+  updateLeadDetails(data: UpdateLeadDetailsInput!): OperatorCommandResult!
+  updateCustomerContact(data: UpdateCustomerContactInput!): OperatorCommandResult!
+  unlinkCustomerHousehold(data: UnlinkCustomerHouseholdInput!): OperatorCommandResult!
   ensureDealershipOnboardingRecord(entity: String!, data: JSON!): JSON!
 }
 
@@ -9136,6 +9176,12 @@ type Query {
   authenticatedItem: AuthenticatedItem
   validateUserPasswordResetToken(email: String!, token: String!): ValidateUserPasswordResetTokenResult
   customerRequestHistory: [CustomerRequest!]!
+  customerRequestDetail(kind: String!, id: ID!): JSON
+  customerPurchases: JSON!
+  customerServiceHistory: JSON!
+  customerServiceOrder(id: ID!): JSON
+  customerPayments: JSON!
+  customerEmailLinkStatus: CustomerEmailLinkResult!
   redirectToInit: Boolean
   publicInventoryVehicles(where: JSON, orderBy: JSON, take: Int, skip: Int): PublicInventoryResult!
   publicInventoryVehicle(id: ID!): PublicInventoryVehicle
@@ -9152,7 +9198,7 @@ type Query {
   fixedOpsWorkspace(limit: Int = 50, offset: Int = 0): FixedOpsWorkspaceResult!
   accountingWorkspace(limit: Int = 50): AccountingWorkspaceResult!
   operationalReport: OperationalReportResult!
-  auditSearch(aggregateType: String, aggregateId: ID, action: String, limit: Int = 50): [DomainAuditEvent!]!
+  auditSearch(aggregateType: String, aggregateId: ID, action: String, actorId: ID, rooftopId: ID, since: String, until: String, limit: Int = 50): [DomainAuditEvent!]!
   customerDuplicateCandidates(customerId: ID!, limit: Int = 20): [CustomerDuplicateCandidate!]!
 }
 
@@ -9482,6 +9528,7 @@ input SubmitServiceBookingInput {
   vehicleModel: String!
   vehicleVin: String
   description: String
+  servicePackageId: ID
   rooftopSlug: String
   idempotencyKey: String!
   website: String
@@ -9497,6 +9544,7 @@ type SubmitServiceBookingPayload {
   serviceType: String
   status: String
   requestedServiceLabel: String
+  servicePackageId: ID
   reused: Boolean
 }
 
@@ -9600,6 +9648,16 @@ type DealerMembershipChangePayload {
   updatedAt: DateTime!
 }
 
+input ConfigureRetentionPolicyInput {
+  rooftopId: ID!
+  category: String!
+  retentionDays: Int!
+  legalHold: Boolean!
+  rationale: String!
+  idempotencyKey: String!
+  expectedUpdatedAt: DateTime
+}
+
 input RecordLenderDecisionInput {
   applicationId: ID!
   submissionId: ID
@@ -9688,6 +9746,7 @@ input MergeCustomersInput {
 
 input ConfigureLeadRoutingRuleInput {
   rooftopId: ID!
+  ruleId: ID
   name: String!
   source: String = "any"
   assigneeId: ID!
@@ -9752,6 +9811,64 @@ input ManageSalesVisitInput {
   expectedUpdatedAt: DateTime
   outcome: String
   notes: String
+  idempotencyKey: String!
+}
+
+input OpenLeadInput {
+  rooftopId: ID!
+  firstName: String!
+  lastName: String!
+  email: String
+  phone: String
+  source: String!
+  budgetRange: String
+  timeframe: String
+  tradeInVehicle: String
+  notes: String
+  interestedVehicleId: ID
+  assignedToId: ID
+  idempotencyKey: String!
+}
+
+type OpenLeadResult {
+  id: ID!
+  customerId: ID!
+  assignedToId: ID
+  routeKey: String
+  firstResponseDueAt: DateTime
+  reused: Boolean!
+}
+
+input UpdateLeadDetailsInput {
+  leadId: ID!
+  expectedUpdatedAt: DateTime!
+  firstName: String!
+  lastName: String!
+  email: String
+  phone: String
+  source: String!
+  budgetRange: String
+  timeframe: String
+  tradeInVehicle: String
+  notes: String
+  interestedVehicleId: ID
+  idempotencyKey: String!
+}
+
+input UpdateCustomerContactInput {
+  customerId: ID!
+  expectedUpdatedAt: DateTime!
+  firstName: String!
+  lastName: String!
+  primaryEmail: String
+  primaryPhone: String
+  idempotencyKey: String!
+}
+
+input UnlinkCustomerHouseholdInput {
+  customerId: ID!
+  expectedUpdatedAt: DateTime!
+  reason: String!
   idempotencyKey: String!
 }
 
@@ -10366,6 +10483,31 @@ input ManageDeliveryCaseInput {
   appointmentAt: DateTime
   checklist: JSON
   customerAcknowledgment: String
+  reason: String
+  idempotencyKey: String!
+}
+
+input CreateWalkInTradeInInput {
+  rooftopId: ID!
+  leadId: ID
+  vin: String
+  year: String!
+  make: String!
+  model: String!
+  trim: String
+  mileage: Int
+  condition: String
+  exteriorCondition: String
+  interiorCondition: String
+  mechanicalIssues: String
+  idempotencyKey: String!
+}
+
+input SetDealTradeInInput {
+  dealId: ID!
+  tradeInId: ID
+  expectedUpdatedAt: DateTime!
+  reason: String
   idempotencyKey: String!
 }
 
@@ -10410,7 +10552,8 @@ input ManageLaborOperationInput {
 }
 
 input ConfigurePartInput {
-  rooftopId: ID!
+  partId: ID
+  rooftopId: ID
   partNumber: String!
   description: String!
   binLocation: String
@@ -10418,6 +10561,8 @@ input ConfigurePartInput {
   costCents: Int!
   priceCents: Int!
   supplier: String
+  supplierPartNumber: String
+  expectedUpdatedAt: DateTime
   idempotencyKey: String!
 }
 
@@ -10439,6 +10584,8 @@ input ManagePartsPurchaseOrderInput {
   reference: String
   supplier: String
   lines: JSON
+  receiptLines: JSON
+  expectedUpdatedAt: DateTime
   idempotencyKey: String!
 }
 
@@ -10498,16 +10645,20 @@ input ReconcilePaymentInput {
 
 input SaveOperationalReportInput {
   rooftopId: ID!
+  reportId: ID
   name: String!
   reportType: String!
   filters: JSON
   exportFormat: String!
   schedule: String!
+  active: Boolean = true
+  expectedUpdatedAt: String
   idempotencyKey: String!
 }
 
 input RunSavedReportInput {
   reportId: ID!
+  runId: ID
   idempotencyKey: String!
 }
 
@@ -10519,6 +10670,33 @@ input AddServiceOrderLineInput {
   quantity: Float!
   unitPriceCents: Int!
   costCents: Int
+  expectedUpdatedAt: DateTime!
+  idempotencyKey: String!
+}
+
+input UpdateServiceOrderLineInput {
+  serviceOrderId: ID!
+  lineItemId: ID!
+  itemType: String!
+  description: String!
+  partNumber: String
+  quantity: Float!
+  unitPriceCents: Int!
+  costCents: Int
+  expectedUpdatedAt: DateTime!
+  idempotencyKey: String!
+}
+
+input RemoveServiceOrderLineInput {
+  serviceOrderId: ID!
+  lineItemId: ID!
+  expectedUpdatedAt: DateTime!
+  idempotencyKey: String!
+}
+
+input SetServiceOrderTaxInput {
+  serviceOrderId: ID!
+  taxCents: Int!
   expectedUpdatedAt: DateTime!
   idempotencyKey: String!
 }
@@ -10536,8 +10714,9 @@ input ConfigureFinanceProductInput {
   category: String!
   providerKey: String!
   retailPriceCents: Int!
-  costCents: Int!
+  costCents: Int
   active: Boolean
+  expectNew: Boolean
   idempotencyKey: String!
 }
 
@@ -10547,7 +10726,16 @@ input RecordFinanceProductQuoteInput {
   status: String!
   retailPriceCents: Int
   costCents: Int
+  termMonths: Int
   evidenceReference: String
+  idempotencyKey: String!
+}
+
+input RecordLenderSubmissionStatusInput {
+  submissionId: ID!
+  status: String!
+  externalReference: String
+  errorCode: String
   idempotencyKey: String!
 }
 
@@ -10627,6 +10815,7 @@ input RecordFinanceProductCancellationInput {
   status: String!
   reason: String!
   refundCents: Int
+  refundBasis: JSON
   evidenceReference: String
   idempotencyKey: String!
 }
@@ -10851,12 +11040,16 @@ input IntakeInventoryVehicleInput {
 }
 
 input EstablishInventoryStockInput {
-  vehicleId: ID!
+  vehicleId: ID
   acquisitionId: ID
   stockNumber: String!
   locationCode: String!
   locationLabel: String
   purchaseCostCents: Int
+  condition: String
+  trim: String
+  exteriorColor: String
+  interiorColor: String
   reason: String!
   idempotencyKey: String!
 }
@@ -10884,6 +11077,7 @@ input CreateInventoryReconWorkInput {
   title: String!
   category: String!
   estimatedCostCents: Int
+  vendorName: String
   assignedToId: ID
   dueAt: DateTime
   reason: String!
@@ -10894,6 +11088,27 @@ input TransitionInventoryReconWorkInput {
   id: ID!
   toStatus: String!
   actualCostCents: Int
+  expectedUpdatedAt: DateTime!
+  reason: String!
+  idempotencyKey: String!
+}
+
+input UpdateInventoryVehicleDetailsInput {
+  stockId: ID!
+  vin: String!
+  year: Int!
+  make: String!
+  model: String!
+  trim: String
+  exteriorColor: String
+  interiorColor: String
+  condition: String!
+  mileage: Int
+  features: JSON
+  listPriceCents: Int
+  priceCents: Int!
+  description: String
+  priceChangeReason: String
   expectedUpdatedAt: DateTime!
   reason: String!
   idempotencyKey: String!
@@ -10994,7 +11209,29 @@ type CustomerAccountResult {
 type CustomerRequest {
   id: ID!
   kind: String!
+  kindKey: String
   scheduledAt: DateTime!
   status: String!
   timezone: String
+  vehicle: String
+  amountCents: Int
+}
+
+type CustomerBookingResult {
+  id: ID!
+  kind: String!
+  status: String!
+  scheduledAt: DateTime
+}
+
+type CustomerEmailLinkResult {
+  email: String!
+  linkedCustomerCount: Int!
+  newlyLinkedCount: Int
+  verified: Boolean!
+}
+
+type CustomerEmailVerificationRequest {
+  sent: Boolean!
+  email: String!
 }

@@ -6,6 +6,7 @@ import { amortizedPaymentCents, assertValidDealPrice, calculateDealPrice, checke
 import { domainEventRequestHash, recordDomainEventInTransaction, stableJson, type DomainEventInput } from '../lifecycle/domainEvents'
 import { assertSessionRooftopPermission, assertUserRooftopAccess } from '../tenantRecords'
 import { assertCurrentFunding, currentDealAuthority, lockDeal, readLockedFunding, worksheetBinding } from '../lifecycle/dealFinanceEvidence'
+import { recomputeServiceOrderTotals } from './serviceOrderLineCommands'
 
 function idempotencyKey(value: unknown) {
   const key = String(value || '').trim()
@@ -377,10 +378,7 @@ export async function addServiceOrderLineItem(_root: unknown, { data }: any, con
     const current = await tx.prisma.serviceOrder.findUnique({ where: { id: order.id }, select: { updatedAt: true, taxCents: true } })
     if (!current || current.updatedAt.getTime() !== expectedUpdatedAt.getTime()) throw new Error('Service order changed concurrently; reload and retry')
     await tx.prisma.repairOrderLineItem.create({ data: { id: lineId, rooftopId: order.rooftop.id, serviceOrderId: order.id, itemType, description, partNumber: evidence.partNumber, quantity, unitPriceCents, priceCents, costCents } })
-    const totals = await tx.prisma.repairOrderLineItem.groupBy({ by: ['itemType'], where: { serviceOrderId: order.id }, _sum: { priceCents: true } })
-    const laborTotalCents = (totals.find((total: any) => total.itemType === 'labor')?._sum.priceCents ?? 0) + (totals.find((total: any) => total.itemType === 'sublet')?._sum.priceCents ?? 0)
-    const partsTotalCents = totals.find((total: any) => total.itemType === 'part')?._sum.priceCents ?? 0
-    await tx.prisma.serviceOrder.update({ where: { id: order.id }, data: { laborTotalCents, partsTotalCents, grandTotalCents: laborTotalCents + partsTotalCents + (current.taxCents ?? 0) } })
+    await recomputeServiceOrderTotals(tx, order.id, current.taxCents ?? 0)
     await recordDomainEventInTransaction(tx, { eventKey, rooftopId: order.rooftop.id, aggregateType: 'ServiceOrder', aggregateId: order.id, action: 'line-item-added', topic: 'service-order.line-item-added', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { lineItemId: lineId }, payload: { rooftopId: order.rooftop.id, serviceOrderId: order.id, lineItemId: lineId, priceCents } })
     return { id: lineId, reused: false }
   }, { timeout: 30_000 })

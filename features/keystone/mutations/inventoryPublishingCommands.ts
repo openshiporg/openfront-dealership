@@ -8,6 +8,7 @@ import { resolveInventoryChannel } from '../../integrations/inventory-channel'
 import { domainEventRequestHash, recordDomainEventInTransaction, type DomainEventInput } from '../lifecycle/domainEvents'
 import { assertMerchandisingTransition } from '../lifecycle/inventoryOperationsLifecycle'
 import { assertSessionRooftopPermission } from '../tenantRecords'
+import { appendInventoryPriceHistory } from '../lifecycle/inventoryPriceHistory'
 
 function required(value: unknown, label: string, max = 500) {
   const result = String(value || '').trim()
@@ -87,6 +88,7 @@ async function updateInventoryMerchandisingDraftCommand(_root: unknown, { data }
       where: { id: stock.vehicle.id },
       data: { priceCents, listPriceCents, mileage, description },
     })
+    await appendInventoryPriceHistory(tx, { rooftopId: stock.rooftop.id, vehicleId: stock.vehicle.id, previousPriceCents: current.vehicle.priceCents, newPriceCents: priceCents, actorId: context.session.itemId, changeReason: reason })
     if (imagePath) {
       const primary = await tx.prisma.vehicleImage.findFirst({ where: { vehicleId: stock.vehicle.id, isPrimary: true }, select: { id: true } })
       if (primary) await tx.prisma.vehicleImage.update({ where: { id: primary.id }, data: { rooftopId: stock.rooftop.id, imagePath, caption: `${stock.vehicle.year} ${stock.vehicle.make} ${stock.vehicle.model}`, category: 'exterior', sortOrder: 0 } })

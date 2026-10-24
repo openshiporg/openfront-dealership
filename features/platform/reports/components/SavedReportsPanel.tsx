@@ -1,0 +1,346 @@
+'use client'
+
+import { useMemo, useState } from 'react'
+import { Download, History, Pencil, Play, Plus, Power, Search } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
+import { Notice, Panel, Pill, Segmented, StatusDot, TitleLine, Track } from '@/features/platform/components/desk'
+import { EmptyRow, Field, FormDialog, TAP, TAP_INPUT, TAP_SM } from '@/features/platform/catalog/components/formKit'
+import { cn } from '@/lib/utils'
+import { type ReportRooftop, type ReportRun, type SavedReport, runReport, saveReport } from '../actions'
+import { downloadReportRun } from '../lib/downloadRun'
+import { EXPORT_FORMATS, REPORT_FILTER_FIELDS, REPORT_TYPES, RUN_STATE, SCHEDULES, describeFilters, effectiveRunStatus, reportTypeLabel, scheduleLabel } from '../lib/reportOptions'
+import { formatDateTime } from '../lib/time'
+
+type StateFilter = 'active' | 'inactive' | 'all'
+type Draft = {
+  reportId?: string
+  expectedUpdatedAt?: string
+  rooftopId: string
+  name: string
+  reportType: string
+  exportFormat: string
+  schedule: string
+  active: boolean
+  filters: Record<string, string>
+}
+
+export function SavedReportsPanel({
+  reports,
+  runs,
+  rooftops,
+  error,
+  timeZone,
+  onReload,
+  onShowRuns,
+}: {
+  reports: SavedReport[]
+  runs: ReportRun[]
+  rooftops: ReportRooftop[]
+  error: string | null
+  timeZone: string
+  onReload: () => Promise<void>
+  onShowRuns: (reportId: string) => void
+}) {
+  const [stateFilter, setStateFilter] = useState<StateFilter>('active')
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [search, setSearch] = useState('')
+  const [draft, setDraft] = useState<Draft | null>(null)
+  const [idempotencyKey, setIdempotencyKey] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [formError, setFormError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [workingId, setWorkingId] = useState<string | null>(null)
+  const [notice, setNotice] = useState<{ tone: 'ok' | 'bad'; text: string; runId?: string } | null>(null)
+
+  const lastRun = useMemo(() => {
+    const map = new Map<string, ReportRun>()
+    for (const run of runs) if (run.savedReport && !map.has(run.savedReport.id)) map.set(run.savedReport.id, run)
+    return map
+  }, [runs])
+  const counts = { active: reports.filter(report => report.active).length, inactive: reports.filter(report => !report.active).length, all: reports.length }
+  const visible = useMemo(() => {
+    const term = search.trim().toLowerCase()
+    return reports
+      .filter(report => stateFilter === 'all' || (stateFilter === 'active' ? report.active : !report.active))
+      .filter(report => typeFilter === 'all' || report.reportType === typeFilter)
+      .filter(report => !term || report.name.toLowerCase().includes(term))
+  }, [reports, stateFilter, typeFilter, search])
+
+  const open = (report?: SavedReport) => {
+    setFieldErrors({}); setFormError(null)
+    setIdempotencyKey(`desk-report:${crypto.randomUUID()}`)
+    setDraft(report
+      ? {
+          reportId: report.id,
+          expectedUpdatedAt: report.updatedAt,
+          rooftopId: report.rooftop?.id || '',
+          name: report.name,
+          reportType: report.reportType,
+          exportFormat: report.exportFormat,
+          schedule: report.schedule,
+          active: report.active,
+          filters: Object.fromEntries(Object.entries(report.filters || {}).map(([key, value]) => [key, String(value)])),
+        }
+      : { rooftopId: rooftops[0]?.id || '', name: '', reportType: 'operations', exportFormat: 'csv', schedule: 'manual', active: true, filters: {} })
+  }
+
+  const submit = async () => {
+    if (!draft) return
+    const errors: Record<string, string> = {}
+    const name = draft.name.trim()
+    if (!draft.rooftopId) errors.rooftopId = 'Choose a rooftop'
+    if (!name) errors.name = 'Name is required'
+    else if (name.length > 100) errors.name = 'Name is too long'
+    const filters: Record<string, string | number> = {}
+    for (const field of REPORT_FILTER_FIELDS[draft.reportType] || []) {
+      const value = (draft.filters[field.key] || '').trim()
+      if (!value || value === 'any') continue
+      if (field.kind === 'days') {
+        const days = Number(value)
+        if (!Number.isInteger(days) || days < 1 || days > 366) { errors[`filter-${field.key}`] = 'Whole number from 1 to 366'; continue }
+        filters[field.key] = days
+      } else {
+        if (field.kind === 'text' && value.length > field.maxLength) { errors[`filter-${field.key}`] = 'Too long'; continue }
+        filters[field.key] = value
+      }
+    }
+    setFieldErrors(errors)
+    if (Object.keys(errors).length) return
+    setBusy(true); setFormError(null)
+    const response = await saveReport({
+      reportId: draft.reportId,
+      expectedUpdatedAt: draft.expectedUpdatedAt,
+      rooftopId: draft.rooftopId,
+      name,
+      reportType: draft.reportType,
+      exportFormat: draft.exportFormat,
+      schedule: draft.schedule,
+      filters,
+      active: draft.active,
+      idempotencyKey,
+    })
+    setBusy(false)
+    if (!response.success) { setFormError(response.error); return }
+    setNotice({ tone: 'ok', text: draft.reportId ? `Saved ${name}` : `Created ${name}` })
+    setDraft(null)
+    await onReload()
+  }
+
+  const toggle = async (report: SavedReport) => {
+    if (!report.rooftop) return
+    setWorkingId(report.id); setNotice(null)
+    const response = await saveReport({
+      reportId: report.id,
+      expectedUpdatedAt: report.updatedAt,
+      rooftopId: report.rooftop.id,
+      name: report.name,
+      reportType: report.reportType,
+      exportFormat: report.exportFormat,
+      schedule: report.schedule,
+      filters: report.filters || {},
+      active: !report.active,
+      idempotencyKey: `desk-report:${report.id}:${report.active ? 'off' : 'on'}:${report.updatedAt}`,
+    })
+    setWorkingId(null)
+    if (!response.success) { setNotice({ tone: 'bad', text: response.error }); return }
+    setNotice({ tone: 'ok', text: `${report.name} ${report.active ? 'paused' : 'resumed'}` })
+    await onReload()
+  }
+
+  const run = async (report: SavedReport) => {
+    setWorkingId(report.id); setNotice(null)
+    const response = await runReport({ reportId: report.id, idempotencyKey: `desk-run:${crypto.randomUUID()}` })
+    setWorkingId(null)
+    if (!response.success) { setNotice({ tone: 'bad', text: response.error }); return }
+    setNotice({ tone: 'ok', text: `${report.name} ran`, runId: response.data?.id })
+    await onReload()
+  }
+
+  const download = async (runId: string) => {
+    const failure = await downloadReportRun(runId)
+    if (failure) setNotice({ tone: 'bad', text: failure })
+  }
+
+  const filterFields = draft ? REPORT_FILTER_FIELDS[draft.reportType] || [] : []
+
+  return (
+    <div className="space-y-4">
+      {error && <Notice tone="bad">{error}</Notice>}
+      {notice && (
+        <Notice tone={notice.tone}>
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+            <span>{notice.text}</span>
+            {notice.runId && (
+              <Track>
+                <Pill size="sm" className={TAP_SM} onClick={() => download(notice.runId as string)}>
+                  <Download />
+                  Download
+                </Pill>
+              </Track>
+            )}
+          </div>
+        </Notice>
+      )}
+      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <Segmented<StateFilter>
+          label="Filter saved reports"
+          value={stateFilter}
+          onChange={setStateFilter}
+          size="sm"
+          options={[
+            { value: 'active', label: 'Active', count: counts.active, tone: 'ok' },
+            { value: 'inactive', label: 'Paused', count: counts.inactive, tone: 'idle' },
+            { value: 'all', label: 'All', count: counts.all },
+          ]}
+        />
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger className={`${TAP_INPUT} w-full sm:w-56`} aria-label="Report type"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All report types</SelectItem>
+            {REPORT_TYPES.map(type => <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <div className="relative min-w-0 sm:max-w-xs sm:flex-1">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input className={cn('pl-9', TAP_INPUT)} value={search} onChange={event => setSearch(event.target.value)} placeholder="Report name" aria-label="Search saved reports" />
+        </div>
+        <Track className="sm:ml-auto">
+          <Pill variant="primary" className={TAP} disabled={rooftops.length === 0} onClick={() => open()}>
+            <Plus />
+            New report
+          </Pill>
+        </Track>
+      </div>
+
+      <Panel className="overflow-hidden">
+        {visible.length === 0 ? (
+          <EmptyRow>{reports.length === 0 ? 'No saved reports yet' : 'No reports match'}</EmptyRow>
+        ) : (
+          <ul className="divide-y">
+            {visible.map(report => {
+              const latest = lastRun.get(report.id)
+              const latestStatus = latest ? effectiveRunStatus(latest) : null
+              const filters = describeFilters(report.reportType, report.filters)
+              return (
+                <li key={report.id} className="flex min-w-0 flex-col gap-3 px-4 py-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <TitleLine as="p" tone={report.active ? 'ok' : 'idle'} status={report.active ? 'Active' : 'Paused'} className="text-sm font-medium">{report.name}</TitleLine>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {[reportTypeLabel(report.reportType), report.exportFormat.toUpperCase(), scheduleLabel(report.schedule), report.active && report.schedule !== 'manual' && report.nextRunAt ? `Next due ${formatDateTime(report.nextRunAt, timeZone)}` : null, rooftops.length > 1 ? report.rooftop?.name : null].filter(Boolean).join(' · ')}
+                    </p>
+                    {filters.length > 0 && (
+                      <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                        {filters.map(text => <li key={text} className="rounded-full bg-muted px-2 py-0.5 text-xs">{text}</li>)}
+                      </ul>
+                    )}
+                    <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                      {latest && latestStatus ? (
+                        <>
+                          <StatusDot tone={RUN_STATE[latestStatus].tone} className="size-1.5 shadow-none" />
+                          Last run {RUN_STATE[latestStatus].label.toLowerCase()} {formatDateTime(latest.completedAt || latest.createdAt, timeZone)}
+                        </>
+                      ) : 'Never run'}
+                    </p>
+                  </div>
+                  <Track className="shrink-0 self-start">
+                    <Pill size="sm" variant="primary" className={TAP_SM} disabled={workingId === report.id} onClick={() => run(report)}>
+                      <Play />
+                      {workingId === report.id ? 'Working…' : 'Run now'}
+                    </Pill>
+                    {latest && latestStatus === 'completed' && (
+                      <Pill size="sm" className={TAP_SM} aria-label={`Download last ${report.name} run`} onClick={() => download(latest.id)}>
+                        <Download />
+                      </Pill>
+                    )}
+                    <Pill size="sm" className={TAP_SM} aria-label={`Run history for ${report.name}`} onClick={() => onShowRuns(report.id)}>
+                      <History />
+                    </Pill>
+                    <Pill size="sm" className={TAP_SM} onClick={() => open(report)}>
+                      <Pencil />
+                      Edit
+                    </Pill>
+                    <Pill size="sm" className={TAP_SM} disabled={workingId === report.id} onClick={() => toggle(report)}>
+                      <Power />
+                      {report.active ? 'Pause' : 'Resume'}
+                    </Pill>
+                  </Track>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </Panel>
+
+      <FormDialog
+        open={draft !== null}
+        title={draft?.reportId ? 'Edit saved report' : 'New saved report'}
+        busy={busy}
+        error={formError}
+        onSubmit={submit}
+        onOpenChange={value => { if (!value) setDraft(null) }}
+        wide
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          {!draft?.reportId && rooftops.length > 1 && (
+            <Field id="report-rooftop" label="Rooftop" error={fieldErrors.rooftopId} className="sm:col-span-2">
+              <Select value={draft?.rooftopId || ''} onValueChange={value => setDraft(current => current && { ...current, rooftopId: value })}>
+                <SelectTrigger id="report-rooftop" className={TAP_INPUT}><SelectValue placeholder="Select rooftop" /></SelectTrigger>
+                <SelectContent>{rooftops.map(rooftop => <SelectItem key={rooftop.id} value={rooftop.id}>{rooftop.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </Field>
+          )}
+          <Field id="report-name" label="Name" error={fieldErrors.name} className="sm:col-span-2">
+            <Input id="report-name" className={TAP_INPUT} maxLength={100} value={draft?.name || ''} aria-invalid={Boolean(fieldErrors.name)} onChange={event => setDraft(current => current && { ...current, name: event.target.value })} />
+          </Field>
+          <Field id="report-type" label="Report type">
+            <Select value={draft?.reportType || 'operations'} onValueChange={value => setDraft(current => current && { ...current, reportType: value, filters: {} })}>
+              <SelectTrigger id="report-type" className={TAP_INPUT}><SelectValue /></SelectTrigger>
+              <SelectContent>{REPORT_TYPES.map(type => <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>)}</SelectContent>
+            </Select>
+          </Field>
+          <Field id="report-format" label="Export format">
+            <Select value={draft?.exportFormat || 'csv'} onValueChange={value => setDraft(current => current && { ...current, exportFormat: value })}>
+              <SelectTrigger id="report-format" className={TAP_INPUT}><SelectValue /></SelectTrigger>
+              <SelectContent>{EXPORT_FORMATS.map(format => <SelectItem key={format.value} value={format.value}>{format.label}</SelectItem>)}</SelectContent>
+            </Select>
+          </Field>
+          <Field id="report-schedule" label="Schedule">
+            <Select value={draft?.schedule || 'manual'} onValueChange={value => setDraft(current => current && { ...current, schedule: value })}>
+              <SelectTrigger id="report-schedule" className={TAP_INPUT}><SelectValue /></SelectTrigger>
+              <SelectContent>{SCHEDULES.map(schedule => <SelectItem key={schedule.value} value={schedule.value}>{schedule.label}</SelectItem>)}</SelectContent>
+            </Select>
+          </Field>
+          {draft?.reportId && (
+            <label htmlFor="report-active" className="flex min-h-11 items-center gap-3 self-end text-sm">
+              <Switch id="report-active" checked={draft.active} onCheckedChange={checked => setDraft(current => current && { ...current, active: checked })} />
+              Active
+            </label>
+          )}
+          {filterFields.length > 0 && <p className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground sm:col-span-2">Filters</p>}
+          {filterFields.map(field => {
+            const id = `report-filter-${field.key}`
+            const value = draft?.filters[field.key] || ''
+            const set = (next: string) => setDraft(current => current && { ...current, filters: { ...current.filters, [field.key]: next } })
+            return (
+              <Field key={field.key} id={id} label={field.label} error={fieldErrors[`filter-${field.key}`]}>
+                {field.kind === 'select' ? (
+                  <Select value={value || 'any'} onValueChange={set}>
+                    <SelectTrigger id={id} className={TAP_INPUT}><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Any</SelectItem>
+                      {field.options.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input id={id} className={TAP_INPUT} inputMode={field.kind === 'days' ? 'numeric' : undefined} maxLength={field.kind === 'text' ? field.maxLength : 3} value={value} aria-invalid={Boolean(fieldErrors[`filter-${field.key}`])} onChange={event => set(event.target.value)} />
+                )}
+              </Field>
+            )
+          })}
+        </div>
+      </FormDialog>
+    </div>
+  )
+}

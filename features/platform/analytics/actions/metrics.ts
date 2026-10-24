@@ -1,6 +1,7 @@
 'use server'
 
 import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
+import { dayKey } from '@/features/platform/lib/format'
 
 export type SalesMetrics = {
   totalSales: number
@@ -196,8 +197,7 @@ export async function getInventoryMetrics(): Promise<{ success: boolean; data?: 
           purchasePrice
           status
           condition
-          dateAcquired: createdAt
-          createdAt
+          inventoryStock { id stockedAt }
         }
         vehiclesCount
       }
@@ -221,11 +221,17 @@ export async function getInventoryMetrics(): Promise<{ success: boolean; data?: 
     const totalVehicles = vehicles.length
     const totalValue = vehicles.reduce((sum, v) => sum + (v.price || 0), 0)
 
-    const daysInStockList = vehicles.map(v => {
-      const acquiredDate = v.dateAcquired || v.createdAt
-      if (!acquiredDate) return 0
-      return Math.floor((now.getTime() - new Date(acquiredDate).getTime()) / (1000 * 60 * 60 * 24))
-    })
+    // Age runs from the stock record's stockedAt, not from when the vehicle row was created.
+    // Units with no stock record have no age and are left out of the aging figures.
+    const daysInStock = (v: any) => {
+      const stockedAt = v.inventoryStock?.stockedAt
+      if (!stockedAt) return null
+      return Math.max(0, Math.floor((now.getTime() - new Date(stockedAt).getTime()) / (1000 * 60 * 60 * 24)))
+    }
+    const daysInStockList = vehicles
+      .filter(v => v.status === 'available')
+      .map(daysInStock)
+      .filter((days): days is number => days !== null)
     const avgDaysInStock = daysInStockList.length > 0
       ? daysInStockList.reduce((s, d) => s + d, 0) / daysInStockList.length
       : 0
@@ -246,9 +252,8 @@ export async function getInventoryMetrics(): Promise<{ success: boolean; data?: 
     vehicles
       .filter(v => v.status === 'available')
       .forEach(v => {
-        const acquiredDate = v.dateAcquired || v.createdAt
-        if (!acquiredDate) return
-        const days = Math.floor((now.getTime() - new Date(acquiredDate).getTime()) / (1000 * 60 * 60 * 24))
+        const days = daysInStock(v)
+        if (days === null) return
         if (days <= 30) agingBuckets['0-30']++
         else if (days <= 60) agingBuckets['31-60']++
         else if (days <= 90) agingBuckets['61-90']++
@@ -257,19 +262,15 @@ export async function getInventoryMetrics(): Promise<{ success: boolean; data?: 
     const agingBreakdown = Object.entries(agingBuckets).map(([range, count]) => ({ range, count }))
 
     const slowMoving = vehicles
-      .filter(v => v.status === 'available')
+      .filter(v => v.status === 'available' && daysInStock(v) !== null)
       .map(v => {
-        const acquiredDate = v.dateAcquired || v.createdAt
-        const daysInStock = acquiredDate
-          ? Math.floor((now.getTime() - new Date(acquiredDate).getTime()) / (1000 * 60 * 60 * 24))
-          : 0
         return {
           id: v.id,
           stockNumber: v.stockNumber,
           make: v.make,
           model: v.model,
           year: v.year,
-          daysInStock,
+          daysInStock: daysInStock(v) as number,
           price: v.price || 0,
         }
       })
@@ -294,7 +295,7 @@ export async function getInventoryMetrics(): Promise<{ success: boolean; data?: 
   }
 }
 
-export async function getServiceMetrics(): Promise<{ success: boolean; data?: ServiceMetrics; error?: string }> {
+export async function getServiceMetrics(timeZone: string): Promise<{ success: boolean; data?: ServiceMetrics; error?: string }> {
   try {
     const query = `
       query GetServiceMetrics($take: Int!, $partsTake: Int!) {
@@ -355,11 +356,11 @@ export async function getServiceMetrics(): Promise<{ success: boolean; data?: Se
     const appointments = appointmentRecords.rows
     const orders = orderRecords.rows
     const parts = partRecords.rows
-    const today = new Date().toDateString()
+    const today = dayKey(Date.now(), timeZone)
 
     const totalAppointments = appointments.length
     const todayAppointments = appointments.filter(appointment => (
-      appointment.appointmentDate && new Date(appointment.appointmentDate).toDateString() === today
+      appointment.appointmentDate && appointment.status !== 'cancelled' && dayKey(appointment.appointmentDate, timeZone) === today
     )).length
 
     const activeRepairOrders = orders.filter(order => ['estimate', 'approved', 'in-progress'].includes(order.status)).length

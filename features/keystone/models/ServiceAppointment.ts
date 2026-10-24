@@ -26,6 +26,7 @@ export const ServiceAppointment = list({
       { field: 'lead', listKey: 'Lead' },
       { field: 'customer', listKey: 'User', kind: 'user' },
       { field: 'assignedTech', listKey: 'User', kind: 'user' },
+      { field: 'servicePackage', listKey: 'ServicePackage' },
     ]),
   },
   ui: {
@@ -54,6 +55,11 @@ export const ServiceAppointment = list({
         labelField: 'name',
       },
       label: 'Customer',
+    }),
+    servicePackage: relationship({
+      ref: 'ServicePackage',
+      ui: { displayMode: 'select', labelField: 'name' },
+      label: 'Service Package',
     }),
     vehicleVin: text(),
     transportationNeed: select({ type: 'string', options: ['none','waiter','shuttle','loaner','rental','drop-off'].map(value => ({ label: value, value })), defaultValue: 'none' }),

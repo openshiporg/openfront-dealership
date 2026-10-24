@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 
 import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
 import { operatorCommandRequest } from '@/features/platform/lib/operatorCommandClient'
+import { ROOFTOP_STAFF_QUERY } from '@/features/platform/lib/rooftopStaffQuery'
 
 export type DeliveryRecord = {
   id: string
@@ -17,7 +18,7 @@ export type DeliveryRecord = {
 }
 
 export type DeliveryChecklistItem = { code: string; status: string; evidenceReference?: string; source?: string }
-export type WeOwe = { id: string; description: string; status: string; promisedAt: string; owner: { id: string; name: string } | null }
+export type WeOwe = { id: string; description: string; status: string; promisedAt: string; estimatedCostCents: number | null; owner: { id: string; name: string } | null }
 export type DeliveryCase = {
   id: string
   updatedAt: string
@@ -30,27 +31,36 @@ export type DeliveryCase = {
   weOweItems: WeOwe[]
 }
 
-export type DeliveryWorkspace = { deliveries: DeliveryRecord[]; cases: DeliveryCase[] }
+export type DeliveryWorkspace = { deliveries: DeliveryRecord[]; cases: DeliveryCase[]; rooftopByDeal: Record<string, string> }
 
 const DELIVERY_PATH = '/dashboard/platform/delivery'
 
 export async function getDeliveryWorkspace() {
-  return keystoneClient<{ deliveryWorkspace: DeliveryWorkspace }>(`
+  const response = await keystoneClient<{ deliveryWorkspace: Omit<DeliveryWorkspace, 'rooftopByDeal'>; deals: Array<{ id: string; rooftop: { id: string } | null }> }>(`
     query DeliveryWorkspace {
       deliveryWorkspace(limit: 100) {
         deliveries { id financeEvidence status updatedAt saleDate vehicle { id vin stockNumber year make model status } lead { id firstName lastName } salesperson { id name } }
-        cases { id updatedAt deliverySnapshot deal { id } status appointmentAt checklist customerAcknowledgment weOweItems { id description status promisedAt owner { id name } } }
+        cases { id updatedAt deliverySnapshot deal { id } status appointmentAt checklist customerAcknowledgment weOweItems { id description status promisedAt estimatedCostCents owner { id name } } }
       }
+      deals(where: { status: { in: ["financed", "delivered"] } }, orderBy: { updatedAt: asc }, take: 100) { id rooftop { id } }
     }
   `, {}, { cache: 'no-store' })
+  if (!response.success) return response
+  const rooftopByDeal = Object.fromEntries((response.data.deals || []).flatMap(deal => (deal.rooftop?.id ? [[deal.id, deal.rooftop.id]] : [])))
+  return { success: true as const, data: { deliveryWorkspace: { ...response.data.deliveryWorkspace, rooftopByDeal } } }
+}
+
+export async function getDeliveryStaff(rooftopId: string) {
+  return keystoneClient<{ users: Array<{ id: string; name: string }> }>(ROOFTOP_STAFF_QUERY, { rooftopId }, { cache: 'no-store' })
 }
 
 export async function manageDeliveryCase(data: {
   dealId: string
-  action: 'schedule' | 'arrive' | 'record-checklist' | 'acknowledge'
+  action: 'schedule' | 'arrive' | 'record-checklist' | 'acknowledge' | 'cancel'
   appointmentAt?: string
   checklist?: DeliveryChecklistItem[]
   customerAcknowledgment?: string
+  reason?: string
   idempotencyKey: string
 }) {
   const response = await operatorCommandRequest(`
@@ -81,7 +91,7 @@ export async function completeDealDelivery(data: {
 export async function manageWeOweItem(data: {
   dealId: string
   itemId?: string
-  action: 'create' | 'fulfill' | 'waive'
+  action: 'create' | 'update' | 'fulfill' | 'waive'
   description?: string
   promisedAt?: string
   ownerId?: string

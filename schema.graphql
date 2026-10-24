@@ -2114,6 +2114,7 @@ type TestDrive {
   salesperson: User
   scheduledTime: DateTime
   completed: Boolean
+  noShow: Boolean
   driverLicenseVerified: Boolean
   feedback: String
   interestedLevel: String
@@ -2137,6 +2138,7 @@ input TestDriveWhereInput {
   salesperson: UserWhereInput
   scheduledTime: DateTimeFilter
   completed: BooleanFilter
+  noShow: BooleanFilter
   driverLicenseVerified: BooleanFilter
   feedback: StringFilter
   interestedLevel: StringNullableFilter
@@ -2148,6 +2150,7 @@ input TestDriveOrderByInput {
   updatedAt: OrderDirection
   scheduledTime: OrderDirection
   completed: OrderDirection
+  noShow: OrderDirection
   driverLicenseVerified: OrderDirection
   feedback: OrderDirection
   interestedLevel: OrderDirection
@@ -2163,6 +2166,7 @@ input TestDriveUpdateInput {
   salesperson: UserRelateToOneForUpdateInput
   scheduledTime: DateTime
   completed: Boolean
+  noShow: Boolean
   driverLicenseVerified: Boolean
   feedback: String
   interestedLevel: String
@@ -2183,6 +2187,7 @@ input TestDriveCreateInput {
   salesperson: UserRelateToOneForCreateInput
   scheduledTime: DateTime
   completed: Boolean
+  noShow: Boolean
   driverLicenseVerified: Boolean
   feedback: String
   interestedLevel: String
@@ -3444,6 +3449,8 @@ type DealershipProfile {
   hoursSunday: String
   websiteUrl: String
   currencyCode: String
+  salesTaxRateBps: Int
+  docFeeCents: Int
   homepageTitle: String
   homepageDescription: String
   logoIcon: String
@@ -3476,6 +3483,8 @@ input DealershipProfileWhereInput {
   hoursSunday: StringFilter
   websiteUrl: StringFilter
   currencyCode: StringFilter
+  salesTaxRateBps: IntFilter
+  docFeeCents: IntFilter
   homepageTitle: StringFilter
   homepageDescription: StringFilter
   logoIcon: StringFilter
@@ -3501,6 +3510,8 @@ input DealershipProfileOrderByInput {
   hoursSunday: OrderDirection
   websiteUrl: OrderDirection
   currencyCode: OrderDirection
+  salesTaxRateBps: OrderDirection
+  docFeeCents: OrderDirection
   homepageTitle: OrderDirection
   homepageDescription: OrderDirection
   logoIcon: OrderDirection
@@ -3525,6 +3536,8 @@ input DealershipProfileUpdateInput {
   hoursSunday: String
   websiteUrl: String
   currencyCode: String
+  salesTaxRateBps: Int
+  docFeeCents: Int
   homepageTitle: String
   homepageDescription: String
   logoIcon: String
@@ -3554,6 +3567,8 @@ input DealershipProfileCreateInput {
   hoursSunday: String
   websiteUrl: String
   currencyCode: String
+  salesTaxRateBps: Int
+  docFeeCents: Int
   homepageTitle: String
   homepageDescription: String
   logoIcon: String
@@ -8864,6 +8879,9 @@ type Mutation {
   submitInventoryMerchandising(data: SubmitInventoryMerchandisingInput!): InventoryCommandResult!
   decideInventoryMerchandising(data: DecideInventoryMerchandisingInput!): InventoryCommandResult!
   recordInventoryFeedRun(data: RecordInventoryFeedRunInput!): InventoryFeedCommandResult!
+  addInventoryVehiclePhoto(data: AddInventoryVehiclePhotoInput!): InventoryCommandResult!
+  arrangeInventoryVehiclePhotos(data: ArrangeInventoryVehiclePhotosInput!): InventoryCommandResult!
+  removeInventoryVehiclePhoto(data: RemoveInventoryVehiclePhotoInput!): InventoryCommandResult!
   mergeCustomers(data: MergeCustomersInput!): CustomerMergeResult!
   configureLeadRoutingRule(data: ConfigureLeadRoutingRuleInput!): OperatorCommandResult!
   routeLead(data: RouteLeadInput!): OperatorCommandResult!
@@ -9745,6 +9763,7 @@ type DealVehicleResult {
   make: String
   model: String
   trim: String
+  exteriorColor: String
   status: String
   priceCents: Int
 }
@@ -10597,6 +10616,7 @@ input ManageFinanceFundingInput {
   checklist: JSON!
   exceptions: JSON!
   fundingReference: String
+  paymentAmountCents: Int
   idempotencyKey: String!
 }
 
@@ -10650,6 +10670,15 @@ type InventoryVehicleResult {
   priceCents: Int
   description: String
   primaryImagePath: String
+  images: [InventoryVehicleImageResult!]!
+}
+
+type InventoryVehicleImageResult {
+  id: ID!
+  url: String
+  isPrimary: Boolean!
+  sortOrder: Int!
+  uploaded: Boolean!
 }
 
 type InventoryPublicListingResult {
@@ -10876,8 +10905,30 @@ input UpdateInventoryMerchandisingDraftInput {
   listPriceCents: Int
   mileage: Int
   description: String!
-  imagePath: String!
+  imagePath: String
   expectedUpdatedAt: DateTime!
+  reason: String!
+  idempotencyKey: String!
+}
+
+input AddInventoryVehiclePhotoInput {
+  stockId: ID!
+  photo: ImageFieldInput
+  imageUrl: String
+  reason: String!
+  idempotencyKey: String!
+}
+
+input ArrangeInventoryVehiclePhotosInput {
+  stockId: ID!
+  imageIds: [ID!]!
+  reason: String!
+  idempotencyKey: String!
+}
+
+input RemoveInventoryVehiclePhotoInput {
+  stockId: ID!
+  imageId: ID!
   reason: String!
   idempotencyKey: String!
 }

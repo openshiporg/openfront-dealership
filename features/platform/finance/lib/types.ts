@@ -1,4 +1,4 @@
-import type { FinanceEvidence } from '@/features/platform/deals/lib/financeEvidence'
+import type { DeskFinanceEvidence } from './financeEvidence'
 
 export type FinanceLead = {
   id: string
@@ -48,7 +48,7 @@ export type FinanceApplication = {
   decisions: FinanceDecision[]
 }
 
-export type FinanceProduct = { id: string; code: string; name: string; category: string; providerKey: string; retailPriceCents: number; costCents: number | null }
+export type FinanceProduct = { id: string; rooftop: { id: string } | null; code: string; name: string; category: string; providerKey: string; retailPriceCents: number; costCents: number | null }
 export type ProductQuote = { id: string; deal: { id: string } | null; product: { id: string; code: string } | null; status: string }
 export type ProductCancellation = { id: string; deal: { id: string } | null; productCode: string; status: string }
 export type FinanceMenu = { id: string; deal: { id: string } | null; version: number; status: string; optionsSnapshot: Array<{ code: string }> | null }
@@ -59,7 +59,7 @@ export type FundingCase = { id: string; deal: { id: string } | null; status: str
 export type Deal = {
   id: string
   worksheetVersion: number
-  financeEvidence: FinanceEvidence | null
+  financeEvidence: DeskFinanceEvidence | null
   rooftop: { id: string; name: string } | null
   vehiclePrice: number | null
   tradeInValue: number | null
@@ -77,7 +77,7 @@ export type Deal = {
   salesperson: { id: string; name: string | null } | null
   lead: { id: string; firstName: string | null; lastName: string | null; email: string | null; phone: string | null } | null
   vehicle: { id: string; year: number | null; make: string | null; model: string | null; stockNumber: string | null; vin: string | null; purchasePrice: number | null } | null
-  approvals: { id: string; decision: string | null; approvalDate: string | null; notes: string | null; approver: { name: string | null } | null }[]
+  approvals: { id: string; decision: string | null; approvalDate: string | null; notes: string | null; approver: { id?: string; name: string | null } | null }[]
 }
 
 export type FinanceWorkspace = {

@@ -37,3 +37,35 @@ export async function inventoryCommandRequest<T>(query: string, variables: Recor
     return { success: false, error: PUBLIC_REQUEST_ERROR, rejected: false }
   }
 }
+
+/**
+ * Sends one file with a command as a GraphQL multipart request (the spec `pages/api/graphql.ts` parses
+ * with graphql-upload). `filePath` is the variable path the file fills, for example `data.photo.upload`.
+ */
+export async function inventoryCommandUpload<T>(query: string, variables: Record<string, unknown>, filePath: string, file: File): Promise<InventoryCommandResponse<T>> {
+  try {
+    const form = new FormData()
+    form.append('operations', JSON.stringify({ query, variables }))
+    form.append('map', JSON.stringify({ 1: [`variables.${filePath}`] }))
+    form.append('1', file, file.name)
+    const response = await fetch(await getGraphQLEndpoint(), {
+      method: 'POST',
+      headers: (await getAuthHeaders()) || {},
+      body: form,
+      redirect: 'error',
+      cache: 'no-store',
+    })
+    const json = await response.json().catch(() => null) as { data?: T; errors?: Array<{ message?: string; extensions?: { code?: string } }> } | null
+    const errors = Array.isArray(json?.errors) ? json.errors : []
+    const rejected = errors.find(entry => entry?.extensions?.code === INVENTORY_COMMAND_REJECTED)
+    if (rejected && typeof rejected.message === 'string' && rejected.message.trim()) return { success: false, error: rejected.message.trim(), rejected: true }
+    if (!response.ok || errors.length || !json?.data) {
+      console.error('Inventory upload failed:', safeErrorSummary({ response: { status: response.status, errors } }))
+      return { success: false, error: PUBLIC_REQUEST_ERROR, rejected: false }
+    }
+    return { success: true, data: json.data }
+  } catch (error) {
+    console.error('Inventory upload failed:', safeErrorSummary(error))
+    return { success: false, error: PUBLIC_REQUEST_ERROR, rejected: false }
+  }
+}

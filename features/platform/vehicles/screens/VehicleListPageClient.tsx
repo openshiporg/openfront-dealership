@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { MoreHorizontal, Plus, RefreshCw, Search, Upload } from 'lucide-react'
+import { LiveVehiclePhotos, reorderPhotoIds, uploadVehiclePhoto, VehiclePhotoEditor } from '../components/VehiclePhotos'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
 import {
@@ -87,13 +88,15 @@ import {
 
 type Vehicle = InventoryVehicle
 
-type InventoryTaskType = 'intake' | 'edit' | 'move' | 'cost' | 'recon-open' | 'recon-complete'
+type InventoryTaskType = 'intake' | 'edit' | 'photos' | 'move' | 'cost' | 'recon-open' | 'recon-complete'
+type StagedPhoto = { id: string; file: File | null; url: string; name: string }
 type InventoryTask = { type: InventoryTaskType; vehicle: Vehicle | null; reconWorkItem?: Vehicle['reconWorkItems'][number]; idempotencyKey: string; fields: Record<string, string>; reconCompletionAttempt?: ReconCompletionAttempt }
 
+/** Accepts 33450, 33,450, $33,450.00 and 33450.5. */
 function moneyInputCents(value: string) {
-  const trimmed = value.trim()
-  if (!/^\d+(?:\.\d{1,2})?$/.test(trimmed)) return null
-  const [whole, fraction = ''] = trimmed.split('.')
+  const trimmed = value.trim().replace(/^\$\s*/, '')
+  if (!/^(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?$/.test(trimmed)) return null
+  const [whole, fraction = ''] = trimmed.replace(/,/g, '').split('.')
   const cents = Number(whole) * 100 + Number(fraction.padEnd(2, '0'))
   return Number.isSafeInteger(cents) && cents <= 2_147_483_647 ? cents : null
 }
@@ -174,6 +177,22 @@ function countByStage(list: Vehicle[]) {
   }, {})
 }
 
+/** Reads the work items first; the stock-level status says "in progress" as soon as an item is opened. */
+function reconLabel(vehicle: Vehicle) {
+  const items = vehicle.reconWorkItems
+  if (items.some(item => item.status === 'in-progress')) return 'Recon in progress'
+  if (items.some(item => item.status === 'open')) return items.some(item => item.status === 'completed') ? 'Recon open' : 'Recon not started'
+  if (vehicle.reconStatus === 'completed' || (items.length > 0 && items.every(item => ['completed', 'cancelled'].includes(item.status)))) return 'Recon done'
+  return reconLabels[vehicle.reconStatus] || vehicle.reconStatus
+}
+
+/** What the merchandising gate (inventoryPublication.ts) will refuse, as the next step to take. */
+function listingNeeds(vehicle: Vehicle): 'photos' | 'details' | null {
+  if (!vehicle.images.length) return 'photos'
+  if (!vehicle.description.trim() || vehicle.price <= 0) return 'details'
+  return null
+}
+
 function hasOpenRecon(vehicle: Vehicle) {
   return vehicle.reconWorkItems.some(item => ['open', 'in-progress'].includes(item.status))
 }
@@ -213,9 +232,13 @@ export function VehicleListPageClient({
   const [pendingFeedRun, setPendingFeedRun] = useState<PublicFeedRunAttempt | null>(null)
   const [pendingMerchandisingAttempt, setPendingMerchandisingAttempt] = useState<MerchandisingCommandAttempt | null>(null)
   const [pendingReconStart, setPendingReconStart] = useState<ReconStartAttempt | null>(null)
+  const [intakePhotos, setIntakePhotos] = useState<StagedPhoto[]>([])
+  const [intakePhotoStatus, setIntakePhotoStatus] = useState<string | null>(null)
   const [lotCounts, setLotCounts] = useState<Record<string, number> | null>(() => initialError ? null : countByStage(initialVehicles))
 
   const isInitialLoad = useRef(true)
+  /** The open task's unit as last loaded, so photo changes made in a dialog show straight away. */
+  const currentTaskVehicle = task?.vehicle ? vehicles.find(vehicle => vehicle.inventoryStockId === task.vehicle!.inventoryStockId) ?? task.vehicle : null
 
   const loadVehicles = async () => {
     setLoading(true)
@@ -257,28 +280,76 @@ export function VehicleListPageClient({
     const fields: Record<string, string> = type === 'intake' ? {
       vin: '', stockNumber: '', year: String(new Date().getFullYear()), condition: 'used', makeChoice: '', make: '', model: '', trim: '',
       exteriorColor: '', interiorColor: '', features: '',
-      purchaseDollars: '', retailDollars: '', mileage: '0', description: '', imagePath: '', locationCode: 'INTAKE',
+      purchaseDollars: '', retailDollars: '', mileage: '0', description: '', locationCode: 'INTAKE',
     } : type === 'edit' && vehicle ? {
-      retailDollars: vehicle.price.toFixed(2), mileage: String(vehicle.mileage), description: vehicle.description, imagePath: vehicle.primaryImagePath || '',
-    } : type === 'move' && vehicle ? { locationCode: vehicle.locationCode } : type === 'cost' ? { dollars: '100', reference: '' } :
+      retailDollars: vehicle.price.toFixed(2), mileage: String(vehicle.mileage), description: vehicle.description,
+    } : type === 'photos' ? {} : type === 'move' && vehicle ? { locationCode: vehicle.locationCode } : type === 'cost' ? { dollars: '100', reference: '' } :
       type === 'recon-open' ? { title: '', estimatedDollars: '0' } : { actualDollars: '0' }
     setTaskError(null)
     setActionMessage(null)
+    if (type === 'intake') clearIntakePhotos()
     setTask({ type, vehicle, reconWorkItem, idempotencyKey: `inventory-${type}:${vehicle?.inventoryStockId || crypto.randomUUID()}:${crypto.randomUUID()}`, fields })
+  }
+
+  const clearIntakePhotos = () => {
+    setIntakePhotos(current => {
+      current.forEach(photo => { if (photo.file) URL.revokeObjectURL(photo.url) })
+      return []
+    })
+    setIntakePhotoStatus(null)
+  }
+  const closeTask = () => {
+    setTask(null)
+    setTaskError(null)
+    clearIntakePhotos()
+  }
+  const stageIntakeFiles = (files: File[]) => setIntakePhotos(current => [
+    ...current,
+    ...files.map(file => ({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file), name: file.name })),
+  ])
+  const stageIntakeUrl = (url: string) => setIntakePhotos(current => [...current, { id: crypto.randomUUID(), file: null, url, name: url.split('/').pop() || 'Photo' }])
+  const moveIntakePhoto = (id: string, to: number) => setIntakePhotos(current => {
+    const order = reorderPhotoIds(current.map(photo => photo.id), id, to)
+    return order.map(photoId => current.find(photo => photo.id === photoId)!)
+  })
+  const removeIntakePhoto = (id: string) => setIntakePhotos(current => current.filter(photo => {
+    if (photo.id === id && photo.file) URL.revokeObjectURL(photo.url)
+    return photo.id !== id
+  }))
+
+  /** Intake photos go up after the unit is stocked, in the order shown; the first becomes primary. */
+  const uploadIntakePhotos = async (stockId: string, idempotencyKey: string) => {
+    let failed = 0
+    for (const [index, photo] of intakePhotos.entries()) {
+      setIntakePhotoStatus(`Uploading photo ${index + 1} of ${intakePhotos.length}`)
+      try {
+        const response = await uploadVehiclePhoto(stockId, photo, `${idempotencyKey}:photo:${photo.id}`)
+        if (!response.success) failed += 1
+      } catch {
+        failed += 1
+      }
+    }
+    setIntakePhotoStatus(null)
+    return failed
   }
 
   const intakeVehicle = () => beginTask('intake')
   const editMerchandisingDraft = (vehicle: Vehicle) => beginTask('edit', vehicle)
+  const managePhotos = (vehicle: Vehicle) => beginTask('photos', vehicle)
   const moveStock = (vehicle: Vehicle) => beginTask('move', vehicle)
   const addInventoryCost = (vehicle: Vehicle) => beginTask('cost', vehicle)
 
   const submitInventoryTask = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!task) return
+    if (task.type === 'photos') {
+      closeTask()
+      return
+    }
     const field = (name: string) => task.fields[name]?.trim() || ''
     const money = (name: string, label: string) => {
       const cents = moneyInputCents(field(name))
-      if (cents == null) throw new Error(`${label} must be a non-negative amount with no more than two decimal places.`)
+      if (cents == null) throw new Error(`${label} must be an amount such as 33,450 or 33450.00.`)
       return cents
     }
     setTaskError(null)
@@ -286,6 +357,7 @@ export function VehicleListPageClient({
     setActionId(task.vehicle?.inventoryStockId || 'intake')
     let reconCompletionAttempt: ReconCompletionAttempt | null = task.reconCompletionAttempt ?? null
     let taskSuccessMessage = 'Saved.'
+    let taskSuccessTone: DeskTone = 'idle'
     try {
       let response: { success: boolean; error?: string } | undefined
       if (task.type === 'intake') {
@@ -304,20 +376,32 @@ export function VehicleListPageClient({
         if (!stockNumber || !make || !model || !locationCode || !Number.isInteger(year) || year < 1886 || year > new Date().getFullYear() + 1 || !Number.isSafeInteger(mileage) || mileage < 0 || priceCents <= 0) {
           throw new Error('Enter a stock number, valid model year, make, model, non-negative odometer, location, and positive retail price.')
         }
-        response = await intakeInventoryVehicle({
+        const intakeResponse = await intakeInventoryVehicle({
           rooftopId: intakeRooftopId, idempotencyKey: task.idempotencyKey,
           reason: 'Vehicle acquired and stocked from inventory operations desk', acquisitionSource: 'dealer-transfer', sourceReference: 'operator-recorded',
           vin, stockNumber, year, make, model, trim: field('trim'), exteriorColor: field('exteriorColor'), interiorColor: field('interiorColor'),
           mileage, purchasePriceCents, listPriceCents: priceCents, priceCents,
-          condition, description: field('description'), features: featureList(task.fields.features || ''), imagePath: field('imagePath'), locationCode, locationLabel: locationCode,
+          condition, description: field('description'), features: featureList(task.fields.features || ''), imagePath: '', locationCode, locationLabel: locationCode,
         })
+        if (intakeResponse.success && intakePhotos.length) {
+          const failed = await uploadIntakePhotos(intakeResponse.data.intakeInventoryVehicle.stockId, task.idempotencyKey)
+          if (failed) {
+            taskSuccessMessage = `Unit stocked. ${failed} of ${intakePhotos.length} photos did not upload; add them from Photos.`
+            taskSuccessTone = 'warn'
+          } else {
+            taskSuccessMessage = `Unit stocked with ${intakePhotos.length} ${intakePhotos.length === 1 ? 'photo' : 'photos'}.`
+          }
+        }
+        response = intakeResponse
       } else if (task.type === 'edit' && task.vehicle) {
         const priceCents = money('retailDollars', 'Retail price')
         const mileage = Number(field('mileage'))
-        if (priceCents <= 0 || !Number.isSafeInteger(mileage) || mileage < 0 || !field('description') || !field('imagePath')) throw new Error('Enter a positive retail price, non-negative odometer, description, and primary image path.')
+        if (priceCents <= 0 || !Number.isSafeInteger(mileage) || mileage < 0 || !field('description')) throw new Error('Enter a positive retail price, non-negative odometer, and description.')
+        // Photo changes in this dialog save on their own and move the stock revision forward.
+        const current = currentTaskVehicle || task.vehicle
         response = await updateInventoryMerchandisingDraft({
-          stockId: task.vehicle.inventoryStockId, priceCents, listPriceCents: priceCents, mileage, description: field('description'), imagePath: field('imagePath'),
-          expectedUpdatedAt: task.vehicle.stockUpdatedAt, reason: 'Listing draft updated from inventory operations desk', idempotencyKey: task.idempotencyKey,
+          stockId: current.inventoryStockId, priceCents, listPriceCents: priceCents, mileage, description: field('description'),
+          expectedUpdatedAt: current.stockUpdatedAt, reason: 'Listing draft updated from inventory operations desk', idempotencyKey: task.idempotencyKey,
         })
       } else if (task.type === 'move' && task.vehicle) {
         const locationCode = field('locationCode').toUpperCase()
@@ -367,8 +451,8 @@ export function VehicleListPageClient({
         setTaskError(response?.error || 'Unable to save. Your entries are kept so you can retry.')
         return
       }
-      setTask(null)
-      setActionMessage(taskSuccessMessage)
+      closeTask()
+      setActionMessage(taskSuccessMessage, taskSuccessTone)
       await loadVehicles()
     } catch (error) {
       if (task.type === 'recon-complete' && reconCompletionAttempt) {
@@ -556,7 +640,7 @@ export function VehicleListPageClient({
       <Input id={`inventory-task-${name}`} type={options.type || 'text'} inputMode={options.inputMode} min={options.min} step={options.step} maxLength={options.maxLength} required={options.required ?? true} disabled={options.disabled} list={options.list} value={task?.fields[name] || ''} onChange={event => updateTaskField(name, event.target.value)} />
     </label>
   )
-  const taskTitle = task?.type === 'intake' ? 'Intake vehicle' : task?.type === 'edit' ? 'Edit listing draft' : task?.type === 'move' ? 'Move inventory' : task?.type === 'cost' ? 'Record inventory cost' : task?.type === 'recon-open' ? 'Add recon work item' : 'Finish recon work item'
+  const taskTitle = task?.type === 'intake' ? 'Intake vehicle' : task?.type === 'edit' ? 'Edit listing draft' : task?.type === 'photos' ? 'Photos' : task?.type === 'move' ? 'Move inventory' : task?.type === 'cost' ? 'Record inventory cost' : task?.type === 'recon-open' ? 'Add recon work item' : 'Finish recon work item'
   const intakeMakeChoice = task?.type === 'intake' ? task.fields.makeChoice || '' : ''
   const intakeModels = makes.find(make => make.name === intakeMakeChoice)?.models || []
 
@@ -635,12 +719,12 @@ export function VehicleListPageClient({
       <Facts
         items={[
           { label: 'Acquisition', value: vehicle.acquisition ? acquisitionLabels[vehicle.acquisition.status] || vehicle.acquisition.status : 'None' },
-          { label: 'Recon', value: reconLabels[vehicle.reconStatus] || vehicle.reconStatus },
+          { label: 'Recon', value: reconLabel(vehicle) },
           { label: 'Listing', value: listingLabels[vehicle.merchandisingStatus] || vehicle.merchandisingStatus },
           { label: 'Storefront', value: vehicle.publicListing.live ? 'Live' : `Not live: ${vehicle.publicListing.reason || 'Not available'}` },
           { label: 'Feed', value: vehicle.feedStatus },
           { label: 'Colours', value: [vehicle.color, vehicle.interiorColor].filter(Boolean).join(' / ') || 'Not recorded' },
-          { label: 'Photo', value: vehicle.primaryImagePath ? 'Added' : 'None' },
+          { label: 'Photos', value: vehicle.images.length || 'None', mono: vehicle.images.length > 0 },
           { label: 'Recon items', value: vehicle.reconWorkItems.length, mono: true },
         ]}
       />
@@ -650,6 +734,7 @@ export function VehicleListPageClient({
       </div>
       <div className="lg:col-span-2">
         <Track>
+          <Pill size="sm" onClick={() => managePhotos(vehicle)}>Photos</Pill>
           <Pill size="sm" variant="plain" onClick={() => setSelectedVehicle(null)}>Close details</Pill>
         </Track>
       </div>
@@ -758,6 +843,7 @@ export function VehicleListPageClient({
               const activeRecon = vehicle.reconWorkItems.find(item => ['open', 'in-progress'].includes(item.status))
               const reconDone = vehicle.reconStatus === 'completed'
               const listingApproved = vehicle.merchandisingStatus === 'approved'
+              const needs = listingNeeds(vehicle)
               // One step at a time: send to recon, work the recon items, approve the listing, then frontline.
               const actions: Array<{ key: string; label: string; onClick: () => void; disabled?: boolean }> = []
               if (acquisitionStatus === 'arrived' && vehicle.acquisition) {
@@ -772,10 +858,14 @@ export function VehicleListPageClient({
                 })
               }
               if (reconDone && (!listingApproved || vehicle.publicListing.action)) {
+                const submits = vehicle.publicListing.action !== 'reapprove' && vehicle.merchandisingStatus !== 'submitted'
                 const listingLabel = vehicle.publicListing.action === 'reapprove' ? 'Re-approve listing'
                   : vehicle.publicListing.action === 'resubmit' ? 'Resubmit listing'
                     : vehicle.merchandisingStatus === 'submitted' ? 'Approve listing' : 'Submit listing'
-                actions.push({ key: 'listing', label: listingLabel, onClick: () => submitOrApproveMerchandising(vehicle), disabled: Boolean(pendingMerchandisingAttempt) })
+                // Submitting needs photos, a description and a price: offer the missing piece as the step.
+                if (submits && needs === 'photos') actions.push({ key: 'listing', label: 'Add photos', onClick: () => managePhotos(vehicle) })
+                else if (submits && needs === 'details') actions.push({ key: 'listing', label: 'Add description', onClick: () => editMerchandisingDraft(vehicle) })
+                else actions.push({ key: 'listing', label: listingLabel, onClick: () => submitOrApproveMerchandising(vehicle), disabled: Boolean(pendingMerchandisingAttempt) })
               }
               if (acquisitionStatus === 'reconditioning' && vehicle.acquisition && reconDone && listingApproved && !vehicle.publicListing.action) {
                 actions.push({ key: 'acquisition', label: 'Mark frontline', onClick: () => advanceAcquisition(vehicle) })
@@ -786,8 +876,9 @@ export function VehicleListPageClient({
                 : <span className={vehicle.publicListing.action || stage === 'available' ? 'text-amber-700 dark:text-amber-400' : undefined}>Not live: {vehicle.publicListing.reason || 'Not available'}</span>
               const statusParts = [
                 acquisitionStatus && acquisitionStatus !== 'frontline' ? acquisitionLabels[acquisitionStatus] || acquisitionStatus : vehicle.frontlineAt ? 'Frontline' : null,
-                reconLabels[vehicle.reconStatus] || vehicle.reconStatus,
+                reconLabel(vehicle),
                 listingLabels[vehicle.merchandisingStatus] || vehicle.merchandisingStatus,
+                !listingApproved && needs === 'photos' ? 'Needs photos' : !listingApproved && needs === 'details' ? 'Needs description' : null,
               ].filter(Boolean) as string[]
               return (
                 <div key={vehicle.id} className="min-w-0 px-4 py-3">
@@ -843,11 +934,12 @@ export function VehicleListPageClient({
                           <DropdownMenuItem disabled={busy} onClick={() => moveStock(vehicle)}>Move</DropdownMenuItem>
                           <DropdownMenuItem disabled={busy} onClick={() => addInventoryCost(vehicle)}>Cost</DropdownMenuItem>
                           <DropdownMenuItem disabled={busy} onClick={() => editMerchandisingDraft(vehicle)}>Edit listing</DropdownMenuItem>
+                          <DropdownMenuItem disabled={busy} onClick={() => managePhotos(vehicle)}>Photos</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </Track>
                   </div>
-                  {isOpen && selectedVehicle && renderDetails(selectedVehicle)}
+                  {isOpen && renderDetails(vehicle)}
                 </div>
               )
             })}
@@ -855,7 +947,7 @@ export function VehicleListPageClient({
         )}
       </DeskSection>
 
-      <Dialog open={Boolean(task)} onOpenChange={open => { if (!open && !actionId && !task?.reconCompletionAttempt) { setTask(null); setTaskError(null) } }}>
+      <Dialog open={Boolean(task)} onOpenChange={open => { if (!open && !actionId && !task?.reconCompletionAttempt) closeTask() }}>
         <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{taskTitle}</DialogTitle>
@@ -935,22 +1027,42 @@ export function VehicleListPageClient({
                   <Textarea id="inventory-task-features" value={task.fields.features || ''} onChange={event => updateTaskField('features', event.target.value)} rows={3} />
                 </label>
               )}
-              {(task?.type === 'intake' || task?.type === 'edit') && <>
+              {(task?.type === 'intake' || task?.type === 'edit') && (
                 <label htmlFor="inventory-task-description" className="grid gap-1.5 text-sm sm:col-span-2">
-                  <span className={fieldLabelClass}>Description{task.type === 'edit' ? '' : ' (optional)'}</span>
+                  <span className={fieldLabelClass}>Description{task.type === 'edit' ? '' : ' (required to publish)'}</span>
                   <Textarea id="inventory-task-description" required={task.type === 'edit'} value={task.fields.description || ''} onChange={event => updateTaskField('description', event.target.value)} rows={3} />
                 </label>
-                <label htmlFor="inventory-task-imagePath" className="grid gap-1.5 text-sm sm:col-span-2">
-                  <span className={fieldLabelClass}>Photo URL{task.type === 'edit' ? '' : ' (optional)'}</span>
-                  <Input id="inventory-task-imagePath" required={task.type === 'edit'} value={task.fields.imagePath || ''} onChange={event => updateTaskField('imagePath', event.target.value)} placeholder="/inventory/vehicle.jpg" />
-                </label>
-              </>}
+              )}
+              {task?.type === 'intake' && (
+                <VehiclePhotoEditor
+                  label="Photos (required to publish)"
+                  tiles={intakePhotos}
+                  busy={Boolean(actionId)}
+                  status={intakePhotoStatus}
+                  onAddFiles={stageIntakeFiles}
+                  onAddUrl={stageIntakeUrl}
+                  onMove={moveIntakePhoto}
+                  onRemove={removeIntakePhoto}
+                />
+              )}
+              {(task?.type === 'edit' || task?.type === 'photos') && currentTaskVehicle && (
+                <LiveVehiclePhotos
+                  stockId={currentTaskVehicle.inventoryStockId}
+                  images={currentTaskVehicle.images}
+                  label={task.type === 'edit' ? 'Photos (saved as you change them)' : 'Photos (first is primary)'}
+                  onChanged={loadVehicles}
+                />
+              )}
             </div>
             {taskError && <Notice tone="bad">{taskError}</Notice>}
             <DialogFooter className="sm:justify-end">
               <Track>
-                <Pill variant="plain" disabled={Boolean(actionId) || Boolean(task?.reconCompletionAttempt)} onClick={() => { setTask(null); setTaskError(null) }}>Cancel</Pill>
-                <Pill type="submit" variant="primary" disabled={Boolean(actionId)}>{actionId ? 'Saving…' : task?.reconCompletionAttempt ? 'Retry' : 'Save'}</Pill>
+                {task?.type === 'photos' ? (
+                  <Pill type="submit" variant="primary" className="max-sm:h-11">Done</Pill>
+                ) : <>
+                  <Pill variant="plain" className="max-sm:h-11" disabled={Boolean(actionId) || Boolean(task?.reconCompletionAttempt)} onClick={closeTask}>Cancel</Pill>
+                  <Pill type="submit" variant="primary" className="max-sm:h-11" disabled={Boolean(actionId)}>{actionId ? 'Saving…' : task?.reconCompletionAttempt ? 'Retry' : 'Save'}</Pill>
+                </>}
               </Track>
             </DialogFooter>
           </form>

@@ -240,7 +240,7 @@ function FinancingContent() {
       <p className="sf-price mt-2 text-[length:var(--sf-text-display)]" aria-live="polite">
         {money(calculatedResults.monthlyPayment)}
       </p>
-      <p className="sf-figure sf-muted mt-2 text-[var(--sf-text-sm)]">
+      <p className="sf-figure sf-muted mt-2 text-[length:var(--sf-text-sm)]">
         {formData.loanTerm} mo / {formData.interestRate}% APR
       </p>
     </div>
@@ -248,17 +248,17 @@ function FinancingContent() {
     <div className="px-4 py-5">
       <p className="sf-eyebrow">Monthly payment</p>
       {calculation.status === 'no-loan' ? (
-        <p role="status" className="sf-title-line mt-3 text-[var(--sf-text-sm)]">
+        <p role="status" className="sf-title-line mt-3 text-[length:var(--sf-text-sm)]">
           <span className="sf-dot" data-tone="ok" aria-hidden="true" />
           <span>Down payment and trade-in cover the full price.</span>
         </p>
       ) : calculation.status === 'invalid-price' || calculation.status === 'invalid-input' ? (
-        <p role="alert" className="sf-title-line mt-3 text-[var(--sf-text-sm)]">
+        <p role="alert" className="sf-title-line mt-3 text-[length:var(--sf-text-sm)]">
           <span className="sf-dot" data-tone="bad" aria-hidden="true" />
           <span>Check the amounts entered.</span>
         </p>
       ) : (
-        <p role="status" className="sf-faint mt-3 text-[var(--sf-text-sm)]">Enter a vehicle price.</p>
+        <p role="status" className="sf-faint mt-3 text-[length:var(--sf-text-sm)]">Enter a vehicle price.</p>
       )}
     </div>
   )
@@ -285,7 +285,7 @@ function FinancingContent() {
       title="Payment estimate"
       meta={`${formData.loanTerm} mo`}
       rows={estimateRows}
-      footer={<p className="sf-faint text-[var(--sf-text-xs)]">Estimate. Actual rates and terms may differ.</p>}
+      footer={<p className="sf-faint text-[length:var(--sf-text-xs)]">Estimate. Actual rates and terms may differ.</p>}
     >
       {selectedVehicle && <StickerVehicle vehicle={selectedVehicle} label={`Vehicle / ${selectedPriceLabel}`} />}
       <div className={estimateRows.length ? 'border-b border-dashed' : undefined} style={{ borderColor: 'var(--sf-rule)' }}>
@@ -327,7 +327,7 @@ function FinancingContent() {
             title="Loan"
             first
             aside={selectedVehicle ? (
-              <Link href={`/inventory/${selectedVehicle.id}`} className="sf-link shrink-0 text-[var(--sf-text-sm)]">
+              <Link href={`/inventory/${selectedVehicle.id}`} className="sf-link shrink-0 text-[length:var(--sf-text-sm)]">
                 Vehicle details
               </Link>
             ) : undefined}
@@ -394,7 +394,7 @@ function FinancingContent() {
                       className="sf-pill min-h-12 gap-1 px-2"
                       aria-pressed={formData.loanTerm === term}
                     >
-                      <span className="sf-figure text-[var(--sf-text-lg)]">{term}</span>
+                      <span className="sf-figure text-[length:var(--sf-text-lg)]">{term}</span>
                       <span className="sf-eyebrow tracking-[0.06em] max-[379px]:hidden">mo</span>
                     </button>
                   ))}
@@ -404,7 +404,7 @@ function FinancingContent() {
               <div>
                 <div className="flex items-baseline justify-between gap-3">
                   <label htmlFor="financing-down-payment" className="sf-label">Down payment</label>
-                  <span className="sf-figure sf-muted text-[var(--sf-text-sm)]">{formData.downPaymentPercent.toFixed(1)}%</span>
+                  <span className="sf-figure sf-muted text-[length:var(--sf-text-sm)]">{formData.downPaymentPercent.toFixed(1)}%</span>
                 </div>
                 <div role="group" aria-label="Down payment share" className="sf-track sf-track-block mb-3">
                   {DOWN_PAYMENT_PRESETS.map((percent) => (
@@ -415,8 +415,8 @@ function FinancingContent() {
                       className="sf-pill min-h-12 px-2"
                       aria-pressed={roundedPercent === percent}
                     >
-                      <span className="sf-figure text-[var(--sf-text-lg)]">{percent}</span>
-                      <span className="sf-figure sf-faint text-[var(--sf-text-xs)]">%</span>
+                      <span className="sf-figure text-[length:var(--sf-text-lg)]">{percent}</span>
+                      <span className="sf-figure sf-faint text-[length:var(--sf-text-xs)]">%</span>
                     </button>
                   ))}
                 </div>
@@ -436,7 +436,7 @@ function FinancingContent() {
                     />
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="sf-figure sf-faint text-[var(--sf-text-xs)]">0%</span>
+                    <span className="sf-figure sf-faint text-[length:var(--sf-text-xs)]">0%</span>
                     <input
                       type="range"
                       min="0"
@@ -447,7 +447,7 @@ function FinancingContent() {
                       className="h-11 w-full min-w-0 accent-[var(--sf-accent)]"
                       aria-label="Down payment percentage"
                     />
-                    <span className="sf-figure sf-faint text-[var(--sf-text-xs)]">50%</span>
+                    <span className="sf-figure sf-faint text-[length:var(--sf-text-xs)]">50%</span>
                   </div>
                 </div>
               </div>
@@ -469,7 +469,7 @@ function FinancingContent() {
                 </div>
                 <Link
                   href={selectedVehicle ? `/trade-in?vehicleId=${selectedVehicle.id}` : '/trade-in'}
-                  className="sf-link mt-1 inline-flex min-h-11 items-center text-[var(--sf-text-sm)]"
+                  className="sf-link mt-1 inline-flex min-h-11 items-center text-[length:var(--sf-text-sm)]"
                 >
                   Request a trade-in review
                 </Link>
@@ -488,7 +488,7 @@ function FinancingContent() {
                 className="flex min-h-11 w-full items-center justify-between gap-4 text-left"
               >
                 <span className="flex items-baseline gap-3">
-                  <span className="sf-figure sf-faint text-[var(--sf-text-sm)]">02</span>
+                  <span className="sf-figure sf-faint text-[length:var(--sf-text-sm)]">02</span>
                   <span className="sf-heading text-[length:var(--sf-text-xl)]">Amortization</span>
                 </span>
                 <ChevronDown
@@ -499,7 +499,7 @@ function FinancingContent() {
 
               {showAmortization && (
                 <div className="sf-well mt-4 overflow-x-auto">
-                  <table className="sf-figure w-full min-w-[30rem] text-[var(--sf-text-sm)]">
+                  <table className="sf-figure w-full min-w-[30rem] text-[length:var(--sf-text-sm)]">
                     <thead>
                       <tr>
                         <th className="sf-eyebrow px-3 py-2.5 text-left font-medium">Month</th>
@@ -659,7 +659,7 @@ function FinancingContent() {
                     <option value="unknown">Not sure</option>
                   </select>
                 </Field>
-                <label className="sf-muted flex min-h-11 cursor-pointer items-start gap-3 text-[var(--sf-text-sm)] sm:col-span-2">
+                <label className="sf-muted flex min-h-11 cursor-pointer items-start gap-3 text-[length:var(--sf-text-sm)] sm:col-span-2">
                   <input
                     type="checkbox"
                     required

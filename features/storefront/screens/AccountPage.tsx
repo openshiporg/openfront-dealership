@@ -109,12 +109,12 @@ export async function AccountPage() {
         <dl className="sf-spec">
           <div>
             <dt>Requests</dt>
-            <dd className="sf-figure text-[var(--sf-text-xl)]">{history?.length ?? 0}</dd>
+            <dd className="sf-figure text-[length:var(--sf-text-xl)]">{history?.length ?? 0}</dd>
           </div>
           {counts.map(([kind, count]) => (
             <div key={kind}>
               <dt>{kind}</dt>
-              <dd className="sf-figure text-[var(--sf-text-xl)]">{count}</dd>
+              <dd className="sf-figure text-[length:var(--sf-text-xl)]">{count}</dd>
             </div>
           ))}
         </dl>
@@ -140,7 +140,7 @@ export async function AccountPage() {
           <div className="sf-notice" data-tone="bad" role="alert">Request history couldn&apos;t be loaded.</div>
         ) : history.length === 0 ? (
           <div className="sf-well p-6">
-            <p className="sf-muted text-[var(--sf-text-sm)]">No requests yet.</p>
+            <p className="sf-muted text-[length:var(--sf-text-sm)]">No requests yet.</p>
           </div>
         ) : (
           <ul className="border-t" style={{ borderColor: 'var(--sf-rule)' }}>
@@ -156,10 +156,10 @@ export async function AccountPage() {
                   <div className="min-w-0">
                     <h3 className="sf-title-line">
                       <span className="sf-dot" data-tone={statusTone(item.status)} aria-hidden="true" />
-                      <span className="sf-heading text-[var(--sf-text-lg)]">{item.kind}</span>
-                      <span className="sf-muted text-[var(--sf-text-sm)]">{status}</span>
+                      <span className="sf-heading text-[length:var(--sf-text-lg)]">{item.kind}</span>
+                      <span className="sf-muted text-[length:var(--sf-text-sm)]">{status}</span>
                     </h3>
-                    <p className="sf-muted mt-1 pl-4 text-[var(--sf-text-sm)]">
+                    <p className="sf-muted mt-1 pl-4 text-[length:var(--sf-text-sm)]">
                       {isScheduledKind(item) ? 'Requested time' : 'Submitted'}{' '}
                       <time dateTime={item.scheduledAt} className="sf-figure text-[var(--sf-ink)]">
                         {formatRequestTime(item)}
@@ -167,7 +167,7 @@ export async function AccountPage() {
                     </p>
                   </div>
                   {reference && (
-                    <p className="sf-figure sf-muted pl-4 text-[var(--sf-text-sm)] sm:pl-0 sm:text-right">{reference}</p>
+                    <p className="sf-figure sf-muted pl-4 text-[length:var(--sf-text-sm)] sm:pl-0 sm:text-right">{reference}</p>
                   )}
                 </li>
               )

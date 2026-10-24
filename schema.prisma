@@ -368,6 +368,7 @@ model TestDrive {
   salespersonId         String?  @map("salesperson")
   scheduledTime         DateTime
   completed             Boolean  @default(false)
+  noShow                Boolean  @default(false)
   driverLicenseVerified Boolean  @default(false)
   feedback              String   @default("")
   interestedLevel       String?
@@ -639,6 +640,8 @@ model DealershipProfile {
   hoursSunday         String   @default("")
   websiteUrl          String   @default("")
   currencyCode        String   @default("USD")
+  salesTaxRateBps     Int      @default(0)
+  docFeeCents         Int      @default(0)
   homepageTitle       String   @default("")
   homepageDescription String   @default("")
   logoIcon            String   @default("")

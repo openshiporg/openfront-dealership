@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 
 import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
-import { inventoryCommandRequest, type InventoryCommandResponse } from '../lib/inventoryCommandClient'
+import { inventoryCommandRequest, inventoryCommandUpload, type InventoryCommandResponse } from '../lib/inventoryCommandClient'
 
 export interface InventoryVehicle {
   id: string
@@ -20,6 +20,8 @@ export interface InventoryVehicle {
   purchasePrice: number | null
   description: string
   primaryImagePath: string | null
+  /** Primary first, then gallery order. */
+  images: InventoryVehiclePhoto[]
   status: string
   condition: string
   dateAcquired: string | null
@@ -37,6 +39,8 @@ export interface InventoryVehicle {
   acquisition: { id: string; status: string; updatedAt: string } | null
   publicListing: InventoryPublicListing
 }
+
+export type InventoryVehiclePhoto = { id: string; url: string | null; isPrimary: boolean; sortOrder: number; uploaded: boolean }
 
 export type InventoryPublicListing = { live: boolean; reason: string | null; action: 'reapprove' | 'resubmit' | null }
 
@@ -69,6 +73,7 @@ type InventoryWorkspaceItem = {
     priceCents: number | null
     description: string | null
     primaryImagePath: string | null
+    images: InventoryVehiclePhoto[] | null
   }
   cost: { purchaseCostCents: number | null; totalCostCents: number | null } | null
   acquisition: { id: string; status: string; updatedAt: string } | null
@@ -99,6 +104,7 @@ function toInventoryVehicle(item: InventoryWorkspaceItem): InventoryVehicle {
     purchasePrice: item.cost?.purchaseCostCents == null ? null : item.cost.purchaseCostCents / 100,
     description: item.vehicle.description || '',
     primaryImagePath: item.vehicle.primaryImagePath || null,
+    images: item.vehicle.images || [],
     status: item.vehicle.status,
     condition: item.vehicle.condition || '',
     dateAcquired: item.stockedAt,
@@ -128,7 +134,7 @@ export async function getInventoryWorkspace(status: string): Promise<InventoryWo
       inventoryWorkspace(status: $status, limit: 100) {
         items {
           id stockNumber locationCode locationLabel stockedAt updatedAt daysInStock reconStatus merchandisingStatus feedStatus frontlineAt
-          vehicle { id vin stockNumber year make model trim exteriorColor interiorColor condition mileage status priceCents description primaryImagePath }
+          vehicle { id vin stockNumber year make model trim exteriorColor interiorColor condition mileage status priceCents description primaryImagePath images { id url isPrimary sortOrder uploaded } }
           cost { purchaseCostCents totalCostCents }
           acquisition { id status updatedAt }
           reconWorkItems { id title status updatedAt }
@@ -179,7 +185,7 @@ export async function intakeInventoryVehicle(data: {
   locationCode: string
   locationLabel: string
 }) {
-  return runInventoryMutation(`
+  return runInventoryMutation<{ intakeInventoryVehicle: { vehicleId: string; acquisitionId: string; stockId: string; reused: boolean; status: string | null } }>(`
     mutation IntakeInventoryVehicle($data: IntakeInventoryVehicleInput!) {
       intakeInventoryVehicle(data: $data) { vehicleId acquisitionId stockId reused status }
     }
@@ -192,7 +198,7 @@ export async function updateInventoryMerchandisingDraft(data: {
   listPriceCents: number
   mileage: number
   description: string
-  imagePath: string
+  imagePath?: string
   expectedUpdatedAt: string
   reason: string
   idempotencyKey: string
@@ -202,6 +208,45 @@ export async function updateInventoryMerchandisingDraft(data: {
       updateInventoryMerchandisingDraft(data: $data) { stockId merchandisingStatus feedStatus updatedAt reused }
     }
   `, { data })
+}
+
+type PhotoCommandResult = { stockId: string; merchandisingStatus: string; updatedAt: string; reused: boolean }
+
+/** Adds one photo: a file from `formData.photo` uploaded to the bucket, or a typed `imageUrl`. */
+export async function addInventoryVehiclePhoto(formData: FormData) {
+  const photo = formData.get('photo')
+  const data = {
+    stockId: String(formData.get('stockId') || ''),
+    imageUrl: String(formData.get('imageUrl') || '') || null,
+    reason: 'Photo added from inventory operations desk',
+    idempotencyKey: String(formData.get('idempotencyKey') || ''),
+  }
+  const mutation = `
+    mutation AddInventoryVehiclePhoto($data: AddInventoryVehiclePhotoInput!) {
+      addInventoryVehiclePhoto(data: $data) { id stockId merchandisingStatus updatedAt reused }
+    }
+  `
+  const response = photo instanceof File && photo.size > 0
+    ? await inventoryCommandUpload<{ addInventoryVehiclePhoto: PhotoCommandResult }>(mutation, { data: { ...data, photo: { upload: null } } }, 'data.photo.upload', photo)
+    : await inventoryCommandRequest<{ addInventoryVehiclePhoto: PhotoCommandResult }>(mutation, { data })
+  if (response.success) revalidatePath(VEHICLES_PATH)
+  return response
+}
+
+export async function arrangeInventoryVehiclePhotos(data: { stockId: string; imageIds: string[]; idempotencyKey: string }) {
+  return runInventoryMutation<{ arrangeInventoryVehiclePhotos: PhotoCommandResult }>(`
+    mutation ArrangeInventoryVehiclePhotos($data: ArrangeInventoryVehiclePhotosInput!) {
+      arrangeInventoryVehiclePhotos(data: $data) { id stockId merchandisingStatus updatedAt reused }
+    }
+  `, { data: { ...data, reason: 'Photos reordered from inventory operations desk' } })
+}
+
+export async function removeInventoryVehiclePhoto(data: { stockId: string; imageId: string; idempotencyKey: string }) {
+  return runInventoryMutation<{ removeInventoryVehiclePhoto: PhotoCommandResult }>(`
+    mutation RemoveInventoryVehiclePhoto($data: RemoveInventoryVehiclePhotoInput!) {
+      removeInventoryVehiclePhoto(data: $data) { id stockId merchandisingStatus updatedAt reused }
+    }
+  `, { data: { ...data, reason: 'Photo removed from inventory operations desk' } })
 }
 
 export async function moveInventoryStock(data: {

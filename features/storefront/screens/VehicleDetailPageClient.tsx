@@ -176,7 +176,7 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
       <Container className="py-[var(--sf-space-2xl)]">
         <div className="sf-well flex flex-col items-start gap-5 p-6 md:p-8">
           <div role="alert" aria-live="assertive">
-            <h1 className="sf-title-line sf-heading text-[var(--sf-text-xl)]">
+            <h1 className="sf-title-line sf-heading text-[length:var(--sf-text-xl)]">
               <span className="sf-dot" data-tone="bad" aria-hidden="true" />
               Vehicle details unavailable
             </h1>
@@ -215,7 +215,7 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
   return (
     <>
       <nav aria-label="Breadcrumb" className="border-b" style={{ borderColor: 'var(--sf-rule)' }}>
-        <Container className="flex min-h-11 items-center gap-1.5 text-[var(--sf-text-sm)]">
+        <Container className="flex min-h-11 items-center gap-1.5 text-[length:var(--sf-text-sm)]">
           <Link href="/inventory" className="sf-muted inline-flex min-h-11 shrink-0 items-center gap-1 hover:text-[var(--sf-accent)]">
             <ChevronLeft className="size-4 sm:hidden" aria-hidden="true" />
             Inventory
@@ -242,7 +242,7 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
               <span className="sf-dot" data-tone={status.tone} aria-hidden="true" />
               <span className="sf-display text-[length:var(--sf-text-2xl)]">{name}</span>
             </h1>
-            <p className="sf-muted mt-1 pl-4 text-[var(--sf-text-md)]">
+            <p className="sf-muted mt-1 pl-4 text-[length:var(--sf-text-md)]">
               <span className="sr-only">{status.label}. </span>
               {vehicle.trim}
             </p>
@@ -262,7 +262,7 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
                 </div>
                 <div className="sf-sticker-row">
                   <dt>VIN</dt>
-                  <dd className="text-[var(--sf-text-xs)]">{vehicle.vin}</dd>
+                  <dd className="text-[length:var(--sf-text-xs)]">{vehicle.vin}</dd>
                 </div>
                 <div className="sf-sticker-row">
                   <dt>Mileage</dt>
@@ -315,19 +315,19 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
 
           <div className="min-w-0 lg:col-start-1 lg:row-start-2">
             <section className="border-t pt-8" style={{ borderColor: 'var(--sf-rule)' }} aria-labelledby="vdp-description">
-              <h2 id="vdp-description" className="sf-heading text-[var(--sf-text-xl)]">Description</h2>
+              <h2 id="vdp-description" className="sf-heading text-[length:var(--sf-text-xl)]">Description</h2>
               {vehicle.description ? (
-                <p className="sf-muted mt-4 max-w-[68ch] whitespace-pre-line text-[var(--sf-text-md)] leading-relaxed">
+                <p className="sf-muted mt-4 max-w-[68ch] whitespace-pre-line text-[length:var(--sf-text-md)] leading-relaxed">
                   {vehicle.description}
                 </p>
               ) : (
-                <p className="sf-faint mt-4 text-[var(--sf-text-sm)]">No description listed.</p>
+                <p className="sf-faint mt-4 text-[length:var(--sf-text-sm)]">No description listed.</p>
               )}
             </section>
 
             {Array.isArray(features) && features.length > 0 && (
               <section className="mt-10 border-t pt-8" style={{ borderColor: 'var(--sf-rule)' }} aria-labelledby="vdp-features">
-                <h2 id="vdp-features" className="sf-title-line sf-heading text-[var(--sf-text-xl)]">
+                <h2 id="vdp-features" className="sf-title-line sf-heading text-[length:var(--sf-text-xl)]">
                   Features
                   <span className="sf-chip sf-figure">{features.length}</span>
                 </h2>
@@ -338,7 +338,7 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
                     return (
                       <li
                         key={index}
-                        className="flex items-start gap-3 border-b py-3 text-[var(--sf-text-sm)]"
+                        className="flex items-start gap-3 border-b py-3 text-[length:var(--sf-text-sm)]"
                         style={{ borderColor: 'var(--sf-rule)' }}
                       >
                         <Check className="mt-0.5 size-4 shrink-0" style={{ color: 'var(--sf-accent)' }} aria-hidden="true" />

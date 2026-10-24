@@ -4,6 +4,7 @@ import { currentDealAuthority, fundingBinding, lockDeal } from '../lifecycle/dea
 import { domainEventRequestHash, recordDomainEventInTransaction, stableJson } from '../lifecycle/domainEvents'
 import { readCurrentPrerequisites } from '../lifecycle/financePrerequisites'
 import { financingPrerequisiteCapability } from '../../integrations/financing'
+import { operatorCommand } from './operatorCommandErrors'
 
 const reference = z.string().trim().min(1).max(200)
 const input = z.object({ dealId: reference, worksheetVersion: z.number().int().positive(), expectedUpdatedAt: z.union([z.date(), reference]),
@@ -11,7 +12,7 @@ const input = z.object({ dealId: reference, worksheetVersion: z.number().int().p
   reviewReference: reference, policyReference: reference, policyVersion: reference, reviewerAuthorityReference: reference,
   idempotencyKey: z.string().trim().min(8).max(180) }).strict()
 
-export async function reviewFinancePrerequisites(_root: unknown, { data }: { data: unknown }, context: Parameters<typeof currentDealAuthority>[0]) {
+async function reviewFinancePrerequisitesCommand(_root: unknown, { data }: { data: unknown }, context: Parameters<typeof currentDealAuthority>[0]) {
   const request = input.parse(data)
   const expected = commandDate(request.expectedUpdatedAt)
   const actorId = context.session?.itemId
@@ -45,3 +46,5 @@ export async function reviewFinancePrerequisites(_root: unknown, { data }: { dat
     return { id: deal.id, status: 'review-recorded', reused: false, updatedAt: occurredAt }
   }, { timeout: 30_000, isolationLevel: 'Serializable' })
 }
+
+export const reviewFinancePrerequisites = operatorCommand(reviewFinancePrerequisitesCommand)

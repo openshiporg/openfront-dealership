@@ -41,7 +41,7 @@ export function Footer({ branding = true }: { branding?: boolean }) {
               <span className="sf-heading text-[length:var(--sf-text-xl)]">{business.fullName}</span>
             </Link>
             {hasAddress && (
-              <address className="mt-5 text-[var(--sf-text-sm)] not-italic" style={{ color: 'var(--sf-on-dark-2)' }}>
+              <address className="mt-5 text-[length:var(--sf-text-sm)] not-italic" style={{ color: 'var(--sf-on-dark-2)' }}>
                 {business.addressLine1 && <div>{business.addressLine1}</div>}
                 {business.addressLine2 && <div>{business.addressLine2}</div>}
               </address>
@@ -65,7 +65,7 @@ export function Footer({ branding = true }: { branding?: boolean }) {
 
           <nav aria-label="Shop" className="min-w-0">
             <p className="sf-eyebrow mb-4">Shop</p>
-            <ul className="space-y-2.5 text-[var(--sf-text-sm)]">
+            <ul className="space-y-2.5 text-[length:var(--sf-text-sm)]">
               {SHOP.map((link) => (
                 <li key={link.href}>
                   <Link href={link.href} className="transition-opacity hover:opacity-70">{link.label}</Link>
@@ -76,7 +76,7 @@ export function Footer({ branding = true }: { branding?: boolean }) {
 
           <nav aria-label="Visit" className="min-w-0">
             <p className="sf-eyebrow mb-4">Visit</p>
-            <ul className="space-y-2.5 text-[var(--sf-text-sm)]">
+            <ul className="space-y-2.5 text-[length:var(--sf-text-sm)]">
               {VISIT.map((link) => (
                 <li key={link.href}>
                   <Link href={link.href} className="transition-opacity hover:opacity-70">{link.label}</Link>
@@ -88,7 +88,7 @@ export function Footer({ branding = true }: { branding?: boolean }) {
           <div className="col-span-2 min-w-0 md:col-span-1">
             <p className="sf-eyebrow mb-4">Hours</p>
             {hours.length > 0 ? (
-              <dl className="space-y-2 text-[var(--sf-text-sm)]">
+              <dl className="space-y-2 text-[length:var(--sf-text-sm)]">
                 {hours.map((row) => (
                   <div key={row.label} className="flex gap-4">
                     <dt className="sf-figure w-16 shrink-0" style={{ color: 'var(--sf-on-dark-2)' }}>{row.label}</dt>
@@ -97,17 +97,17 @@ export function Footer({ branding = true }: { branding?: boolean }) {
                 ))}
               </dl>
             ) : (
-              <p className="text-[var(--sf-text-sm)]" style={{ color: 'var(--sf-on-dark-2)' }}>Hours not listed</p>
+              <p className="text-[length:var(--sf-text-sm)]" style={{ color: 'var(--sf-on-dark-2)' }}>Hours not listed</p>
             )}
             {business.salesEmail && (
-              <a href={`mailto:${business.salesEmail}`} className="mt-4 block break-all text-[var(--sf-text-sm)] underline-offset-4 hover:underline">
+              <a href={`mailto:${business.salesEmail}`} className="mt-4 block break-all text-[length:var(--sf-text-sm)] underline-offset-4 hover:underline">
                 {business.salesEmail}
               </a>
             )}
           </div>
         </div>
 
-        <div className="mt-12 flex flex-col gap-3 border-t pt-6 text-[var(--sf-text-xs)] sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--sf-rule-dark)', color: 'var(--sf-on-dark-2)' }}>
+        <div className="mt-12 flex flex-col gap-3 border-t pt-6 text-[length:var(--sf-text-xs)] sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--sf-rule-dark)', color: 'var(--sf-on-dark-2)' }}>
           <p>© {year} {business.fullName}</p>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <Link href="/photo-credits" className="inline-flex min-h-11 items-center transition-opacity hover:opacity-70">Photo credits</Link>

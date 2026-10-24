@@ -5,13 +5,16 @@ import { assertSessionRooftopPermission } from '../tenantRecords'
 import { commandDate } from '../lifecycle/commandDate'
 import { domainEventRequestHash, stableJson } from '../lifecycle/domainEvents'
 import { currentDealAuthority, fundingBinding, lockDeal, readLockedFunding, worksheetBinding } from '../lifecycle/dealFinanceEvidence'
-import { assertReviewedPrerequisites } from '../lifecycle/financePrerequisites'
+import { assertReviewedPrerequisites, readCurrentPrerequisites } from '../lifecycle/financePrerequisites'
+import { calculateDealPrice } from '../lifecycle/dealPricing'
+import { dealReceivedCents, formatUsdCents } from '../lifecycle/cashPayment'
+import { operatorCommand } from './operatorCommandErrors'
 import { financingPrerequisiteCapability } from '../../integrations/financing'
 
 const required=(v:any,n:string,max=500)=>{const s=String(v||'').trim();if(!s||s.length>max)throw new Error(`${n} is required`);return s}
 const key=(v:any)=>required(v,'Idempotency key',200)
 const codes=(v:any,n:string)=>{if(!Array.isArray(v))throw new Error(`${n} must be an array`);return [...new Set(v.map((x:any)=>required(x,n,80)))].slice(0,50)}
-async function dealForFinance(context:any,id:any){if(!context.session?.itemId||!permissions.canManageFinancing({session:context.session}))throw new Error('Financing permission is required');const deal=await context.query.Deal.findOne({where:{id:String(id||'')},query:'id status updatedAt rooftop { id } lead { id } vehicle { id vin stockNumber } selectedLenderDecision { id }'});if(!deal?.rooftop?.id)throw new Error('Deal not found or not accessible');await assertSessionRooftopPermission(context,deal.rooftop.id,'canManageFinancing');return deal}
+async function dealForFinance(context:any,id:any){if(!context.session?.itemId||!permissions.canManageFinancing({session:context.session}))throw new Error('Financing permission is required');const deal=await context.query.Deal.findOne({where:{id:String(id||'')},query:'id status structureType updatedAt rooftop { id } lead { id } vehicle { id vin stockNumber } selectedLenderDecision { id }'});if(!deal?.rooftop?.id)throw new Error('Deal not found or not accessible');await assertSessionRooftopPermission(context,deal.rooftop.id,'canManageFinancing');return deal}
 async function eventTx(context:any,event:DomainEventInput,write:(tx:any,reused:boolean)=>Promise<any>){return context.transaction(async(tx:any)=>{await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${event.eventKey}, 0))`;const recorded=await recordDomainEventInTransaction(tx,event);return write(tx,recorded.reused)},{timeout:30_000})}
 
 
@@ -45,9 +48,9 @@ async function artifactCommand(context: Parameters<typeof dealForFinance>[0], da
   }, { timeout: 30_000, isolationLevel: 'Serializable' })
 }
 
-export async function configureFinanceProduct(_r:unknown,{data}:any,context:any){if(!context.session?.itemId||!permissions.canManageFinancing({session:context.session}))throw new Error('Financing permission is required');const rooftopId=String(data.rooftopId||'');await assertSessionRooftopPermission(context,rooftopId,'canManageFinancing');const rooftop=await context.query.Rooftop.findOne({where:{id:rooftopId},query:'id'});if(!rooftop)throw new Error('Rooftop not found or not accessible');const category=required(data.category,'Category',50);if(!['service-contract','gap','maintenance','appearance','tire-wheel','other'].includes(category))throw new Error('Unsupported product category');const providerKey=required(data.providerKey,'Provider key',80);if(!financingProviderKeys().includes(providerKey))throw new Error('Unsupported financing provider');const evidence={rooftopId:rooftop.id,code:required(data.code,'Code',80).toUpperCase(),name:required(data.name,'Name',200),category,providerKey,retailPriceCents:Number(data.retailPriceCents),costCents:Number(data.costCents),active:data.active!==false};for(const f of ['retailPriceCents','costCents'] as const)if(!Number.isInteger(evidence[f])||evidence[f]<0)throw new Error(`${f} is invalid`);const eventKey=`finance-product:${key(data.idempotencyKey)}`;const id=await eventTx(context,{eventKey,rooftopId:rooftop.id,aggregateType:'FinanceProduct',aggregateId:`${rooftop.id}:${evidence.code}`,action:'configured',topic:'finance-product.configured',actorId:context.session.itemId,afterSnapshot:evidence,payload:evidence},async(tx,reused)=>{if(reused){const found=await tx.prisma.financeProduct.findFirst({where:{rooftopId:rooftop.id,code:evidence.code},select:{id:true}});if(!found)throw new Error('Finance product replay record is missing');return found.id}const existing=await tx.prisma.financeProduct.findFirst({where:{rooftopId:rooftop.id,code:evidence.code},select:{id:true}});const saved=existing?await tx.prisma.financeProduct.update({where:{id:existing.id},data:evidence,select:{id:true}}):await tx.prisma.financeProduct.create({data:evidence,select:{id:true}});return saved.id});return context.db.FinanceProduct.findOne({ where: {id} })}
+async function configureFinanceProductCommand(_r:unknown,{data}:any,context:any){if(!context.session?.itemId||!permissions.canManageFinancing({session:context.session}))throw new Error('Financing permission is required');const rooftopId=String(data.rooftopId||'');await assertSessionRooftopPermission(context,rooftopId,'canManageFinancing');const rooftop=await context.query.Rooftop.findOne({where:{id:rooftopId},query:'id'});if(!rooftop)throw new Error('Rooftop not found or not accessible');const category=required(data.category,'Category',50);if(!['service-contract','gap','maintenance','appearance','tire-wheel','other'].includes(category))throw new Error('Unsupported product category');const providerKey=required(data.providerKey,'Provider key',80);if(!financingProviderKeys().includes(providerKey))throw new Error('Unsupported financing provider');const evidence={rooftopId:rooftop.id,code:required(data.code,'Code',80).toUpperCase(),name:required(data.name,'Name',200),category,providerKey,retailPriceCents:Number(data.retailPriceCents),costCents:Number(data.costCents),active:data.active!==false};for(const f of ['retailPriceCents','costCents'] as const)if(!Number.isInteger(evidence[f])||evidence[f]<0)throw new Error(`${f} is invalid`);const eventKey=`finance-product:${key(data.idempotencyKey)}`;const id=await eventTx(context,{eventKey,rooftopId:rooftop.id,aggregateType:'FinanceProduct',aggregateId:`${rooftop.id}:${evidence.code}`,action:'configured',topic:'finance-product.configured',actorId:context.session.itemId,afterSnapshot:evidence,payload:evidence},async(tx,reused)=>{if(reused){const found=await tx.prisma.financeProduct.findFirst({where:{rooftopId:rooftop.id,code:evidence.code},select:{id:true}});if(!found)throw new Error('Finance product replay record is missing');return found.id}const existing=await tx.prisma.financeProduct.findFirst({where:{rooftopId:rooftop.id,code:evidence.code},select:{id:true}});const saved=existing?await tx.prisma.financeProduct.update({where:{id:existing.id},data:evidence,select:{id:true}}):await tx.prisma.financeProduct.create({data:evidence,select:{id:true}});return saved.id});return context.db.FinanceProduct.findOne({ where: {id} })}
 
-export async function presentFinanceMenu(_r: unknown, { data }: any, context: any) {
+async function presentFinanceMenuCommand(_r: unknown, { data }: any, context: any) {
   return artifactCommand(context, data, 'menu-present', async (tx, scoped, deal) => {
     const productCodes = codes(data.productCodes, 'Product codes')
     const products = await scoped.query.FinanceProduct.findMany({ where: { rooftop: { id: { equals: deal.rooftopId } }, code: { in: productCodes }, active: { equals: true } }, take: 50, query: 'id code name category providerKey retailPriceCents' })
@@ -72,7 +75,7 @@ export async function presentFinanceMenu(_r: unknown, { data }: any, context: an
   })
 }
 
-export async function decideFinanceMenu(_r: unknown, { data }: any, context: any) {
+async function decideFinanceMenuCommand(_r: unknown, { data }: any, context: any) {
   return artifactCommand(context, data, 'menu-decide', async (tx, scoped, deal) => {
     const menu = await tx.prisma.financeMenuVersion.findFirst({ where: { dealId: deal.id, rooftopId: deal.rooftopId }, orderBy: { version: 'desc' } })
     if (!menu || menu.id !== data.menuId || menu.status !== 'presented') throw new Error('Current presented menu not found for this deal')
@@ -91,7 +94,7 @@ export async function decideFinanceMenu(_r: unknown, { data }: any, context: any
   })
 }
 
-export async function recordFinanceComplianceCheck(_r: unknown, { data }: any, context: any) {
+async function recordFinanceComplianceCheckCommand(_r: unknown, { data }: any, context: any) {
   return artifactCommand(context, data, 'compliance-record', async (tx, scoped, deal) => {
     const checkType = required(data.checkType, 'Check type', 40), status = required(data.status, 'Status', 40)
     if (!['identity', 'ofac', 'red-flag', 'privacy'].includes(checkType) || !['requested', 'completed', 'failed', 'manual-review'].includes(status)) throw new Error('Invalid compliance check evidence')
@@ -110,7 +113,7 @@ export async function recordFinanceComplianceCheck(_r: unknown, { data }: any, c
   })
 }
 
-export async function manageFinanceContractPackage(_r: unknown, { data }: any, context: any) {
+async function manageFinanceContractPackageCommand(_r: unknown, { data }: any, context: any) {
   return artifactCommand(context, data, 'contract-update', async (tx, scoped, deal) => {
     const action = required(data.action, 'Contract action', 50)
     if (!['prepare', 'mark-ready', 'request-handoff', 'record-provider-status'].includes(action)) throw new Error('Invalid contract action')
@@ -155,7 +158,7 @@ export async function manageFinanceContractPackage(_r: unknown, { data }: any, c
   })
 }
 
-export async function manageFinanceFundingCase(_root: unknown, { data }: any, context: any) {
+async function manageFinanceFundingCaseCommand(_root: unknown, { data }: any, context: any) {
   const visible = await dealForFinance(context, data.dealId)
   const status = required(data.status, 'Funding status', 40)
   if (!['pending', 'exception', 'clear-to-fund', 'funded', 'cancelled'].includes(status)) throw new Error('Invalid funding status')
@@ -165,13 +168,17 @@ export async function manageFinanceFundingCase(_root: unknown, { data }: any, co
   if (checklist.some((x: any) => !['open', 'complete', 'waived'].includes(x.status)) || exceptions.some((x: any) => !['open', 'resolved', 'waived'].includes(x.status))) throw new Error('Invalid funding checklist evidence')
   if (['clear-to-fund', 'funded'].includes(status) && (!checklist.length || checklist.some((x: any) => x.status === 'open') || exceptions.some((x: any) => x.status === 'open'))) throw new Error('Funding cannot clear with open checklist items or exceptions')
   const fundingReference = String(data.fundingReference || '').trim()
-  if (status === 'funded') required(fundingReference, 'Funding/reconfirmation reference for the current worksheet', 200)
+  if (status === 'funded') required(fundingReference, visible.structureType === 'cash' ? 'Receipt reference' : 'Funding/reconfirmation reference for the current worksheet', 200)
+  // Cash: funding is "payment received", recorded with the amount actually taken.
+  const paymentAmountCents = data.paymentAmountCents == null ? null : Number(data.paymentAmountCents)
+  if (paymentAmountCents != null && (!Number.isSafeInteger(paymentAmountCents) || paymentAmountCents < 0 || paymentAmountCents > 2_147_483_647)) throw new Error('Payment amount must be a non-negative amount in cents')
   const expectedUpdatedAt = commandDate(data.expectedUpdatedAt)
   const expectedFundingUpdatedAt = data.expectedFundingUpdatedAt == null ? null : commandDate(data.expectedFundingUpdatedAt)
   if (!Number.isInteger(data.worksheetVersion) || data.worksheetVersion < 1) throw new Error('Current worksheet version is required')
   const eventKey = `finance-funding:${key(data.idempotencyKey)}`
   const request = { dealId: visible.id, status, checklist, exceptions, fundingReference,
-    worksheetVersion: data.worksheetVersion, expectedUpdatedAt: expectedUpdatedAt.toISOString(), expectedFundingUpdatedAt: expectedFundingUpdatedAt?.toISOString() ?? null }
+    worksheetVersion: data.worksheetVersion, expectedUpdatedAt: expectedUpdatedAt.toISOString(), expectedFundingUpdatedAt: expectedFundingUpdatedAt?.toISOString() ?? null,
+    ...(paymentAmountCents != null ? { paymentAmountCents } : {}) }
   return context.transaction(async (tx: any) => {
     await lockDeal(tx, visible.id)
     const authority = await currentDealAuthority(tx, context.session, visible.id, ['canManageFinancing'])
@@ -203,14 +210,18 @@ export async function manageFinanceFundingCase(_root: unknown, { data }: any, co
     if (deal.worksheetVersion !== data.worksheetVersion || deal.updatedAt.getTime() !== expectedUpdatedAt.getTime()) throw new Error('Deal worksheet changed; reload and review funding')
     if ((existing?.updatedAt?.getTime() ?? null) !== (expectedFundingUpdatedAt?.getTime() ?? null)) throw new Error('Funding case changed; reload and review before updating')
     const binding = await currentBinding()
+    const now = new Date()
+    const cashPayment = deal.structureType === 'cash' && status === 'funded'
+      ? await recordCashSalePrerequisites(tx, deal, { binding, fundingReference, paymentAmountCents, actorId: context.session.itemId, idempotencyKey: key(data.idempotencyKey), now })
+      : null
     let prerequisites: any = null
     if (needsCurrentEvidence) {
       prerequisites = await assertReviewedPrerequisites(tx, deal)
     }
-    const now = new Date()
     const evidence = { version: 2, request, dealId: deal.id, binding, status, checklist, exceptions, fundingReference,
       evidenceSource: 'operator-recorded', prerequisites, fundedAt: status === 'funded' ? now.toISOString() : null,
-      previousEvidenceHash: existing ? domainEventRequestHash(existing.immutableEvidence) : null }
+      previousEvidenceHash: existing ? domainEventRequestHash(existing.immutableEvidence) : null,
+      ...(cashPayment ? { payment: cashPayment } : {}) }
     const values = { status, checklist, exceptions, fundingReference, fundedAt: status === 'funded' ? now : null, immutableEvidence: evidence }
     let id: string
     if (existing) {
@@ -220,11 +231,64 @@ export async function manageFinanceFundingCase(_root: unknown, { data }: any, co
     } else {
       id = (await tx.prisma.financeFundingCase.create({ data: { ...values, rooftopId: deal.rooftopId, dealId: deal.id, idempotencyKey: key(data.idempotencyKey) }, select: { id: true } })).id
     }
+    if (cashPayment && cashPayment.amountCents > 0) {
+      // A cash sale's money is a PaymentTransaction like any other deal payment, so reporting and
+      // reconciliation see it. Operator-recorded: no processor was involved.
+      await tx.prisma.paymentTransaction.create({ data: { rooftopId: deal.rooftopId, dealId: deal.id, sourceType: 'deal', amountCents: cashPayment.amountCents,
+        currency: 'usd', providerKey: 'operator-recorded', providerTransactionId: fundingReference, status: 'captured', capturedCents: cashPayment.amountCents,
+        idempotencyKey: cashPayment.paymentIdempotencyKey } })
+    }
     await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: 'FinanceFundingCase', aggregateId: deal.id, action: `status:${status}`, topic: 'finance-funding.updated', actorId: context.session.itemId, beforeSnapshot: undefined, afterSnapshot: evidence, payload: { rooftopId: deal.rooftopId, dealId: deal.id, status } })
     return authority.context.db.FinanceFundingCase.findOne({ where: { id } })
   }, { timeout: 30_000, isolationLevel: 'Serializable' })
 }
 
-export async function recordFinanceProductQuote(_r:unknown,{data}:any,context:any){const deal=await dealForFinance(context,data.dealId);const product=await context.query.FinanceProduct.findOne({where:{id:String(data.productId||'')},query:'id code providerKey rooftop { id }'});if(!product||product.rooftop?.id!==deal.rooftop.id)throw new Error('Finance product not found at this rooftop');const status=required(data.status,'Quote status',30);if(!['requested','quoted','failed'].includes(status))throw new Error('Invalid quote status');const providerKey=product.providerKey;if(!financingProviderKeys().includes(providerKey))throw new Error('Unsupported product provider');const retailPriceCents=data.retailPriceCents==null?null:Number(data.retailPriceCents),costCents=data.costCents==null?null:Number(data.costCents),evidenceReference=String(data.evidenceReference||'').trim();if(status==='quoted'&&(!Number.isInteger(retailPriceCents)||Number(retailPriceCents)<0||!Number.isInteger(costCents)||Number(costCents)<0||!evidenceReference))throw new Error('Quoted products require integer prices and provider/operator evidence');const now=new Date(),eventKey=`finance-product-quote:${key(data.idempotencyKey)}`,evidence={dealId:deal.id,productId:product.id,productCode:product.code,providerKey,status,retailPriceCents,costCents,evidenceReference:evidenceReference||null,externalRateGuaranteed:false,recordedAt:now.toISOString()};const id=await eventTx(context,{eventKey,rooftopId:deal.rooftop.id,aggregateType:'FinanceProductQuote',aggregateId:deal.id,action:`recorded:${status}`,topic:'finance-product-quote.recorded',actorId:context.session.itemId,afterSnapshot:evidence,payload:{rooftopId:deal.rooftop.id,dealId:deal.id,productId:product.id,status}},async(tx,reused)=>{if(reused){const found=await tx.prisma.financeProductQuote.findUnique({where:{idempotencyKey:key(data.idempotencyKey)},select:{id:true}});if(!found)throw new Error('Quote replay record missing');return found.id}return(await tx.prisma.financeProductQuote.create({data:{rooftopId:deal.rooftop.id,dealId:deal.id,productId:product.id,providerKey,status,retailPriceCents,costCents,evidenceReference,requestSnapshot:{externalRequestSent:false},resultSnapshot:{evidenceReference:evidenceReference||null,externalRateGuaranteed:false},requestedAt:now,completedAt:status==='requested'?null:now,idempotencyKey:key(data.idempotencyKey)},select:{id:true}})).id});return context.db.FinanceProductQuote.findOne({ where: {id} })}
+/**
+ * Cash sale: recording payment received is the funding event. In the same transaction it
+ * - checks the amount against what the buyer still owes (server pricing, minus recorded payments),
+ * - declines F&I when no menu was presented (the menu is optional on cash; an undecided one blocks),
+ * - confirms the current documents and checks as the prerequisite review, bound to this receipt.
+ * The full lender path (separate review, funding checklist) stays for finance and lease deals.
+ */
+async function recordCashSalePrerequisites(tx: any, deal: any, input: { binding: unknown; fundingReference: string; paymentAmountCents: number | null; actorId: string; idempotencyKey: string; now: Date }) {
+  const latestMenu = await tx.prisma.financeMenuVersion.findFirst({ where: { dealId: deal.id, rooftopId: deal.rooftopId }, orderBy: [{ version: 'desc' }, { id: 'desc' }] })
+  if (latestMenu?.status === 'presented') throw new Error('Record the customer\'s F&I menu decision first')
+  if (!latestMenu) {
+    await tx.prisma.financeMenuVersion.create({ data: { rooftopId: deal.rooftopId, dealId: deal.id, version: 1, status: 'declined',
+      optionsSnapshot: [], selectedProductCodes: [], declinedProductCodes: [], disclosureAcknowledgment: 'Cash sale: no F&I products presented',
+      presentedAt: input.now, decidedAt: input.now, idempotencyKey: `${input.idempotencyKey}:cash-menu` } })
+  }
+  // Documents and checks first (rolls back the auto-declined menu if any are missing), then the money.
+  const current = await readCurrentPrerequisites(tx, deal)
+  const amountDueCents = calculateDealPrice(deal).cashPayableCents
+  const previouslyReceivedCents = await dealReceivedCents(tx, deal)
+  const remainingCents = amountDueCents - previouslyReceivedCents
+  if (input.paymentAmountCents == null) throw new Error('Enter the payment amount received')
+  if (remainingCents < 0) throw new Error(`Recorded payments exceed the amount due by ${formatUsdCents(-remainingCents)}; refund the difference first`)
+  if (input.paymentAmountCents !== remainingCents) {
+    throw new Error(remainingCents === 0 ? 'This deal is already paid in full; enter 0 to reconfirm the payment' : `Payment must equal the ${formatUsdCents(remainingCents)} still due`)
+  }
+  const purpose = 'funding-delivery-prerequisite-review'
+  const policy = { policyReference: 'cash-sale-payment', policyVersion: '1', reviewerAuthorityReference: `user:${input.actorId}`, reviewReference: input.fundingReference }
+  await recordDomainEventInTransaction(tx, { eventKey: `finance-prerequisite-review:cash-payment:${input.idempotencyKey}`, rooftopId: deal.rooftopId,
+    aggregateType: 'Deal', aggregateId: deal.id, action: 'prerequisites-reviewed', topic: 'finance-prerequisites.reviewed', actorId: input.actorId, occurredAt: input.now,
+    afterSnapshot: { version: 1, purpose, actorId: input.actorId, request: { dealId: deal.id, worksheetVersion: deal.worksheetVersion, purpose, source: 'cash-payment' },
+      ...current, binding: input.binding, ...policy, capability: financingPrerequisiteCapability('operator-recorded'), acceptedTermsHash: domainEventRequestHash(deal.acceptedSnapshot) },
+    payload: { dealId: deal.id, rooftopId: deal.rooftopId, worksheetVersion: deal.worksheetVersion } })
+  return { amountCents: input.paymentAmountCents, amountDueCents, previouslyReceivedCents, receiptReference: input.fundingReference,
+    paymentIdempotencyKey: `cash-payment:${input.idempotencyKey}` }
+}
 
-export async function recordFinanceProductCancellation(_r:unknown,{data}:any,context:any){const deal=await dealForFinance(context,data.dealId);const menu=await context.query.FinanceMenuVersion.findOne({where:{id:String(data.menuId||'')},query:'id status selectedProductCodes deal { id } rooftop { id }'});const productCode=required(data.productCode,'Product code',80);if(!menu||menu.deal?.id!==deal.id||menu.status!=='accepted'||!Array.isArray(menu.selectedProductCodes)||!menu.selectedProductCodes.includes(productCode))throw new Error('Cancellation must reference an accepted menu product');const status=required(data.status,'Cancellation status',30);if(!['requested','completed','denied'].includes(status))throw new Error('Invalid cancellation status');const reason=required(data.reason,'Cancellation reason',1000),refundCents=data.refundCents==null?0:Number(data.refundCents);if(!Number.isInteger(refundCents)||refundCents<0||status==='completed'&&!required(data.evidenceReference,'Cancellation evidence reference',200))throw new Error('Invalid cancellation evidence');const now=new Date(),eventKey=`finance-product-cancellation:${key(data.idempotencyKey)}`,evidence={dealId:deal.id,menuId:menu.id,productCode,status,reason,refundCents,evidenceReference:String(data.evidenceReference||'').trim()||null,recordedAt:now.toISOString()};const id=await eventTx(context,{eventKey,rooftopId:deal.rooftop.id,aggregateType:'FinanceProductCancellation',aggregateId:deal.id,action:`recorded:${status}`,topic:'finance-product-cancellation.recorded',actorId:context.session.itemId,afterSnapshot:evidence,payload:{rooftopId:deal.rooftop.id,dealId:deal.id,productCode,status,refundCents}},async(tx,reused)=>{if(reused){const found=await tx.prisma.financeProductCancellation.findUnique({where:{idempotencyKey:key(data.idempotencyKey)},select:{id:true}});if(!found)throw new Error('Cancellation replay record missing');return found.id}return(await tx.prisma.financeProductCancellation.create({data:{rooftopId:deal.rooftop.id,dealId:deal.id,menuId:menu.id,productCode,status,reason,refundCents,evidence:{evidenceReference:evidence.evidenceReference},requestedAt:now,completedAt:status==='requested'?null:now,idempotencyKey:key(data.idempotencyKey)},select:{id:true}})).id});return context.db.FinanceProductCancellation.findOne({ where: {id} })}
+async function recordFinanceProductQuoteCommand(_r:unknown,{data}:any,context:any){const deal=await dealForFinance(context,data.dealId);const product=await context.query.FinanceProduct.findOne({where:{id:String(data.productId||'')},query:'id code providerKey rooftop { id }'});if(!product||product.rooftop?.id!==deal.rooftop.id)throw new Error('Finance product not found at this rooftop');const status=required(data.status,'Quote status',30);if(!['requested','quoted','failed'].includes(status))throw new Error('Invalid quote status');const providerKey=product.providerKey;if(!financingProviderKeys().includes(providerKey))throw new Error('Unsupported product provider');const retailPriceCents=data.retailPriceCents==null?null:Number(data.retailPriceCents),costCents=data.costCents==null?null:Number(data.costCents),evidenceReference=String(data.evidenceReference||'').trim();if(status==='quoted'&&(!Number.isInteger(retailPriceCents)||Number(retailPriceCents)<0||!Number.isInteger(costCents)||Number(costCents)<0||!evidenceReference))throw new Error('Quoted products require integer prices and provider/operator evidence');const now=new Date(),eventKey=`finance-product-quote:${key(data.idempotencyKey)}`,evidence={dealId:deal.id,productId:product.id,productCode:product.code,providerKey,status,retailPriceCents,costCents,evidenceReference:evidenceReference||null,externalRateGuaranteed:false,recordedAt:now.toISOString()};const id=await eventTx(context,{eventKey,rooftopId:deal.rooftop.id,aggregateType:'FinanceProductQuote',aggregateId:deal.id,action:`recorded:${status}`,topic:'finance-product-quote.recorded',actorId:context.session.itemId,afterSnapshot:evidence,payload:{rooftopId:deal.rooftop.id,dealId:deal.id,productId:product.id,status}},async(tx,reused)=>{if(reused){const found=await tx.prisma.financeProductQuote.findUnique({where:{idempotencyKey:key(data.idempotencyKey)},select:{id:true}});if(!found)throw new Error('Quote replay record missing');return found.id}return(await tx.prisma.financeProductQuote.create({data:{rooftopId:deal.rooftop.id,dealId:deal.id,productId:product.id,providerKey,status,retailPriceCents,costCents,evidenceReference,requestSnapshot:{externalRequestSent:false},resultSnapshot:{evidenceReference:evidenceReference||null,externalRateGuaranteed:false},requestedAt:now,completedAt:status==='requested'?null:now,idempotencyKey:key(data.idempotencyKey)},select:{id:true}})).id});return context.db.FinanceProductQuote.findOne({ where: {id} })}
+
+async function recordFinanceProductCancellationCommand(_r:unknown,{data}:any,context:any){const deal=await dealForFinance(context,data.dealId);const menu=await context.query.FinanceMenuVersion.findOne({where:{id:String(data.menuId||'')},query:'id status selectedProductCodes deal { id } rooftop { id }'});const productCode=required(data.productCode,'Product code',80);if(!menu||menu.deal?.id!==deal.id||menu.status!=='accepted'||!Array.isArray(menu.selectedProductCodes)||!menu.selectedProductCodes.includes(productCode))throw new Error('Cancellation must reference an accepted menu product');const status=required(data.status,'Cancellation status',30);if(!['requested','completed','denied'].includes(status))throw new Error('Invalid cancellation status');const reason=required(data.reason,'Cancellation reason',1000),refundCents=data.refundCents==null?0:Number(data.refundCents);if(!Number.isInteger(refundCents)||refundCents<0||status==='completed'&&!required(data.evidenceReference,'Cancellation evidence reference',200))throw new Error('Invalid cancellation evidence');const now=new Date(),eventKey=`finance-product-cancellation:${key(data.idempotencyKey)}`,evidence={dealId:deal.id,menuId:menu.id,productCode,status,reason,refundCents,evidenceReference:String(data.evidenceReference||'').trim()||null,recordedAt:now.toISOString()};const id=await eventTx(context,{eventKey,rooftopId:deal.rooftop.id,aggregateType:'FinanceProductCancellation',aggregateId:deal.id,action:`recorded:${status}`,topic:'finance-product-cancellation.recorded',actorId:context.session.itemId,afterSnapshot:evidence,payload:{rooftopId:deal.rooftop.id,dealId:deal.id,productCode,status,refundCents}},async(tx,reused)=>{if(reused){const found=await tx.prisma.financeProductCancellation.findUnique({where:{idempotencyKey:key(data.idempotencyKey)},select:{id:true}});if(!found)throw new Error('Cancellation replay record missing');return found.id}return(await tx.prisma.financeProductCancellation.create({data:{rooftopId:deal.rooftop.id,dealId:deal.id,menuId:menu.id,productCode,status,reason,refundCents,evidence:{evidenceReference:evidence.evidenceReference},requestedAt:now,completedAt:status==='requested'?null:now,idempotencyKey:key(data.idempotencyKey)},select:{id:true}})).id});return context.db.FinanceProductCancellation.findOne({ where: {id} })}
+
+// Each finance command's own validation ("Record product quotes first") reaches the desk verbatim.
+export const configureFinanceProduct = operatorCommand(configureFinanceProductCommand)
+export const presentFinanceMenu = operatorCommand(presentFinanceMenuCommand)
+export const decideFinanceMenu = operatorCommand(decideFinanceMenuCommand)
+export const recordFinanceComplianceCheck = operatorCommand(recordFinanceComplianceCheckCommand)
+export const manageFinanceContractPackage = operatorCommand(manageFinanceContractPackageCommand)
+export const manageFinanceFundingCase = operatorCommand(manageFinanceFundingCaseCommand)
+export const recordFinanceProductQuote = operatorCommand(recordFinanceProductQuoteCommand)
+export const recordFinanceProductCancellation = operatorCommand(recordFinanceProductCancellationCommand)

@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowRight, RefreshCw, Save } from 'lucide-react'
-import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
@@ -32,6 +31,8 @@ import {
   type DealSetupVehicle,
 } from '../actions'
 import { formatUsd, formatUsdCredit } from '../lib/formatMoney'
+import { MoneyInput } from '../components/MoneyInput'
+import { applyDealDefaults, calculateDealPrice, lineAmountCents, type DealDefaults } from '@/features/keystone/lifecycle/dealPricing'
 
 type Vehicle = DealSetupVehicle
 type Lead = DealSetupLead
@@ -68,13 +69,29 @@ function SummaryRow({ label, value, emphasis, credit }: { label: string; value: 
   )
 }
 
+const NO_DEFAULTS: DealDefaults = { salesTaxRateBps: 0, docFeeCents: 0 }
+
+/** Preview of the pencil the server creates: the same defaults and pricing rules, in dollars. */
+function previewDeal(form: { vehiclePrice: number; tradeInValue: number; downPayment: number }, defaults: DealDefaults) {
+  try {
+    const amounts = { vehiclePriceCents: Math.round(form.vehiclePrice * 100), tradeInValueCents: Math.round(form.tradeInValue * 100), downPaymentCents: Math.round(form.downPayment * 100) }
+    const { fees, taxLines } = applyDealDefaults({ ...amounts, rebates: [] }, defaults)
+    const price = calculateDealPrice({ ...amounts, fees, taxLines })
+    return { fees, taxLines, subtotal: price.subtotalCents / 100, totalPrice: price.totalPriceCents / 100, remainingBalance: Math.max(0, price.balanceCents) / 100 }
+  } catch {
+    return null
+  }
+}
+
 export function DealCreatePageClient({
   initialVehicles,
   initialLeads,
+  initialDealDefaults,
   initialError,
 }: {
   initialVehicles: Vehicle[]
   initialLeads: Lead[]
+  initialDealDefaults: DealDefaults
   initialError: string | null
 }) {
   const router = useRouter()
@@ -85,6 +102,7 @@ export function DealCreatePageClient({
   const [saveError, setSaveError] = useState<string | null>(null)
   const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles)
   const [leads, setLeads] = useState<Lead[]>(initialLeads)
+  const [dealDefaults, setDealDefaults] = useState<DealDefaults>(initialDealDefaults || NO_DEFAULTS)
   const [salesReps, setSalesReps] = useState<User[]>([])
   const [salesRepsLoading, setSalesRepsLoading] = useState(false)
 
@@ -97,15 +115,7 @@ export function DealCreatePageClient({
     downPayment: 0,
   })
 
-  const [calculated, setCalculated] = useState({
-    subtotal: 0,
-    totalPrice: 0,
-    remainingBalance: 0,
-  })
-
-  useEffect(() => {
-    calculateDeal()
-  }, [formData])
+  const calculated = previewDeal(formData, dealDefaults)
 
   useEffect(() => {
     let current = true
@@ -132,6 +142,7 @@ export function DealCreatePageClient({
     if (response.success) {
       setVehicles(response.data.vehicles)
       setLeads(response.data.leads)
+      setDealDefaults(response.data.dealDefaults)
     } else {
       setError(response.error || 'Unable to load deal options.')
     }
@@ -145,14 +156,6 @@ export function DealCreatePageClient({
       vehicleId,
       vehiclePrice: vehicle?.price || 0,
     }))
-  }
-
-  const calculateDeal = () => {
-    const { vehiclePrice, tradeInValue, downPayment } = formData
-    const subtotal = Math.max(0, vehiclePrice - tradeInValue)
-    const totalPrice = subtotal
-    const remainingBalance = Math.max(0, totalPrice - downPayment)
-    setCalculated({ subtotal, totalPrice, remainingBalance })
   }
 
   const handleSave = async () => {
@@ -340,36 +343,28 @@ export function DealCreatePageClient({
                 <div className="grid gap-4 sm:grid-cols-3">
                   <label htmlFor="deal-negotiated-price" className="grid min-w-0 gap-1.5">
                     <span className={fieldLabel}>Negotiated price</span>
-                    <Input
+                    <MoneyInput
                       id="deal-negotiated-price"
-                      type="number"
-                      className="text-right tabular-nums"
-                      value={formData.vehiclePrice || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, vehiclePrice: parseFloat(e.target.value) || 0 }))}
+                      cents={Math.round(formData.vehiclePrice * 100)}
+                      onCentsChange={(cents) => setFormData(prev => ({ ...prev, vehiclePrice: cents / 100 }))}
                       placeholder="0"
                     />
                   </label>
                   <label htmlFor="deal-trade-in-value" className="grid min-w-0 gap-1.5">
                     <span className={fieldLabel}>Trade-in value</span>
-                    <Input
+                    <MoneyInput
                       id="deal-trade-in-value"
-                      type="number"
-                      min="0"
-                      className="text-right tabular-nums"
-                      value={formData.tradeInValue || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, tradeInValue: parseFloat(e.target.value) || 0 }))}
+                      cents={Math.round(formData.tradeInValue * 100)}
+                      onCentsChange={(cents) => setFormData(prev => ({ ...prev, tradeInValue: cents / 100 }))}
                       placeholder="0"
                     />
                   </label>
                   <label htmlFor="deal-down-payment" className="grid min-w-0 gap-1.5">
                     <span className={fieldLabel}>Down payment</span>
-                    <Input
+                    <MoneyInput
                       id="deal-down-payment"
-                      type="number"
-                      min="0"
-                      className="text-right tabular-nums"
-                      value={formData.downPayment || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, downPayment: parseFloat(e.target.value) || 0 }))}
+                      cents={Math.round(formData.downPayment * 100)}
+                      onCentsChange={(cents) => setFormData(prev => ({ ...prev, downPayment: cents / 100 }))}
                       placeholder="0"
                     />
                   </label>
@@ -383,11 +378,13 @@ export function DealCreatePageClient({
                 <Panel className="overflow-hidden">
                   <dl className="divide-y divide-border/60">
                     <SummaryRow label="Vehicle price" value={formatCurrency(formData.vehiclePrice)} />
+                    {calculated?.fees.map(line => <SummaryRow key={line.code} label={line.name} value={formatCurrency(lineAmountCents(line) / 100)} />)}
+                    <SummaryRow label="Subtotal" value={calculated ? formatCurrency(calculated.subtotal) : '-'} />
+                    {calculated?.taxLines.map(line => <SummaryRow key={line.code} label={line.name} value={formatCurrency(lineAmountCents(line) / 100)} />)}
                     {formData.tradeInValue > 0 && <SummaryRow label="Trade-in credit" value={formatUsdCredit(formData.tradeInValue)} credit />}
-                    <SummaryRow label="Subtotal" value={formatCurrency(calculated.subtotal)} />
-                    <SummaryRow emphasis label="Working balance" value={formatCurrency(calculated.totalPrice)} />
+                    <SummaryRow emphasis label="Working balance" value={calculated ? formatCurrency(calculated.totalPrice) : '-'} />
                     <SummaryRow label="Down payment" value={formatUsdCredit(formData.downPayment)} credit={formData.downPayment > 0} />
-                    <SummaryRow label="Remaining balance" value={formatCurrency(calculated.remainingBalance)} />
+                    <SummaryRow label="Remaining balance" value={calculated ? formatCurrency(calculated.remainingBalance) : '-'} />
                   </dl>
                 </Panel>
                 {frontGross !== null && (

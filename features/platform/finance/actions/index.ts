@@ -3,13 +3,15 @@
 import { revalidatePath } from 'next/cache'
 
 import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
+import { operatorCommandRequest } from '@/features/platform/lib/operatorCommandClient'
 
 import type { FinanceWorkspace } from '../lib/types'
 
 const FINANCE_PATH = '/dashboard/platform/finance'
 
+// Commands return the server's own rejection message ("Record product quotes first") when it refuses.
 async function mutate<T = unknown>(query: string, variables: Record<string, unknown>) {
-  const response = await keystoneClient<T>(query, variables)
+  const response = await operatorCommandRequest<T>(query, variables)
   if (response.success) revalidatePath(FINANCE_PATH)
   return response
 }
@@ -20,7 +22,7 @@ export async function getFinanceWorkspace() {
       financeWorkspace(limit: 50) {
         deals { id worksheetVersion financeEvidence rooftop { id name } vehiclePrice tradeInValue downPayment financingAmount monthlyPayment loanTerm apr taxAmount status totalPrice profit createdAt updatedAt salesperson { id name } lead { id firstName lastName } vehicle { id year make model stockNumber vin purchasePrice } approvals { id decision approvalDate notes approver { name } } }
         applications { id reference status applicantName requestedAmountCents submittedAt vehicle { id year make model stockNumber priceCents } lead { id rooftop { id } firstName lastName email phone status createdAt interestedVehicle { id year make model stockNumber priceCents } tasks { id title dueDate completed priority } } submissions { id providerKey providerMode externalRequestSent status externalReference queuedAt } decisions { id providerKey decision approvedAmountCents aprBasisPoints termMonths monthlyPaymentCents reasonCodes decidedAt } }
-        products { id code name category providerKey retailPriceCents costCents }
+        products { id rooftop { id } code name category providerKey retailPriceCents costCents }
         productQuotes { id deal { id } product { id code } status }
         productCancellations { id deal { id } productCode status }
         menus { id deal { id } version status optionsSnapshot }
@@ -199,6 +201,7 @@ export async function manageFinanceFundingCase(data: {
   checklist: Array<{ code: string; status: string }>
   exceptions: Array<{ code: string; status: string; notes: string }>
   fundingReference?: string
+  paymentAmountCents?: number
   idempotencyKey: string
 }) {
   return mutate(`

@@ -43,7 +43,7 @@ export function ResetPasswordPage() {
       </div>
 
       <div className="mt-5 flex justify-center">
-        <Link href="/account" className="sf-link inline-flex min-h-11 items-center gap-1.5 text-[var(--sf-text-sm)]">
+        <Link href="/account" className="sf-link inline-flex min-h-11 items-center gap-1.5 text-[length:var(--sf-text-sm)]">
           <ArrowLeft className="size-4" aria-hidden="true" />
           Back to account
         </Link>

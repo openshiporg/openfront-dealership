@@ -14,6 +14,16 @@ export type FixedOpsAppointment = {
   lead: { id: string; firstName: string | null; lastName: string | null; email: string | null; phone: string | null } | null
 }
 
+export type FixedOpsLineItem = {
+  id: string
+  itemType: string
+  description: string
+  partNumber: string | null
+  quantity: number
+  unitPriceCents: number
+  priceCents: number
+}
+
 export type FixedOpsOrder = {
   id: string
   rooftop: { id: string; name: string } | null
@@ -26,6 +36,7 @@ export type FixedOpsOrder = {
   authorizationStatus: string
   invoiceNumber: string | null
   laborOperations: { id: string; operationCode: string; description: string; status: string; technician: { id: string; name: string } | null }[]
+  lineItems: FixedOpsLineItem[]
   laborTotalCents: number | null
   partsTotalCents: number | null
   taxCents: number | null

@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
 import { sanitizeStoreLogoSvg } from '@/features/lib/sanitize-store-logo'
 import { normalizeStoreLogoColor } from '@/features/lib/store-logo'
+import { checkedCents, checkedRateBps } from '@/features/keystone/lifecycle/dealPricing'
 
 export type DealershipStoreSettings = {
   id?: string
@@ -27,6 +28,9 @@ export type DealershipStoreSettings = {
   homepageDescription: string
   logoIcon: string
   logoColor: string
+  /** Deal defaults: integer basis points (415 = 4.15%) and integer cents. */
+  salesTaxRateBps: number
+  docFeeCents: number
   /** IANA zone stored on the storefront's rooftop, not on DealershipProfile. */
   timezone: string
 }
@@ -40,6 +44,7 @@ const SETTINGS_FIELDS = `
   addressLine1 addressLine2 city state postalCode
   hoursMonFri hoursSaturday hoursSunday websiteUrl currencyCode
   homepageTitle homepageDescription logoIcon logoColor
+  salesTaxRateBps docFeeCents
 `
 
 type StorefrontRooftop = { rooftopId: string; timezone: string }
@@ -87,6 +92,9 @@ function prepareSettings(input: DealershipStoreSettings): DealershipStoreSetting
   const timezone = boundedText(input.timezone, 100)
   if (timezone && !isTimeZone(timezone)) throw new Error('Choose a valid timezone.')
 
+  const salesTaxRateBps = checkedRateBps(input.salesTaxRateBps)
+  const docFeeCents = checkedCents(input.docFeeCents, 'Documentation fee')
+
   return {
     id: input.id,
     name,
@@ -108,6 +116,8 @@ function prepareSettings(input: DealershipStoreSettings): DealershipStoreSetting
     homepageDescription: boundedText(input.homepageDescription, 1_000),
     logoIcon,
     logoColor: normalizeStoreLogoColor(input.logoColor),
+    salesTaxRateBps,
+    docFeeCents,
     timezone,
   }
 }
@@ -131,6 +141,8 @@ export async function getDealershipStoreSettings(): Promise<StoreSettingsResult>
       ...settings,
       logoIcon: sanitizeStoreLogoSvg(settings.logoIcon),
       logoColor: normalizeStoreLogoColor(settings.logoColor),
+      salesTaxRateBps: Number(settings.salesTaxRateBps) || 0,
+      docFeeCents: Number(settings.docFeeCents) || 0,
       timezone: rooftop?.timezone || '',
     },
   }

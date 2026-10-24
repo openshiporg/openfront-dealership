@@ -5,10 +5,11 @@ import { ChevronRight, RefreshCw } from 'lucide-react'
 import { Notice, Pill, Track } from '@/features/platform/components/desk'
 import { getDealTimeline, type DomainTimelineEntry } from '../actions'
 
-export function FinanceEvidenceHistory({ dealId, aggregateType, label }: {
+export function FinanceEvidenceHistory({ dealId, aggregateType, label, timeZone }: {
   dealId: string
   aggregateType: 'Deal' | 'FinanceFundingCase' | 'DeliveryCase'
   label: string
+  timeZone?: string
 }) {
   const [entries, setEntries] = useState<DomainTimelineEntry[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -57,7 +58,7 @@ export function FinanceEvidenceHistory({ dealId, aggregateType, label }: {
                 <details className="group/entry">
                   <summary className="flex cursor-pointer list-none flex-wrap items-baseline gap-x-2 gap-y-0.5 px-3 py-2 [&::-webkit-details-marker]:hidden">
                     <span className="min-w-0 break-words font-mono text-xs text-foreground">{entry.action}</span>
-                    <span className="text-xs tabular-nums text-muted-foreground">{new Date(entry.occurredAt).toLocaleString()}</span>
+                    <span className="text-xs tabular-nums text-muted-foreground">{new Date(entry.occurredAt).toLocaleString('en-US', { timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
                     <span className="text-xs text-muted-foreground">{entry.actor?.name || 'Unknown'}</span>
                   </summary>
                   <pre className="mx-3 mb-3 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/50 p-2 font-mono text-[11px] text-muted-foreground">

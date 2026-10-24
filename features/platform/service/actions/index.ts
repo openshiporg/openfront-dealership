@@ -21,7 +21,7 @@ export async function getFixedOpsWorkspace() {
       fixedOpsWorkspace(limit: 100) {
         serviceRooftops { id name }
         appointments { id rooftop { id } appointmentDate serviceType status customerVehicleDescription description estimatedDuration mileageIn advisorNotes lead { id firstName lastName email phone } assignedTech { id name } serviceOrder { id status grandTotalCents } }
-        orders { id rooftop { id name } status concern cause correction payType authorizationEvidence authorizationStatus invoiceNumber laborOperations { id operationCode description status technician { id name } } laborTotalCents partsTotalCents taxCents grandTotalCents completedAt updatedAt appointment { id appointmentDate serviceType customerVehicleDescription assignedTech { name } } }
+        orders { id rooftop { id name } status concern cause correction payType authorizationEvidence authorizationStatus invoiceNumber laborOperations { id operationCode description status technician { id name } } lineItems { id itemType description partNumber quantity unitPriceCents priceCents } laborTotalCents partsTotalCents taxCents grandTotalCents completedAt updatedAt appointment { id appointmentDate serviceType customerVehicleDescription assignedTech { name } } }
         parts { id partNumber description quantity minimumQuantity priceCents supplier }
       }
     }

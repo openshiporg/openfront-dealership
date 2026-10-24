@@ -29,7 +29,7 @@ export function ComparisonBar() {
           role="region"
           aria-label="Compare"
         >
-          <p className="min-w-0 flex-1 truncate text-[var(--sf-text-sm)]">
+          <p className="min-w-0 flex-1 truncate text-[length:var(--sf-text-sm)]">
             <span className="sf-figure font-semibold">{count}</span>
             <span style={{ color: 'var(--sf-on-dark-2)' }}> of 4 selected</span>
           </p>

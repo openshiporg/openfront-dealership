@@ -1,5 +1,5 @@
 import { list } from '@keystone-6/core'
-import { text } from '@keystone-6/core/fields'
+import { integer, text } from '@keystone-6/core/fields'
 
 import { permissions } from '../access'
 import { normalizeStoreLogoColor } from '../../lib/store-logo'
@@ -39,6 +39,18 @@ export const DealershipProfile = list({
     hoursSunday: text({ defaultValue: '' }),
     websiteUrl: text({ defaultValue: '' }),
     currencyCode: text({ validation: { isRequired: true }, defaultValue: 'USD' }),
+    salesTaxRateBps: integer({
+      label: 'Sales tax rate (basis points)',
+      defaultValue: 0,
+      validation: { isRequired: true, min: 0, max: 10_000 },
+      ui: { description: 'Default deal sales tax rate; 415 is 4.15%' },
+    }),
+    docFeeCents: integer({
+      label: 'Documentation fee (cents)',
+      defaultValue: 0,
+      validation: { isRequired: true, min: 0 },
+      ui: { description: 'Default documentation fee added to new deal worksheets' },
+    }),
     homepageTitle: text({ defaultValue: '' }),
     homepageDescription: text({
       defaultValue: '',

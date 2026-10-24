@@ -37,13 +37,19 @@ export async function inventoryWorkspace(_root: unknown, args: any, context: any
     where: { id: { in: ids } },
     include: {
       rooftop: { select: { id: true, name: true } },
-      vehicle: { select: { id: true, vin: true, stockNumber: true, year: true, make: true, model: true, trim: true, exteriorColor: true, interiorColor: true, condition: true, mileage: true, status: true, priceCents: true, description: true, images: { where: { isPrimary: true }, take: 1, select: { imagePath: true } } } },
+      vehicle: { select: { id: true, vin: true, stockNumber: true, year: true, make: true, model: true, trim: true, exteriorColor: true, interiorColor: true, condition: true, mileage: true, status: true, priceCents: true, description: true, images: { orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }], take: 60, select: { id: true, imagePath: true, image_id: true, image_extension: true, isPrimary: true, sortOrder: true } } } },
       acquisition: { select: { id: true, reference: true, status: true, vin: true, year: true, make: true, model: true, acquisitionSource: true, appraisalCents: true, purchaseCents: true, reconEstimateCents: true, updatedAt: true, vehicleId: true } },
       reconWorkItems: { orderBy: { createdAt: 'desc' }, take: 20, select: { id: true, title: true, category: true, status: true, estimatedCostCents: true, actualCostCents: true, dueAt: true, updatedAt: true } },
       merchandisingVersions: { orderBy: { version: 'desc' }, take: 1, select: { id: true, version: true, status: true, submittedAt: true, decidedAt: true, decisionReason: true, updatedAt: true } },
     },
   }) : []
   const byId = new Map(rows.map((row: any) => [row.id, row]))
+  // Uploaded photos resolve to signed bucket URLs; typed paths win, as on the storefront.
+  const photoUrls = new Map<string, string | null>(await Promise.all(rows.flatMap((row: any) => (row.vehicle?.images || []).map(async (image: any): Promise<[string, string | null]> => {
+    if (image.imagePath) return [image.id, image.imagePath]
+    if (!image.image_id || !image.image_extension) return [image.id, null]
+    return [image.id, await context.images('my_images').getUrl(image.image_id, image.image_extension).catch(() => null)]
+  }))))
   // Same rows the storefront gate reads, so the desk can say why a unit is not publicly listed.
   const publications = ids.length ? await context.sudo().prisma.inventoryStock.findMany({
     where: { id: { in: ids } },
@@ -58,7 +64,12 @@ export async function inventoryWorkspace(_root: unknown, args: any, context: any
     return [{
       id: row.id,
       rooftop: row.rooftop,
-      vehicle: { ...row.vehicle, primaryImagePath: row.vehicle.images[0]?.imagePath ?? null, images: undefined },
+      vehicle: (() => {
+        const images = row.vehicle.images
+          .map((image: any) => ({ id: image.id, url: photoUrls.get(image.id) ?? null, isPrimary: image.isPrimary, sortOrder: image.sortOrder ?? 0, uploaded: Boolean(image.image_id) }))
+          .sort((a: any, b: any) => Number(b.isPrimary) - Number(a.isPrimary) || a.sortOrder - b.sortOrder || a.id.localeCompare(b.id))
+        return { ...row.vehicle, primaryImagePath: images[0]?.url ?? null, images }
+      })(),
       acquisition: row.acquisition ?? null,
       stockNumber: row.stockNumber,
       locationCode: row.locationCode,

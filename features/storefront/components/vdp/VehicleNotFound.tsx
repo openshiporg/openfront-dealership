@@ -6,7 +6,7 @@ export function VehicleNotFound() {
     <Container className="py-[var(--sf-space-2xl)]">
       <div className="sf-well flex flex-col items-start gap-5 p-6 md:p-8">
         <div>
-          <h1 className="sf-title-line sf-heading text-[var(--sf-text-xl)]">
+          <h1 className="sf-title-line sf-heading text-[length:var(--sf-text-xl)]">
             <span className="sf-dot" aria-hidden="true" />
             Vehicle not found
           </h1>

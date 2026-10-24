@@ -23,7 +23,7 @@ import {
   Track,
   type DeskTone,
 } from '@/features/platform/components/desk'
-import { readFinanceEvidence } from '@/features/platform/deals/lib/financeEvidence'
+import { centsToDollarInput, parseDollarsToCents, readDeskFinanceEvidence, type FinanceStep, type FinanceStepCode } from '../lib/financeEvidence'
 import { FinanceEvidenceHistory } from '@/features/platform/deals/components/FinanceEvidenceHistory'
 import { cn } from '@/lib/utils'
 import {
@@ -93,10 +93,42 @@ function formatCurrency(value: number | null | undefined) {
   }).format(value || 0)
 }
 
-function formatDate(value: string | null | undefined) {
+// Dealership time zone, so the server render and the browser agree.
+function formatDate(value: string | null | undefined, timeZone: string) {
   if (!value) return '-'
-  return new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return new Date(value).toLocaleDateString('en-US', { timeZone, month: 'short', day: 'numeric', year: 'numeric' })
 }
+
+const approvalLabels: Record<string, string> = {
+  pending: 'Submitted for approval',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  'changes-requested': 'Changes requested',
+}
+
+// Older approvals carry boilerplate notes that named the finance desk regardless of where they were decided.
+const boilerplateApprovalNote = /^(submitted for|approved by|rejected by) finance desk( approval)?\.?$/i
+
+/** Approvals newest first, without "pending" rows that a later decision has settled. */
+function visibleApprovals(approvals: Deal['approvals']) {
+  const sorted = [...(approvals || [])].sort((a, b) => new Date(b.approvalDate || 0).getTime() - new Date(a.approvalDate || 0).getTime())
+  return sorted.filter((approval, index) => approval.decision !== 'pending' || !sorted.slice(0, index).some(later => later.decision && later.decision !== 'pending'))
+}
+
+function approvalSummary(approval: Deal['approvals'][number]) {
+  const label = approvalLabels[approval.decision || ''] || approval.decision || 'Recorded'
+  const by = approval.approver?.name ? `${label} by ${approval.approver.name}` : label
+  const note = approval.notes && !boilerplateApprovalNote.test(approval.notes.trim()) ? approval.notes.trim() : null
+  return { by, note }
+}
+
+const stepTone = (step: FinanceStep, next: boolean): DeskTone => step.state === 'done' ? 'ok' : next ? 'info' : step.state === 'optional' ? 'idle' : step.available ? 'warn' : 'idle'
+
+function formatCurrencyCents(cents: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100)
+}
+
+const checkLabels: Record<string, string> = { identity: 'Identity', ofac: 'OFAC', 'red-flag': 'Red flag', privacy: 'Privacy notice' }
 
 function getCustomerName(deal: Deal) {
   if (!deal.lead) return 'No customer'
@@ -133,7 +165,16 @@ function stateTone(value: string | null | undefined): DeskTone {
 }
 
 function normalizeDeals(deals: Deal[] | undefined) {
-  return (deals || []).map(deal => ({ ...deal, financeEvidence: readFinanceEvidence(deal.financeEvidence) }))
+  return (deals || []).map(deal => ({ ...deal, financeEvidence: readDeskFinanceEvidence(deal.financeEvidence) }))
+}
+
+function stepFor(deal: Deal, code: FinanceStepCode) {
+  return deal.financeEvidence?.steps.find(step => step.code === code) ?? null
+}
+
+function nextStepFor(deal: Deal) {
+  const code = deal.financeEvidence?.nextStep
+  return code ? stepFor(deal, code) : null
 }
 
 function Empty({ label, onReset }: { label: string; onReset?: () => void }) {
@@ -157,9 +198,11 @@ function Ledger({ children, empty }: { children: ReactNode[]; empty: string }) {
 export function FinanceDeskPageClient({
   initialWorkspace,
   initialError,
+  timeZone,
 }: {
   initialWorkspace: FinanceWorkspace | null
   initialError: string | null
+  timeZone: string
 }) {
   const [deals, setDeals] = useState<Deal[]>(normalizeDeals(initialWorkspace?.deals))
   const [applications, setApplications] = useState<FinanceApplication[]>(initialWorkspace?.applications || [])
@@ -212,7 +255,7 @@ export function FinanceDeskPageClient({
 
   const recordApprovalAndStatus = (deal: Deal, decision: 'approved' | 'rejected' | 'changes-requested', nextStatus: string) => openFinanceTask({
     kind: 'deal-approval', deal, decision, nextStatus,
-    fields: { notes: decision === 'approved' ? 'Approved by finance desk.' : 'Rejected by finance desk.' },
+    fields: { notes: '' },
   })
 
   const updateDealStatus = async (deal: Deal, status: string) => {
@@ -273,40 +316,46 @@ export function FinanceDeskPageClient({
   const configureProduct = () => {
     const rooftopId = deals[0]?.rooftop?.id || applications[0]?.lead?.rooftop?.id
     if (!rooftopId) { setNotice('Add a deal or finance application before configuring products.'); return }
-    openFinanceTask({ kind: 'configure-product', fields: { rooftopId, code: '', name: '', category: 'service-contract', retailCents: '150000', costCents: '90000' } })
+    openFinanceTask({ kind: 'configure-product', fields: { rooftopId, code: '', name: '', category: 'service-contract', retail: '', cost: '' } })
   }
 
+  // Menus and quotes are per rooftop; only this deal's rooftop products can be offered.
+  const productsFor = (deal: Deal) => products.filter(product => !product.rooftop?.id || product.rooftop.id === deal.rooftop?.id)
+
   const recordProductQuotes = (deal: Deal) => {
-    if (!products.length) { setNotice('Configure at least one active F&I product first.'); return }
+    if (!productsFor(deal).length) { setNotice('Configure at least one active F&I product first.'); return }
     openFinanceTask({ kind: 'product-quotes', deal, fields: { evidenceReference: '' } })
   }
 
   const presentMenu = async (deal: Deal) => {
-    if (!products.length) { setNotice('Configure at least one active F&I product first.'); return }
     setUpdatingId(deal.id)
     const response = await presentFinanceMenu({
       dealId: deal.id,
       expectedUpdatedAt: deal.updatedAt,
-      productCodes: products.map(product => product.code),
+      productCodes: productsFor(deal).map(product => product.code),
       idempotencyKey: `finance-menu:${deal.id}:${crypto.randomUUID()}`,
     })
     setNotice(response.success ? 'Menu presented.' : `Unable to present menu: ${response.error}`)
     await loadDeals(); setUpdatingId(null)
   }
 
-  const decideMenu = (deal: Deal, accept: boolean) => {
+  const decideMenu = (deal: Deal) => {
     const menu = menus.find(item => item.deal?.id === deal.id && item.status === 'presented')
     if (!menu) { setNotice('No presented menu is awaiting a decision.'); return }
-    openFinanceTask({ kind: accept ? 'menu-accept' : 'menu-decline', deal, menu, fields: { acknowledgment: '' } })
+    const hasOptions = (menu.optionsSnapshot || []).length > 0
+    openFinanceTask({ kind: 'menu-decision', deal, menu, fields: { decision: hasOptions ? '' : 'declined', acknowledgment: '' } })
   }
 
-  const recordCompliance = (deal: Deal) => openFinanceTask({ kind: 'compliance', deal, fields: { checkType: 'identity', status: 'requested', evidenceReference: '' } })
+  const requiredChecks = (deal: Deal) => deal.financeEvidence?.structureType === 'cash' ? ['identity', 'ofac', 'privacy'] : ['identity', 'ofac', 'red-flag', 'privacy']
+
+  const recordCompliance = (deal: Deal, checkType?: string) => openFinanceTask({ kind: 'compliance', deal, fields: { checkType: checkType || requiredChecks(deal)[0], status: 'completed', evidenceReference: '' } })
 
   const advanceContract = async (deal: Deal) => {
     const current = contractPackages.find(item => item.deal?.id === deal.id)
     if (current?.status === 'preparing') return openFinanceTask({ kind: 'contract-ready', deal, fields: { confirmed: '' } })
-    if (current && current.status !== 'ready') return openFinanceTask({ kind: 'contract-provider', deal, fields: { providerStatus: 'sent', envelopeReference: '', evidenceReference: '' } })
-    const action = current?.status === 'ready' ? 'request-handoff' : 'prepare'
+    const restart = !current || ['declined', 'void'].includes(current.status)
+    if (!restart && current.status !== 'ready') return openFinanceTask({ kind: 'contract-provider', deal, fields: { providerStatus: 'signed', envelopeReference: '', evidenceReference: '' } })
+    const action = !restart && current.status === 'ready' ? 'request-handoff' : 'prepare'
     const requiredDocuments = ['buyers-order', 'retail-installment-contract', 'privacy-disclosure', 'product-menu']
     setUpdatingId(deal.id)
     const response = await manageFinanceContractPackage({
@@ -321,13 +370,41 @@ export function FinanceDeskPageClient({
     await loadDeals(); setUpdatingId(null)
   }
 
-  const updateFunding = (deal: Deal) => openFinanceTask({ kind: 'funding', deal, fields: { status: 'pending', fundingReference: '', exceptionNotes: '', attestChecklist: '' } })
+  const updateFunding = (deal: Deal, status = 'funded') => openFinanceTask({ kind: 'funding', deal, fields: { status, fundingReference: '', exceptionNotes: '', attestChecklist: '' } })
+
+  const recordPayment = (deal: Deal) => {
+    const remaining = deal.financeEvidence?.payment?.remainingCents
+    openFinanceTask({ kind: 'payment', deal, fields: { amount: remaining != null && remaining >= 0 ? centsToDollarInput(remaining) : '', receiptReference: '', attestPayment: '' } })
+  }
+
+  const openPrerequisiteReview = (deal: Deal) => openFinanceTask({
+    kind: 'prerequisite-review',
+    deal,
+    fields: { reviewReference: '', policyReference: '', policyVersion: '', reviewerAuthorityReference: '' },
+  })
+
+  /** Runs the action for one server step; the step list and the highlighted next action both use it. */
+  const runStep = (deal: Deal, code: FinanceStepCode) => {
+    if (code === 'approve') return recordApprovalAndStatus(deal, 'approved', 'approved')
+    if (code === 'quotes') return recordProductQuotes(deal)
+    if (code === 'present-menu') return presentMenu(deal)
+    if (code === 'decide-menu') return decideMenu(deal)
+    if (code.startsWith('check:')) return recordCompliance(deal, code.slice('check:'.length))
+    if (code === 'contract') {
+      if (deal.financeEvidence?.structureType === 'cash') return openFinanceTask({ kind: 'buyers-order', deal, fields: { reference: '' } })
+      return advanceContract(deal)
+    }
+    if (code === 'review') return openPrerequisiteReview(deal)
+    if (code === 'funding') return updateFunding(deal)
+    if (code === 'payment') return recordPayment(deal)
+    if (code === 'mark-financed') return updateDealStatus(deal, 'financed')
+  }
 
   const recordCancellation = (deal: Deal) => {
     const menu = menus.find(item => item.deal?.id === deal.id && item.status === 'accepted')
     const productCode = (menu?.optionsSnapshot || [])[0]?.code
     if (!menu || !productCode) { setNotice('An accepted product menu is required.'); return }
-    openFinanceTask({ kind: 'cancellation', deal, menu, fields: { productCode, status: 'requested', reason: '', evidenceReference: '', refundCents: '0' } })
+    openFinanceTask({ kind: 'cancellation', deal, menu, fields: { productCode, status: 'requested', reason: '', evidenceReference: '', refund: '0' } })
   }
 
   const taskFields: OperatorActionField[] = !task ? [] : task.kind === 'deal-approval' ? [
@@ -345,13 +422,14 @@ export function FinanceDeskPageClient({
   ] : task.kind === 'configure-product' ? [
     { name: 'code', label: 'Product code', maxLength: 80 }, { name: 'name', label: 'Product name', maxLength: 200 },
     { name: 'category', label: 'Category', type: 'select', options: ['service-contract', 'gap', 'maintenance', 'appearance', 'tire-wheel', 'other'].map(value => ({ value, label: value })) },
-    { name: 'retailCents', label: 'Retail price (cents)', type: 'number', min: 0, step: 1 }, { name: 'costCents', label: 'Dealer cost (cents)', type: 'number', min: 0, step: 1 },
+    { name: 'retail', label: 'Retail price ($)', placeholder: '1,299.50', maxLength: 20 }, { name: 'cost', label: 'Dealer cost ($)', placeholder: '899', maxLength: 20 },
   ] : task.kind === 'product-quotes' ? [
     { name: 'evidenceReference', label: 'Quote reference', maxLength: 200 },
-  ] : task.kind === 'menu-accept' || task.kind === 'menu-decline' ? [
+  ] : task.kind === 'menu-decision' ? [
+    ...((task.menu?.optionsSnapshot || []).length > 0 ? [{ name: 'decision', label: 'Customer decision', type: 'select' as const, options: [{ value: 'accepted', label: 'Accepted products' }, { value: 'declined', label: 'Declined products' }] }] : []),
     { name: 'acknowledgment', label: 'Disclosure acknowledgment', type: 'textarea', maxLength: 1000 },
   ] : task.kind === 'compliance' ? [
-    { name: 'checkType', label: 'Check type', type: 'select', options: ['identity', 'ofac', 'red-flag', 'privacy'].map(value => ({ value, label: value })) },
+    { name: 'checkType', label: 'Check type', type: 'select', options: (task.deal ? requiredChecks(task.deal) : ['identity', 'ofac', 'red-flag', 'privacy']).map(value => ({ value, label: checkLabels[value] || value })) },
     { name: 'status', label: 'Check status', type: 'select', options: ['requested', 'completed', 'failed', 'manual-review'].map(value => ({ value, label: value })) },
     ...(task.fields.status === 'completed' ? [{ name: 'evidenceReference', label: 'Check reference', maxLength: 200 }] : []),
   ] : task.kind === 'contract-ready' ? [
@@ -359,6 +437,8 @@ export function FinanceDeskPageClient({
   ] : task.kind === 'contract-provider' ? [
     { name: 'providerStatus', label: 'Contract status', type: 'select', options: ['sent', 'viewed', 'signed', 'declined', 'void'].map(value => ({ value, label: value })) },
     { name: 'envelopeReference', label: 'Envelope reference', maxLength: 200 }, { name: 'evidenceReference', label: 'Contract reference', maxLength: 200 },
+  ] : task.kind === 'buyers-order' ? [
+    { name: 'reference', label: 'Signed buyer\'s order reference', maxLength: 200 },
   ] : task.kind === 'prerequisite-review' ? [
     { name: 'reviewReference', label: 'Review reference', maxLength: 200 },
     { name: 'policyReference', label: 'Policy reference', maxLength: 200 },
@@ -369,11 +449,15 @@ export function FinanceDeskPageClient({
     ...(['clear-to-fund', 'funded'].includes(task.fields.status || '') ? [{ name: 'attestChecklist', label: 'I reviewed the signed contract, stipulations, lender approval, and insurance', type: 'checkbox' as const }] : []),
     ...(task.fields.status === 'funded' ? [{ name: 'fundingReference', label: `Funding reference for worksheet ${task.deal?.worksheetVersion}`, maxLength: 200 }] : []),
     ...(task.fields.status === 'exception' ? [{ name: 'exceptionNotes', label: 'Funding exception details', type: 'textarea' as const, maxLength: 1000 }] : []),
+  ] : task.kind === 'payment' ? [
+    { name: 'amount', label: 'Amount received ($)', maxLength: 20, description: task.deal?.financeEvidence?.payment ? `Due ${formatCurrencyCents(task.deal.financeEvidence.payment.remainingCents)}` : undefined },
+    { name: 'receiptReference', label: 'Receipt reference', maxLength: 200 },
+    { name: 'attestPayment', label: 'Payment received', type: 'checkbox' as const, description: 'Payment received in full' },
   ] : task.kind === 'cancellation' ? [
     { name: 'productCode', label: 'Accepted menu product', maxLength: 80 },
     { name: 'status', label: 'Cancellation state', type: 'select', options: ['requested', 'completed', 'denied'].map(value => ({ value, label: value })) },
     { name: 'reason', label: 'Cancellation reason', type: 'textarea', maxLength: 1000 },
-    { name: 'refundCents', label: 'Refund amount in cents (enter 0 if none)', type: 'number', min: 0, step: 1 },
+    { name: 'refund', label: 'Refund amount ($, 0 if none)', maxLength: 20 },
     ...(task.fields.status === 'completed' ? [{ name: 'evidenceReference', label: 'Cancellation reference', maxLength: 200 }] : []),
   ] : []
   const taskTitles: Record<string, string> = {
@@ -381,8 +465,9 @@ export function FinanceDeskPageClient({
     'lender-decision': 'Record lender decision',
     'configure-product': 'Configure F&I product',
     'product-quotes': 'Record product quotes',
-    'menu-accept': 'Record menu decision',
-    'menu-decline': 'Record menu decision',
+    'menu-decision': 'Record menu decision',
+    'buyers-order': 'Record signed buyer\'s order',
+    payment: 'Record payment',
     compliance: 'Record compliance check',
     'contract-ready': 'Mark contract package ready',
     'contract-provider': 'Record contract status',
@@ -396,19 +481,8 @@ export function FinanceDeskPageClient({
     event.preventDefault()
     if (!task) return
     const value = (name: string) => task.fields[name]?.trim() || ''
-    const centsFromDollars = (name: string, label: string) => {
-      const raw = value(name)
-      if (!/^\d+(?:\.\d{1,2})?$/.test(raw)) throw new Error(`${label} must be entered in dollars with no more than two decimal places.`)
-      const [whole, fraction = ''] = raw.split('.')
-      const cents = Number(whole) * 100 + Number(fraction.padEnd(2, '0'))
-      if (!Number.isSafeInteger(cents) || cents > 2_147_483_647) throw new Error(`${label} is outside the supported range.`)
-      return cents
-    }
-    const integerCents = (name: string, label: string) => {
-      const cents = Number(value(name))
-      if (!Number.isSafeInteger(cents) || cents < 0 || cents > 2_147_483_647) throw new Error(`${label} must be non-negative integer cents.`)
-      return cents
-    }
+    // Dollars, commas allowed ("1,299.50"); converted to cents here.
+    const centsFromDollars = (name: string, label: string) => parseDollarsToCents(value(name), label)
     const { deal, application, submission, menu } = task
     setTaskError(null)
     setUpdatingId(deal?.id || application?.id || 'finance-task')
@@ -452,16 +526,17 @@ export function FinanceDeskPageClient({
           name: value('name'),
           category,
           providerKey: 'operator-recorded',
-          retailPriceCents: integerCents('retailCents', 'Retail price'),
-          costCents: integerCents('costCents', 'Dealer cost'),
+          retailPriceCents: centsFromDollars('retail', 'Retail price'),
+          costCents: centsFromDollars('cost', 'Dealer cost'),
           active: true,
           idempotencyKey: task.idempotencyKey,
         })
       } else if (task.kind === 'product-quotes' && deal) {
         if (!value('evidenceReference')) throw new Error('Quote reference is required.')
-        if (!products.length) throw new Error('Configure at least one active F&I product first.')
-        if (products.some(product => !Number.isSafeInteger(product.costCents) || (product.costCents ?? -1) < 0)) throw new Error('Every product needs a dealer cost before quotes can be recorded.')
-        for (const product of products) {
+        const dealProducts = productsFor(deal)
+        if (!dealProducts.length) throw new Error('Configure at least one active F&I product first.')
+        if (dealProducts.some(product => !Number.isSafeInteger(product.costCents) || (product.costCents ?? -1) < 0)) throw new Error('Every product needs a dealer cost before quotes can be recorded.')
+        for (const product of dealProducts) {
           response = await recordFinanceProductQuote({
             dealId: deal.id,
             productId: product.id,
@@ -473,10 +548,11 @@ export function FinanceDeskPageClient({
           })
           if (!response.success) throw new Error(response.error || `Unable to record quote for ${product.code}.`)
         }
-      } else if ((task.kind === 'menu-accept' || task.kind === 'menu-decline') && deal && menu) {
+      } else if (task.kind === 'menu-decision' && deal && menu) {
+        if (!['accepted', 'declined'].includes(value('decision'))) throw new Error('Select the customer decision.')
         if (!value('acknowledgment')) throw new Error('Disclosure acknowledgment is required.')
         const codes = (menu.optionsSnapshot || []).map(option => option.code)
-        const accept = task.kind === 'menu-accept'
+        const accept = value('decision') === 'accepted' && codes.length > 0
         response = await decideFinanceMenu({
           dealId: deal.id,
           expectedUpdatedAt: deal.updatedAt,
@@ -523,9 +599,42 @@ export function FinanceDeskPageClient({
           evidenceSource: 'operator-recorded',
           idempotencyKey: task.idempotencyKey,
         })
+      } else if (task.kind === 'buyers-order' && deal) {
+        const reference = value('reference')
+        if (!reference) throw new Error('Enter the signed buyer\'s order reference.')
+        // A cash sale's contract is the signed buyer's order: one record, no lender handoff.
+        response = await manageFinanceContractPackage({
+          dealId: deal.id,
+          expectedUpdatedAt: deal.updatedAt,
+          action: 'record-provider-status',
+          providerKey: 'operator-recorded',
+          requiredDocuments: ['buyers-order'],
+          documentChecklist: [{ code: 'buyers-order', status: 'complete' }],
+          providerStatus: 'signed',
+          envelopeReference: reference,
+          evidenceReference: reference,
+          evidenceSource: 'operator-recorded',
+          idempotencyKey: task.idempotencyKey,
+        })
+      } else if (task.kind === 'payment' && deal) {
+        const amount = centsFromDollars('amount', 'Amount received')
+        if (!value('receiptReference')) throw new Error('Enter the receipt reference.')
+        if (value('attestPayment') !== 'yes') throw new Error('Confirm the payment was received in full.')
+        response = await manageFinanceFundingCase({
+          dealId: deal.id,
+          worksheetVersion: deal.worksheetVersion,
+          expectedUpdatedAt: deal.updatedAt,
+          expectedFundingUpdatedAt: deal.financeEvidence?.fundingUpdatedAt ?? null,
+          status: 'funded',
+          checklist: [{ code: 'payment-received', status: 'complete' }],
+          exceptions: [],
+          fundingReference: value('receiptReference'),
+          paymentAmountCents: amount,
+          idempotencyKey: task.idempotencyKey,
+        })
       } else if (task.kind === 'prerequisite-review' && deal) {
         const digest = deal.financeEvidence?.prerequisites?.digest
-        if (!digest) throw new Error('A signed contract, decided menu, and compliance checks are required before review.')
+        if (!digest) throw new Error(stepFor(deal, 'review')?.blockedReason || 'Record the menu decision, checks and signed contract first.')
         response = await reviewFinancePrerequisites({
           dealId: deal.id,
           worksheetVersion: deal.worksheetVersion,
@@ -543,7 +652,7 @@ export function FinanceDeskPageClient({
         if (status === 'funded' && !value('fundingReference')) throw new Error('A funding reference is required to mark the deal funded.')
         if (status === 'exception' && !value('exceptionNotes')) throw new Error('Describe the funding exception.')
         const complete = ['clear-to-fund', 'funded'].includes(status)
-        if (complete && !deal.financeEvidence?.prerequisites?.current) throw new Error('Review the funding prerequisites before clearing funding.')
+        if (complete && !deal.financeEvidence?.prerequisites?.current) throw new Error('Review prerequisites first.')
         if (complete && value('attestChecklist') !== 'yes') throw new Error('Confirm the signed contract, stipulations, lender approval, and insurance before clearing funding.')
         response = await manageFinanceFundingCase({
           dealId: deal.id,
@@ -565,7 +674,7 @@ export function FinanceDeskPageClient({
           productCode: value('productCode'),
           status,
           reason: value('reason'),
-          refundCents: integerCents('refundCents', 'Refund amount'),
+          refundCents: centsFromDollars('refund', 'Refund amount'),
           evidenceReference: value('evidenceReference') || undefined,
           idempotencyKey: task.idempotencyKey,
         })
@@ -573,7 +682,7 @@ export function FinanceDeskPageClient({
       if (response && !response.success) { setTaskError(response.error || 'Unable to save. Your entries are preserved.'); return }
       if (!response) throw new Error('Something went wrong. Close and reopen this task.')
       setTask(null)
-      setNotice(task.kind === 'lender-decision' ? 'Lender decision recorded.' : task.kind.startsWith('contract') ? 'Contract updated.' : 'Saved.')
+      setNotice(task.kind === 'lender-decision' ? 'Lender decision recorded.' : task.kind === 'payment' ? 'Payment recorded.' : task.kind.startsWith('contract') || task.kind === 'buyers-order' ? 'Contract updated.' : 'Saved.')
       await loadDeals()
     } catch (error) {
       setTaskError(error instanceof Error ? error.message : 'Unable to save.')
@@ -677,9 +786,12 @@ export function FinanceDeskPageClient({
     const fundingCase = fundingCases.find(item => item.deal?.id === deal.id)
     const evidence = deal.financeEvidence
     const dealHref = `${basePath}/platform/deals/${deal.id}`
-    const workingStatus = ['submitted', 'approved', 'financed'].includes(deal.status || '')
-    const contractStatus = ['approved', 'financed'].includes(deal.status || '')
-    const hasPresentedMenu = menus.some(item => item.deal?.id === deal.id && item.status === 'presented')
+    const cash = evidence?.structureType === 'cash'
+    const next = nextStepFor(deal)
+    const steps = evidence?.steps || []
+    const primaryNext = next && next.available && next.code !== 'delivery' ? next : null
+    const approvals = visibleApprovals(deal.approvals)
+    const fundingStatusOpen = ['approved', 'financed'].includes(deal.status || '') && Boolean(evidence?.prerequisites?.current)
     const hasAcceptedMenu = menus.some(item => item.deal?.id === deal.id && item.status === 'accepted')
     const dealMenus = menus.filter(item => item.deal?.id === deal.id)
     const dealQuotes = productQuotes.filter(item => item.deal?.id === deal.id)
@@ -717,72 +829,73 @@ export function FinanceDeskPageClient({
             </Track>
           </div>
 
-          <div className="flex min-w-0 flex-wrap gap-2">
-            {(deal.status === 'submitted' || (deal.status === 'approved' && evidence?.fundingCurrent) || deal.status === 'financed') && (
-              <Track>
-                {deal.status === 'submitted' && (
-                  <>
-                    <Pill size="sm" variant="primary" onClick={() => recordApprovalAndStatus(deal, 'approved', 'approved')} disabled={busy}>
-                      Approve
-                    </Pill>
-                    <Pill size="sm" variant="danger" onClick={() => recordApprovalAndStatus(deal, 'rejected', 'cancelled')} disabled={busy}>
-                      Reject
-                    </Pill>
-                  </>
-                )}
-                {deal.status === 'approved' && evidence?.fundingCurrent && (
-                  <Pill size="sm" variant="primary" onClick={() => updateDealStatus(deal, 'financed')} disabled={busy}>
-                    Mark financed
-                  </Pill>
-                )}
-                {deal.status === 'financed' && (
-                  <Pill size="sm" variant="primary" asChild>
-                    <Link href={`${basePath}/platform/delivery`}>Open delivery</Link>
-                  </Pill>
-                )}
-              </Track>
+          {/* One step at a time: the server's next required step is the primary action. */}
+          {(primaryNext || deal.status === 'submitted' || deal.status === 'financed' || (!cash && fundingStatusOpen) || hasAcceptedMenu) && (
+          <Track aria-label="Deal actions">
+            {primaryNext && (
+              <Pill size="sm" variant="primary" onClick={() => runStep(deal, primaryNext.code)} disabled={busy}>
+                {primaryNext.label}
+              </Pill>
             )}
-            {(workingStatus || hasPresentedMenu || hasAcceptedMenu) && (
-              <Track aria-label="Products and compliance">
-                {workingStatus && (
-                  <>
-                    <Pill size="sm" onClick={() => recordProductQuotes(deal)} disabled={busy}>Record quotes</Pill>
-                    <Pill size="sm" onClick={() => presentMenu(deal)} disabled={busy}>Present menu</Pill>
-                  </>
-                )}
-                {hasPresentedMenu && (
-                  <>
-                    <Pill size="sm" onClick={() => decideMenu(deal, true)} disabled={busy}>Accept products</Pill>
-                    <Pill size="sm" onClick={() => decideMenu(deal, false)} disabled={busy}>Decline products</Pill>
-                  </>
-                )}
-                {workingStatus && <Pill size="sm" onClick={() => recordCompliance(deal)} disabled={busy}>Record check</Pill>}
-                {hasAcceptedMenu && <Pill size="sm" onClick={() => recordCancellation(deal)} disabled={busy}>Product cancellation</Pill>}
-              </Track>
+            {deal.status === 'submitted' && (
+              <Pill size="sm" variant="danger" onClick={() => recordApprovalAndStatus(deal, 'rejected', 'cancelled')} disabled={busy}>
+                Reject
+              </Pill>
             )}
-            {contractStatus && (
-              <Track aria-label="Contract and funding">
-                <Pill size="sm" onClick={() => advanceContract(deal)} disabled={busy}>Contract handoff</Pill>
-                <Pill
-                  size="sm"
-                  disabled={busy || !evidence?.prerequisites?.digest}
-                  onClick={() =>
-                    openFinanceTask({
-                      kind: 'prerequisite-review',
-                      deal,
-                      fields: { reviewReference: '', policyReference: '', policyVersion: '', reviewerAuthorityReference: '' },
-                    })
-                  }
-                >
-                  Review prerequisites
-                </Pill>
-                <Pill size="sm" onClick={() => updateFunding(deal)} disabled={busy}>Update funding</Pill>
-              </Track>
+            {deal.status === 'financed' && (
+              <Pill size="sm" variant={next?.code === 'delivery' ? 'primary' : 'raised'} asChild>
+                <Link href={`${basePath}/platform/delivery`}>Open delivery</Link>
+              </Pill>
             )}
-          </div>
-
+            {!cash && fundingStatusOpen && (
+              <Pill size="sm" onClick={() => updateFunding(deal, 'pending')} disabled={busy}>Update funding</Pill>
+            )}
+            {hasAcceptedMenu && <Pill size="sm" onClick={() => recordCancellation(deal)} disabled={busy}>Product cancellation</Pill>}
+          </Track>
+          )}
+          {next && !next.available && next.blockedReason && (
+            <p className="pl-4 text-xs text-muted-foreground" role="status">{next.label}: {next.blockedReason}</p>
+          )}
           {warnings.length > 0 && <Notice tone="warn">{warnings.join(' · ')}</Notice>}
         </div>
+
+        {steps.length > 0 && (
+          <DeskSection title={cash ? 'Cash sale steps' : 'Finance steps'}>
+            <ol className="divide-y text-sm">
+              {steps.map(step => {
+                const isNext = step.code === next?.code
+                const reasonId = `finance-step-${deal.id}-${step.code}`
+                const fundingStep = step.code === 'funding' || step.code === 'payment'
+                const stale = fundingStep && step.state !== 'done' && evidence?.fundingStatus === 'funded'
+                const stateText = step.state === 'done'
+                  ? fundingStep && evidence?.fundingReference ? `Done · ${evidence.fundingReference}` : 'Done'
+                  : stale ? 'Recorded for an earlier worksheet; record again'
+                    : step.available ? (isNext ? 'Next' : step.state === 'optional' ? 'Optional' : 'To do')
+                      : step.blockedReason || (step.state === 'optional' ? 'Optional' : 'Waiting')
+                const showAction = step.state !== 'done' && step.code !== 'delivery' && (step.available || Boolean(step.blockedReason))
+                return (
+                  <li key={step.code} className="flex min-w-0 flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                    <div className="min-w-0">
+                      <TitleLine as="p" tone={stepTone(step, isNext)} status={step.state === 'done' ? 'Done' : isNext ? 'Next' : step.state} className={cn('font-medium', step.state === 'done' && 'text-muted-foreground')}>
+                        {step.label}
+                      </TitleLine>
+                      <p id={reasonId} className="break-words pl-4 text-xs text-muted-foreground">
+                        {stateText}{step.detail ? ` · ${step.detail}` : ''}
+                      </p>
+                    </div>
+                    {showAction && (
+                      <Track className="shrink-0 self-start pl-4 sm:self-auto sm:pl-0">
+                        <Pill size="sm" disabled={busy || !step.available} aria-describedby={reasonId} onClick={() => runStep(deal, step.code)}>
+                          {step.label}
+                        </Pill>
+                      </Track>
+                    )}
+                  </li>
+                )
+              })}
+            </ol>
+          </DeskSection>
+        )}
 
         <DeskSection title="Worksheet">
           <Facts
@@ -815,7 +928,7 @@ export function FinanceDeskPageClient({
                       {submission.status} · {submission.providerMode}{submission.externalReference ? ` · ${submission.externalReference}` : ''}
                     </p>
                   </div>
-                  <p className="shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">{formatDate(submission.queuedAt)}</p>
+                  <p className="shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">{formatDate(submission.queuedAt, timeZone)}</p>
                 </li>
               )),
               ...application.decisions.map(decision => (
@@ -825,7 +938,7 @@ export function FinanceDeskPageClient({
                       {decision.decision} · {decision.providerKey}
                     </TitleLine>
                     <p className="truncate pl-4 text-xs text-muted-foreground">
-                      {formatDate(decision.decidedAt)}{decision.reasonCodes.length > 0 ? ` · ${decision.reasonCodes.join(', ')}` : ''}
+                      {formatDate(decision.decidedAt, timeZone)}{decision.reasonCodes.length > 0 ? ` · ${decision.reasonCodes.join(', ')}` : ''}
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
@@ -841,21 +954,22 @@ export function FinanceDeskPageClient({
           </Ledger>
         </DeskSection>
 
-        <DeskSection title="Approvals" count={deal.approvals?.length || 0}>
+        <DeskSection title="Approvals" count={approvals.length}>
           <Ledger empty="None">
-            {(deal.approvals || []).map(approval => (
-              <li key={approval.id} className="flex min-w-0 items-start justify-between gap-4 py-2.5">
-                <div className="min-w-0">
-                  <TitleLine as="p" tone={stateTone(approval.decision)} status={approval.decision || undefined} className="font-medium capitalize">
-                    {approval.decision || 'Recorded'}
-                  </TitleLine>
-                  {(approval.approver?.name || approval.notes) && (
-                    <p className="pl-4 text-xs text-muted-foreground">{[approval.approver?.name, approval.notes].filter(Boolean).join(' · ')}</p>
-                  )}
-                </div>
-                <p className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{formatDate(approval.approvalDate)}</p>
-              </li>
-            ))}
+            {approvals.map(approval => {
+              const { by, note } = approvalSummary(approval)
+              return (
+                <li key={approval.id} className="flex min-w-0 items-start justify-between gap-4 py-2.5">
+                  <div className="min-w-0">
+                    <TitleLine as="p" tone={stateTone(approval.decision)} status={approval.decision || undefined} className="font-medium">
+                      {by}
+                    </TitleLine>
+                    {note && <p className="pl-4 text-xs text-muted-foreground">{note}</p>}
+                  </div>
+                  <p className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{formatDate(approval.approvalDate, timeZone)}</p>
+                </li>
+              )
+            })}
           </Ledger>
         </DeskSection>
 
@@ -926,18 +1040,16 @@ export function FinanceDeskPageClient({
           )}
         </DeskSection>
 
-        <DeskSection title="Funding">
+        <DeskSection title={cash ? 'Payment' : 'Funding'}>
           <div className="space-y-3">
-            {evidence?.issue && <Notice tone="warn">{evidence.issue}</Notice>}
             <Facts
               items={[
-                { label: 'Funding', value: <TitleLine as="span" tone={stateTone(evidence?.fundingStatus)}>{evidence?.fundingStatus || 'not started'}</TitleLine> },
-                { label: 'Worksheet', value: evidence?.fundingCurrent ? 'current' : 'needs review' },
-                evidence?.fundingReference ? { label: 'Reference', value: evidence.fundingReference, mono: true } : null,
-                {
-                  label: 'Prerequisites',
-                  value: `${evidence?.prerequisites?.current ? 'Reviewed' : 'Review required'}${evidence?.prerequisites?.issue ? ` · ${evidence.prerequisites.issue}` : ''}`,
-                },
+                { label: cash ? 'Payment' : 'Funding', value: <TitleLine as="span" tone={evidence?.fundingCurrent ? 'ok' : stateTone(evidence?.fundingStatus)}>{evidence?.fundingCurrent ? (cash ? 'received' : 'funded') : evidence?.fundingStatus || 'not started'}</TitleLine> },
+                evidence?.fundingStatus ? { label: 'Worksheet', value: evidence.fundingCurrent ? 'current' : 'earlier version' } : null,
+                evidence?.fundingReference ? { label: cash ? 'Receipt' : 'Reference', value: evidence.fundingReference, mono: true } : null,
+                cash && evidence?.payment ? { label: 'Amount due', value: formatCurrencyCents(evidence.payment.amountDueCents), mono: true } : null,
+                cash && evidence?.payment ? { label: 'Received', value: formatCurrencyCents(evidence.payment.receivedCents), mono: true } : null,
+                { label: 'Prerequisites', value: evidence?.prerequisites?.current ? (cash ? 'Confirmed with payment' : 'Reviewed') : 'Not yet' },
                 fundingCase ? { label: 'Funding case', value: fundingCase.status } : null,
                 fundingCase ? { label: 'Open exceptions', value: openFundingExceptions, mono: true } : null,
               ]}
@@ -951,7 +1063,7 @@ export function FinanceDeskPageClient({
                   </pre>
                 </details>
               )}
-              <FinanceEvidenceHistory dealId={deal.id} aggregateType="FinanceFundingCase" label="Funding history" />
+              <FinanceEvidenceHistory dealId={deal.id} aggregateType="FinanceFundingCase" label="Funding history" timeZone={timeZone} />
               {fundingCase?.immutableEvidence != null && (
                 <details className="mt-2">
                   <summary>Funding details</summary>
@@ -1055,7 +1167,7 @@ export function FinanceDeskPageClient({
                         </TitleLine>
                         <p className="truncate pl-4 text-xs text-muted-foreground">
                           <Code>#{deal.vehicle?.stockNumber || '-'}</Code> · {statusLabels[status] || status}
-                          {deal.approvals?.[0] ? ` · ${deal.approvals[0].decision || 'recorded'} ${formatDate(deal.approvals[0].approvalDate)}` : ''}
+                          {deal.financeEvidence?.nextStep ? ` · Next: ${nextStepFor(deal)?.label}` : ''}
                           {warnings.length > 0 ? ` · ${warnings.join(', ')}` : ''}
                         </p>
                       </div>
@@ -1090,7 +1202,7 @@ export function FinanceDeskPageClient({
                 const submission = application.submissions[0]
                 const decision = application.decisions[0]
                 const busy = updatingId === application.id
-                const lenderState = submission ? submission.status : openTask ? `${openTask.title || 'Open task'} · ${formatDate(openTask.dueDate)}` : 'Not queued'
+                const lenderState = submission ? submission.status : openTask ? `${openTask.title || 'Open task'} · ${formatDate(openTask.dueDate, timeZone)}` : 'Not queued'
                 return (
                   <div key={application.id} className="flex min-w-0 flex-col gap-3 px-4 py-3 md:flex-row md:items-start md:justify-between">
                     <div className="flex min-w-0 flex-1 items-start justify-between gap-4">
@@ -1110,7 +1222,7 @@ export function FinanceDeskPageClient({
                           <Code>{application.reference || application.id}</Code> · {application.status} · Stock <Code>#{vehicle?.stockNumber || '-'}</Code> · {formatCurrency((vehicle?.priceCents || 0) / 100)}
                         </p>
                         <p className="pl-4 text-xs text-muted-foreground">
-                          Submitted {formatDate(application.submittedAt)} · {submission ? `${submission.providerKey} · ` : ''}{lenderState}
+                          Submitted {formatDate(application.submittedAt, timeZone)} · {submission ? `${submission.providerKey} · ` : ''}{lenderState}
                           {decision ? ` · Latest decision: ${decision.decision}` : ''}
                         </p>
                       </div>

@@ -1,10 +1,16 @@
+/** Recorded by staff at delivery. */
 export const DELIVERY_CHECKLIST_ITEMS = [
   { code: 'identity', label: 'Identity' },
   { code: 'insurance', label: 'Insurance' },
   { code: 'registration', label: 'Registration' },
   { code: 'title-handoff', label: 'Title handoff' },
-  { code: 'funding', label: 'Funding' },
 ] as const
+
+/**
+ * Funding is the fifth checklist item, but staff never record it here: the server attaches it from
+ * the current funding case (funded, or payment received on a cash sale) at customer acknowledgment.
+ */
+export const DELIVERY_FUNDING_ITEM = { code: 'funding', label: 'Funding' } as const
 
 export function buildDeliveryChecklistEntry(code: string, evidenceReference: string) {
   if (!DELIVERY_CHECKLIST_ITEMS.some(item => item.code === code)) {

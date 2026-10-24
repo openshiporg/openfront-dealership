@@ -85,7 +85,7 @@ export async function HomePage() {
               {business.homepageTitle || business.fullName}
             </h1>
             {business.homepageDescription && (
-              <p className="mt-5 max-w-md text-[var(--sf-text-md)]" style={{ color: 'var(--sf-on-dark-2)' }}>
+              <p className="mt-5 max-w-md text-[length:var(--sf-text-md)]" style={{ color: 'var(--sf-on-dark-2)' }}>
                 {business.homepageDescription}
               </p>
             )}
@@ -103,9 +103,9 @@ export async function HomePage() {
               <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-4 rounded-[var(--sf-radius-md)] p-4" style={{ background: 'oklch(0.18 0.012 262 / 0.78)', backdropFilter: 'blur(10px)' }}>
                 <div className="min-w-0">
                   <p className="sf-eyebrow">{vehicleConditionLabel(lead.condition)}</p>
-                  <p className="sf-heading mt-1 truncate text-[var(--sf-text-lg)]">{vehicleTitle(lead)}</p>
+                  <p className="sf-heading mt-1 truncate text-[length:var(--sf-text-lg)]">{vehicleTitle(lead)}</p>
                 </div>
-                <p className="sf-price shrink-0 text-[var(--sf-text-xl)]">{formatPrice(lead.price, business.currencyCode)}</p>
+                <p className="sf-price shrink-0 text-[length:var(--sf-text-xl)]">{formatPrice(lead.price, business.currencyCode)}</p>
               </div>
             </Link>
           )}
@@ -120,7 +120,7 @@ export async function HomePage() {
         <Container>
           <div className="mb-8 flex items-end justify-between gap-4">
             <h2 className="sf-display text-[length:var(--sf-text-2xl)]">Latest arrivals</h2>
-            <Link href="/inventory" className="sf-link inline-flex shrink-0 items-center gap-1 text-[var(--sf-text-sm)]">
+            <Link href="/inventory" className="sf-link inline-flex shrink-0 items-center gap-1 text-[length:var(--sf-text-sm)]">
               All inventory
               <ArrowRight className="size-4" aria-hidden="true" />
             </Link>
@@ -173,7 +173,7 @@ export async function HomePage() {
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="sf-eyebrow block">{lane.label}</span>
-                      <span className="sf-heading mt-1 block text-[var(--sf-text-lg)] transition-colors group-hover:text-[var(--sf-accent)]">{lane.action}</span>
+                      <span className="sf-heading mt-1 block text-[length:var(--sf-text-lg)] transition-colors group-hover:text-[var(--sf-accent)]">{lane.action}</span>
                     </span>
                     <ArrowRight className="size-5 shrink-0 transition-transform group-hover:translate-x-1 sm:hidden" aria-hidden="true" />
                   </Link>

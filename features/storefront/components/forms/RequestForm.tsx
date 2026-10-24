@@ -42,7 +42,7 @@ export function FormSection({
     <section className={first ? undefined : 'border-t pt-[var(--sf-space-md)]'} style={first ? undefined : { borderColor: 'var(--sf-rule)' }}>
       <div className="mb-5 flex items-baseline justify-between gap-4">
         <h2 className="flex min-w-0 items-baseline gap-3">
-          {step && <span className="sf-figure sf-faint text-[var(--sf-text-sm)]">{step}</span>}
+          {step && <span className="sf-figure sf-faint text-[length:var(--sf-text-sm)]">{step}</span>}
           <span className="sf-heading text-[length:var(--sf-text-xl)]">{title}</span>
         </h2>
         {aside}
@@ -196,9 +196,9 @@ export function StickerVehicle({ vehicle, label }: { vehicle: Vehicle; label: st
       </div>
       <div className="min-w-0">
         <p className="sf-eyebrow">{label}</p>
-        <p className="sf-heading mt-1 text-[var(--sf-text-md)]">{vehicleTitle(vehicle)}</p>
+        <p className="sf-heading mt-1 text-[length:var(--sf-text-md)]">{vehicleTitle(vehicle)}</p>
         {vehicle.stockNumber && (
-          <p className="sf-figure sf-muted mt-0.5 text-[var(--sf-text-xs)]">Stock {vehicle.stockNumber}</p>
+          <p className="sf-figure sf-muted mt-0.5 text-[length:var(--sf-text-xs)]">Stock {vehicle.stockNumber}</p>
         )}
       </div>
     </div>
@@ -231,10 +231,10 @@ export function RequestReceived({
           {reference && (
             <p role="status" className="mt-5 flex flex-wrap items-baseline gap-3">
               <span className="sf-eyebrow">Reference</span>
-              <span className="sf-figure text-[var(--sf-text-xl)] font-semibold">{reference}</span>
+              <span className="sf-figure text-[length:var(--sf-text-xl)] font-semibold">{reference}</span>
             </p>
           )}
-          {note && <p className="sf-muted mt-4 max-w-md text-[var(--sf-text-sm)]">{note}</p>}
+          {note && <p className="sf-muted mt-4 max-w-md text-[length:var(--sf-text-sm)]">{note}</p>}
           <nav aria-label="Next" className={`sf-track mt-[var(--sf-space-lg)] ${WRAP_TRACK}`}>
             {actions}
           </nav>

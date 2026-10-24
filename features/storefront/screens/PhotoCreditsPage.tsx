@@ -60,8 +60,8 @@ export async function PhotoCreditsPage() {
         <ul className="grid gap-x-12 md:grid-cols-2">
           {photos.map((photo) => (
             <li key={photo.path} className="border-t py-6" style={{ borderColor: 'var(--sf-rule)' }}>
-              <h2 className="sf-heading text-[var(--sf-text-lg)]">{photo.vehicle}</h2>
-              <dl className="mt-4 grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-4 gap-y-2 text-[var(--sf-text-sm)]">
+              <h2 className="sf-heading text-[length:var(--sf-text-lg)]">{photo.vehicle}</h2>
+              <dl className="mt-4 grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-4 gap-y-2 text-[length:var(--sf-text-sm)]">
                 <dt className="sf-eyebrow pt-0.5">Original</dt>
                 <dd className="min-w-0">
                   <a href={photo.sourceUrl} target="_blank" rel="noopener noreferrer" className="sf-link inline-flex items-start gap-1 break-words">
@@ -84,7 +84,7 @@ export async function PhotoCreditsPage() {
             </li>
           ))}
         </ul>
-        <p className="sf-faint mt-4 max-w-2xl border-t pt-6 text-[var(--sf-text-xs)] leading-relaxed" style={{ borderColor: 'var(--sf-rule)' }}>
+        <p className="sf-faint mt-4 max-w-2xl border-t pt-6 text-[length:var(--sf-text-xs)] leading-relaxed" style={{ borderColor: 'var(--sf-rule)' }}>
           The modified photos are shared under the same license as their originals. The photographers do not endorse
           this dealership or its listings.
         </p>

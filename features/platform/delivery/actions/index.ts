@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 
 import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
+import { operatorCommandRequest } from '@/features/platform/lib/operatorCommandClient'
 
 export type DeliveryRecord = {
   id: string
@@ -15,7 +16,7 @@ export type DeliveryRecord = {
   salesperson: { id: string; name: string } | null
 }
 
-export type DeliveryChecklistItem = { code: string; status: string; evidenceReference?: string }
+export type DeliveryChecklistItem = { code: string; status: string; evidenceReference?: string; source?: string }
 export type WeOwe = { id: string; description: string; status: string; promisedAt: string; owner: { id: string; name: string } | null }
 export type DeliveryCase = {
   id: string
@@ -52,7 +53,7 @@ export async function manageDeliveryCase(data: {
   customerAcknowledgment?: string
   idempotencyKey: string
 }) {
-  const response = await keystoneClient(`
+  const response = await operatorCommandRequest(`
     mutation ManageDeliveryCase($data: ManageDeliveryCaseInput!) {
       manageDeliveryCase(data: $data) { id status }
     }
@@ -68,7 +69,7 @@ export async function completeDealDelivery(data: {
   expectedDeliveryCaseUpdatedAt: string
   idempotencyKey: string
 }) {
-  const response = await keystoneClient(`
+  const response = await operatorCommandRequest(`
     mutation CompleteDealDelivery($data: CompleteDealDeliveryInput!) {
       completeDealDelivery(data: $data) { id status reused updatedAt }
     }
@@ -89,7 +90,7 @@ export async function manageWeOweItem(data: {
   customerAcknowledgment?: string
   idempotencyKey: string
 }) {
-  const response = await keystoneClient(`
+  const response = await operatorCommandRequest(`
     mutation ManageWeOwe($data: ManageWeOweItemInput!) {
       manageWeOweItem(data: $data) { id status }
     }

@@ -89,3 +89,88 @@ export function amortizedPaymentCents(principalCents: number, aprPercent: number
   const rate = aprPercent / 100 / 12
   return checkedCents(Math.round(principalCents * rate / (1 - Math.pow(1 + rate, -termMonths))), 'Monthly payment')
 }
+
+/** Sales tax rates are integer basis points (415 = 4.15%), matching aprBasisPoints. */
+export const MAX_TAX_RATE_BPS = 10_000
+export const SALES_TAX_LINE_CODE = 'sales-tax'
+export const DOC_FEE_LINE_CODE = 'doc-fee'
+
+export type DealDefaults = { salesTaxRateBps: number; docFeeCents: number }
+
+export function checkedRateBps(value: unknown, label = 'Sales tax rate'): number {
+  const rate = Number(value ?? 0)
+  if (!Number.isSafeInteger(rate) || rate < 0 || rate > MAX_TAX_RATE_BPS) {
+    throw new Error(`${label} must be between 0% and 100% with at most two decimal places`)
+  }
+  return rate
+}
+
+/** "4.15", "6", "8.5": the rate as a percent without trailing zeros. */
+export function formatRatePercent(rateBps: number): string {
+  return (checkedRateBps(rateBps) / 100).toFixed(2).replace(/\.?0+$/, '')
+}
+
+/**
+ * Taxable price: vehicle price + fees - rebates - trade-in credit, never below zero.
+ * F&I products are not taxed by default; staff override the line where the jurisdiction differs.
+ */
+export function taxableAmountCents(deal: Pick<DealPriceInput, 'vehiclePriceCents' | 'tradeInValueCents' | 'fees' | 'rebates'>): number {
+  const base = checkedCents(deal.vehiclePriceCents, 'Vehicle price')
+    + sumMoneyLines(deal.fees)
+    - sumMoneyLines(deal.rebates)
+    - checkedCents(deal.tradeInValueCents, 'Trade-in credit')
+  return Math.min(Math.max(0, base), MAX_CENTS)
+}
+
+export function salesTaxCents(taxableCents: number, rateBps: number): number {
+  return checkedCents(Math.round(checkedCents(taxableCents, 'Taxable amount') * checkedRateBps(rateBps) / 10_000), 'Sales tax')
+}
+
+export function salesTaxLine(rateBps: number, taxableCents: number): MoneyLine {
+  return {
+    code: SALES_TAX_LINE_CODE,
+    name: `Sales tax ${formatRatePercent(rateBps)}%`,
+    amountCents: salesTaxCents(taxableCents, rateBps),
+    source: 'configured-policy',
+    rateBps: checkedRateBps(rateBps),
+  }
+}
+
+export function docFeeLine(docFeeCents: number): MoneyLine {
+  return { code: DOC_FEE_LINE_CODE, name: 'Documentation fee', amountCents: checkedCents(docFeeCents, 'Documentation fee'), source: 'configured-policy' }
+}
+
+/** A tax line still priced by its configured rate; editing its amount makes it operator-recorded. */
+export function isRateTaxLine(line: unknown): line is MoneyLine & { rateBps: number } {
+  const value = line as MoneyLine | null
+  return Boolean(value && value.source === 'configured-policy' && typeof value.rateBps === 'number')
+}
+
+/** Reprices rate-based tax lines from the current taxable price; other lines are left as recorded. */
+export function repriceRateTaxLines<T extends MoneyLine>(
+  taxLines: T[],
+  deal: Pick<DealPriceInput, 'vehiclePriceCents' | 'tradeInValueCents' | 'fees' | 'rebates'>,
+): T[] {
+  if (!taxLines.some(isRateTaxLine)) return taxLines
+  const taxableCents = taxableAmountCents(deal)
+  return taxLines.map(line => isRateTaxLine(line) ? { ...line, amountCents: salesTaxCents(taxableCents, line.rateBps) } : line)
+}
+
+/**
+ * Fills an empty fee or tax category from the dealership defaults. Existing lines are never
+ * replaced, and a zero rate or fee adds nothing.
+ */
+export function applyDealDefaults<T extends MoneyLine>(
+  deal: Pick<DealPriceInput, 'vehiclePriceCents' | 'tradeInValueCents' | 'rebates'> & { fees?: T[] | null; taxLines?: T[] | null },
+  defaults: Partial<DealDefaults> | null | undefined,
+): { fees: MoneyLine[]; taxLines: MoneyLine[]; changed: boolean } {
+  const docFeeCents = checkedCents(defaults?.docFeeCents ?? 0, 'Documentation fee')
+  const rateBps = checkedRateBps(defaults?.salesTaxRateBps ?? 0)
+  const currentFees: MoneyLine[] = Array.isArray(deal.fees) ? deal.fees : []
+  const currentTax: MoneyLine[] = Array.isArray(deal.taxLines) ? deal.taxLines : []
+  const fees = currentFees.length || docFeeCents === 0 ? currentFees : [docFeeLine(docFeeCents)]
+  const taxLines = currentTax.length || rateBps === 0
+    ? currentTax
+    : [salesTaxLine(rateBps, taxableAmountCents({ ...deal, fees }))]
+  return { fees, taxLines, changed: fees !== currentFees || taxLines !== currentTax }
+}

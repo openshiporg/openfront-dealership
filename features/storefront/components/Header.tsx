@@ -67,7 +67,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50" onKeyDown={handleHeaderKeyDown}>
-      <div className="sf-band hidden text-[var(--sf-text-xs)] sm:block">
+      <div className="sf-band hidden text-[length:var(--sf-text-xs)] sm:block">
         <Container className="flex items-center gap-5 py-2">
           {business.addressLine1 && (
             <span className="hidden min-w-0 truncate md:inline" style={{ color: 'var(--sf-on-dark-2)' }}>
@@ -115,7 +115,7 @@ export function Header() {
                   key={item.href}
                   href={item.href}
                   aria-current={active ? 'page' : undefined}
-                  className="relative whitespace-nowrap rounded-full px-3 py-2 text-[var(--sf-text-sm)] font-semibold transition-colors"
+                  className="relative whitespace-nowrap rounded-full px-3 py-2 text-[length:var(--sf-text-sm)] font-semibold transition-colors"
                   style={{ color: active ? 'var(--sf-ink)' : 'var(--sf-ink-2)' }}
                 >
                   {item.label}
@@ -217,7 +217,7 @@ export function Header() {
                     href={item.href}
                     onClick={() => setMenuOpen(false)}
                     aria-current={active ? 'page' : undefined}
-                    className="sf-heading flex min-h-12 items-center justify-between border-b text-[var(--sf-text-lg)] last:border-0"
+                    className="sf-heading flex min-h-12 items-center justify-between border-b text-[length:var(--sf-text-lg)] last:border-0"
                     style={{ borderColor: 'var(--sf-rule)', color: active ? 'var(--sf-accent)' : 'var(--sf-ink)' }}
                   >
                     {item.label}

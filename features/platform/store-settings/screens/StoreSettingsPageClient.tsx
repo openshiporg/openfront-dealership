@@ -20,6 +20,7 @@ import {
 } from '../actions'
 import { DEFAULT_STORE_LOGO_COLOR, normalizeStoreLogoColor } from '@/features/lib/store-logo'
 import { HUE_PRESETS, LOGO_ICONS } from '../lib/icon-registry'
+import { formatBpsForInput, formatCentsForInput, parseDollarsToCents, parsePercentToBps } from '@/features/platform/deals/lib/moneyInput'
 
 const EMPTY_SETTINGS: DealershipStoreSettings = {
   name: '',
@@ -41,6 +42,8 @@ const EMPTY_SETTINGS: DealershipStoreSettings = {
   homepageDescription: '',
   logoIcon: LOGO_ICONS[0].lightSvg,
   logoColor: DEFAULT_STORE_LOGO_COLOR,
+  salesTaxRateBps: 0,
+  docFeeCents: 0,
   timezone: '',
 }
 
@@ -110,6 +113,9 @@ function Field({
   placeholder,
   type = 'text',
   required = false,
+  inputMode,
+  error,
+  className,
 }: {
   label: string
   value: string
@@ -117,6 +123,9 @@ function Field({
   placeholder?: string
   type?: string
   required?: boolean
+  inputMode?: 'decimal'
+  error?: string | null
+  className?: string
 }) {
   const id = `store-settings-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
   return (
@@ -125,14 +134,24 @@ function Field({
       <Input
         id={id}
         type={type}
+        inputMode={inputMode}
+        className={className}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         required={required}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${id}-error` : undefined}
       />
+      {error ? <p id={`${id}-error`} className="text-xs text-destructive">{error}</p> : null}
     </div>
   )
 }
+
+type TextSettingKey = { [K in keyof DealershipStoreSettings]-?: DealershipStoreSettings[K] extends string ? K : never }[keyof DealershipStoreSettings]
+
+const TAX_RATE_ERROR = 'Enter a rate from 0 to 100, up to two decimals'
+const DOC_FEE_ERROR = 'Enter a dollar amount, up to two decimals'
 
 export function StoreSettingsPageClient({
   initialSettings,
@@ -151,19 +170,27 @@ export function StoreSettingsPageClient({
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(initialError)
   const [warning, setWarning] = useState<string | null>(null)
+  // Deal defaults are edited as typed text ("4.15", "$1,299") and stored as basis points and cents.
+  const [taxRateText, setTaxRateText] = useState(() => formatBpsForInput(initialSettings?.salesTaxRateBps))
+  const [docFeeText, setDocFeeText] = useState(() => formatCentsForInput(initialSettings?.docFeeCents))
+  const salesTaxRateBps = parsePercentToBps(taxRateText)
+  const docFeeCents = parseDollarsToCents(docFeeText)
+  const invalidDealDefaults = salesTaxRateBps === null || docFeeCents === null
 
-  const update = (key: keyof DealershipStoreSettings, value: string) => {
+  const update = (key: TextSettingKey, value: string) => {
     setForm(current => ({ ...current, [key]: value }))
   }
 
   const save = async () => {
-    if (initialError || invalidMark) return
+    if (initialError || invalidMark || salesTaxRateBps === null || docFeeCents === null) return
     setIsSaving(true)
     setError(null)
     setWarning(null)
-    const result = await saveDealershipStoreSettings(form)
+    const result = await saveDealershipStoreSettings({ ...form, salesTaxRateBps, docFeeCents })
     if (result.success && result.data) {
       setForm({ ...result.data, timezone: result.data.timezone || form.timezone })
+      setTaxRateText(formatBpsForInput(result.data.salesTaxRateBps))
+      setDocFeeText(formatCentsForInput(result.data.docFeeCents))
       if (result.warning) {
         setWarning(result.warning)
         toast.error(result.warning)
@@ -181,7 +208,7 @@ export function StoreSettingsPageClient({
 
   const saveButton = (
     <Track>
-      <Pill variant="primary" onClick={save} disabled={isSaving || Boolean(initialError) || invalidMark}>
+      <Pill variant="primary" onClick={save} disabled={isSaving || Boolean(initialError) || invalidMark || invalidDealDefaults}>
         <Save />
         {isSaving ? 'Saving…' : 'Save settings'}
       </Pill>
@@ -306,6 +333,13 @@ export function StoreSettingsPageClient({
             <Section title="Currency">
               <div className="max-w-[12rem]">
                 <Field label="Currency code" value={form.currencyCode} onChange={value => update('currencyCode', value.toUpperCase())} required />
+              </div>
+            </Section>
+
+            <Section title="Deal defaults">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Sales tax rate (%)" inputMode="decimal" className="text-right tabular-nums" value={taxRateText} onChange={setTaxRateText} placeholder="0" error={salesTaxRateBps === null ? TAX_RATE_ERROR : null} />
+                <Field label="Documentation fee ($)" inputMode="decimal" className="text-right tabular-nums" value={docFeeText} onChange={setDocFeeText} placeholder="0" error={docFeeCents === null ? DOC_FEE_ERROR : null} />
               </div>
             </Section>
           </div>

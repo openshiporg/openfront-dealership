@@ -1,4 +1,5 @@
 import { permissions } from '../access'
+import { applyDealDefaults, sumMoneyLines } from '../lifecycle/dealPricing'
 import { recordDomainEventInTransaction } from '../lifecycle/domainEvents'
 import { assertSessionRooftopPermission, assertUserRooftopAccess } from '../tenantRecords'
 
@@ -22,11 +23,12 @@ export async function createDealPencil(_root: unknown, { data }: { data: any }, 
     throw new Error('Rooftop, vehicle, and a valid idempotency key are required')
   }
   await assertSessionRooftopPermission(context, rooftopId, 'canManageDeals')
-  const [rooftop, vehicle, lead, tradeIn] = await Promise.all([
+  const [rooftop, vehicle, lead, tradeIn, profile] = await Promise.all([
     context.query.Rooftop.findOne({ where: { id: rooftopId }, query: 'id status' }),
     context.query.Vehicle.findOne({ where: { id: vehicleId }, query: 'id status rooftop { id } vin stockNumber year make model trim' }),
     leadId ? context.query.Lead.findOne({ where: { id: leadId }, query: 'id rooftop { id } assignedSalesperson { id }' }) : null,
     tradeInId ? context.query.TradeIn.findOne({ where: { id: tradeInId }, query: 'id rooftop { id } lead { id } deal { id }' }) : null,
+    context.sudo().query.DealershipProfile.findOne({ where: { id: 1 }, query: 'salesTaxRateBps docFeeCents' }),
   ])
   if (!rooftop || rooftop.status !== 'active') throw new Error('Rooftop not found or not accessible')
   if (!vehicle || vehicle.rooftop?.id !== rooftopId || vehicle.status !== 'available') throw new Error('Deal vehicle is not available at this rooftop')
@@ -40,19 +42,23 @@ export async function createDealPencil(_root: unknown, { data }: { data: any }, 
     }
   }
 
+  const vehiclePriceCents = cents(data.vehiclePriceCents, 'Vehicle price')
+  const tradeInValueCents = cents(data.tradeInValueCents, 'Trade-in value')
+  // The dealership's configured doc fee and sales tax seed the pencil; staff edit them on the worksheet.
+  const { fees, taxLines } = applyDealDefaults({ vehiclePriceCents, tradeInValueCents, rebates: [], fees: [], taxLines: [] }, profile)
   const terms = {
-    vehiclePriceCents: cents(data.vehiclePriceCents, 'Vehicle price'),
-    tradeInValueCents: cents(data.tradeInValueCents, 'Trade-in value'),
+    vehiclePriceCents,
+    tradeInValueCents,
     downPaymentCents: cents(data.downPaymentCents, 'Down payment'),
     financingAmountCents: 0,
     monthlyPaymentCents: 0,
-    taxAmountCents: 0,
+    taxAmountCents: sumMoneyLines(taxLines),
     loanTerm: null,
     apr: null,
-    fees: [],
+    fees,
     rebates: [],
     products: [],
-    taxLines: [],
+    taxLines,
     structureType: 'cash',
     worksheetVersion: 0,
   }

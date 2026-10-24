@@ -6,6 +6,7 @@ import {
   type DealStatus,
 } from '../lifecycle/dealLifecycle'
 import { assertSessionRooftopPermission } from '../tenantRecords'
+import { operatorCommand } from './operatorCommandErrors'
 import { domainEventRequestHash } from '../lifecycle/domainEvents'
 import { assertAcceptedWorksheet, assertCurrentFunding, assertCurrentSelectedOffer, currentDealAuthority, lockDeal, readLockedFunding, worksheetBinding } from '../lifecycle/dealFinanceEvidence'
 
@@ -29,7 +30,7 @@ const DEAL_EVIDENCE_QUERY = `
   tradeInVehicle { id }
 `
 
-export async function transitionDeal(
+async function transitionDealCommand(
   _root: unknown,
   { id, toStatus, notes, idempotencyKey }: { id: string; toStatus: DealStatus; notes?: string | null; idempotencyKey: string },
   context: any
@@ -192,3 +193,6 @@ export async function transitionDeal(
     return sessionContext.db.Deal.findOne({ where: { id } })
   }, { timeout: 30_000, isolationLevel: 'Serializable' })
 }
+
+// Lifecycle gates ("Record payment first") reach the deal, finance and delivery desks verbatim.
+export const transitionDeal = operatorCommand(transitionDealCommand)

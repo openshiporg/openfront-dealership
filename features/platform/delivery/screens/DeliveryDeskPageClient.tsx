@@ -24,9 +24,10 @@ import {
   Track,
   type DeskTone,
 } from '@/features/platform/components/desk'
-import { readFinanceEvidence, type FinanceEvidence } from '@/features/platform/deals/lib/financeEvidence'
+import { readDeskFinanceEvidence, type DeskFinanceEvidence } from '@/features/platform/finance/lib/financeEvidence'
 import { FinanceEvidenceHistory } from '@/features/platform/deals/components/FinanceEvidenceHistory'
-import { buildDeliveryChecklistEntry, DELIVERY_CHECKLIST_ITEMS } from '../lib/checklistEvidence'
+import { buildDeliveryChecklistEntry, DELIVERY_CHECKLIST_ITEMS, DELIVERY_FUNDING_ITEM } from '../lib/checklistEvidence'
+import { fromZonedInput, zonedInputValue } from '../lib/zonedTime'
 import {
   type DeliveryCase,
   type DeliveryRecord,
@@ -38,7 +39,7 @@ import {
   manageWeOweItem,
 } from '../actions'
 
-type Delivery = Omit<DeliveryRecord, 'financeEvidence'> & { financeEvidence: FinanceEvidence | null }
+type Delivery = Omit<DeliveryRecord, 'financeEvidence'> & { financeEvidence: DeskFinanceEvidence | null }
 type DeliveryTaskKind = 'schedule' | 'checklist' | 'acknowledge' | 'we-owe' | 'close-we-owe' | 'complete'
 type DeliveryTask = {
   idempotencyKey: string
@@ -51,13 +52,8 @@ type DeliveryTask = {
 }
 type CommandResult = { success: boolean; error?: string }
 
-function localDateTimeValue(date: Date) {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-  return local.toISOString().slice(0, 16)
-}
-
 function readDeliveries(workspace: DeliveryWorkspace | null): Delivery[] {
-  return (workspace?.deliveries || []).map(delivery => ({ ...delivery, financeEvidence: readFinanceEvidence(delivery.financeEvidence) }))
+  return (workspace?.deliveries || []).map(delivery => ({ ...delivery, financeEvidence: readDeskFinanceEvidence(delivery.financeEvidence) }))
 }
 
 const caseTone: Record<string, DeskTone> = {
@@ -88,14 +84,31 @@ function vehicleName(delivery: Delivery) {
   return delivery.vehicle ? `${delivery.vehicle.year} ${delivery.vehicle.make} ${delivery.vehicle.model}` : 'Vehicle unavailable'
 }
 
-function formatDate(value: string | null | undefined) {
+// Dealership time zone, so the server render and the browser agree.
+function formatDate(value: string | null | undefined, timeZone: string) {
   return value
-    ? new Date(value).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    ? new Date(value).toLocaleString('en-US', { timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
     : 'Not scheduled'
 }
 
+/** Staff-recorded checklist items that are complete or waived. */
+function recordedChecklist(deliveryCase: DeliveryCase | undefined) {
+  return DELIVERY_CHECKLIST_ITEMS.filter(({ code }) => deliveryCase?.checklist?.some(item => item.code === code && ['complete', 'waived'].includes(item.status)))
+}
+
+/** Funding comes from the funding case; a delivered case keeps the funding entry it was delivered with. */
+function fundingItem(delivery: Delivery, deliveryCase: DeliveryCase | undefined) {
+  const finance = delivery.financeEvidence
+  const cash = finance?.structureType === 'cash'
+  const label = cash ? 'Payment' : DELIVERY_FUNDING_ITEM.label
+  const recorded = deliveryCase?.checklist?.find(item => item.code === DELIVERY_FUNDING_ITEM.code)
+  if (finance?.fundingCurrent) return { label, done: true, text: `${cash ? 'received' : 'funded'}${finance.fundingReference ? ` · ${finance.fundingReference}` : ''}` }
+  if (delivery.status === 'delivered' && recorded) return { label, done: true, text: `complete${recorded.evidenceReference ? ` · ${recorded.evidenceReference}` : ''}` }
+  return { label, done: false, text: finance?.fundingStatus === 'funded' ? 'recorded for an earlier worksheet' : cash ? 'waiting on payment' : 'waiting on funding' }
+}
+
 /** The time readout at the head of each delivery row. */
-function TimeReadout({ value }: { value: string | null | undefined }) {
+function TimeReadout({ value, timeZone }: { value: string | null | undefined; timeZone: string }) {
   if (!value) {
     return (
       <div className="font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
@@ -107,8 +120,8 @@ function TimeReadout({ value }: { value: string | null | undefined }) {
   const date = new Date(value)
   return (
     <time dateTime={value} className="block font-mono tabular-nums">
-      <span className="block text-[11px] uppercase tracking-[0.1em] text-muted-foreground">{date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
-      <span className="block text-lg font-semibold tracking-tight text-foreground">{date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
+      <span className="block text-[11px] uppercase tracking-[0.1em] text-muted-foreground">{date.toLocaleDateString('en-US', { timeZone, weekday: 'short', month: 'short', day: 'numeric' })}</span>
+      <span className="block text-lg font-semibold tracking-tight text-foreground">{date.toLocaleTimeString('en-US', { timeZone, hour: 'numeric', minute: '2-digit' })}</span>
     </time>
   )
 }
@@ -116,9 +129,11 @@ function TimeReadout({ value }: { value: string | null | undefined }) {
 export function DeliveryDeskPageClient({
   initialWorkspace,
   initialError,
+  timeZone,
 }: {
   initialWorkspace: DeliveryWorkspace | null
   initialError: string | null
+  timeZone: string
 }) {
   const [deliveries, setDeliveries] = useState<Delivery[]>(() => readDeliveries(initialWorkspace))
   const [cases, setCases] = useState<DeliveryCase[]>(initialWorkspace?.cases || [])
@@ -159,11 +174,11 @@ export function DeliveryDeskPageClient({
       deliveryCaseUpdatedAt: caseFor(delivery.id)?.updatedAt ?? null,
       fields:
         kind === 'schedule'
-          ? { appointmentAt: localDateTimeValue(new Date(Date.now() + 86_400_000)) }
+          ? { appointmentAt: zonedInputValue(new Date(Date.now() + 86_400_000), timeZone) }
           : kind === 'we-owe'
-            ? { description: '', promisedAt: localDateTimeValue(new Date(Date.now() + 7 * 86_400_000)) }
+            ? { description: '', promisedAt: zonedInputValue(new Date(Date.now() + 7 * 86_400_000), timeZone) }
             : kind === 'checklist'
-              ? { code: DELIVERY_CHECKLIST_ITEMS[0].code, reference: '' }
+              ? { code: (DELIVERY_CHECKLIST_ITEMS.find(item => !recordedChecklist(caseFor(delivery.id)).includes(item)) ?? DELIVERY_CHECKLIST_ITEMS[0]).code, reference: '' }
               : kind === 'acknowledge'
                 ? { acknowledgment: '' }
                 : kind === 'close-we-owe'
@@ -207,7 +222,7 @@ export function DeliveryDeskPageClient({
         if (field('confirmed') !== 'yes') throw new Error('Confirm the vehicle is ready for delivery.')
         const fundingUpdatedAt = delivery.financeEvidence?.fundingUpdatedAt
         if (!delivery.financeEvidence?.fundingCurrent || !fundingUpdatedAt || !task.deliveryCaseUpdatedAt) {
-          throw new Error('Funding is not current. Refresh and review Finance before completing.')
+          throw new Error(delivery.financeEvidence?.structureType === 'cash' ? 'Record payment on the finance desk first.' : 'Record funding on the finance desk first.')
         }
         response = await completeDealDelivery({
           dealId: delivery.id,
@@ -217,8 +232,8 @@ export function DeliveryDeskPageClient({
           idempotencyKey: task.idempotencyKey,
         })
       } else if (kind === 'schedule') {
-        const appointmentAt = new Date(field('appointmentAt'))
-        if (!field('appointmentAt') || Number.isNaN(appointmentAt.getTime())) throw new Error('Choose a valid delivery appointment time.')
+        const appointmentAt = fromZonedInput(field('appointmentAt'), timeZone)
+        if (!appointmentAt) throw new Error('Choose a valid delivery appointment time.')
         response = await manageDeliveryCase({
           dealId: delivery.id,
           action: 'schedule',
@@ -246,8 +261,8 @@ export function DeliveryDeskPageClient({
         })
       } else if (kind === 'we-owe') {
         const description = field('description')
-        const promisedAt = new Date(field('promisedAt'))
-        if (!description || Number.isNaN(promisedAt.getTime()) || !delivery.salesperson?.id) {
+        const promisedAt = fromZonedInput(field('promisedAt'), timeZone)
+        if (!description || !promisedAt || !delivery.salesperson?.id) {
           throw new Error('Description, promised date, and an assigned salesperson are required.')
         }
         response = await manageWeOweItem({
@@ -340,7 +355,7 @@ export function DeliveryDeskPageClient({
       : task?.kind === 'we-owe'
         ? `Assigned to ${task.delivery.salesperson?.name || 'no salesperson'}`
         : task?.kind === 'schedule'
-          ? 'Dealership local time.'
+          ? `Dealership time (${timeZone.replace(/_/g, ' ')}).`
           : task
             ? vehicleName(task.delivery)
             : ''
@@ -438,16 +453,25 @@ export function DeliveryDeskPageClient({
               <Panel className="divide-y">
                 {visible.map(delivery => {
                   const deliveryCase = caseFor(delivery.id)
-                  const completedChecks = DELIVERY_CHECKLIST_ITEMS.filter(({ code }) =>
-                    deliveryCase?.checklist?.some(item => item.code === code && ['complete', 'waived'].includes(item.status))
-                  ).length
+                  const recorded = recordedChecklist(deliveryCase)
+                  const funding = fundingItem(delivery, deliveryCase)
+                  const totalChecks = DELIVERY_CHECKLIST_ITEMS.length + 1
+                  const completedChecks = recorded.length + (funding.done ? 1 : 0)
                   const openWeOwe = deliveryCase?.weOweItems.filter(item => item.status === 'open') || []
                   const finance = delivery.financeEvidence
                   const busy = activeId === delivery.id
-                  const allChecked = completedChecks === DELIVERY_CHECKLIST_ITEMS.length
+                  const allChecked = completedChecks === totalChecks
+                  const missingItem = DELIVERY_CHECKLIST_ITEMS.find(item => !recorded.includes(item))
+                  // One step at a time, in the order the server accepts them.
+                  const next = !deliveryCase ? 'schedule'
+                    : deliveryCase.status === 'ready' ? 'complete'
+                      : deliveryCase.status === 'scheduled' ? 'arrive'
+                        : missingItem ? 'checklist'
+                          : funding.done ? 'acknowledge' : null
+                  const acknowledgeBlocked = missingItem ? `Record ${missingItem.label.toLowerCase()} first` : !funding.done ? (finance?.structureType === 'cash' ? 'Record payment on the finance desk first' : 'Record funding on the finance desk first') : null
                   return (
                     <article key={delivery.id} className="grid min-w-0 gap-3 px-4 py-4 sm:grid-cols-[6.5rem_minmax(0,1fr)] sm:gap-5">
-                      <TimeReadout value={deliveryCase?.appointmentAt} />
+                      <TimeReadout value={deliveryCase?.appointmentAt} timeZone={timeZone} />
 
                       <div className="min-w-0 space-y-4">
                         <div className="min-w-0">
@@ -475,15 +499,15 @@ export function DeliveryDeskPageClient({
                         <div className="min-w-0 space-y-2">
                           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                             <span className={fieldLabel}>Checklist</span>
-                            <Meter value={completedChecks / DELIVERY_CHECKLIST_ITEMS.length} segments={DELIVERY_CHECKLIST_ITEMS.length} tone={allChecked ? 'ok' : 'warn'} label={`${vehicleName(delivery)} checklist progress`} />
+                            <Meter value={completedChecks / totalChecks} segments={totalChecks} tone={allChecked ? 'ok' : 'warn'} label={`${vehicleName(delivery)} checklist progress`} />
                             <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                              {completedChecks}/{DELIVERY_CHECKLIST_ITEMS.length} complete
+                              {completedChecks}/{totalChecks} complete
                             </span>
                           </div>
                           <ul className="grid min-w-0 gap-x-4 gap-y-1 sm:grid-cols-2 xl:grid-cols-3">
                             {DELIVERY_CHECKLIST_ITEMS.map(({ code, label }) => {
                               const item = deliveryCase?.checklist?.find(value => value.code === code)
-                              const done = Boolean(item && ['complete', 'waived'].includes(item.status))
+                              const done = recorded.some(value => value.code === code)
                               return (
                                 <li key={code} className="min-w-0 text-xs">
                                   <TitleLine as="span" tone={done ? 'ok' : 'idle'} className="text-foreground">
@@ -494,6 +518,12 @@ export function DeliveryDeskPageClient({
                               )
                             })}
                             <li className="min-w-0 text-xs">
+                              <TitleLine as="span" tone={funding.done ? 'ok' : 'idle'} className="text-foreground">
+                                {funding.label}
+                                <span className="break-all text-muted-foreground"> · {funding.text}</span>
+                              </TitleLine>
+                            </li>
+                            <li className="min-w-0 text-xs">
                               <TitleLine as="span" tone={deliveryCase?.customerAcknowledgment ? 'ok' : 'idle'} className="text-foreground">
                                 Customer acknowledgment
                                 <span className="text-muted-foreground"> · {deliveryCase?.customerAcknowledgment ? 'Recorded' : 'Missing'}</span>
@@ -503,60 +533,73 @@ export function DeliveryDeskPageClient({
                         </div>
 
                         <div className="min-w-0 space-y-1.5 text-sm">
-                          <TitleLine as="p" tone={finance?.fundingCurrent ? 'ok' : delivery.status === 'delivered' ? 'idle' : 'warn'} className="text-foreground">
-                            Worksheet {finance?.worksheetVersion} · funding {finance?.fundingStatus || 'missing'}
-                            {finance?.fundingCurrent ? ' · current' : delivery.status === 'delivered' ? '' : ' · needs review'}
-                          </TitleLine>
-                          <TitleLine as="p" tone={finance?.prerequisites?.current ? 'ok' : 'warn'} className="text-foreground">
-                            Contract, menu, and compliance: {finance?.prerequisites?.current ? 'Reviewed' : 'Needs review'}
-                            {finance?.prerequisites?.issue ? `. ${finance.prerequisites.issue}` : ''}
-                          </TitleLine>
-                          {finance?.issue && (
-                            <Notice tone="warn" role="status">
-                              {finance.issue}{' '}
-                              <Link className="underline" href={`${basePath}/platform/finance`}>
-                                Review funding
+                          {delivery.status !== 'delivered' && !finance?.prerequisites?.current && (
+                            <TitleLine as="p" tone="idle" className="text-foreground">
+                              {finance?.structureType === 'cash' ? 'Documents and checks' : 'Contract, menu, and compliance'}
+                              <span className="text-muted-foreground"> · {finance?.structureType === 'cash' ? 'confirmed when payment is recorded' : 'not yet reviewed'} · </span>
+                              <Link className="text-muted-foreground underline hover:text-foreground" href={`${basePath}/platform/finance`}>
+                                Open finance
                               </Link>
-                            </Notice>
+                            </TitleLine>
                           )}
                           {delivery.status === 'delivered' && (
-                            <p className="text-sm text-muted-foreground">Delivered {formatDate(delivery.saleDate)}.</p>
+                            <p className="text-sm text-muted-foreground">Delivered {formatDate(delivery.saleDate, timeZone)}.</p>
                           )}
                         </div>
 
                         {delivery.status === 'financed' && (
-                          <Track aria-label={`${vehicleName(delivery)} actions`}>
-                            {!deliveryCase && (
-                              <Pill size="sm" variant="primary" onClick={() => manageCase(delivery, 'schedule')} disabled={busy}>
-                                Schedule
-                              </Pill>
-                            )}
-                            {deliveryCase?.status === 'scheduled' && (
-                              <Pill size="sm" variant="primary" onClick={() => manageCase(delivery, 'arrive')} disabled={busy}>
-                                Record arrival
-                              </Pill>
-                            )}
-                            {deliveryCase?.status === 'ready' && (
-                              <Pill size="sm" variant="primary" onClick={() => complete(delivery)} disabled={busy || !finance?.fundingCurrent}>
-                                <Check />
-                                Complete delivery
-                              </Pill>
-                            )}
-                            {deliveryCase && (
-                              <>
-                                <Pill size="sm" onClick={() => manageCase(delivery, 'record-checklist')} disabled={busy}>
-                                  Record checklist item
+                          <div className="min-w-0 space-y-1.5">
+                            <Track aria-label={`${vehicleName(delivery)} actions`}>
+                              {!deliveryCase && (
+                                <Pill size="sm" variant="primary" onClick={() => manageCase(delivery, 'schedule')} disabled={busy}>
+                                  Schedule
                                 </Pill>
-                                <Pill size="sm" onClick={() => manageCase(delivery, 'acknowledge')} disabled={busy}>
+                              )}
+                              {deliveryCase?.status === 'ready' && (
+                                <Pill size="sm" variant="primary" onClick={() => complete(delivery)} disabled={busy || !funding.done}>
+                                  <Check />
+                                  Complete delivery
+                                </Pill>
+                              )}
+                              {deliveryCase?.status === 'scheduled' && (
+                                <Pill size="sm" variant={next === 'arrive' ? 'primary' : 'raised'} onClick={() => manageCase(delivery, 'arrive')} disabled={busy}>
+                                  Record arrival
+                                </Pill>
+                              )}
+                              {deliveryCase && missingItem && (
+                                <Pill size="sm" variant={next === 'checklist' ? 'primary' : 'raised'} onClick={() => manageCase(delivery, 'record-checklist')} disabled={busy}>
+                                  Record {missingItem.label.toLowerCase()}
+                                </Pill>
+                              )}
+                              {deliveryCase && deliveryCase.status !== 'ready' && (
+                                <Pill size="sm" variant={next === 'acknowledge' ? 'primary' : 'raised'} onClick={() => manageCase(delivery, 'acknowledge')} disabled={busy || Boolean(acknowledgeBlocked)} aria-describedby={acknowledgeBlocked ? `delivery-ack-${delivery.id}` : undefined}>
                                   Record acknowledgment
                                 </Pill>
+                              )}
+                              {deliveryCase && !missingItem && (
+                                <Pill size="sm" onClick={() => manageCase(delivery, 'record-checklist')} disabled={busy}>
+                                  Update checklist item
+                                </Pill>
+                              )}
+                              {deliveryCase && (
                                 <Pill size="sm" onClick={() => addWeOwe(delivery)} disabled={busy}>
                                   <Plus />
                                   Add we-owe
                                 </Pill>
-                              </>
+                              )}
+                            </Track>
+                            {deliveryCase && deliveryCase.status !== 'ready' && acknowledgeBlocked && (
+                              <p id={`delivery-ack-${delivery.id}`} className="pl-4 text-xs text-muted-foreground">
+                                Acknowledgment: {acknowledgeBlocked}
+                                {!funding.done && !missingItem && (
+                                  <>
+                                    {' · '}
+                                    <Link className="underline hover:text-foreground" href={`${basePath}/platform/finance`}>Open finance</Link>
+                                  </>
+                                )}
+                              </p>
                             )}
-                          </Track>
+                          </div>
                         )}
 
                         {(deliveryCase?.weOweItems.length || 0) > 0 && (
@@ -577,7 +620,7 @@ export function DeliveryDeskPageClient({
                                       {item.description}
                                     </TitleLine>
                                     <p className="pl-4 text-xs text-muted-foreground">
-                                      {item.status} · promised {formatDate(item.promisedAt)} · {item.owner?.name || 'Unassigned'}
+                                      {item.status} · promised {formatDate(item.promisedAt, timeZone)} · {item.owner?.name || 'Unassigned'}
                                     </p>
                                   </div>
                                   {item.status === 'open' && (
@@ -597,8 +640,8 @@ export function DeliveryDeskPageClient({
                         )}
 
                         <div className="min-w-0 divide-y border-t">
-                          <FinanceEvidenceHistory dealId={delivery.id} aggregateType="DeliveryCase" label="Delivery history" />
-                          <FinanceEvidenceHistory dealId={delivery.id} aggregateType="Deal" label="Deal history" />
+                          <FinanceEvidenceHistory dealId={delivery.id} aggregateType="DeliveryCase" label="Delivery history" timeZone={timeZone} />
+                          <FinanceEvidenceHistory dealId={delivery.id} aggregateType="Deal" label="Deal history" timeZone={timeZone} />
                           {deliveryCase?.deliverySnapshot != null && (
                             <details className="group min-w-0 text-sm">
                               <summary className="flex cursor-pointer list-none items-center gap-2 py-1.5 font-medium text-foreground [&::-webkit-details-marker]:hidden">
@@ -642,7 +685,7 @@ export function DeliveryDeskPageClient({
                     id="delivery-appointment"
                     type="datetime-local"
                     required
-                    min={localDateTimeValue(new Date(Date.now() - 300_000))}
+                    min={zonedInputValue(new Date(Date.now() - 300_000), timeZone)}
                     value={task.fields.appointmentAt || ''}
                     onChange={event => updateTaskField('appointmentAt', event.target.value)}
                   />
@@ -705,7 +748,7 @@ export function DeliveryDeskPageClient({
                     />
                   </label>
                   <label htmlFor="we-owe-promised-at" className="grid gap-1.5 text-sm">
-                    <span className={fieldLabel}>Promised by</span>
+                    <span className={fieldLabel}>Promised by (dealership time)</span>
                     <Input
                       id="we-owe-promised-at"
                       type="datetime-local"

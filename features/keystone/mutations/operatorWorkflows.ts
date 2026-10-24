@@ -127,12 +127,13 @@ export async function updateTestDriveWorkflow(_root: unknown, { data }: any, con
   if (!context.session?.itemId || !permissions.canManageLeads({ session: context.session })) throw new Error('Lead management permission is required')
   const id = String(data.id || '')
   const action = String(data.action || '')
-  if (!['verify-license', 'complete'].includes(action)) throw new Error('Unsupported test-drive action')
-  const drive = await context.query.TestDrive.findOne({ where: { id }, query: 'id completed driverLicenseVerified rooftop { id } lead { id status updatedAt } updatedAt' })
+  if (!['verify-license', 'complete', 'no-show'].includes(action)) throw new Error('Unsupported test-drive action')
+  const drive = await context.query.TestDrive.findOne({ where: { id }, query: 'id completed driverLicenseVerified scheduledTime rooftop { id } lead { id status updatedAt } updatedAt' })
   if (!drive?.rooftop?.id) throw new Error('Test drive not found or not accessible')
   await assertSessionRooftopPermission(context, drive.rooftop.id, 'canManageLeads')
   if (drive.completed) throw new Error('Completed test drives are immutable')
   if (action === 'complete' && !drive.driverLicenseVerified) throw new Error('Driver license must be verified before completion')
+  if (action === 'no-show' && new Date(drive.scheduledTime).getTime() > Date.now()) throw new Error('A test drive can only be marked no-show after its scheduled time')
   const interestedLevel = String(data.interestedLevel || 'maybe')
   if (action === 'complete' && !['not-interested', 'maybe', 'very-interested'].includes(interestedLevel)) throw new Error('Interest level is invalid')
   const targetLeadStatus = interestedLevel === 'very-interested' ? 'negotiating' : 'contacted'
@@ -154,7 +155,9 @@ export async function updateTestDriveWorkflow(_root: unknown, { data }: any, con
       where: { id, updatedAt: new Date(drive.updatedAt), completed: false },
       data: action === 'verify-license'
         ? { driverLicenseVerified: true }
-        : { completed: true, interestedLevel, feedback: String(data.feedback || '').trim().slice(0, 4000) },
+        : action === 'no-show'
+          ? { completed: true, noShow: true }
+          : { completed: true, interestedLevel, feedback: String(data.feedback || '').trim().slice(0, 4000) },
     })
     if (changed.count !== 1) throw new Error('Test drive changed concurrently; reload and retry')
     if (action === 'complete' && drive.lead?.id) {

@@ -18,8 +18,8 @@ export function serviceTaskFields(task: ServiceTask, rooftops: ServiceChoice[], 
     { name: 'concern', label: 'Customer concern', type: 'textarea', maxLength: 5000 },
     { name: 'cause', label: 'Cause', type: 'textarea', maxLength: 5000 },
     { name: 'correction', label: 'Correction / repair plan', type: 'textarea', maxLength: 5000 },
-    { name: 'payType', label: 'Pay type', type: 'select', options: ['customer', 'warranty', 'internal'].map(value => ({ value, label: value })) },
-    { name: 'authorizationStatus', label: 'Authorization status', type: 'select', options: ['pending', 'authorized', 'declined'].map(value => ({ value, label: value })) },
+    { name: 'payType', label: 'Pay type', type: 'select', options: [{ value: 'customer', label: 'Customer' }, { value: 'warranty', label: 'Warranty' }, { value: 'internal', label: 'Internal' }] },
+    { name: 'authorizationStatus', label: 'Authorization status', type: 'select', options: [{ value: 'pending', label: 'Pending' }, { value: 'authorized', label: 'Authorized' }, { value: 'declined', label: 'Declined' }] },
     { name: 'reference', label: 'Authorization reference', required: task.values.authorizationStatus !== 'pending', maxLength: 200 },
     { name: 'invoiceNumber', label: 'Invoice number (optional)', required: false, maxLength: 100 },
   ]
@@ -129,4 +129,29 @@ export function splitLocalDateTime(value: string) {
   const match = value.trim().match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/)
   if (!match) throw new Error('Date and time are required')
   return { date: match[1], time: match[2] }
+}
+
+/**
+ * Repair-order totals are stored on ServiceOrder. addServiceOrderLineItem recomputes them from the
+ * lines (labor + sublet as labor, part as parts, plus stored tax), but openServiceOrder accepts
+ * totals directly, so an order can carry amounts no line backs.
+ */
+export function repairOrderTotalsCheck(order: {
+  lineItems: Array<{ itemType: string; priceCents: number }>
+  laborTotalCents: number | null
+  partsTotalCents: number | null
+  taxCents: number | null
+  grandTotalCents: number | null
+}) {
+  const sum = (types: string[]) => order.lineItems.filter(line => types.includes(line.itemType)).reduce((total, line) => total + (line.priceCents || 0), 0)
+  const lineLaborCents = sum(['labor', 'sublet'])
+  const linePartsCents = sum(['part'])
+  const laborCents = order.laborTotalCents ?? 0
+  const partsCents = order.partsTotalCents ?? 0
+  const taxCents = order.taxCents ?? 0
+  const matches =
+    laborCents === lineLaborCents &&
+    partsCents === linePartsCents &&
+    (order.grandTotalCents ?? 0) === laborCents + partsCents + taxCents
+  return { lineLaborCents, linePartsCents, matches }
 }

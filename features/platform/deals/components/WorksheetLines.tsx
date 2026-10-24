@@ -4,6 +4,7 @@ import { Plus, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Pill, Track } from '@/features/platform/components/desk'
 import { type MoneyLine } from '@/features/keystone/lifecycle/dealPricing'
+import { MoneyInput } from './MoneyInput'
 
 const fieldLabel = 'font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-muted-foreground'
 
@@ -51,7 +52,8 @@ export function WorksheetLines({ title, category, lines, onChange, disabled, sho
                 </label>
                 <label htmlFor={`${category}-${index}-amount`} className="grid min-w-0 gap-1">
                   <span className={fieldLabel}>Amount (USD)</span>
-                  <Input id={`${category}-${index}-amount`} className="h-8 text-right tabular-nums" type="number" min="0" step="0.01" value={Number(line.amountCents ?? Math.round(Number(line.amount || 0) * 100)) / 100} onChange={event => update(index, { amountCents: Math.round(Number(event.target.value) * 100) })} />
+                  {/* A typed amount is the operator's figure; it is no longer repriced from the configured rate. */}
+                  <MoneyInput id={`${category}-${index}-amount`} className="h-8" cents={Number(line.amountCents ?? Math.round(Number(line.amount || 0) * 100))} onCentsChange={amountCents => update(index, { amountCents, source: 'operator-recorded' })} />
                 </label>
                 <Track className="justify-self-end">
                   <Pill size="sm" variant="plain" aria-label={`Remove ${line.name || title} line ${index + 1}`} onClick={() => onChange(lines.filter((_, position) => position !== index))}>

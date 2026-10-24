@@ -77,6 +77,12 @@ export const TestDrive = list({
       defaultValue: false,
       label: 'Completed',
     }),
+    // A no-show closes the drive (completed is also set) without recording interest or moving the lead.
+    noShow: checkbox({
+      access: { update: () => false },
+      defaultValue: false,
+      label: 'No-show',
+    }),
     driverLicenseVerified: checkbox({
       access: { update: () => false },
       defaultValue: false,

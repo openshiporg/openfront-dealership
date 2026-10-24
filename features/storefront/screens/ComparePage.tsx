@@ -258,7 +258,7 @@ export function ComparePage() {
           aria-label="Comparison table"
           tabIndex={0}
         >
-          <table className="w-full border-collapse text-[var(--sf-text-sm)]">
+          <table className="w-full border-collapse text-[length:var(--sf-text-sm)]">
             <thead>
               <tr>
                 <th scope="col" className={`${stickyCell} sf-eyebrow align-bottom py-4`} style={stickyStyle}>
@@ -278,15 +278,15 @@ export function ComparePage() {
                       </Link>
                       <h2 className="sf-title-line mt-3">
                         <span className="sf-dot" data-tone={status.tone} aria-hidden="true" />
-                        <Link href={`/inventory/${vehicle.id}`} className="sf-heading min-w-0 text-[var(--sf-text-md)] hover:text-[var(--sf-accent)]">
+                        <Link href={`/inventory/${vehicle.id}`} className="sf-heading min-w-0 text-[length:var(--sf-text-md)] hover:text-[var(--sf-accent)]">
                           {vehicle.year} {vehicle.make} {vehicle.model}
                         </Link>
                       </h2>
-                      <p className="sf-muted min-h-[1.5em] truncate pl-4 text-[var(--sf-text-xs)]">
+                      <p className="sf-muted min-h-[1.5em] truncate pl-4 text-[length:var(--sf-text-xs)]">
                         <span className="sr-only">{status.label}. </span>
                         {vehicle.trim}
                       </p>
-                      <p className="sf-price mt-2 pl-4 text-[var(--sf-text-xl)]">{formatPrice(vehicle.price, currencyCode)}</p>
+                      <p className="sf-price mt-2 pl-4 text-[length:var(--sf-text-xl)]">{formatPrice(vehicle.price, currencyCode)}</p>
                       <div className="mt-3 pl-4">
                         <span className="sf-track">
                           <button
@@ -316,7 +316,7 @@ export function ComparePage() {
                     return (
                       <td
                         key={vehicle.id}
-                        className={`px-3 py-3 sm:px-4 ${field.mono ? 'sf-figure' : ''} ${field.key === 'vin' ? 'break-all text-[var(--sf-text-xs)]' : ''} ${best}`}
+                        className={`px-3 py-3 sm:px-4 ${field.mono ? 'sf-figure' : ''} ${field.key === 'vin' ? 'break-all text-[length:var(--sf-text-xs)]' : ''} ${best}`}
                       >
                         {field.format(vehicle, currencyCode)}
                         {best && <span className="sr-only"> (best)</span>}

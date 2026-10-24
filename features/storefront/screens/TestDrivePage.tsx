@@ -161,7 +161,7 @@ export function TestDrivePage() {
       ) : (
         <div className="flex items-center justify-between gap-3 border-b border-dashed px-4 py-3" style={{ borderColor: 'var(--sf-rule)' }}>
           <span className="sf-eyebrow">Vehicle</span>
-          <Link href="/inventory" className="sf-link text-[var(--sf-text-sm)]">Choose from inventory</Link>
+          <Link href="/inventory" className="sf-link text-[length:var(--sf-text-sm)]">Choose from inventory</Link>
         </div>
       )}
     </Sticker>
@@ -190,7 +190,7 @@ export function TestDrivePage() {
 
               {availability.status === 'closed' ? (
                 <div className="sf-well p-4">
-                  <p role="alert" className="sf-title-line text-[var(--sf-text-sm)]">
+                  <p role="alert" className="sf-title-line text-[length:var(--sf-text-sm)]">
                     <span className="sf-dot" data-tone="bad" aria-hidden="true" />
                     <span>{closedDayLabel(availability)} Choose another date.</span>
                   </p>

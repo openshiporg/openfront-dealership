@@ -41,7 +41,7 @@ export function LoginPage() {
             <div>
               <div className="flex items-baseline justify-between gap-3">
                 <label htmlFor="signin-password" className="sf-label">Password</label>
-                <Link href="/account/reset" className="sf-link -my-3 inline-flex min-h-11 items-center text-[var(--sf-text-xs)]">
+                <Link href="/account/reset" className="sf-link -my-3 inline-flex min-h-11 items-center text-[length:var(--sf-text-xs)]">
                   Forgot password?
                 </Link>
               </div>

@@ -197,7 +197,7 @@ export function ServicePage() {
       meta={business.shortName || business.fullName}
       rows={summaryRows()}
       footer={selectedPackage ? (
-        <button type="button" onClick={clearPackage} className="sf-link inline-flex min-h-11 items-center gap-1.5 text-[var(--sf-text-sm)]">
+        <button type="button" onClick={clearPackage} className="sf-link inline-flex min-h-11 items-center gap-1.5 text-[length:var(--sf-text-sm)]">
           <X className="size-4" aria-hidden="true" />
           Remove package
         </button>
@@ -241,15 +241,15 @@ export function ServicePage() {
                           {selected && <Check className="size-3.5" strokeWidth={3} />}
                         </span>
                         <span className="min-w-0">
-                          <span className="sf-heading block text-[var(--sf-text-md)]">{pkg.name}</span>
+                          <span className="sf-heading block text-[length:var(--sf-text-md)]">{pkg.name}</span>
                           {pkg.description && (
-                            <span className="sf-muted mt-1 block text-[var(--sf-text-sm)]">{pkg.description}</span>
+                            <span className="sf-muted mt-1 block text-[length:var(--sf-text-sm)]">{pkg.description}</span>
                           )}
-                          {duration && <span className="sf-figure sf-faint mt-1.5 block text-[var(--sf-text-xs)]">{duration}</span>}
+                          {duration && <span className="sf-figure sf-faint mt-1.5 block text-[length:var(--sf-text-xs)]">{duration}</span>}
                         </span>
-                        <span className="sf-price text-right text-[var(--sf-text-lg)]">
+                        <span className="sf-price text-right text-[length:var(--sf-text-lg)]">
                           {formatServicePackagePrice(pkg.price, business.currencyCode) ?? (
-                            <span className="sf-faint font-sans text-[var(--sf-text-xs)] font-medium">Price unavailable</span>
+                            <span className="sf-faint font-sans text-[length:var(--sf-text-xs)] font-medium">Price unavailable</span>
                           )}
                         </span>
                       </button>
@@ -259,11 +259,11 @@ export function ServicePage() {
               </ul>
             ) : serviceMenu.kind === 'empty' ? (
               <div className="sf-well p-5">
-                <p className="sf-muted text-[var(--sf-text-sm)]" role="status">No service packages listed.</p>
+                <p className="sf-muted text-[length:var(--sf-text-sm)]" role="status">No service packages listed.</p>
               </div>
             ) : (
               <div className="sf-well flex flex-col items-start gap-4 p-5" role="status">
-                <p className="sf-title-line text-[var(--sf-text-sm)]">
+                <p className="sf-title-line text-[length:var(--sf-text-sm)]">
                   <span className="sf-dot" data-tone="bad" aria-hidden="true" />
                   <span>
                     Service menu unavailable.
@@ -301,7 +301,7 @@ export function ServicePage() {
                         <p className="sf-label">Service</p>
                         <div className="sf-input flex items-center justify-between gap-3" style={{ background: 'var(--sf-paper-2)' }}>
                           <span className="min-w-0 truncate">{selectedPackage}</span>
-                          <button type="button" onClick={clearPackage} className="sf-link -my-2 inline-flex min-h-11 shrink-0 items-center text-[var(--sf-text-sm)]">
+                          <button type="button" onClick={clearPackage} className="sf-link -my-2 inline-flex min-h-11 shrink-0 items-center text-[length:var(--sf-text-sm)]">
                             Change
                           </button>
                         </div>
@@ -327,7 +327,7 @@ export function ServicePage() {
 
                   {availability.status === 'closed' ? (
                     <div className="sf-well p-4">
-                      <p role="alert" className="sf-title-line text-[var(--sf-text-sm)]">
+                      <p role="alert" className="sf-title-line text-[length:var(--sf-text-sm)]">
                         <span className="sf-dot" data-tone="bad" aria-hidden="true" />
                         <span>{closedDayLabel(availability)} Choose another date.</span>
                       </p>

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 
 import { keystoneClient } from '@/features/dashboard/lib/keystoneClient'
 import { ROOFTOP_STAFF_QUERY } from '@/features/platform/lib/rooftopStaffQuery'
-import type { MoneyLine } from '@/features/keystone/lifecycle/dealPricing'
+import type { DealDefaults, MoneyLine } from '@/features/keystone/lifecycle/dealPricing'
 
 export type DealDeskDeal = {
   id: string
@@ -63,15 +63,24 @@ export async function getDealDeskWorkspace(status: string) {
   `, { status }, { cache: 'no-store' })
 }
 
+const DEAL_DEFAULTS_FIELDS = 'salesTaxRateBps docFeeCents'
+
+function dealDefaults(profile: Partial<DealDefaults> | null | undefined): DealDefaults {
+  return { salesTaxRateBps: Number(profile?.salesTaxRateBps) || 0, docFeeCents: Number(profile?.docFeeCents) || 0 }
+}
+
 export async function getDealWorkspace(id: string) {
-  return keystoneClient<{ dealWorkspace: { deal: any; worksheetVersions: DealWorksheetVersion[] } }>(`
+  const response = await keystoneClient<{ dealWorkspace: { deal: any; worksheetVersions: DealWorksheetVersion[] }; dealershipProfile: Partial<DealDefaults> | null }>(`
     query DealWorkspace($id: ID!) {
+      dealershipProfile { ${DEAL_DEFAULTS_FIELDS} }
       dealWorkspace(id: $id) {
-        deal { id financeEvidence vehiclePriceCents tradeInValueCents downPaymentCents financingAmountCents monthlyPaymentCents loanTerm apr taxAmountCents totalPriceCents fees rebates products taxLines residualValueCents moneyFactorBasisPoints status structureType worksheetVersion presentedAt acceptedAt saleDate createdAt updatedAt salesperson { id name } lead { id firstName lastName } vehicle { id year make model trim stockNumber vin priceCents } approvals { id decision approvalDate notes approver { name } } }
+        deal { id financeEvidence vehiclePriceCents tradeInValueCents downPaymentCents financingAmountCents monthlyPaymentCents loanTerm apr taxAmountCents totalPriceCents fees rebates products taxLines residualValueCents moneyFactorBasisPoints status structureType worksheetVersion presentedAt acceptedAt saleDate createdAt updatedAt salesperson { id name } lead { id firstName lastName } vehicle { id year make model trim exteriorColor stockNumber vin priceCents } approvals { id decision approvalDate notes approver { name } } }
         worksheetVersions { id snapshot occurredAt }
       }
     }
   `, { id }, { cache: 'no-store' })
+  if (!response.success) return response
+  return { ...response, data: { ...response.data, dealDefaults: dealDefaults(response.data.dealershipProfile) } }
 }
 
 export async function getDealLenderOffers(dealId: string) {
@@ -93,17 +102,28 @@ export async function getDealTimeline(aggregateType: 'Deal' | 'FinanceFundingCas
 }
 
 export async function getDealSetupOptions() {
-  const [vehicles, leads] = await Promise.all([
+  const [vehicles, leads, profile] = await Promise.all([
     keystoneClient<{ vehicles: DealSetupVehicle[] }>(`
       query DealSetupVehicles { vehicles(where: { status: { equals: "available" } }) { id stockNumber year make model price purchasePrice rooftop { id } } }
     `, {}, { cache: 'no-store' }),
     keystoneClient<{ leads: DealSetupLead[] }>(`
       query DealSetupLeads { leads(where: { status: { not: { equals: "closed-lost" } } }) { id firstName lastName email phone } }
     `, {}, { cache: 'no-store' }),
+    keystoneClient<{ dealershipProfile: Partial<DealDefaults> | null }>(`
+      query DealSetupDefaults { dealershipProfile { ${DEAL_DEFAULTS_FIELDS} } }
+    `, {}, { cache: 'no-store' }),
   ])
   if (!vehicles.success) return { success: false as const, error: vehicles.error }
   if (!leads.success) return { success: false as const, error: leads.error }
-  return { success: true as const, data: { vehicles: vehicles.data.vehicles || [], leads: leads.data.leads || [] } }
+  return {
+    success: true as const,
+    data: {
+      vehicles: vehicles.data.vehicles || [],
+      leads: leads.data.leads || [],
+      // The server applies the same defaults when it creates the pencil; this is the preview.
+      dealDefaults: dealDefaults(profile.success ? profile.data.dealershipProfile : null),
+    },
+  }
 }
 
 export async function getRooftopSalespeople(rooftopId: string) {

@@ -16,6 +16,7 @@ import {
   completeTestDrive,
   getTestDriveVehicles,
   getTestDrives,
+  markTestDriveNoShow,
   scheduleTestDrive,
   verifyTestDriveLicense,
 } from '../actions'
@@ -32,7 +33,7 @@ function scheduleFields(vehicles: Array<{ value: string; label: string }>): Oper
   ]
 }
 
-type QueueFilter = 'today' | 'upcoming' | 'open' | 'completed' | 'all'
+type QueueFilter = 'today' | 'upcoming' | 'past-due' | 'completed' | 'all'
 
 function formatDateTime(value: string | null | undefined, timeZone: string) {
   if (!value) return 'Unscheduled'
@@ -45,8 +46,8 @@ function formatDateTime(value: string | null | undefined, timeZone: string) {
   })
 }
 
-function formatCurrency(value: number | null | undefined) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value || 0)
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)
 }
 
 function leadName(testDrive: TestDrive) {
@@ -55,7 +56,7 @@ function leadName(testDrive: TestDrive) {
 }
 
 function vehicleName(testDrive: TestDrive) {
-  if (!testDrive.vehicle) return 'Vehicle not selected'
+  if (!testDrive.vehicle) return 'No vehicle chosen'
   return [testDrive.vehicle.year, testDrive.vehicle.make, testDrive.vehicle.model].filter(Boolean).join(' ')
 }
 
@@ -67,6 +68,11 @@ function isToday(value: string | null | undefined, timeZone: string) {
 function isUpcoming(value: string | null | undefined) {
   if (!value) return false
   return new Date(value).getTime() >= Date.now()
+}
+
+/** Open drives whose scheduled time has passed; they stay here until completed or marked no-show. */
+function isPastDue(testDrive: TestDrive) {
+  return !testDrive.completed && Boolean(testDrive.scheduledTime) && !isUpcoming(testDrive.scheduledTime)
 }
 
 function formatTime(value: string | null | undefined, timeZone: string) {
@@ -81,8 +87,9 @@ function formatDay(value: string | null | undefined, timeZone: string) {
 }
 
 function driveState(testDrive: TestDrive): { tone: DeskTone; label: string } {
+  if (testDrive.noShow) return { tone: 'idle', label: 'No-show' }
   if (testDrive.completed) return { tone: 'ok', label: 'Completed' }
-  if (!isUpcoming(testDrive.scheduledTime)) return { tone: 'bad', label: 'Past due' }
+  if (isPastDue(testDrive)) return { tone: 'bad', label: 'Past due' }
   if (!testDrive.driverLicenseVerified) return { tone: 'warn', label: 'Upcoming' }
   return { tone: 'info', label: 'Upcoming' }
 }
@@ -116,7 +123,7 @@ export function TestDriveDeskPageClient({
   const [search, setSearch] = useState('')
   const [sortOrder, setSortOrder] = useState('scheduled')
   const [updatingId, setUpdatingId] = useState<string | null>(null)
-  const [filter, setFilter] = useState<QueueFilter>('open')
+  const [filter, setFilter] = useState<QueueFilter>('upcoming')
   const [feedbackDrafts, setFeedbackDrafts] = useState<Record<string, string>>(() => feedbackDraftsFor(initialTestDrives))
   const [interestDrafts, setInterestDrafts] = useState<Record<string, string>>(() => interestDraftsFor(initialTestDrives))
   const [schedule, setSchedule] = useState<{ values: Record<string, string>; idempotencyKey: string } | null>(null)
@@ -196,8 +203,8 @@ export function TestDriveDeskPageClient({
           ? testDrives.filter(testDrive => !testDrive.completed && isUpcoming(testDrive.scheduledTime))
           : filter === 'completed'
             ? testDrives.filter(testDrive => testDrive.completed)
-            : filter === 'open'
-              ? testDrives.filter(testDrive => !testDrive.completed)
+            : filter === 'past-due'
+              ? testDrives.filter(isPastDue)
               : testDrives
     const term = search.trim().toLowerCase()
     const visible = !term
@@ -239,6 +246,15 @@ export function TestDriveDeskPageClient({
     setUpdatingId(null)
   }
 
+  const markNoShow = async (testDrive: TestDrive) => {
+    setUpdatingId(testDrive.id)
+    const response = await markTestDriveNoShow(testDrive.id)
+
+    if (!response.success) alert(`Unable to mark no-show: ${response.error}`)
+    await loadTestDrives()
+    setUpdatingId(null)
+  }
+
   const isFiltered = Boolean(search.trim()) || filter !== 'all'
   const resetFilters = () => {
     setSearch('')
@@ -246,7 +262,7 @@ export function TestDriveDeskPageClient({
   }
 
   const counts = {
-    open: testDrives.filter(testDrive => !testDrive.completed).length,
+    pastDue: testDrives.filter(isPastDue).length,
     today: testDrives.filter(testDrive => isToday(testDrive.scheduledTime, timeZone)).length,
     upcoming: testDrives.filter(testDrive => !testDrive.completed && isUpcoming(testDrive.scheduledTime)).length,
     completed: testDrives.filter(testDrive => testDrive.completed).length,
@@ -262,9 +278,9 @@ export function TestDriveDeskPageClient({
   const header = (
     <DeskHeader
       title="Test drives"
-      tone={error ? 'bad' : counts.today > 0 ? 'info' : 'idle'}
-      status={error ? 'Unavailable' : `${counts.today} today`}
-      meta={`${counts.today} today · ${counts.upcoming} upcoming · ${counts.open} open`}
+      tone={error ? 'bad' : counts.pastDue > 0 ? 'warn' : counts.today > 0 ? 'info' : 'idle'}
+      status={error ? 'Unavailable' : counts.pastDue > 0 ? `${counts.pastDue} past due` : `${counts.today} today`}
+      meta={`${counts.today} today · ${counts.upcoming} upcoming · ${counts.pastDue} past due`}
       actions={
         <Track>
           <Pill onClick={loadTestDrives} disabled={loading}>
@@ -301,7 +317,7 @@ export function TestDriveDeskPageClient({
           options={[
             { value: 'today', label: 'Today', count: counts.today },
             { value: 'upcoming', label: 'Upcoming', count: counts.upcoming },
-            { value: 'open', label: 'Open', count: counts.open },
+            { value: 'past-due', label: 'Past due', count: counts.pastDue },
             { value: 'completed', label: 'Completed', count: counts.completed },
             { value: 'all', label: 'All', count: counts.all },
           ]}
@@ -382,10 +398,18 @@ export function TestDriveDeskPageClient({
                       ) : (
                         vehicleName(testDrive)
                       )}
-                      {' · '}
-                      <Code>#{testDrive.vehicle?.stockNumber || '-'}</Code>
-                      {' · '}
-                      <span className="tabular-nums">{formatCurrency(testDrive.vehicle?.price)}</span>
+                      {testDrive.vehicle?.stockNumber && (
+                        <>
+                          {' · '}
+                          <Code>#{testDrive.vehicle.stockNumber}</Code>
+                        </>
+                      )}
+                      {testDrive.vehicle?.price != null && testDrive.vehicle.price > 0 && (
+                        <>
+                          {' · '}
+                          <span className="tabular-nums">{formatCurrency(testDrive.vehicle.price)}</span>
+                        </>
+                      )}
                     </p>
                     <p className="break-words pl-4 text-xs text-muted-foreground">
                       {state.label}
@@ -400,7 +424,9 @@ export function TestDriveDeskPageClient({
                   </div>
 
                   <div className="col-span-2 min-w-0 md:col-span-1">
-                    {testDrive.completed ? (
+                    {testDrive.noShow ? (
+                      <p className="text-xs text-muted-foreground">No-show</p>
+                    ) : testDrive.completed ? (
                       <div className="text-xs">
                         <p className="font-medium text-foreground">{interestLabels[testDrive.interestedLevel || ''] || testDrive.interestedLevel || '-'}</p>
                         {testDrive.feedback && <p className="mt-0.5 whitespace-pre-line break-words text-muted-foreground">{testDrive.feedback}</p>}
@@ -436,6 +462,11 @@ export function TestDriveDeskPageClient({
                   {!testDrive.completed && (
                     <div className="col-span-2 flex justify-end md:col-span-1">
                       <Track>
+                        {isPastDue(testDrive) && (
+                          <Pill size="sm" onClick={() => markNoShow(testDrive)} disabled={busy}>
+                            No-show
+                          </Pill>
+                        )}
                         {!testDrive.driverLicenseVerified && (
                           <Pill size="sm" onClick={() => verifyLicense(testDrive)} disabled={busy}>
                             Verify license

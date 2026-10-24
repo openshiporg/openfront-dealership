@@ -139,7 +139,7 @@ export function LeadCaptureModal({
               {vehicleTitle(vehicle)}
               {vehicle.stockNumber && <span className="sf-figure"> · #{vehicle.stockNumber}</span>}
             </p>
-            <h2 id="lead-modal-title" className="sf-heading mt-1.5 text-[var(--sf-text-xl)]">
+            <h2 id="lead-modal-title" className="sf-heading mt-1.5 text-[length:var(--sf-text-xl)]">
               {titles[intent]}
             </h2>
           </div>

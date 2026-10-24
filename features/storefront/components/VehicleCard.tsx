@@ -89,7 +89,7 @@ export function VehicleCard({
                 {name}
               </Link>
             </h3>
-            <p className="sf-muted mt-1 pl-4 text-[var(--sf-text-sm)]">
+            <p className="sf-muted mt-1 pl-4 text-[length:var(--sf-text-sm)]">
               <span className="sr-only">{status.label}. </span>
               {vehicle.trim}
             </p>
@@ -106,7 +106,7 @@ export function VehicleCard({
               {compareButton}
             </div>
           </div>
-          {compareFull && <p role="status" className="sf-muted text-[var(--sf-text-xs)]">Compare holds 4 vehicles.</p>}
+          {compareFull && <p role="status" className="sf-muted text-[length:var(--sf-text-xs)]">Compare holds 4 vehicles.</p>}
           <PhotoAttribution src={imageUrl} />
         </div>
       </article>
@@ -135,27 +135,27 @@ export function VehicleCard({
       <div className="flex flex-1 flex-col pt-4">
         <h3 className="sf-title-line">
           <span className="sf-dot" data-tone={status.tone} aria-hidden="true" />
-          <Link href={href} className="sf-heading min-w-0 text-[var(--sf-text-lg)] hover:text-[var(--sf-accent)]">
+          <Link href={href} className="sf-heading min-w-0 text-[length:var(--sf-text-lg)] hover:text-[var(--sf-accent)]">
             {name}
           </Link>
         </h3>
-        <p className="sf-muted mt-0.5 min-h-[1.5em] truncate pl-4 text-[var(--sf-text-sm)]">
+        <p className="sf-muted mt-0.5 min-h-[1.5em] truncate pl-4 text-[length:var(--sf-text-sm)]">
           <span className="sr-only">{status.label}. </span>
           {vehicle.trim}
         </p>
 
         <div className="mt-3 flex items-baseline justify-between gap-3 pl-4">
           <p className="sf-price text-[length:var(--sf-text-xl)]">{formatPrice(vehicle.price, currencyCode)}</p>
-          <p className="sf-figure sf-faint truncate text-[var(--sf-text-xs)]">{formatMileage(vehicle.mileage)}</p>
+          <p className="sf-figure sf-faint truncate text-[length:var(--sf-text-xs)]">{formatMileage(vehicle.mileage)}</p>
         </div>
 
         <div className="mt-auto flex items-center justify-between gap-3 pt-4 pl-4">
-          <p className="sf-figure sf-faint min-w-0 truncate text-[var(--sf-text-xs)]">
+          <p className="sf-figure sf-faint min-w-0 truncate text-[length:var(--sf-text-xs)]">
             {vehicle.color ? `${vehicle.color} · ` : ''}#{vehicle.stockNumber}
           </p>
           {compareButton && <div className="sf-track shrink-0">{compareButton}</div>}
         </div>
-        {compareFull && <p role="status" className="sf-muted mt-2 pl-4 text-[var(--sf-text-xs)]">Compare holds 4 vehicles.</p>}
+        {compareFull && <p role="status" className="sf-muted mt-2 pl-4 text-[length:var(--sf-text-xs)]">Compare holds 4 vehicles.</p>}
         <div className="pl-4"><PhotoAttribution src={imageUrl} /></div>
       </div>
     </article>

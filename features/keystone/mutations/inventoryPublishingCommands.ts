@@ -53,7 +53,9 @@ async function updateInventoryMerchandisingDraftCommand(_root: unknown, { data }
   const mileage = data.mileage == null ? null : nonNegativeInteger(data.mileage, 'Mileage')
   if (priceCents === 0) throw new Error('Retail price must be greater than zero')
   const description = required(data.description, 'Description', 4_000)
-  const imagePath = required(data.imagePath, 'Primary image path', 500)
+  // Photos are managed by the photo commands; a typed primary path is still accepted from older callers.
+  const imagePath = String(data.imagePath || '').trim()
+  if (imagePath.length > 500) throw new Error('Primary image path must be at most 500 characters')
   const expectedUpdatedAt = commandDate(data.expectedUpdatedAt)
   const reason = required(data.reason, 'Audit reason')
   const eventKey = `inventory-merchandising-draft:${key(data.idempotencyKey)}`
@@ -85,9 +87,11 @@ async function updateInventoryMerchandisingDraftCommand(_root: unknown, { data }
       where: { id: stock.vehicle.id },
       data: { priceCents, listPriceCents, mileage, description },
     })
-    const primary = await tx.prisma.vehicleImage.findFirst({ where: { vehicleId: stock.vehicle.id, isPrimary: true }, select: { id: true } })
-    if (primary) await tx.prisma.vehicleImage.update({ where: { id: primary.id }, data: { rooftopId: stock.rooftop.id, imagePath, caption: `${stock.vehicle.year} ${stock.vehicle.make} ${stock.vehicle.model}`, category: 'exterior', sortOrder: 0 } })
-    else await tx.prisma.vehicleImage.create({ data: { rooftopId: stock.rooftop.id, vehicleId: stock.vehicle.id, imagePath, caption: `${stock.vehicle.year} ${stock.vehicle.make} ${stock.vehicle.model}`, category: 'exterior', sortOrder: 0, isPrimary: true } })
+    if (imagePath) {
+      const primary = await tx.prisma.vehicleImage.findFirst({ where: { vehicleId: stock.vehicle.id, isPrimary: true }, select: { id: true } })
+      if (primary) await tx.prisma.vehicleImage.update({ where: { id: primary.id }, data: { rooftopId: stock.rooftop.id, imagePath, caption: `${stock.vehicle.year} ${stock.vehicle.make} ${stock.vehicle.model}`, category: 'exterior', sortOrder: 0 } })
+      else await tx.prisma.vehicleImage.create({ data: { rooftopId: stock.rooftop.id, vehicleId: stock.vehicle.id, imagePath, caption: `${stock.vehicle.year} ${stock.vehicle.make} ${stock.vehicle.model}`, category: 'exterior', sortOrder: 0, isPrimary: true } })
+    }
     await tx.prisma.inventoryStockEvent.create({ data: { rooftopId: stock.rooftop.id, stockId: stock.id, eventKey, eventType: 'merchandising-draft-updated', reason, evidence, actorId: context.session.itemId } })
     return false
   }, { timeout: 30_000 })

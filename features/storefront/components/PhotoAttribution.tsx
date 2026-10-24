@@ -9,7 +9,7 @@ export function PhotoAttribution({ src, className = '' }: { src?: string | null;
   if (!photo) return null
 
   return (
-    <p className={`text-[var(--sf-text-xs)] leading-snug ${className}`} style={{ color: 'var(--sf-ink-3)' }}>
+    <p className={`text-[length:var(--sf-text-xs)] leading-snug ${className}`} style={{ color: 'var(--sf-ink-3)' }}>
       Photo:{' '}
       <a href={photo.sourceUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
         {photo.author}

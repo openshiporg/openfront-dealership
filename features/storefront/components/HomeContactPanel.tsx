@@ -23,7 +23,7 @@ export function HomeContactPanel() {
             {hasLocation ? business.addressLine1 || business.addressLine2 : business.fullName}
           </h2>
           {business.addressLine1 && business.addressLine2 && (
-            <p className="sf-muted mt-2 text-[var(--sf-text-md)]">{business.addressLine2}</p>
+            <p className="sf-muted mt-2 text-[length:var(--sf-text-md)]">{business.addressLine2}</p>
           )}
           <div className="sf-track mt-6">
             {business.directionsHref && (
@@ -41,14 +41,14 @@ export function HomeContactPanel() {
           {hours.length > 0 ? (
             <dl className="border-t" style={{ borderColor: 'var(--sf-rule)' }}>
               {hours.map((row) => (
-                <div key={row.label} className="flex items-baseline justify-between gap-4 border-b py-2.5 text-[var(--sf-text-sm)]" style={{ borderColor: 'var(--sf-rule)' }}>
+                <div key={row.label} className="flex items-baseline justify-between gap-4 border-b py-2.5 text-[length:var(--sf-text-sm)]" style={{ borderColor: 'var(--sf-rule)' }}>
                   <dt className="sf-muted">{row.label}</dt>
                   <dd className="sf-figure text-right">{row.value}</dd>
                 </div>
               ))}
             </dl>
           ) : (
-            <p className="sf-muted text-[var(--sf-text-sm)]">Hours not listed</p>
+            <p className="sf-muted text-[length:var(--sf-text-sm)]">Hours not listed</p>
           )}
         </div>
 
@@ -56,19 +56,19 @@ export function HomeContactPanel() {
           <p className="sf-eyebrow mb-3">Sales</p>
           <dl className="border-t" style={{ borderColor: 'var(--sf-rule)' }}>
             {business.phoneHref && business.phoneDisplay && (
-              <div className="flex items-baseline justify-between gap-4 border-b py-2.5 text-[var(--sf-text-sm)]" style={{ borderColor: 'var(--sf-rule)' }}>
+              <div className="flex items-baseline justify-between gap-4 border-b py-2.5 text-[length:var(--sf-text-sm)]" style={{ borderColor: 'var(--sf-rule)' }}>
                 <dt className="sf-muted">Phone</dt>
                 <dd><a href={business.phoneHref} className="sf-figure sf-link">{business.phoneDisplay}</a></dd>
               </div>
             )}
             {business.salesEmail && (
-              <div className="flex items-baseline justify-between gap-4 border-b py-2.5 text-[var(--sf-text-sm)]" style={{ borderColor: 'var(--sf-rule)' }}>
+              <div className="flex items-baseline justify-between gap-4 border-b py-2.5 text-[length:var(--sf-text-sm)]" style={{ borderColor: 'var(--sf-rule)' }}>
                 <dt className="sf-muted">Email</dt>
                 <dd className="min-w-0 text-right"><a href={`mailto:${business.salesEmail}`} className="sf-link break-all">{business.salesEmail}</a></dd>
               </div>
             )}
             {business.serviceEmail && (
-              <div className="flex items-baseline justify-between gap-4 border-b py-2.5 text-[var(--sf-text-sm)]" style={{ borderColor: 'var(--sf-rule)' }}>
+              <div className="flex items-baseline justify-between gap-4 border-b py-2.5 text-[length:var(--sf-text-sm)]" style={{ borderColor: 'var(--sf-rule)' }}>
                 <dt className="sf-muted">Service</dt>
                 <dd className="min-w-0 text-right"><a href={`mailto:${business.serviceEmail}`} className="sf-link break-all">{business.serviceEmail}</a></dd>
               </div>

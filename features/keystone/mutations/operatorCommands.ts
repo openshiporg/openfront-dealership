@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import { permissions } from '../access'
 import { commandDate } from '../lifecycle/commandDate'
-import { amortizedPaymentCents, assertValidDealPrice, calculateDealPrice, checkedCents, normalizeMoneyLines, sumMoneyLines } from '../lifecycle/dealPricing'
+import { amortizedPaymentCents, assertValidDealPrice, calculateDealPrice, checkedCents, normalizeMoneyLines, repriceRateTaxLines, sumMoneyLines } from '../lifecycle/dealPricing'
 import { domainEventRequestHash, recordDomainEventInTransaction, stableJson, type DomainEventInput } from '../lifecycle/domainEvents'
 import { assertSessionRooftopPermission, assertUserRooftopAccess } from '../tenantRecords'
 import { assertCurrentFunding, currentDealAuthority, lockDeal, readLockedFunding, worksheetBinding } from '../lifecycle/dealFinanceEvidence'
@@ -80,9 +80,10 @@ export async function saveDealWorksheet(_root: unknown, { data }: any, context: 
   const products = normalizeMoneyLines(data.products === undefined ? deal.products ?? [] : data.products, 'Product')
   const retainedTax = deal.taxLines?.length ? deal.taxLines : Number(deal.taxAmountCents || 0) > 0
     ? [{ code: 'legacy-tax', name: 'Retained operator-recorded tax', amountCents: deal.taxAmountCents, source: 'operator-recorded' }] : []
-  const taxLines = normalizeMoneyLines(data.taxLines === undefined ? retainedTax : data.taxLines, 'Tax')
   const vehiclePriceCents = cents(data.vehiclePriceCents, 'Vehicle price')
   const tradeInValueCents = cents(data.tradeInValueCents === undefined ? deal.tradeInValueCents : data.tradeInValueCents, 'Trade-in value')
+  // Rate-based tax lines are repriced here so the server, not the client, owns the tax amount.
+  const taxLines = repriceRateTaxLines(normalizeMoneyLines(data.taxLines === undefined ? retainedTax : data.taxLines, 'Tax'), { vehiclePriceCents, tradeInValueCents, fees, rebates })
   const downPaymentCents = cents(data.downPaymentCents === undefined ? deal.downPaymentCents : data.downPaymentCents, 'Down payment')
   const taxAmountCents = sumMoneyLines(taxLines)
   const pricing = calculateDealPrice({ vehiclePriceCents, tradeInValueCents, downPaymentCents, fees, rebates, products, taxLines, taxAmountCents })

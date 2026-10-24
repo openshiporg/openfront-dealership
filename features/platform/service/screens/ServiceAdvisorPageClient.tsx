@@ -44,12 +44,13 @@ import {
   bookingFields,
   serviceTaskFields,
   serviceTaskRequest,
+  repairOrderTotalsCheck,
   splitLocalDateTime,
   type ServiceChoice,
   type ServiceTask,
   type ServiceTaskOperation,
 } from '../lib/serviceTasks'
-import type { FixedOpsWorkspace } from '../lib/types'
+import type { FixedOpsLineItem, FixedOpsWorkspace } from '../lib/types'
 
 
 const serviceTaskActions: Record<ServiceTaskOperation, (data: Record<string, unknown>) => Promise<{ success: boolean; error?: string }>> = {
@@ -88,6 +89,10 @@ type ServiceOrder = {
   authorizationStatus: string
   invoiceNumber: string | null
   laborOperations: { id: string; operationCode: string; description: string; status: string; technician: { id: string; name: string } | null }[]
+  lineItems: FixedOpsLineItem[]
+  lineLaborTotal: number
+  linePartsTotal: number
+  totalsMatchLines: boolean
   laborTotal: number | null
   partsTotal: number | null
   tax: number | null
@@ -184,14 +189,28 @@ function toAppointments(workspace: FixedOpsWorkspace | null | undefined): Servic
   }))
 }
 
+const lineItemTypeLabels: Record<string, string> = {
+  labor: 'Labor',
+  part: 'Part',
+  sublet: 'Sublet',
+}
+
 function toOrders(workspace: FixedOpsWorkspace | null | undefined): ServiceOrder[] {
-  return (workspace?.orders || []).map(order => ({
-    ...order,
-    laborTotal: (order.laborTotalCents ?? 0) / 100,
-    partsTotal: (order.partsTotalCents ?? 0) / 100,
-    tax: (order.taxCents ?? 0) / 100,
-    grandTotal: (order.grandTotalCents ?? 0) / 100,
-  }))
+  return (workspace?.orders || []).map(order => {
+    const lineItems = order.lineItems || []
+    const check = repairOrderTotalsCheck({ ...order, lineItems })
+    return {
+      ...order,
+      lineItems,
+      lineLaborTotal: check.lineLaborCents / 100,
+      linePartsTotal: check.linePartsCents / 100,
+      totalsMatchLines: check.matches,
+      laborTotal: (order.laborTotalCents ?? 0) / 100,
+      partsTotal: (order.partsTotalCents ?? 0) / 100,
+      tax: (order.taxCents ?? 0) / 100,
+      grandTotal: (order.grandTotalCents ?? 0) / 100,
+    }
+  })
 }
 
 function toParts(workspace: FixedOpsWorkspace | null | undefined): Part[] {
@@ -623,7 +642,7 @@ export function ServiceAdvisorPageClient({
               {
                 label: 'Authorization',
                 value: (
-                  <TitleLine as="span" tone={order.authorizationStatus === 'approved' ? 'ok' : order.authorizationStatus === 'declined' ? 'bad' : 'warn'} className="justify-end capitalize">
+                  <TitleLine as="span" tone={order.authorizationStatus === 'authorized' || order.authorizationStatus === 'approved' ? 'ok' : order.authorizationStatus === 'declined' ? 'bad' : 'warn'} className="justify-end capitalize">
                     {order.authorizationStatus || 'pending'}
                   </TitleLine>
                 ),
@@ -655,7 +674,39 @@ export function ServiceAdvisorPageClient({
           )}
         </DeskSection>
 
-        <DeskSection title="Totals">
+        <DeskSection title="Line items" count={order.lineItems.length}>
+          {order.lineItems.length === 0 ? (
+            <p className="py-3 text-sm text-muted-foreground">No line items</p>
+          ) : (
+            <ul className="divide-y text-sm">
+              {order.lineItems.map(line => (
+                <li key={line.id} className="flex min-w-0 items-start justify-between gap-4 py-2.5">
+                  <div className="min-w-0">
+                    <p className="break-words font-medium">{line.description}</p>
+                    <p className="break-words text-xs text-muted-foreground">
+                      {[lineItemTypeLabels[line.itemType] || line.itemType, line.partNumber || null, `Qty ${line.quantity} × ${formatCurrency(line.unitPriceCents / 100)}`]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                  </div>
+                  <p className="shrink-0 font-mono text-[13px] tabular-nums">{formatCurrency(line.priceCents / 100)}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </DeskSection>
+
+        <DeskSection title="Recorded totals">
+          {!order.totalsMatchLines && (
+            <Notice tone="warn" className="mb-2">
+              <div className="min-w-0">
+                <p className="font-medium">Totals don&apos;t match line items</p>
+                <p className="mt-0.5 font-mono text-xs tabular-nums text-muted-foreground">
+                  Lines: Labor {formatCurrency(order.lineLaborTotal)} · Parts {formatCurrency(order.linePartsTotal)}
+                </p>
+              </div>
+            </Notice>
+          )}
           <dl className="divide-y text-sm">
             {[
               ['Labor', order.laborTotal],

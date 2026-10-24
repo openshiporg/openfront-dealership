@@ -23,7 +23,7 @@ export function PageHeader({
           {eyebrow && <p className="sf-eyebrow mb-3">{eyebrow}</p>}
           <h1 className="sf-display max-w-3xl text-[length:var(--sf-text-display)]">{title}</h1>
           {description && (
-            <p className="sf-muted mt-3 max-w-xl text-[var(--sf-text-md)]">{description}</p>
+            <p className="sf-muted mt-3 max-w-xl text-[length:var(--sf-text-md)]">{description}</p>
           )}
         </div>
         {actions && <div className="shrink-0">{actions}</div>}

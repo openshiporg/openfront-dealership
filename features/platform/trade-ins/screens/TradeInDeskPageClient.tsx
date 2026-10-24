@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
 import { Code, DeskHeader, Notice, Panel, Pill, Segmented, StatusDot, TitleLine, Track, type DeskTone } from '@/features/platform/components/desk'
+import { formatPhone } from '@/features/platform/lib/format'
 import { type TradeIn, getTradeIns, recordTradeInAppraisal } from '../actions'
 
 type QueueFilter = 'open' | 'all' | 'attached'
@@ -17,6 +18,26 @@ const conditionTone: Record<string, DeskTone> = {
   good: 'info',
   fair: 'warn',
   poor: 'bad',
+}
+
+const conditionLabel: Record<string, string> = {
+  excellent: 'Excellent',
+  good: 'Good',
+  fair: 'Fair',
+  poor: 'Poor',
+}
+
+// Storefront requests store "Ownership: <own|financing|lease>[; customer-reported payoff: $X]" (submitTradeIn).
+const ownershipLabel: Record<string, string> = {
+  own: 'Owned',
+  financing: 'Financed',
+  lease: 'Leased',
+}
+
+function conditionNotes(value: string) {
+  return value
+    .replace(/^Ownership: (own|financing|lease)\b/, (_match, ownership: string) => `Ownership: ${ownershipLabel[ownership]}`)
+    .replace(/; customer-reported payoff:/, '; Customer-reported payoff:')
 }
 
 function appraisalState(tradeIn: TradeIn): { tone: DeskTone; label: string } {
@@ -255,10 +276,10 @@ export function TradeInDeskPageClient({
                       <TitleLine as="p" tone={state.tone} status={state.label} className="text-sm font-medium">
                         {vehicleLabel(tradeIn)}
                         {tradeIn.condition && (
-                          <span className="ml-2 inline-flex items-baseline gap-1 text-xs font-normal capitalize text-muted-foreground">
+                          <span className="ml-2 inline-flex items-baseline gap-1 text-xs font-normal text-muted-foreground">
                             <span className="sr-only">Condition: </span>
                             <StatusDot tone={conditionTone[tradeIn.condition] ?? 'idle'} className="size-1.5 -translate-y-px shadow-none" />
-                            {tradeIn.condition}
+                            {conditionLabel[tradeIn.condition] ?? tradeIn.condition}
                           </span>
                         )}
                       </TitleLine>
@@ -278,11 +299,11 @@ export function TradeInDeskPageClient({
                           'No customer'
                         )}
                         {' · '}
-                        {tradeIn.lead?.phone || tradeIn.lead?.email || 'No contact'}
+                        {formatPhone(tradeIn.lead?.phone) || tradeIn.lead?.email || 'No contact'}
                         {tradeIn.appraisedBy?.name ? ` · Appraised by ${tradeIn.appraisedBy.name}` : ''}
                       </p>
                       {tradeIn.interiorCondition && (
-                        <p className="break-words pl-4 text-xs text-muted-foreground">{tradeIn.interiorCondition}</p>
+                        <p className="break-words pl-4 text-xs text-muted-foreground">{conditionNotes(tradeIn.interiorCondition)}</p>
                       )}
                       {tradeIn.mechanicalIssues && (
                         <p className="break-words pl-4 text-xs text-amber-700 dark:text-amber-300" title={tradeIn.mechanicalIssues}>

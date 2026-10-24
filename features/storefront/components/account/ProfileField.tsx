@@ -21,7 +21,7 @@ export function ProfileField({
       className="grid gap-4 border-b py-[var(--sf-space-md)] md:grid-cols-[11rem_minmax(0,1fr)_auto] md:items-start md:gap-6"
       style={{ borderColor: 'var(--sf-rule)' }}
     >
-      <h2 className="sf-heading text-[var(--sf-text-lg)]">{title}</h2>
+      <h2 className="sf-heading text-[length:var(--sf-text-lg)]">{title}</h2>
       <div className="min-w-0 max-w-xl space-y-4">
         {children}
         {state.error && <div role="alert" className="sf-notice" data-tone="bad">{state.error}</div>}

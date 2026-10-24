@@ -18,7 +18,7 @@ const PREFERRED_CONTACT = [
 
 function InfoRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 border-b py-3 text-[var(--sf-text-sm)]" style={{ borderColor: 'var(--sf-rule)' }}>
+    <div className="flex items-baseline justify-between gap-4 border-b py-3 text-[length:var(--sf-text-sm)]" style={{ borderColor: 'var(--sf-rule)' }}>
       <dt className="sf-muted shrink-0">{label}</dt>
       <dd className="min-w-0 text-right">{children}</dd>
     </div>
@@ -133,7 +133,7 @@ export function ContactPage() {
                   )}
                 </>
               ) : (
-                <p className="sf-muted text-[var(--sf-text-sm)]">Address not listed</p>
+                <p className="sf-muted text-[length:var(--sf-text-sm)]">Address not listed</p>
               )}
             </section>
 
@@ -153,7 +153,7 @@ export function ContactPage() {
                   ))}
                 </dl>
               ) : (
-                <p className="sf-muted text-[var(--sf-text-sm)]">Contact details not listed</p>
+                <p className="sf-muted text-[length:var(--sf-text-sm)]">Contact details not listed</p>
               )}
             </section>
 
@@ -168,7 +168,7 @@ export function ContactPage() {
                   ))}
                 </dl>
               ) : (
-                <p className="sf-muted text-[var(--sf-text-sm)]">Hours not listed</p>
+                <p className="sf-muted text-[length:var(--sf-text-sm)]">Hours not listed</p>
               )}
             </section>
           </aside>

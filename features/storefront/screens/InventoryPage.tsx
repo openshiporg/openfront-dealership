@@ -368,7 +368,7 @@ export function InventoryPage() {
             <p className="sf-eyebrow">Inventory</p>
             <h1 className="sf-display mt-2 text-[length:var(--sf-text-2xl)] md:text-[2.75rem]">On the lot</h1>
           </div>
-          <p className="sf-title-line sf-figure text-[var(--sf-text-sm)]" aria-live="polite">
+          <p className="sf-title-line sf-figure text-[length:var(--sf-text-sm)]" aria-live="polite">
             <span className="sf-dot" data-tone={readoutTone} aria-hidden="true" />
             {readout}
           </p>
@@ -391,7 +391,7 @@ export function InventoryPage() {
               className="flex items-center justify-between gap-3 border-b px-4 py-2 lg:border-b-0 lg:px-0 lg:pb-5 lg:pt-0"
               style={{ borderColor: 'var(--sf-rule)' }}
             >
-              <h2 id="inventory-filters-title" className="sf-title-line sf-heading text-[var(--sf-text-lg)]">
+              <h2 id="inventory-filters-title" className="sf-title-line sf-heading text-[length:var(--sf-text-lg)]">
                 Filters
                 {activeFilterCount > 0 && (
                   <span className="sf-chip sf-figure" aria-label={`${activeFilterCount} active`}>{activeFilterCount}</span>
@@ -608,7 +608,7 @@ export function InventoryPage() {
                   </li>
                 ))}
                 <li>
-                  <button type="button" onClick={clearFilters} className="sf-link inline-flex min-h-11 items-center px-2 text-[var(--sf-text-xs)]">
+                  <button type="button" onClick={clearFilters} className="sf-link inline-flex min-h-11 items-center px-2 text-[length:var(--sf-text-xs)]">
                     Clear all
                   </button>
                 </li>
@@ -706,7 +706,7 @@ export function InventoryPage() {
                         <ChevronRight className="size-4" aria-hidden="true" />
                       </button>
                     </div>
-                    <p className="sf-figure sf-faint text-[var(--sf-text-xs)]" aria-live="polite">
+                    <p className="sf-figure sf-faint text-[length:var(--sf-text-xs)]" aria-live="polite">
                       Page {currentPage} of {totalPages}
                     </p>
                   </nav>

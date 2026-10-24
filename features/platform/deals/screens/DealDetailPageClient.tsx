@@ -34,8 +34,9 @@ import {
   type DealLenderOffer,
   type DealWorksheetVersion,
 } from '../actions'
-import { calculateDealPrice, assertValidDealPrice, normalizeMoneyLines, sumMoneyLines, type MoneyLine } from '@/features/keystone/lifecycle/dealPricing'
+import { applyDealDefaults, calculateDealPrice, assertValidDealPrice, normalizeMoneyLines, repriceRateTaxLines, sumMoneyLines, type MoneyLine } from '@/features/keystone/lifecycle/dealPricing'
 import { WorksheetLines } from '../components/WorksheetLines'
+import { MoneyInput } from '../components/MoneyInput'
 import { readFinanceEvidence, type FinanceEvidence } from '../lib/financeEvidence'
 import { FinanceEvidenceHistory } from '../components/FinanceEvidenceHistory'
 import { labelForDeal, toneForDeal } from '../lib/dealStatus'
@@ -81,7 +82,7 @@ interface Deal {
     trim: string
     stockNumber: string
     vin: string
-    color: string
+    exteriorColor: string | null
     price: number
     purchasePrice: number
   } | null
@@ -95,6 +96,16 @@ interface Deal {
 }
 
 const fieldLabel = 'font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground'
+
+/** Rate-based tax lines follow the worksheet; the server reprices them the same way on save. */
+function withRepricedTax(deal: Deal): Deal {
+  try {
+    return { ...deal, taxLines: repriceRateTaxLines(deal.taxLines, { vehiclePriceCents: Math.round(deal.vehiclePrice * 100), tradeInValueCents: Math.round(deal.tradeInValue * 100), fees: deal.fees, rebates: deal.rebates }) }
+  } catch {
+    // Invalid amounts are reported on save; keep the last priced tax until then.
+    return deal
+  }
+}
 
 function lineCents(line: MoneyLine) {
   const value = Number(line.amountCents ?? Math.round(Number((line as { amount?: unknown }).amount || 0) * 100))
@@ -175,12 +186,26 @@ export function DealDetailPageClient({ id }: { id: string }) {
       value.financeEvidence = readFinanceEvidence(value.financeEvidence)
       for (const key of ['fees', 'rebates', 'products', 'taxLines']) value[key] = Array.isArray(value[key]) ? value[key] : []
       if (!value.taxLines.length && value.taxAmountCents > 0) value.taxLines = [{ code: 'legacy-tax', name: 'Tax', amountCents: value.taxAmountCents, source: 'operator-recorded' }]
-      setWorksheetDirty(false)
       setShowLineErrors(false)
       setWorksheetHistory(response.data.dealWorkspace.worksheetVersions || [])
       setSavedPricing({ ...calculateDealPrice(value), financingAmountCents: value.financingAmountCents || 0, monthlyPaymentCents: value.monthlyPaymentCents || 0, apr: value.apr || 0, loanTerm: value.loanTerm || 0 })
+      // A never-saved pencil with no fee or tax lines starts from the store's doc fee and tax rate.
+      let prefilled = false
+      if (value.status === 'pencil' && !value.worksheetVersion) {
+        try {
+          const seeded = applyDealDefaults(value, response.data.dealDefaults)
+          if (seeded.changed) {
+            value.fees = seeded.fees
+            value.taxLines = seeded.taxLines
+            prefilled = true
+          }
+        } catch {
+          prefilled = false
+        }
+      }
+      setWorksheetDirty(prefilled)
       const dollars = (cents: number | null | undefined) => (cents ?? 0) / 100
-      setDeal({ ...value, vehiclePrice: dollars(value.vehiclePriceCents), tradeInValue: dollars(value.tradeInValueCents), downPayment: dollars(value.downPaymentCents), financingAmount: dollars(value.financingAmountCents), monthlyPayment: dollars(value.monthlyPaymentCents), taxAmount: dollars(value.taxAmountCents), totalPrice: dollars(value.totalPriceCents), profit: null, salesperson: value.salesperson ? { ...value.salesperson, email: '' } : null, lead: value.lead ? { ...value.lead, email: '', phone: '' } : null, vehicle: value.vehicle ? { ...value.vehicle, color: null, price: dollars(value.vehicle.priceCents), purchasePrice: 0 } : null })
+      setDeal({ ...value, vehiclePrice: dollars(value.vehiclePriceCents), tradeInValue: dollars(value.tradeInValueCents), downPayment: dollars(value.downPaymentCents), financingAmount: dollars(value.financingAmountCents), monthlyPayment: dollars(value.monthlyPaymentCents), taxAmount: dollars(value.taxAmountCents), totalPrice: dollars(value.totalPriceCents), profit: null, salesperson: value.salesperson ? { ...value.salesperson, email: '' } : null, lead: value.lead ? { ...value.lead, email: '', phone: '' } : null, vehicle: value.vehicle ? { ...value.vehicle, price: dollars(value.vehicle.priceCents), purchasePrice: 0 } : null })
       const offers = await getDealLenderOffers(id)
       setLenderOffers(offers.success ? offers.data?.dealLenderOffers || [] : [])
     } else {
@@ -188,6 +213,11 @@ export function DealDetailPageClient({ id }: { id: string }) {
       setError(response.error || 'The deal was not found.')
     }
     setLoading(false)
+  }
+
+  const editWorksheet = (patch: Partial<Deal>) => {
+    setWorksheetDirty(true)
+    setDeal(current => current ? withRepricedTax({ ...current, ...patch }) : current)
   }
 
   const saveWorksheetVersion = async () => {
@@ -385,11 +415,11 @@ export function DealDetailPageClient({ id }: { id: string }) {
 
   const updateStatus = async (newStatus: string, approvalDecision?: 'pending' | 'approved' | 'rejected' | 'changes-requested') => {
     const defaultNote = approvalDecision === 'pending'
-      ? 'Submitted for finance desk approval.'
+      ? 'Submitted for approval from the deal page.'
       : approvalDecision === 'approved'
-        ? 'Approved by finance desk.'
+        ? 'Approved from the deal page.'
         : approvalDecision === 'rejected'
-          ? 'Rejected by finance desk.'
+          ? 'Rejected from the deal page.'
           : ''
 
     if (approvalDecision) {
@@ -684,30 +714,30 @@ export function DealDetailPageClient({ id }: { id: string }) {
                       label="Deal structure"
                       size="sm"
                       value={deal.structureType === 'finance' ? 'finance' : 'cash'}
-                      onChange={(structureType) => { setWorksheetDirty(true); setDeal(current => current ? { ...current, structureType, ...(structureType === 'cash' ? { loanTerm: 0, apr: 0, financingAmount: 0, monthlyPayment: 0 } : {}) } : current) }}
+                      onChange={(structureType) => editWorksheet({ structureType, ...(structureType === 'cash' ? { loanTerm: 0, apr: 0, financingAmount: 0, monthlyPayment: 0 } : {}) })}
                       options={[{ value: 'cash', label: 'Cash', disabled: updating }, { value: 'finance', label: 'Finance', disabled: updating }]}
                     />
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {[
+                    {([
                       ['Negotiated vehicle price', 'vehiclePrice'],
                       ['Trade-in credit', 'tradeInValue'],
                       [isCash ? 'Down payment (part of amount due)' : 'Down payment', 'downPayment'],
-                    ].map(([label, field]) => (
+                    ] as const).map(([label, field]) => (
                       <label key={field} className="grid min-w-0 gap-1.5">
                         <span className={fieldLabel}>{label}</span>
-                        <Input disabled={updating} aria-label={label} className="text-right tabular-nums" type="number" min="0" step="0.01" value={Number(deal[field as keyof Deal] || 0)} onChange={(event) => { setWorksheetDirty(true); setDeal(current => current ? { ...current, [field]: Number(event.target.value) } : current) }} />
+                        <MoneyInput disabled={updating} aria-label={label} cents={Math.round(Number(deal[field] || 0) * 100)} onCentsChange={(cents) => editWorksheet({ [field]: cents / 100 })} />
                       </label>
                     ))}
                     {deal.structureType === 'finance' && (
                       <>
-                        <label className="grid min-w-0 gap-1.5"><span className={fieldLabel}>APR (%)</span><Input disabled={updating} aria-label="APR percentage" className="text-right tabular-nums" type="number" min="0" max="100" step="0.01" value={deal.apr || 0} onChange={(event) => { setWorksheetDirty(true); setDeal(current => current ? { ...current, apr: Number(event.target.value) } : current) }} /></label>
-                        <label className="grid min-w-0 gap-1.5"><span className={fieldLabel}>Term (months)</span><Input disabled={updating} aria-label="Term in months" className="text-right tabular-nums" type="number" min="1" max="120" step="1" value={deal.loanTerm || 0} onChange={(event) => { setWorksheetDirty(true); setDeal(current => current ? { ...current, loanTerm: Number(event.target.value) } : current) }} /></label>
+                        <label className="grid min-w-0 gap-1.5"><span className={fieldLabel}>APR (%)</span><Input disabled={updating} aria-label="APR percentage" className="text-right tabular-nums" type="number" min="0" max="100" step="0.01" value={deal.apr || 0} onChange={(event) => editWorksheet({ apr: Number(event.target.value) })} /></label>
+                        <label className="grid min-w-0 gap-1.5"><span className={fieldLabel}>Term (months)</span><Input disabled={updating} aria-label="Term in months" className="text-right tabular-nums" type="number" min="1" max="120" step="1" value={deal.loanTerm || 0} onChange={(event) => editWorksheet({ loanTerm: Number(event.target.value) })} /></label>
                       </>
                     )}
                   </div>
                   <Panel className="space-y-3 p-3">
-                    {([['fees', 'Fees', 'fee'], ['products', 'Products', 'product'], ['rebates', 'Rebates', 'rebate'], ['taxLines', 'Tax', 'tax']] as const).map(([field, title, category]) => <WorksheetLines key={field} title={title} category={category} lines={deal[field]} disabled={updating} showErrors={showLineErrors} onChange={lines => { setWorksheetDirty(true); setDeal(current => current ? { ...current, [field]: lines } : current) }} />)}
+                    {([['fees', 'Fees', 'fee'], ['products', 'Products', 'product'], ['rebates', 'Rebates', 'rebate'], ['taxLines', 'Tax', 'tax']] as const).map(([field, title, category]) => <WorksheetLines key={field} title={title} category={category} lines={deal[field]} disabled={updating} showErrors={showLineErrors} onChange={lines => editWorksheet({ [field]: lines })} />)}
                   </Panel>
                   <Track>
                     <Pill variant={worksheetDirty ? 'primary' : 'raised'} onClick={saveWorksheetVersion} disabled={updating}>
@@ -844,7 +874,7 @@ export function DealDetailPageClient({ id }: { id: string }) {
                   deal.vehicle.trim ? { label: 'Trim', value: deal.vehicle.trim } : null,
                   { label: 'Stock #', value: <Code className="text-foreground">{deal.vehicle.stockNumber}</Code> },
                   { label: 'VIN', value: <Code className="break-all text-foreground">{deal.vehicle.vin}</Code> },
-                  { label: 'Color', value: deal.vehicle.color || '-' },
+                  { label: 'Color', value: deal.vehicle.exteriorColor || '-' },
                   { label: 'MSRP', value: formatCurrency(deal.vehicle.price), mono: true },
                 ]} />
               ) : (

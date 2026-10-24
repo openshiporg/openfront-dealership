@@ -2,7 +2,8 @@ import { domainEventRequestHash, stableJson } from './domainEvents'
 import { calculateDealPrice } from './dealPricing'
 import { buildDealEvidenceSnapshot } from './dealLifecycle'
 import { assertSessionRooftopPermission } from '../tenantRecords'
-import { assertReviewedPrerequisites, prerequisiteReadiness } from './financePrerequisites'
+import { assertReviewedPrerequisites, financeSteps, prerequisiteReadiness } from './financePrerequisites'
+import { cashPaymentState } from './cashPayment'
 
 // Reuse the existing audit/JSON evidence stores; no historical rows are backfilled.
 // Old unbound evidence stays readable but must be explicitly reconfirmed.
@@ -133,10 +134,17 @@ export async function financeEvidenceReadiness(tx: any, deal: any) {
   let fundingCurrent = false
   let issue: string | null = null
   try { await assertCurrentSelectedOffer(tx, deal); selectedOfferCurrent = true } catch (error) { issue = (error as Error).message }
-  try { await assertCurrentFunding(tx, deal, funding); fundingCurrent = true } catch (error) { issue ||= (error as Error).message }
+  // No funding case yet is a step still to do, not an error to show.
+  if (funding) {
+    try { await assertCurrentFunding(tx, deal, funding); fundingCurrent = true } catch (error) { issue ||= (error as Error).message }
+  }
+  const prerequisites = await prerequisiteReadiness(tx, deal)
+  const plan = await financeSteps(tx, deal, { prerequisitesCurrent: prerequisites.current, fundingCurrent })
   return { worksheetVersion: deal.worksheetVersion, selectedOfferCurrent, fundingCurrent,
     fundingStatus: funding?.status ?? null, fundingReference: funding?.fundingReference ?? null,
     fundingUpdatedAt: funding?.updatedAt?.toISOString() ?? null,
     fundingWorksheetVersion: funding?.immutableEvidence?.binding?.worksheetVersion ?? null,
-    prerequisites: await prerequisiteReadiness(tx, deal), issue }
+    prerequisites, issue,
+    structureType: plan.structureType, steps: plan.steps, nextStep: plan.nextStep,
+    payment: await cashPaymentState(tx, deal) }
 }

@@ -8,6 +8,7 @@ export type TestDrive = {
   id: string
   scheduledTime: string | null
   completed: boolean | null
+  noShow: boolean | null
   driverLicenseVerified: boolean | null
   feedback: string | null
   interestedLevel: string | null
@@ -25,6 +26,7 @@ export async function getTestDrives() {
         id
         scheduledTime
         completed
+        noShow
         driverLicenseVerified
         feedback
         interestedLevel
@@ -60,6 +62,16 @@ export async function completeTestDrive(data: { id: string; interestedLevel: str
       idempotencyKey: `test-drive:${data.id}:complete`,
     },
   })
+  if (response.success) revalidatePath(TEST_DRIVES_PATH)
+  return response
+}
+
+export async function markTestDriveNoShow(id: string) {
+  const response = await keystoneClient(`
+    mutation MarkTestDriveNoShow($data: TestDriveWorkflowInput!) {
+      updateTestDriveWorkflow(data: $data) { id completed noShow }
+    }
+  `, { data: { id, action: 'no-show', idempotencyKey: `test-drive:${id}:no-show` } })
   if (response.success) revalidatePath(TEST_DRIVES_PATH)
   return response
 }

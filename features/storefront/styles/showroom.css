@@ -455,6 +455,11 @@ body:has(.storefront) {
   color: var(--sf-on-dark-2);
 }
 
+.sf-band .sf-pill-primary,
+.sf-band .sf-pill-primary:hover:not(:disabled) {
+  color: var(--sf-accent-ink);
+}
+
 .sf-band .sf-pill[aria-pressed="true"],
 .sf-band .sf-pill[data-active="true"] {
   background: var(--sf-paper-4);

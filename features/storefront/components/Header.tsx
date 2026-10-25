@@ -99,7 +99,7 @@ export function Header() {
 
       <div
         className="border-b backdrop-blur-md"
-        style={{ background: 'oklch(0.987 0.002 255 / 0.9)', borderColor: 'var(--sf-rule)' }}
+        style={{ background: 'color-mix(in oklch, var(--sf-paper) 90%, transparent)', borderColor: 'var(--sf-rule)' }}
       >
         <Container className="flex h-16 items-center gap-2 sm:gap-4 md:h-[4.5rem]">
           {/* Phones: the name may wrap to two lines rather than truncate; it keeps a floor width so it never collapses to the logo. */}

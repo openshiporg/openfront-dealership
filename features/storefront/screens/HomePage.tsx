@@ -73,39 +73,42 @@ export async function HomePage() {
   return (
     <>
       <section className="sf-band relative overflow-hidden">
-        <Container className={`relative grid gap-10 pb-28 pt-10 md:pb-36 md:pt-16 ${lead && leadImage ? 'lg:grid-cols-[1fr_1.05fr] lg:items-end lg:gap-14' : ''}`}>
-          <div className="min-w-0">
-            {count !== null && (
-              <p className="sf-title-line sf-eyebrow">
-                <span className="sf-dot" data-tone={count > 0 ? 'ok' : 'idle'} aria-hidden="true" />
-                <span className="sf-figure">{new Intl.NumberFormat('en-US').format(count)}</span> in stock
-              </p>
-            )}
-            <h1 className={`sf-display mt-4 text-[length:var(--sf-text-display)] ${lead && leadImage ? 'max-w-[15ch]' : 'max-w-[22ch]'}`}>
-              {business.homepageTitle || business.fullName}
-            </h1>
-            {business.homepageDescription && (
-              <p className="mt-5 max-w-md text-[length:var(--sf-text-md)]" style={{ color: 'var(--sf-on-dark-2)' }}>
-                {business.homepageDescription}
-              </p>
-            )}
-            <div className="sf-track mt-8">
+        <Container className="relative pb-28 pt-10 md:pb-36 md:pt-16">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+            <div className="min-w-0">
+              {count !== null && (
+                <p className="sf-title-line sf-eyebrow">
+                  <span className="sf-dot" data-tone={count > 0 ? 'ok' : 'idle'} aria-hidden="true" />
+                  <span className="sf-figure">{new Intl.NumberFormat('en-US').format(count)}</span> in stock
+                </p>
+              )}
+              <h1 className="sf-display mt-4 max-w-[18ch] text-[length:var(--sf-text-display)]">
+                {business.homepageTitle || business.fullName}
+              </h1>
+              {business.homepageDescription && (
+                <p className="mt-5 max-w-md text-[length:var(--sf-text-md)]" style={{ color: 'var(--sf-on-dark-2)' }}>
+                  {business.homepageDescription}
+                </p>
+              )}
+            </div>
+            <div className="sf-track self-start lg:self-end">
               <Link href="/inventory" className="sf-pill sf-pill-primary">Shop inventory</Link>
               <Link href="/test-drive" className="sf-pill">Book a test drive</Link>
             </div>
           </div>
 
           {lead && leadImage && (
-            <Link href={`/inventory/${lead.id}`} className="group relative hidden min-w-0 lg:block">
-              <div className="relative aspect-[16/10] overflow-hidden rounded-[var(--sf-radius-lg)]" style={{ background: 'var(--sf-paper-4)' }}>
-                <Image src={leadImage} alt={vehicleTitle(lead)} fill priority unoptimized sizes="50vw" className="object-cover transition-transform duration-700 group-hover:scale-[1.02]" />
-              </div>
-              <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-4 rounded-[var(--sf-radius-md)] p-4" style={{ background: 'oklch(0.18 0.012 262 / 0.78)', backdropFilter: 'blur(10px)' }}>
-                <div className="min-w-0">
-                  <p className="sf-eyebrow">{vehicleConditionLabel(lead.condition)}</p>
-                  <p className="sf-heading mt-1 truncate text-[length:var(--sf-text-lg)]">{vehicleTitle(lead)}</p>
+            <Link href={`/inventory/${lead.id}`} className="sf-lead-frame group mt-10 md:mt-14">
+              <Image src={leadImage} alt={vehicleTitle(lead)} fill priority unoptimized sizes="(min-width: 1280px) 78rem, 100vw" className="object-cover transition-transform duration-700 group-hover:scale-[1.02]" />
+              <div className="sf-sticker sf-lead-sticker">
+                <div className="sf-sticker-head">
+                  <span>{vehicleConditionLabel(lead.condition)}</span>
+                  {lead.year ? <span>{lead.year}</span> : null}
                 </div>
-                <p className="sf-price shrink-0 text-[length:var(--sf-text-xl)]">{formatPrice(lead.price, business.currencyCode)}</p>
+                <div className="flex items-end justify-between gap-4 p-4">
+                  <p className="sf-heading min-w-0 text-[length:var(--sf-text-lg)]">{vehicleTitle(lead)}</p>
+                  <p className="sf-price shrink-0 text-[length:var(--sf-text-xl)]">{formatPrice(lead.price, business.currencyCode)}</p>
+                </div>
               </div>
             </Link>
           )}

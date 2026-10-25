@@ -51,19 +51,22 @@ export async function completeOnboarding() {
 }
 
 /**
- * `configured` means a rooftop already exists. `resumable` means this user has a setup run
- * in progress (a partial failure leaves the status at `in_progress`), so a retry may reuse
- * the records it already saved instead of being refused as a second dealership.
+ * `configured` means the dealership has been set up: its profile is saved or someone holds a
+ * dealer group membership. A rooftop alone does not count, because the rooftop-scope migration
+ * inserts a member-less default group and rooftop on every install, including a fresh one, and
+ * onboarding adopts that rooftop by slug rather than creating a second dealership.
+ * `resumable` means this user has a setup run in progress (a partial failure leaves the status
+ * at `in_progress`), so a retry may reuse the records it already saved.
  */
 export async function getStoreSetupState() {
-  const response = await keystoneClient(`query StoreSetupState { rooftopsCount authenticatedItem { ... on User { id onboardingStatus } } }`);
+  const response = await keystoneClient(`query StoreSetupState { dealershipProfile { id } dealerGroupMembershipsCount authenticatedItem { ... on User { id onboardingStatus } } }`);
   if (!response.success) {
     return { success: false as const, configured: false, resumable: false };
   }
   const onboardingStatus = response.data?.authenticatedItem?.onboardingStatus ?? null;
   return {
     success: true as const,
-    configured: (response.data?.rooftopsCount ?? 0) > 0,
+    configured: Boolean(response.data?.dealershipProfile?.id) || (response.data?.dealerGroupMembershipsCount ?? 0) > 0,
     resumable: onboardingStatus === 'in_progress',
   };
 }

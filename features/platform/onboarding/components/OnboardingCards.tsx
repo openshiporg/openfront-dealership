@@ -123,7 +123,7 @@ export function OnboardingCards({
     return null;
   }
 
-  // A store that already has a rooftop is set up; onboarding would seed a second dealership.
+  // A dealership that is already set up (saved profile or members) does not get the setup card.
   // A run left in progress by a partial failure stays visible so it can be retried.
   if (storeConfigured !== false) {
     return null;

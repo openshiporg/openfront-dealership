@@ -155,15 +155,34 @@ async function ensureDealership(input: SeedObject, context: any): Promise<Ensure
       }
     }
 
-    const groups = await sudo.query.DealerGroup.findMany({ where: { slug: { equals: groupSlug } }, take: 1, query: 'id' })
-    const dealerGroupId: string = groups[0]?.id
-      || (await sudo.db.DealerGroup.createOne({ data: { name: profile.name, slug: groupSlug, status: 'active' } })).id
-
+    let groups = await sudo.query.DealerGroup.findMany({ where: { slug: { equals: groupSlug } }, take: 1, query: 'id' })
     const rooftops = await sudo.query.Rooftop.findMany({
       where: { publicSlug: { equals: rooftopSlug } },
       take: 1,
       query: 'id dealerGroup { id }',
     })
+
+    // Every install, including a fresh one, starts with the rooftop-scope migration's
+    // default dealer group and rooftop, which nobody belongs to. When the requested
+    // rooftop slug is that unclaimed rooftop, setup adopts its group under the merchant's
+    // name instead of failing on the taken slug. A group or rooftop with any member is
+    // never adopted.
+    const rooftopGroupId: string | undefined = rooftops[0]?.dealerGroup?.id
+    if (!groups[0] && rooftopGroupId) {
+      const [groupMembers, rooftopMembers] = await Promise.all([
+        sudo.db.DealerGroupMembership.count({ where: { dealerGroup: { id: { equals: rooftopGroupId } } } }),
+        sudo.db.RooftopMembership.count({ where: { rooftop: { dealerGroup: { id: { equals: rooftopGroupId } } } } }),
+      ])
+      if (groupMembers === 0 && rooftopMembers === 0) {
+        await sudo.db.DealerGroup.updateOne({ where: { id: rooftopGroupId }, data: { name: profile.name } })
+        await sudo.db.Rooftop.updateOne({ where: { id: rooftops[0].id }, data: { name: profile.name } })
+        groups = [{ id: rooftopGroupId }]
+      }
+    }
+
+    const dealerGroupId: string = groups[0]?.id
+      || (await sudo.db.DealerGroup.createOne({ data: { name: profile.name, slug: groupSlug, status: 'active' } })).id
+
     if (rooftops[0] && rooftops[0].dealerGroup?.id !== dealerGroupId) {
       throw new Error('This rooftop slug already belongs to another dealer group')
     }

@@ -19,7 +19,7 @@ This is a redesign, not a polish. The earlier "lot at night" storefront and the 
 - **Build.** I rebuilt the platform kit (`components/desk.tsx`) and the storefront system (`tokens.css`, `signage.css`, fonts) myself. I then fanned the screens out to 8 agents working on separate directories, all bound by the contract and `craft-floor.md`.
 - **Gates.**
   - `impeccable detect` returns [] on `features/platform` and `features/storefront`.
-  - Real `tsc --noEmit` exits 0 on the pushed commits.
+  - Real `tsc --noEmit` exits 0 on every pushed commit (the last one through the serialized runner after the shared disk floor cleared).
   - Unit tests: 22/22.
   - Parity check: drift 0.
 - **Finish review.**
@@ -97,10 +97,10 @@ Every page now opens on a **"Needs you" queue**: what is waiting on this operato
 - `f26a442` Storefront redesign: the rooftop's signage in daylight.
 - `39eb5f0` Design record: product context, direction contracts, critique and before screenshots.
 - `d56bb8f` Redesign finish-review fixes.
-- A second fix batch (Analytics hairline row; Overview, Service and Payments strips moved below the work; platform "Similar" photo marker; warn hue; phone subtitle wrap; 13px controls; staff search placeholder) is committed locally after its typecheck. See the session report for its push status.
+- `370d308` Redesign verdict-pass fixes and design system record (Analytics hairline row; Overview, Service and Payments strips moved below the work; platform "Similar" photo marker; warn hue apart from failure red; phone subtitle wrap; 13px controls; staff search placeholder; DESIGN.md and design.json)
 
 ## Screenshots
-Playwright, 1440x900 and 390x844, full page. 26 routes each, captured from the live demo.
+Playwright (WebKit), 1440x900 and 390x844, full page, 26 routes each, captured from the live demo after the last deploy. A 390px overflow sweep of every captured route finds no page wider than the screen.
 - Before: `before/before-*.jpg`
 - After: `after/after-*.jpg`
 
@@ -111,3 +111,4 @@ The demo has little transactional data (0 deals), so many queues show their empt
 - **Storefront mono** still appears on some non-data text (phone numbers, day names, "Not set").
 - **No URL filters:** the platform pages don't read URL filter params, so Overview queue rows open the right page unfiltered.
 - **The reviewer's second verdict** was not rerun after batch 2. Two rounds is the budget for an unattended run.
+- **Detector advisories:** with DESIGN.md in place, `impeccable detect` reports 32 off-ramp font sizes (11/15px left in screens), 5 colours and one font in an onboarding file. All are advisory drift, not slop rules.

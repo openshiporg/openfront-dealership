@@ -448,12 +448,6 @@ export function PaymentsPageClient({
           )}
         </DeskSection>
 
-        <ReadoutStrip>
-          <Readout label="Pending" value={(counts.pending || 0) + (counts.creating || 0) + (counts.authorized || 0)} tone={counts.pending ? 'warn' : 'idle'} />
-          <Readout label="Captured" value={counts.captured || 0} tone="ok" />
-          <Readout label="Unreconciled" value={counts.unreconciled || 0} tone={counts.unreconciled ? 'warn' : 'idle'} />
-          <Readout label="Failed" value={counts.failed || 0} tone={counts.failed ? 'bad' : 'idle'} />
-        </ReadoutStrip>
 
         <Segmented<View>
           label="Payments view"
@@ -472,10 +466,10 @@ export function PaymentsPageClient({
               <div className="grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_12rem_10rem_10rem]">
                 <div className="relative min-w-0 sm:col-span-2 lg:col-span-1">
                   <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input value={search} onChange={event => setSearch(event.target.value)} placeholder="Payment ID, provider ID or reference" aria-label="Search payments" className="h-11 rounded-[4px] pl-9 sm:h-9" />
+                  <Input value={search} onChange={event => setSearch(event.target.value)} placeholder="Payment ID, provider ID or reference" aria-label="Search payments" className="h-11 rounded-[4px] pl-9 text-[13px] sm:h-9" />
                 </div>
                 <Select value={provider} onValueChange={setProvider}>
-                  <SelectTrigger className="h-11 w-full rounded-[4px] sm:h-9" aria-label="Provider">
+                  <SelectTrigger className="text-[13px] h-11 w-full rounded-[4px] sm:h-9" aria-label="Provider">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -485,8 +479,8 @@ export function PaymentsPageClient({
                     ))}
                   </SelectContent>
                 </Select>
-                <Input type="date" value={from} max={to || undefined} onChange={event => setFrom(event.target.value)} aria-label="From date" aria-invalid={Boolean(dateError)} className="h-11 rounded-[4px] sm:h-9" />
-                <Input type="date" value={to} min={from || undefined} onChange={event => setTo(event.target.value)} aria-label="To date" aria-invalid={Boolean(dateError)} className="h-11 rounded-[4px] sm:h-9" />
+                <Input type="date" value={from} max={to || undefined} onChange={event => setFrom(event.target.value)} aria-label="From date" aria-invalid={Boolean(dateError)} className="h-11 rounded-[4px] text-[13px] sm:h-9" />
+                <Input type="date" value={to} min={from || undefined} onChange={event => setTo(event.target.value)} aria-label="To date" aria-invalid={Boolean(dateError)} className="h-11 rounded-[4px] text-[13px] sm:h-9" />
               </div>
               {dateError && <p className="text-xs text-red-600 dark:text-red-400">{dateError}</p>}
             </div>
@@ -647,6 +641,12 @@ export function PaymentsPageClient({
           onSubmit={submitProvider}
           onOpenChange={open => { if (!open) setProviderForm(null) }}
         />
+        <ReadoutStrip>
+          <Readout label="Pending" value={(counts.pending || 0) + (counts.creating || 0) + (counts.authorized || 0)} tone={counts.pending ? 'warn' : 'idle'} />
+          <Readout label="Captured" value={counts.captured || 0} tone="ok" />
+          <Readout label="Unreconciled" value={counts.unreconciled || 0} tone={counts.unreconciled ? 'warn' : 'idle'} />
+          <Readout label="Failed" value={counts.failed || 0} tone={counts.failed ? 'bad' : 'idle'} />
+        </ReadoutStrip>
       </div>
     </PageContainer>
   )

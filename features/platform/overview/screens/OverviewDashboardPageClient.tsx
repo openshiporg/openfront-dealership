@@ -474,17 +474,6 @@ export function OverviewDashboardPageClient({
           )}
         </DeskSection>
 
-        <DeskSection id="overview-30d" title="Last 30 days">
-          <ReadoutStrip>
-            <Readout label="Units delivered" value={pc.deliveredCount.current} sub={comparisonLabel(pc.deliveredCount)} tone={comparisonTone(pc.deliveredCount)} />
-            <Readout label="Gross" value={formatCurrencyCents(pc.deliveredGrossCents.current)} sub={metrics.deliveredDeals ? `Avg ${formatCurrencyCents(metrics.averageDeliveredGrossCents)} all time` : comparisonLabel(pc.deliveredGrossCents)} tone={comparisonTone(pc.deliveredGrossCents)} />
-            <Readout label="Delivered revenue" value={formatCurrencyCents(pc.deliveredRevenueCents.current)} sub={comparisonLabel(pc.deliveredRevenueCents)} tone={comparisonTone(pc.deliveredRevenueCents)} />
-            <Readout label="New leads" value={pc.newLeads.current} sub={comparisonLabel(pc.newLeads)} tone={comparisonTone(pc.newLeads)} />
-            <Readout label="Lead conversion" value={`${metrics.leadConversionPercent.toFixed(1)}%`} sub={metrics.convertedLeads != null ? `${metrics.convertedLeads} of ${metrics.totalLeads} leads` : `${metrics.totalLeads} leads`} />
-            <Readout label="Service revenue" value={formatCurrencyCents(pc.settledServiceRevenueCents.current)} sub={comparisonLabel(pc.settledServiceRevenueCents)} tone={comparisonTone(pc.settledServiceRevenueCents)} />
-          </ReadoutStrip>
-        </DeskSection>
-
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1.4fr_1fr]">
           <DeskSection id="overview-revenue" title="Delivered revenue by month">
             {revenueChart.length > 0 ? (
@@ -573,6 +562,17 @@ export function OverviewDashboardPageClient({
             <p className="py-3 text-[13px] text-muted-foreground">No delivered deals</p>
           )}
         </DeskSection>
+        <DeskSection id="overview-30d" title="Last 30 days">
+          <ReadoutStrip>
+            <Readout label="Units delivered" value={pc.deliveredCount.current} sub={comparisonLabel(pc.deliveredCount)} tone={comparisonTone(pc.deliveredCount)} />
+            <Readout label="Gross" value={formatCurrencyCents(pc.deliveredGrossCents.current)} sub={metrics.deliveredDeals ? `Avg ${formatCurrencyCents(metrics.averageDeliveredGrossCents)} all time` : comparisonLabel(pc.deliveredGrossCents)} tone={comparisonTone(pc.deliveredGrossCents)} />
+            <Readout label="Delivered revenue" value={formatCurrencyCents(pc.deliveredRevenueCents.current)} sub={comparisonLabel(pc.deliveredRevenueCents)} tone={comparisonTone(pc.deliveredRevenueCents)} />
+            <Readout label="New leads" value={pc.newLeads.current} sub={comparisonLabel(pc.newLeads)} tone={comparisonTone(pc.newLeads)} />
+            <Readout label="Lead conversion" value={`${metrics.leadConversionPercent.toFixed(1)}%`} sub={metrics.convertedLeads != null ? `${metrics.convertedLeads} of ${metrics.totalLeads} leads` : `${metrics.totalLeads} leads`} />
+            <Readout label="Service revenue" value={formatCurrencyCents(pc.settledServiceRevenueCents.current)} sub={comparisonLabel(pc.settledServiceRevenueCents)} tone={comparisonTone(pc.settledServiceRevenueCents)} />
+          </ReadoutStrip>
+        </DeskSection>
+
 
         <DeskSection id="overview-stock-service" title="Stock and shop">
           <ReadoutStrip>

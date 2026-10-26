@@ -117,18 +117,6 @@ function ShareTable({
 }
 
 /** Month-to-date cell: the label, the windshield figure, and the prior month beside it. */
-function MonthFigure({ label, value, sub, lead }: { label: string; value: ReactNode; sub?: ReactNode; lead?: boolean }) {
-  return (
-    <div className="min-w-0 bg-card px-4 py-4">
-      <p className="text-[12px] font-medium text-muted-foreground">{label}</p>
-      <p className="mt-2 truncate text-foreground">
-        <Figure size="lg" className={lead ? 'text-[40px] md:text-[52px]' : undefined}>{value}</Figure>
-      </p>
-      {sub && <p className="mt-1.5 truncate text-[12px] text-muted-foreground">{sub}</p>}
-    </div>
-  )
-}
-
 export function AnalyticsDashboardPageClient({ initialData, timeZone }: { initialData: AnalyticsData; timeZone: string }) {
   const [data, setData] = useState<AnalyticsData>(initialData)
   const [loading, setLoading] = useState(false)
@@ -240,30 +228,28 @@ export function AnalyticsDashboardPageClient({ initialData, timeZone }: { initia
           </h2>
           <span className="text-[12px] text-muted-foreground">Delivered deals by sale date</span>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-md border bg-border lg:grid-cols-4">
-          <MonthFigure
-            lead
+        <ReadoutStrip className="mt-3">
+          <Readout
             label="Units delivered"
             value={mtd.count}
             sub={lastMonth ? `${lastMonthName}: ${lastMonth.count}` : `${lastMonthName}: none`}
           />
-          <MonthFigure
-            lead
+          <Readout
             label="Gross"
             value={formatCurrency(mtd.grossCents / 100)}
             sub={lastMonth ? `${lastMonthName}: ${formatCurrency(lastMonth.grossCents / 100)}` : `${lastMonthName}: none`}
           />
-          <MonthFigure
+          <Readout
             label="Gross per unit"
             value={mtd.count ? formatCurrency(mtd.grossCents / 100 / mtd.count) : NO_DATA}
             sub={lastMonth?.count ? `${lastMonthName}: ${formatCurrency(lastMonth.grossCents / 100 / lastMonth.count)}` : undefined}
           />
-          <MonthFigure
+          <Readout
             label="Delivered revenue"
             value={formatCurrency(mtd.revenueCents / 100)}
             sub={lastMonth ? `${lastMonthName}: ${formatCurrency(lastMonth.revenueCents / 100)}` : undefined}
           />
-        </div>
+        </ReadoutStrip>
       </section>
 
       {watch.length > 0 && (

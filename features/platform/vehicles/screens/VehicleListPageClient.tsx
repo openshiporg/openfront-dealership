@@ -1,5 +1,7 @@
 'use client'
 
+import { isRepresentativePhoto } from '@/features/storefront/lib/photoAttribution'
+
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -840,7 +842,7 @@ export function VehicleListPageClient({
         <>
           {intakeRooftops.length > 1 && (
             <Select value={intakeRooftopId} onValueChange={setIntakeRooftopId}>
-              <SelectTrigger className="h-8 w-full rounded-[4px] sm:w-[180px]" aria-label="Intake rooftop">
+              <SelectTrigger className="text-[13px] h-8 w-full rounded-[4px] sm:w-[180px]" aria-label="Intake rooftop">
                 <SelectValue placeholder="Intake rooftop" />
               </SelectTrigger>
               <SelectContent>
@@ -1004,12 +1006,12 @@ export function VehicleListPageClient({
                 placeholder="Stock #, VIN, make, model"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="rounded-[4px] pl-9 max-md:h-10"
+                className="rounded-[4px] pl-9 text-[13px] max-md:h-10"
                 aria-label="Search inventory"
               />
             </div>
             <Select value={sortOrder} onValueChange={setSortOrder}>
-              <SelectTrigger className="w-full rounded-[4px] max-md:h-10 sm:w-[180px]" aria-label="Sort inventory">
+              <SelectTrigger className="text-[13px] w-full rounded-[4px] max-md:h-10 sm:w-[180px]" aria-label="Sort inventory">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1091,12 +1093,18 @@ export function VehicleListPageClient({
                       <div className="relative h-9 w-12 overflow-hidden rounded-[4px] bg-muted">
                         {thumb
                           ? <Image src={thumb} alt="" fill unoptimized sizes="48px" className="object-cover" />
+                          : null}
+                        {thumb && isRepresentativePhoto(thumb, vehicle) && (
+                          <span title="Representative photo: a different model" className="absolute inset-x-0 bottom-0 bg-zinc-950/75 text-center text-[9px] font-medium leading-3 text-white">Similar</span>
+                        )}
+                        {thumb
+                          ? null
                           : <span className="absolute inset-0 grid place-items-center text-[10px] text-muted-foreground">No photo</span>}
                       </div>
                     </Td>
                     <Td className="min-w-0 max-w-[22rem] max-md:max-w-[13rem]">
                       <div className="min-w-0 break-words">{vehicleName(vehicle)}</div>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{subline.join(' · ')}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground max-md:line-clamp-2 md:truncate">{subline.join(' · ')}</p>
                       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 md:hidden">
                         <Code>{vehicle.stockNumber}</Code>
                         <Status tone={statusTones[stage] || 'idle'}>{statusLabels[stage] || stage}</Status>

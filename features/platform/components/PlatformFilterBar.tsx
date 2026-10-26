@@ -112,7 +112,7 @@ export function PlatformFilterBar({
               onChange={(e) => setSearchString(e.target.value)}
               placeholder={`Search by ${
                 searchLabels.length
-                  ? searchLabels.slice(0, 3).join(", ").toLowerCase()
+                  ? searchLabels.filter((label: string) => !/^(id|created at|updated at)$/i.test(label)).slice(0, 3).join(", ").toLowerCase()
                   : "ID"
               }`}
               aria-label={`Search ${list.plural ?? "records"}`}

@@ -15,7 +15,7 @@ export type DeskTone = 'ok' | 'warn' | 'bad' | 'info' | 'idle' | 'accent'
 
 const MARK_TONE: Record<DeskTone, string> = {
   ok: 'bg-emerald-600 dark:bg-emerald-400',
-  warn: 'bg-orange-700 dark:bg-orange-400',
+  warn: 'bg-amber-700 dark:bg-amber-500',
   bad: 'bg-red-600 dark:bg-red-400',
   info: 'bg-sky-600 dark:bg-sky-400',
   idle: 'bg-zinc-400 dark:bg-zinc-500',
@@ -24,7 +24,7 @@ const MARK_TONE: Record<DeskTone, string> = {
 
 const TEXT_TONE: Record<DeskTone, string> = {
   ok: 'text-emerald-700 dark:text-emerald-300',
-  warn: 'text-orange-800 dark:text-orange-300',
+  warn: 'text-amber-800 dark:text-amber-300',
   bad: 'text-red-700 dark:text-red-300',
   info: 'text-sky-700 dark:text-sky-300',
   idle: 'text-muted-foreground',
@@ -442,7 +442,7 @@ export function Notice({
       className={cn(
         'flex min-w-0 items-baseline gap-2 rounded-[4px] border px-3 py-2 text-[13px]',
         tone === 'bad' && 'border-red-600/30 bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200',
-        tone === 'warn' && 'border-orange-600/35 bg-orange-50 text-orange-900 dark:bg-orange-950/40 dark:text-orange-100',
+        tone === 'warn' && 'border-amber-700/35 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100',
         tone === 'ok' && 'border-emerald-600/30 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100',
         (tone === 'idle' || tone === 'info' || tone === 'accent') && 'bg-muted/50 text-foreground',
         className,

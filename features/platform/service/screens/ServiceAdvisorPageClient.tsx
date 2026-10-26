@@ -454,13 +454,6 @@ export function ServiceAdvisorPageClient({
           )}
         </DeskSection>
 
-        <ReadoutStrip>
-          <Readout label="Today" value={appointmentCounts.today} sub="Appointments" />
-          <Readout label="Open ROs" value={workingOrders.length} />
-          <Readout label="Open RO value" value={formatCents(workingValue)} />
-          <Readout label="Waiting parts" value={appointmentCounts['waiting-parts']} tone={appointmentCounts['waiting-parts'] > 0 ? 'warn' : undefined} />
-          <Readout label="Low stock" value={lowParts.length} tone={lowParts.length > 0 ? 'bad' : undefined} sub={`${parts.length} parts`} />
-        </ReadoutStrip>
 
         <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative min-w-0 flex-1 sm:max-w-md">
@@ -675,6 +668,13 @@ export function ServiceAdvisorPageClient({
             }
           }}
         />
+        <ReadoutStrip>
+          <Readout label="Today" value={appointmentCounts.today} sub="Appointments" />
+          <Readout label="Open ROs" value={workingOrders.length} />
+          <Readout label="Open RO value" value={formatCents(workingValue)} />
+          <Readout label="Waiting parts" value={appointmentCounts['waiting-parts']} tone={appointmentCounts['waiting-parts'] > 0 ? 'warn' : undefined} />
+          <Readout label="Low stock" value={lowParts.length} tone={lowParts.length > 0 ? 'bad' : undefined} sub={`${parts.length} parts`} />
+        </ReadoutStrip>
       </div>
     </PageContainer>
   )

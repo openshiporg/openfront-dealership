@@ -1271,7 +1271,7 @@ export function FinanceDeskPageClient({
             <div className="relative min-w-0 flex-1 lg:max-w-sm">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                className="h-10 rounded-[4px] pl-9"
+                className="h-10 rounded-[4px] pl-9 text-[13px]"
                 value={search}
                 onChange={event => setSearch(event.target.value)}
                 placeholder="Search applicant, vehicle, stock, or reference"
@@ -1279,7 +1279,7 @@ export function FinanceDeskPageClient({
               />
             </div>
             <Select value={sortOrder} onValueChange={setSortOrder}>
-              <SelectTrigger className="h-10 w-full rounded-[4px] lg:w-[180px]" aria-label="Sort deals">
+              <SelectTrigger className="text-[13px] h-10 w-full rounded-[4px] lg:w-[180px]" aria-label="Sort deals">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

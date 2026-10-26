@@ -5,9 +5,10 @@ import { Pencil, Plus, Power, Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { Code, DeskSection, Notice, Panel, Pill, Segmented, TitleLine, Track } from '@/features/platform/components/desk'
+import { Attention, Code, DeskSection, DeskTable, Figure, Notice, Panel, Pill, Segmented, Status, Td, Th, Tr, Track } from '@/features/platform/components/desk'
 import { type CatalogRooftop, type CatalogRoutingRule, configureRoutingRule, deleteRoutingRule, getRoutingStaff } from '../actions'
 import { ConfirmDialog, EmptyRow, Field, FormDialog, TAP, TAP_INPUT, TAP_SM } from './formKit'
+import { cn } from '@/lib/utils'
 
 export const ROUTING_SOURCES = [
   { value: 'any', label: 'Any source' },
@@ -184,40 +185,56 @@ export function LeadRoutingPanel({
         let activeRank = 0
         return (
           <DeskSection key={group.rooftop?.id || 'none'} title={rooftops.length > 1 ? group.rooftop?.name || 'No rooftop' : 'Evaluation order'} count={group.rules.length}>
-            <Panel className="overflow-hidden">
-              <ol className="divide-y">
+            <DeskTable aria-label={`Routing rules${group.rooftop?.name ? ` for ${group.rooftop.name}` : ''}`}>
+              <thead>
+                <tr>
+                  <Th align="right" className="w-10"><span className="sr-only">Order</span>#</Th>
+                  <Th>Rule</Th>
+                  <Th priority={2}>Assignee</Th>
+                  <Th>Status</Th>
+                  <Th align="right" priority={2}>First response</Th>
+                  <Th align="right" priority={3}>Priority</Th>
+                  <Th align="right"><span className="sr-only">Actions</span></Th>
+                </tr>
+              </thead>
+              <tbody>
                 {group.rules.map(rule => {
                   if (rule.active) activeRank += 1
+                  const assignee = rule.assignee?.name || rule.assignee?.email
                   return (
-                    <li key={rule.id} className="flex min-w-0 flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex min-w-0 items-baseline gap-3">
-                        <span className="w-6 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">{rule.active ? activeRank : '-'}</span>
-                        <div className="min-w-0">
-                          <TitleLine as="p" tone={rule.active ? 'ok' : 'idle'} status={rule.active ? 'Active' : 'Inactive'} className="text-sm font-medium">{rule.name}</TitleLine>
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            {sourceLabel(rule.source)} · {rule.assignee?.name || rule.assignee?.email || 'No assignee'} · First response {formatMinutes(rule.firstResponseMinutes)}
-                          </p>
-                          <p className="mt-0.5 text-xs text-muted-foreground">Priority <Code>{rule.priority}</Code></p>
+                    <Tr key={rule.id}>
+                      <Td align="right" className="w-10 text-xs text-muted-foreground">{rule.active ? activeRank : '-'}</Td>
+                      <Td className="max-w-0 min-w-[8rem]">
+                        <span className="block truncate font-medium text-foreground">{rule.name}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {sourceLabel(rule.source)}
+                          <span className="md:hidden"> · {assignee || 'No assignee'} · {formatMinutes(rule.firstResponseMinutes)}</span>
+                        </span>
+                      </Td>
+                      <Td priority={2}>{assignee ? <span className="text-foreground">{assignee}</span> : <Attention>No assignee</Attention>}</Td>
+                      <Td>{rule.active ? <Status tone="ok">Active</Status> : <Status tone="idle">Inactive</Status>}</Td>
+                      <Td align="right" priority={2}><Figure size="sm">{formatMinutes(rule.firstResponseMinutes)}</Figure></Td>
+                      <Td align="right" priority={3}><Code>{rule.priority}</Code></Td>
+                      <Td align="right" className="w-px whitespace-nowrap">
+                        <div className="inline-flex flex-wrap justify-end gap-1">
+                          <Pill size="sm" className={TAP_SM} disabled={togglingId === rule.id || !rule.assignee?.id} title={!rule.assignee?.id ? 'Assign someone first' : undefined} onClick={() => toggle(rule)}>
+                            <Power />
+                            {togglingId === rule.id ? 'Saving…' : rule.active ? 'Deactivate' : 'Activate'}
+                          </Pill>
+                          <Pill size="sm" className={TAP_SM} onClick={() => open(rule)}>
+                            <Pencil />
+                            Edit
+                          </Pill>
+                          <Pill size="sm" variant="plain" className={cn(TAP_SM, 'max-sm:w-11')} aria-label={`Delete ${rule.name}`} onClick={() => { setFormError(null); setPending(rule) }}>
+                            <Trash2 />
+                          </Pill>
                         </div>
-                      </div>
-                      <Track className="shrink-0 self-start sm:self-center">
-                        <Pill size="sm" className={TAP_SM} disabled={togglingId === rule.id || !rule.assignee?.id} title={!rule.assignee?.id ? 'Assign someone first' : undefined} onClick={() => toggle(rule)}>
-                          <Power />
-                          {togglingId === rule.id ? 'Saving…' : rule.active ? 'Deactivate' : 'Activate'}
-                        </Pill>
-                        <Pill size="sm" className={TAP_SM} onClick={() => open(rule)}>
-                          <Pencil />
-                          Edit
-                        </Pill>
-                        <Pill size="sm" className={TAP_SM} aria-label={`Delete ${rule.name}`} onClick={() => { setFormError(null); setPending(rule) }}>
-                          <Trash2 />
-                        </Pill>
-                      </Track>
-                    </li>
+                      </Td>
+                    </Tr>
                   )
                 })}
-              </ol>
-            </Panel>
+              </tbody>
+            </DeskTable>
           </DeskSection>
         )
       })}

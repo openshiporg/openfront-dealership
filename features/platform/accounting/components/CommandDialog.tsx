@@ -75,7 +75,7 @@ export function CommandDialog({
                 const describedBy = fieldError ? `${id}-error` : undefined
                 return (
                   <div key={field.name} className={`grid min-w-0 gap-1.5 text-sm ${field.wide || field.type === 'textarea' ? 'sm:col-span-2' : ''}`}>
-                    <label htmlFor={id} className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                    <label htmlFor={id} className="text-[12px] font-medium text-muted-foreground">
                       {field.label}
                     </label>
                     {field.type === 'textarea' ? (

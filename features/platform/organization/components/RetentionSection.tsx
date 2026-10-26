@@ -5,7 +5,7 @@ import { Pencil } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Code, DeskSection, Notice, Panel, Pill, Segmented, TitleLine, Track, type DeskTone } from '@/features/platform/components/desk'
+import { Code, DeskSection, DeskTable, Notice, Panel, Pill, Segmented, Status, Td, Th, Tr, type DeskTone } from '@/features/platform/components/desk'
 import { configureRetentionPolicy } from '../actions'
 import { MAX_RETENTION_DAYS, RETENTION_CATEGORIES } from '../lib/permissions'
 import type { RetentionPolicy, Rooftop, Viewer } from '../lib/types'
@@ -137,41 +137,50 @@ export function RetentionSection({
               {rooftopRows.length === 0 ? (
                 <p className="py-4 text-sm text-muted-foreground">No matching policies</p>
               ) : (
-                <Panel className="divide-y">
-                  {rooftopRows.map(row => {
-                    const state = rowState(row)
-                    const blocked = blockedReason(row)
-                    return (
-                      <div key={row.category.value} className="flex min-w-0 flex-col gap-3 px-4 py-3 md:flex-row md:items-start md:justify-between">
-                        <div className="min-w-0">
-                          <TitleLine as="p" tone={state.tone} status={state.label} className="text-sm font-medium">
-                            {row.category.label}
-                          </TitleLine>
-                          {row.policy ? (
-                            <>
-                              <p className="break-words pl-4 text-xs text-muted-foreground">
-                                <span className="tabular-nums text-foreground">{formatDays(row.policy.retentionDays)}</span>
-                                {row.policy.legalHold ? ' · Legal hold' : ''}
-                                {` · ${row.policy.lastSweptAt ? `Swept ${formatDate(row.policy.lastSweptAt, timeZone)}` : 'Never swept'}`}
-                                {` · Updated ${formatDate(row.policy.updatedAt, timeZone)}`}
-                              </p>
-                              {row.policy.rationale && <p className="break-words pl-4 text-xs text-muted-foreground">{row.policy.rationale}</p>}
-                            </>
-                          ) : (
-                            <p className="pl-4 text-xs text-muted-foreground">Not set</p>
-                          )}
-                          {blocked && <p className="pl-4 text-xs text-muted-foreground">{blocked}</p>}
-                        </div>
-                        <Track className="self-end md:self-auto">
-                          <Pill size="sm" variant={row.policy ? 'raised' : 'primary'} className="h-11 sm:h-7" disabled={Boolean(blocked)} title={blocked} onClick={() => openForm(row)}>
-                            <Pencil />
-                            {row.policy ? 'Edit' : 'Set policy'}
-                          </Pill>
-                        </Track>
-                      </div>
-                    )
-                  })}
-                </Panel>
+                <DeskTable aria-label={`Retention policies for ${rooftop.name}`}>
+                  <thead>
+                    <tr>
+                      <Th>Category</Th>
+                      <Th>Status</Th>
+                      <Th align="right" priority={2}>Keep for</Th>
+                      <Th priority={3}>Last swept</Th>
+                      <Th priority={3}>Rationale</Th>
+                      <Th align="right"><span className="sr-only">Action</span></Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rooftopRows.map(row => {
+                      const state = rowState(row)
+                      const blocked = blockedReason(row)
+                      return (
+                        <Tr key={row.category.value}>
+                          <Td className="max-w-0 min-w-[8rem]">
+                            <span className="block truncate font-medium text-foreground">{row.category.label}</span>
+                            {row.policy && (
+                              <span className="block truncate text-xs text-muted-foreground md:hidden">{formatDays(row.policy.retentionDays)}</span>
+                            )}
+                            {blocked && <span className="block text-xs text-muted-foreground">{blocked}</span>}
+                          </Td>
+                          <Td><Status tone={state.tone}>{state.label}</Status></Td>
+                          <Td align="right" priority={2} className="whitespace-nowrap">
+                            {row.policy ? formatDays(row.policy.retentionDays) : <span className="text-muted-foreground">Not set</span>}
+                          </Td>
+                          <Td priority={3} className="whitespace-nowrap text-muted-foreground">
+                            {row.policy ? (row.policy.lastSweptAt ? formatDate(row.policy.lastSweptAt, timeZone) : 'Never') : ''}
+                            {row.policy && <span className="block text-xs">Updated {formatDate(row.policy.updatedAt, timeZone)}</span>}
+                          </Td>
+                          <Td priority={3} className="max-w-[18rem] break-words text-muted-foreground">{row.policy?.rationale || ''}</Td>
+                          <Td align="right" className="w-px whitespace-nowrap">
+                            <Pill size="sm" variant={row.policy ? 'raised' : 'primary'} className="h-11 sm:h-7" disabled={Boolean(blocked)} title={blocked} onClick={() => openForm(row)}>
+                              <Pencil />
+                              {row.policy ? 'Edit' : 'Set policy'}
+                            </Pill>
+                          </Td>
+                        </Tr>
+                      )
+                    })}
+                  </tbody>
+                </DeskTable>
               )}
             </DeskSection>
           )

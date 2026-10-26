@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, type FormEvent } from 'react'
+import { Fragment, useMemo, useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { Plus, RefreshCw, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
 import { OperatorActionDialog, type OperatorActionField } from '@/features/platform/components/OperatorActionDialog'
-import { Code, DeskHeader, Notice, Panel, Pill, Segmented, TitleLine, Track, type DeskTone } from '@/features/platform/components/desk'
+import { Attention, Code, DeskHeader, DeskSection, DeskTable, Figure, Notice, Panel, Pill, Segmented, Status, Td, Th, Tr, Track, type DeskTone } from '@/features/platform/components/desk'
 import { dayKey, formatPhone } from '@/features/platform/lib/format'
 import {
   type TestDrive,
@@ -98,6 +98,14 @@ function formatTime(value: string | null | undefined, timeZone: string) {
   return new Date(value).toLocaleTimeString('en-US', { timeZone, hour: 'numeric', minute: '2-digit' })
 }
 
+/** Time since a past moment as a short figure: "35m", "4h", "3d". */
+function formatElapsedSince(value: string, nowMs: number) {
+  const minutes = Math.max(0, Math.floor((nowMs - new Date(value).getTime()) / 60_000))
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  return hours < 48 ? `${hours}h` : `${Math.floor(hours / 24)}d`
+}
+
 function formatDay(value: string | null | undefined, timeZone: string) {
   if (!value) return 'Unscheduled'
   if (isToday(value, timeZone)) return 'Today'
@@ -152,6 +160,7 @@ export function TestDriveDeskPageClient({
   const [notice, setNotice] = useState<string | null>(null)
   const [noShowTarget, setNoShowTarget] = useState<TestDrive | null>(null)
   const [noShowError, setNoShowError] = useState<string | null>(null)
+  const [expandedKey, setExpandedKey] = useState<string | null>(null)
 
   const openSchedule = async () => {
     setScheduleError(null)
@@ -304,6 +313,12 @@ export function TestDriveDeskPageClient({
     all: testDrives.length,
   }
 
+  const now = Date.now()
+  // Today's open drives and any past-due drive still open (out, or waiting on a no-show call), earliest first.
+  const onDeck = testDrives
+    .filter(testDrive => isOpen(testDrive) && (isPastDue(testDrive) || isToday(testDrive.scheduledTime, timeZone)))
+    .sort((a, b) => new Date(a.scheduledTime || '9999-12-31').getTime() - new Date(b.scheduledTime || '9999-12-31').getTime())
+
   const breadcrumbs = [
     { type: 'link' as const, label: 'Dashboard', href: basePath },
     { type: 'page' as const, label: 'Platform' },
@@ -317,23 +332,122 @@ export function TestDriveDeskPageClient({
       status={error ? 'Unavailable' : counts.pastDue > 0 ? `${counts.pastDue} past due` : `${counts.today} today`}
       meta={`${counts.today} today · ${counts.upcoming} upcoming · ${counts.pastDue} past due`}
       actions={
-        <Track>
-          <Pill onClick={loadTestDrives} disabled={loading}>
+        <>
+          <Pill variant="plain" className="max-md:h-10" onClick={loadTestDrives} disabled={loading}>
             <RefreshCw className={loading ? 'animate-spin' : undefined} />
             Refresh
           </Pill>
-          <Pill variant="primary" onClick={openSchedule}>
+          <Pill variant="primary" className="max-md:h-10" onClick={openSchedule}>
             <Plus />
             Schedule test drive
           </Pill>
-        </Track>
+        </>
       }
     />
   )
 
+  const customerCell = (testDrive: TestDrive) => (
+    testDrive.lead ? (
+      <Link href={`${basePath}/platform/crm/${testDrive.lead.id}`} className="font-medium text-foreground hover:underline">
+        {leadName(testDrive)}
+      </Link>
+    ) : <span className="font-medium text-foreground">{leadName(testDrive)}</span>
+  )
+
+  const vehicleCell = (testDrive: TestDrive) => (
+    testDrive.vehicle ? (
+      <Link href={`/inventory/${testDrive.vehicle.id}`} className="text-foreground hover:underline">{vehicleName(testDrive)}</Link>
+    ) : <span className="text-muted-foreground">{vehicleName(testDrive)}</span>
+  )
+
+  const licenseStatus = (testDrive: TestDrive) => (
+    testDrive.driverLicenseVerified
+      ? <Status tone="ok">License verified</Status>
+      : <Status tone="warn">License needs check</Status>
+  )
+
+  const driveActions = (testDrive: TestDrive, section: string) => {
+    if (!isOpen(testDrive)) return null
+    const busy = updatingId === testDrive.id
+    const key = `${section}:${testDrive.id}`
+    return (
+      <div className="flex flex-wrap justify-end gap-2">
+        {isPastDue(testDrive) && (
+          <Pill size="sm" className="h-10 md:h-7" onClick={() => { setNoShowError(null); setNoShowTarget(testDrive) }} disabled={busy}>
+            No-show
+          </Pill>
+        )}
+        {!testDrive.driverLicenseVerified && (
+          <Pill size="sm" className="h-10 md:h-7" onClick={() => verifyLicense(testDrive)} disabled={busy}>
+            Verify license
+          </Pill>
+        )}
+        <Pill
+          size="sm"
+          variant={testDrive.driverLicenseVerified ? 'primary' : 'raised'}
+          className="h-10 md:h-7"
+          aria-expanded={expandedKey === key}
+          aria-controls={`complete-${key}`}
+          onClick={() => setExpandedKey(current => (current === key ? null : key))}
+          disabled={busy || !testDrive.driverLicenseVerified}
+          title={testDrive.driverLicenseVerified ? undefined : 'Verify the license first'}
+        >
+          Complete
+        </Pill>
+      </div>
+    )
+  }
+
+  const completionRow = (testDrive: TestDrive, section: string, colSpan: number) => {
+    const key = `${section}:${testDrive.id}`
+    if (expandedKey !== key || !isOpen(testDrive)) return null
+    const busy = updatingId === testDrive.id
+    return (
+      <tr id={`complete-${key}`} className="border-b bg-muted/30 last:border-b-0">
+        <td colSpan={colSpan} className="px-4 py-3">
+          <div className="grid min-w-0 gap-2 md:grid-cols-[12rem_minmax(0,1fr)_auto] md:items-start">
+            <Select
+              value={interestDrafts[testDrive.id] || 'maybe'}
+              onValueChange={value => setInterestDrafts(prev => ({ ...prev, [testDrive.id]: value }))}
+              disabled={Boolean(testDrive.completed)}
+            >
+              <SelectTrigger className="h-10 rounded-[4px] text-[13px] md:h-9" aria-label={`Interest level for ${leadName(testDrive)}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="not-interested">Not interested</SelectItem>
+                <SelectItem value="maybe">Maybe</SelectItem>
+                <SelectItem value="very-interested">Very interested</SelectItem>
+              </SelectContent>
+            </Select>
+            <Textarea
+              value={feedbackDrafts[testDrive.id] || ''}
+              onChange={event => setFeedbackDrafts(prev => ({ ...prev, [testDrive.id]: event.target.value }))}
+              placeholder="Feedback"
+              aria-label={`Feedback for ${leadName(testDrive)}`}
+              disabled={Boolean(testDrive.completed)}
+              className="min-h-14 rounded-[4px] text-sm"
+            />
+            <div className="flex justify-end gap-2">
+              <Pill variant="plain" className="h-10 md:h-8" onClick={() => setExpandedKey(null)} disabled={busy}>Cancel</Pill>
+              <Pill
+                variant="primary"
+                className="h-10 md:h-8"
+                onClick={async () => { await completeDrive(testDrive); setExpandedKey(null) }}
+                disabled={busy || !testDrive.driverLicenseVerified}
+              >
+                {busy ? 'Saving…' : 'Complete drive'}
+              </Pill>
+            </div>
+          </div>
+        </td>
+      </tr>
+    )
+  }
+
   return (
     <PageContainer title="Test Drives" header={header} breadcrumbs={breadcrumbs}>
-      <div className="min-w-0 max-w-full space-y-4 px-4 pb-24 md:px-6">
+      <div className="min-w-0 max-w-full space-y-8 px-4 pb-24 md:px-6">
         {notice && (
           <Notice tone="ok">
             <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
@@ -344,187 +458,186 @@ export function TestDriveDeskPageClient({
             </div>
           </Notice>
         )}
-        <Segmented<QueueFilter>
-          label="Filter test drives"
-          value={filter}
-          onChange={setFilter}
-          size="sm"
-          options={[
-            { value: 'today', label: 'Today', count: counts.today },
-            { value: 'upcoming', label: 'Upcoming', count: counts.upcoming },
-            { value: 'past-due', label: 'Past due', count: counts.pastDue },
-            { value: 'completed', label: 'Completed', count: counts.completed },
-            { value: 'no-show', label: 'No-show', count: counts.noShow },
-            { value: 'cancelled', label: 'Cancelled', count: counts.cancelled },
-            { value: 'all', label: 'All', count: counts.all },
-          ]}
-        />
-        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="relative min-w-0 sm:max-w-sm sm:flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="pl-9"
-              value={search}
-              onChange={event => setSearch(event.target.value)}
-              placeholder="Customer, stock or VIN"
-              aria-label="Search test drives"
-            />
-          </div>
-          <Select value={sortOrder} onValueChange={setSortOrder}>
-            <SelectTrigger className="w-full sm:w-[160px]" aria-label="Sort test drives">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="scheduled">Soonest first</SelectItem>
-              <SelectItem value="recent">Latest first</SelectItem>
-            </SelectContent>
-          </Select>
-          {loading && (
-            <span className="text-xs text-muted-foreground" role="status">
-              Refreshing…
-            </span>
-          )}
-        </div>
 
-        {error ? (
-          <Notice tone="bad">
-            <p className="font-medium">Test drives unavailable</p>
-            <p className="mt-0.5 text-muted-foreground">{error}</p>
-            <Track className="mt-2">
-              <Pill size="sm" onClick={loadTestDrives}>Retry</Pill>
-            </Track>
-          </Notice>
-        ) : filteredTestDrives.length === 0 ? (
-          <Panel className="flex flex-col items-center gap-3 px-4 py-12 text-center">
-            <p className="text-sm text-muted-foreground">
-              {testDrives.length > 0 && isFiltered ? 'No matching test drives' : 'No test drives'}
-            </p>
-            {testDrives.length > 0 && isFiltered && (
-              <Track>
-                <Pill size="sm" onClick={resetFilters}>Reset filters</Pill>
+        <DeskSection id="test-drives-today" title="Today and past due" count={error ? undefined : onDeck.length}>
+          {error ? (
+            <Notice tone="bad">
+              <p className="font-medium">Test drives unavailable</p>
+              <p className="mt-0.5 text-muted-foreground">{error}</p>
+              <Track className="mt-2">
+                <Pill size="sm" onClick={loadTestDrives}>Retry</Pill>
               </Track>
+            </Notice>
+          ) : onDeck.length === 0 ? (
+            <p className="text-[13px] text-muted-foreground">No drives today</p>
+          ) : (
+            <DeskTable aria-label="Test drives today and past due">
+              <thead>
+                <tr>
+                  <Th align="right" className="w-24">Time</Th>
+                  <Th>Customer</Th>
+                  <Th priority={2}>Vehicle</Th>
+                  <Th priority={3}>License</Th>
+                  <Th className="w-0"><span className="sr-only">Actions</span></Th>
+                </tr>
+              </thead>
+              <tbody>
+                {onDeck.map(testDrive => {
+                  const pastDue = isPastDue(testDrive)
+                  return (
+                    <Fragment key={testDrive.id}>
+                      <Tr>
+                        <Td align="right" className="whitespace-nowrap">
+                          <Figure size="sm">{formatTime(testDrive.scheduledTime, timeZone)}</Figure>
+                          {pastDue && testDrive.scheduledTime && (
+                            <span className="mt-1 block"><Attention>{formatElapsedSince(testDrive.scheduledTime, now)} past</Attention></span>
+                          )}
+                          {pastDue && !isToday(testDrive.scheduledTime, timeZone) && (
+                            <span className="block text-[11px] text-muted-foreground">{formatDay(testDrive.scheduledTime, timeZone)}</span>
+                          )}
+                        </Td>
+                        <Td className="min-w-0">
+                          {customerCell(testDrive)}
+                          <p className="break-words text-xs text-muted-foreground">
+                            {pastDue ? 'Past due' : 'Today'}
+                            {' · '}
+                            {formatPhone(testDrive.lead?.phone) || testDrive.lead?.email || 'No contact'}
+                            {testDrive.salesperson?.name ? ` · ${testDrive.salesperson.name}` : ''}
+                          </p>
+                          <p className="break-words text-xs md:hidden">{vehicleCell(testDrive)}</p>
+                          <p className="text-xs lg:hidden">{testDrive.driverLicenseVerified ? <span className="text-muted-foreground">License verified</span> : <span className="text-amber-700 dark:text-amber-300">License needs check</span>}</p>
+                        </Td>
+                        <Td priority={2} className="min-w-0">
+                          {vehicleCell(testDrive)}
+                          {testDrive.vehicle?.stockNumber && <p><Code>#{testDrive.vehicle.stockNumber}</Code></p>}
+                        </Td>
+                        <Td priority={3}>{licenseStatus(testDrive)}</Td>
+                        <Td>{driveActions(testDrive, 'today')}</Td>
+                      </Tr>
+                      {completionRow(testDrive, 'today', 5)}
+                    </Fragment>
+                  )
+                })}
+              </tbody>
+            </DeskTable>
+          )}
+        </DeskSection>
+
+        <section aria-labelledby="test-drives-all" className="min-w-0 space-y-3">
+          <h2 id="test-drives-all" className="text-[15px] font-semibold text-foreground">All test drives</h2>
+          <Segmented<QueueFilter>
+            label="Filter test drives"
+            value={filter}
+            onChange={setFilter}
+            className="max-md:[&_button]:h-10"
+            options={[
+              { value: 'today', label: 'Today', count: counts.today },
+              { value: 'upcoming', label: 'Upcoming', count: counts.upcoming },
+              { value: 'past-due', label: 'Past due', count: counts.pastDue },
+              { value: 'completed', label: 'Completed', count: counts.completed },
+              { value: 'no-show', label: 'No-show', count: counts.noShow },
+              { value: 'cancelled', label: 'Cancelled', count: counts.cancelled },
+              { value: 'all', label: 'All', count: counts.all },
+            ]}
+          />
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="relative min-w-0 flex-1 sm:max-w-sm">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="h-10 rounded-[4px] pl-9 text-[13px] sm:h-9"
+                value={search}
+                onChange={event => setSearch(event.target.value)}
+                placeholder="Customer, stock or VIN"
+                aria-label="Search test drives"
+              />
+            </div>
+            <Select value={sortOrder} onValueChange={setSortOrder}>
+              <SelectTrigger className="h-10 w-[9.5rem] shrink-0 rounded-[4px] px-2.5 text-[13px] sm:h-9" aria-label="Sort test drives">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="scheduled">Soonest first</SelectItem>
+                <SelectItem value="recent">Latest first</SelectItem>
+              </SelectContent>
+            </Select>
+            {loading && (
+              <span className="text-xs text-muted-foreground" role="status">
+                Refreshing…
+              </span>
             )}
-          </Panel>
-        ) : (
-          <Panel className="divide-y">
-            {filteredTestDrives.map(testDrive => {
-              const state = driveState(testDrive)
-              const busy = updatingId === testDrive.id
-              return (
-                <div key={testDrive.id} className="grid min-w-0 grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3 gap-y-3 px-4 py-3 md:grid-cols-[5.5rem_minmax(0,1fr)_minmax(0,18rem)_auto] md:items-start">
-                  <div className="min-w-0">
-                    <p className="font-mono text-sm font-medium tabular-nums text-foreground">{formatTime(testDrive.scheduledTime, timeZone)}</p>
-                    <p className="text-[11px] text-muted-foreground" title={formatDateTime(testDrive.scheduledTime, timeZone)}>{formatDay(testDrive.scheduledTime, timeZone)}</p>
-                  </div>
+          </div>
 
-                  <div className="min-w-0">
-                    <TitleLine as="p" tone={state.tone} status={state.label} className="text-sm font-medium">
-                      {testDrive.lead ? (
-                        <Link href={`${basePath}/platform/crm/${testDrive.lead.id}`} className="hover:underline">
-                          {leadName(testDrive)}
-                        </Link>
-                      ) : (
-                        leadName(testDrive)
-                      )}
-                    </TitleLine>
-                    <p className="break-words pl-4 text-xs text-muted-foreground">
-                      {testDrive.vehicle ? (
-                        <Link href={`/inventory/${testDrive.vehicle.id}`} className="text-foreground hover:underline">
-                          {vehicleName(testDrive)}
-                        </Link>
-                      ) : (
-                        vehicleName(testDrive)
-                      )}
-                      {testDrive.vehicle?.stockNumber && (
-                        <>
-                          {' · '}
-                          <Code>#{testDrive.vehicle.stockNumber}</Code>
-                        </>
-                      )}
-                      {testDrive.vehicle?.price != null && testDrive.vehicle.price > 0 && (
-                        <>
-                          {' · '}
-                          <span className="tabular-nums">{formatCurrency(testDrive.vehicle.price)}</span>
-                        </>
-                      )}
-                    </p>
-                    <p className="break-words pl-4 text-xs text-muted-foreground">
-                      {state.label}
-                      {' · '}
-                      <span className={testDrive.driverLicenseVerified ? undefined : 'text-amber-700 dark:text-amber-300'}>
-                        {testDrive.driverLicenseVerified ? 'License verified' : 'License needs check'}
-                      </span>
-                      {' · '}
-                      {formatPhone(testDrive.lead?.phone) || testDrive.lead?.email || 'No contact'}
-                      {testDrive.salesperson?.name ? ` · ${testDrive.salesperson.name}` : ''}
-                    </p>
-                  </div>
-
-                  <div className="col-span-2 min-w-0 md:col-span-1">
-                    {testDrive.cancelledAt || testDrive.noShow ? (
-                      <p className="text-xs text-muted-foreground">{testDrive.cancelledAt ? 'Cancelled by customer' : 'No-show'}</p>
-                    ) : testDrive.completed ? (
-                      <div className="text-xs">
-                        <p className="font-medium text-foreground">{interestLabels[testDrive.interestedLevel || ''] || testDrive.interestedLevel || '-'}</p>
-                        {testDrive.feedback && <p className="mt-0.5 whitespace-pre-line break-words text-muted-foreground">{testDrive.feedback}</p>}
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <Select
-                          value={interestDrafts[testDrive.id] || 'maybe'}
-                          onValueChange={value => setInterestDrafts(prev => ({ ...prev, [testDrive.id]: value }))}
-                          disabled={Boolean(testDrive.completed)}
-                        >
-                          <SelectTrigger className="h-8" aria-label={`Interest level for ${leadName(testDrive)}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="not-interested">Not interested</SelectItem>
-                            <SelectItem value="maybe">Maybe</SelectItem>
-                            <SelectItem value="very-interested">Very interested</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Textarea
-                          value={feedbackDrafts[testDrive.id] || ''}
-                          onChange={event => setFeedbackDrafts(prev => ({ ...prev, [testDrive.id]: event.target.value }))}
-                          placeholder="Feedback"
-                          aria-label={`Feedback for ${leadName(testDrive)}`}
-                          disabled={Boolean(testDrive.completed)}
-                          className="min-h-14 text-sm"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {isOpen(testDrive) && (
-                    <div className="col-span-2 flex justify-end md:col-span-1">
-                      <Track>
-                        {isPastDue(testDrive) && (
-                          <Pill size="sm" onClick={() => { setNoShowError(null); setNoShowTarget(testDrive) }} disabled={busy}>
-                            No-show
-                          </Pill>
-                        )}
-                        {!testDrive.driverLicenseVerified && (
-                          <Pill size="sm" onClick={() => verifyLicense(testDrive)} disabled={busy}>
-                            Verify license
-                          </Pill>
-                        )}
-                        <Pill
-                          size="sm"
-                          variant="primary"
-                          onClick={() => completeDrive(testDrive)}
-                          disabled={busy || !testDrive.driverLicenseVerified}
-                        >
-                          Complete
-                        </Pill>
-                      </Track>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </Panel>
-        )}
+          {error ? null : filteredTestDrives.length === 0 ? (
+            <Panel className="flex flex-col items-center gap-3 px-4 py-12 text-center">
+              <p className="text-sm text-muted-foreground">
+                {testDrives.length > 0 && isFiltered ? 'No matching test drives' : 'No test drives'}
+              </p>
+              {testDrives.length > 0 && isFiltered && (
+                <Track>
+                  <Pill size="sm" className="max-md:h-10" onClick={resetFilters}>Reset filters</Pill>
+                </Track>
+              )}
+            </Panel>
+          ) : (
+            <DeskTable aria-label="Test drives">
+              <thead>
+                <tr>
+                  <Th className="w-28">When</Th>
+                  <Th>Customer</Th>
+                  <Th priority={2}>Vehicle</Th>
+                  <Th priority={3}>License</Th>
+                  <Th>Status</Th>
+                  <Th className="w-0"><span className="sr-only">Actions</span></Th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTestDrives.map(testDrive => {
+                  const state = driveState(testDrive)
+                  return (
+                    <Fragment key={testDrive.id}>
+                      <Tr>
+                        <Td className="whitespace-nowrap">
+                          <p className="font-medium tabular-nums text-foreground">{formatTime(testDrive.scheduledTime, timeZone)}</p>
+                          <p className="text-[12px] text-muted-foreground" title={formatDateTime(testDrive.scheduledTime, timeZone)}>{formatDay(testDrive.scheduledTime, timeZone)}</p>
+                        </Td>
+                        <Td className="min-w-0">
+                          {customerCell(testDrive)}
+                          <p className="break-words text-xs text-muted-foreground">
+                            {formatPhone(testDrive.lead?.phone) || testDrive.lead?.email || 'No contact'}
+                            {testDrive.salesperson?.name ? ` · ${testDrive.salesperson.name}` : ''}
+                          </p>
+                          <p className="break-words text-xs md:hidden">{vehicleCell(testDrive)}</p>
+                          {testDrive.completed && !testDrive.noShow && !testDrive.cancelledAt && (
+                            <p className="mt-0.5 break-words text-xs">
+                              <span className="font-medium text-foreground">{interestLabels[testDrive.interestedLevel || ''] || testDrive.interestedLevel || '-'}</span>
+                              {testDrive.feedback && <span className="whitespace-pre-line text-muted-foreground"> · {testDrive.feedback}</span>}
+                            </p>
+                          )}
+                          {(testDrive.cancelledAt || testDrive.noShow) && (
+                            <p className="text-xs text-muted-foreground">{testDrive.cancelledAt ? 'Cancelled by customer' : 'No-show'}</p>
+                          )}
+                        </Td>
+                        <Td priority={2} className="min-w-0">
+                          {vehicleCell(testDrive)}
+                          <p className="text-xs text-muted-foreground">
+                            {testDrive.vehicle?.stockNumber && <Code>#{testDrive.vehicle.stockNumber}</Code>}
+                            {testDrive.vehicle?.price != null && testDrive.vehicle.price > 0 && (
+                              <span className="tabular-nums">{testDrive.vehicle?.stockNumber ? ' · ' : ''}{formatCurrency(testDrive.vehicle.price)}</span>
+                            )}
+                          </p>
+                        </Td>
+                        <Td priority={3}>{isOpen(testDrive) ? licenseStatus(testDrive) : <span className="text-muted-foreground">-</span>}</Td>
+                        <Td><Status tone={state.tone}>{state.label}</Status></Td>
+                        <Td>{driveActions(testDrive, 'all')}</Td>
+                      </Tr>
+                      {completionRow(testDrive, 'all', 6)}
+                    </Fragment>
+                  )
+                })}
+              </tbody>
+            </DeskTable>
+          )}
+        </section>
 
         <Dialog
           open={Boolean(noShowTarget)}

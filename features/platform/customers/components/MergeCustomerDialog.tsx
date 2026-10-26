@@ -22,7 +22,7 @@ export type MergeParty = {
 function PartyCard({ party, role }: { party: MergeParty; role: 'Keep' | 'Merge away' }) {
   return (
     <Panel className={`min-w-0 px-3 py-2.5 ${role === 'Keep' ? 'border-emerald-500/40' : 'border-red-500/30'}`}>
-      <p className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">{role}</p>
+      <p className="text-[12px] font-medium text-muted-foreground">{role}</p>
       <p className="text-sm font-medium">{personName(party.firstName, party.lastName)}</p>
       <p className="truncate text-xs text-muted-foreground">{[party.primaryEmail, formatPhone(party.primaryPhone)].filter(Boolean).join(' · ') || 'No contact'}</p>
       <p className="text-xs text-muted-foreground">{party.leadsCount} lead{party.leadsCount === 1 ? '' : 's'}</p>
@@ -109,10 +109,10 @@ export function MergeCustomerDialog({
             <li>{personName(duplicate.firstName, duplicate.lastName)} becomes read only and marked merged</li>
           </ul>
           <FormField id="merge-reason" label="Reason" error={errors.reason}>
-            <Textarea id="merge-reason" rows={3} maxLength={1000} value={reason} aria-invalid={Boolean(errors.reason)} onChange={event => { setReason(event.target.value); setErrors(prev => ({ ...prev, reason: undefined })) }} />
+            <Textarea className="rounded-[4px]" id="merge-reason" rows={3} maxLength={1000} value={reason} aria-invalid={Boolean(errors.reason)} onChange={event => { setReason(event.target.value); setErrors(prev => ({ ...prev, reason: undefined })) }} />
           </FormField>
           <div>
-            <label className="flex min-h-11 items-center gap-3 rounded-lg bg-muted/50 px-3 py-2 text-sm">
+            <label className="flex min-h-11 items-center gap-3 rounded-md bg-muted/50 px-3 py-2 text-sm">
               <Checkbox className="size-5" checked={confirmed} onCheckedChange={checked => { setConfirmed(checked === true); setErrors(prev => ({ ...prev, confirmed: undefined })) }} />
               Merge {personName(duplicate.firstName, duplicate.lastName)} into {personName(survivor.firstName, survivor.lastName)}
             </label>

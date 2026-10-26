@@ -2,37 +2,37 @@
 
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
-import { Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from 'recharts'
 import { ArrowRight, RefreshCw } from 'lucide-react'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
 import {
+  Attention,
   Code,
   DeskHeader,
   DeskSection,
+  DeskTable,
+  Figure,
+  Meter,
   Notice,
-  Panel,
   Pill,
   Readout,
   ReadoutStrip,
   Segmented,
-  TitleLine,
-  Track,
+  Status,
+  Td,
+  Th,
+  Tr,
   type DeskTone,
 } from '@/features/platform/components/desk'
 import { getAnalyticsData, type AnalyticsData } from '../actions'
 import { monthLabel } from '../lib/monthLabel'
-
-const ACCENT = '#0ea5e9'
-
-const chartConfig = {
-  revenue: { label: 'Revenue', color: 'var(--foreground)' },
-  count: { label: 'Count', color: 'var(--foreground)' },
-}
+import { HairlineChart } from '../components/HairlineChart'
 
 type Area = 'sales' | 'inventory' | 'service'
 type Period = '6' | '12' | 'all'
+
+/** Same threshold the inventory list uses for an aging unit. */
+const AGED_UNIT_DAYS = 60
 
 const AREA_OPTIONS = [
   { value: 'sales', label: 'Sales' },
@@ -41,8 +41,8 @@ const AREA_OPTIONS = [
 ] as const
 
 const PERIOD_OPTIONS = [
-  { value: '6', label: '6M' },
-  { value: '12', label: '12M' },
+  { value: '6', label: '6 months' },
+  { value: '12', label: '12 months' },
   { value: 'all', label: 'All' },
 ] as const
 
@@ -54,46 +54,78 @@ const statusTone: Record<string, DeskTone> = {
   sold: 'accent',
 }
 
+const humanize = (value: string) => value.replace(/[-_]/g, ' ').replace(/^./, letter => letter.toUpperCase())
+
 function Empty({ children }: { children: ReactNode }) {
-  return <p className="py-8 text-center text-sm text-muted-foreground">{children}</p>
+  return <p className="py-3 text-[13px] text-muted-foreground">{children}</p>
 }
 
 function SectionLink({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <Link href={href} className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground">
+    <Link href={href} className="inline-flex min-h-10 items-center gap-1 text-[12px] font-medium text-muted-foreground hover:text-foreground sm:min-h-0">
       {children}
-      <ArrowRight className="size-3" />
+      <ArrowRight className="size-3.5" aria-hidden="true" />
     </Link>
   )
 }
 
-/** Horizontal share bars as a row list: label, bar, figure. */
-function BarRows({
+/** Label, count and share of the total, as a dense table. Replaces the old rounded bar rows. */
+function ShareTable({
   rows,
   empty,
+  labelHeading,
+  countHeading = 'Count',
+  extraHeading,
 }: {
-  rows: Array<{ key: string; label: ReactNode; value: number; figure?: ReactNode; tone?: DeskTone; accent?: boolean }>
+  rows: Array<{ key: string; label: ReactNode; value: number; extra?: ReactNode }>
   empty: string
+  labelHeading: string
+  countHeading?: string
+  extraHeading?: string
 }) {
   if (!rows.length) return <Empty>{empty}</Empty>
-  const max = Math.max(1, ...rows.map(row => row.value))
+  const total = rows.reduce((sum, row) => sum + row.value, 0) || 1
   return (
-    <ul className="space-y-2.5">
-      {rows.map(row => (
-        <li key={row.key} className="flex min-w-0 items-center gap-3 text-sm">
-          <TitleLine as="span" tone={row.tone} className="w-28 shrink-0 truncate capitalize text-muted-foreground sm:w-36">
-            {row.label}
-          </TitleLine>
-          <span className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
-            <span
-              className="block h-full rounded-full"
-              style={{ width: `${(row.value / max) * 100}%`, background: row.accent ? ACCENT : 'color-mix(in oklab, var(--foreground) 80%, transparent)' }}
-            />
-          </span>
-          <span className="shrink-0 text-right font-mono text-xs tabular-nums">{row.figure ?? row.value}</span>
-        </li>
-      ))}
-    </ul>
+    <DeskTable>
+      <thead>
+        <tr>
+          <Th>{labelHeading}</Th>
+          <Th align="right">{countHeading}</Th>
+          {extraHeading && <Th align="right" priority={2}>{extraHeading}</Th>}
+          <Th align="right" priority={2}>Share</Th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(row => (
+          <Tr key={row.key}>
+            <Td className="max-w-[14rem] truncate">{row.label}</Td>
+            <Td align="right" className="w-[1%] whitespace-nowrap">
+              <Figure size="sm">{row.value}</Figure>
+            </Td>
+            {extraHeading && <Td align="right" priority={2} className="w-[1%] whitespace-nowrap text-muted-foreground">{row.extra}</Td>}
+            <Td align="right" priority={2} className="w-[1%] whitespace-nowrap">
+              <span className="inline-flex items-center gap-2 text-[12px] text-muted-foreground">
+                <Meter value={row.value / total} label="Share of total" />
+                <span className="w-9 text-right tabular-nums">{Math.round((row.value / total) * 100)}%</span>
+              </span>
+            </Td>
+          </Tr>
+        ))}
+      </tbody>
+    </DeskTable>
+  )
+}
+
+/** Month-to-date cell: the label, the windshield figure, and the prior month beside it. */
+function MonthFigure({ label, value, sub, lead }: { label: string; value: ReactNode; sub?: ReactNode; lead?: boolean }) {
+  return (
+    <div className="min-w-0 bg-card px-4 py-4">
+      <p className="text-[12px] font-medium text-muted-foreground">{label}</p>
+      <p className="mt-2 truncate text-foreground">
+        <Figure size="lg" className={lead ? 'text-[40px] md:text-[52px]' : undefined}>{value}</Figure>
+      </p>
+      {sub && <p className="mt-1.5 truncate text-[12px] text-muted-foreground">{sub}</p>}
+    </div>
   )
 }
 
@@ -115,6 +147,7 @@ export function AnalyticsDashboardPageClient({ initialData, timeZone }: { initia
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: currencyCode, maximumFractionDigits: 0 }).format(value)
   }
   const compactCurrency = new Intl.NumberFormat('en-US', { style: 'currency', currency: currencyCode, notation: 'compact', maximumFractionDigits: 0 })
+  const platform = `${basePath}/platform`
 
   const breadcrumbs = [
     { type: 'link' as const, label: 'Dashboard', href: basePath },
@@ -130,19 +163,47 @@ export function AnalyticsDashboardPageClient({ initialData, timeZone }: { initia
   const laborRate = opMetrics?.service?.soldHours ? formatCurrency((opMetrics.service.effectiveLaborRateCents || 0) / 100) : NO_DATA
   const partsFillRate = serviceMetrics?.partsCommittedQuantity && opMetrics?.parts?.fillRatePercent !== undefined ? `${opMetrics.parts.fillRatePercent}%` : NO_DATA
 
+  // Month to date comes from the operational report's delivered-by-month buckets (calendar months, UTC, as the server groups them).
+  const deliveredByMonth = opMetrics?.deliveredByMonth || []
+  const currentKey = operations?.generatedAt ? operations.generatedAt.slice(0, 7) : null
+  const previousKey = currentKey
+    ? (() => {
+        const [year, month] = currentKey.split('-').map(Number)
+        return month === 1 ? `${year - 1}-12` : `${year}-${String(month - 1).padStart(2, '0')}`
+      })()
+    : null
+  const mtd = deliveredByMonth.find(item => item.month === currentKey) || { month: currentKey || '', revenueCents: 0, grossCents: 0, count: 0 }
+  const lastMonth = deliveredByMonth.find(item => item.month === previousKey) || null
+  const lastMonthName = previousKey ? monthLabel(previousKey) : 'Last month'
+  const grossChart = deliveredByMonth.map(item => ({ month: item.month, label: monthLabel(item.month), gross: item.grossCents / 100 }))
+
+  const agedUnits = (inventoryMetrics?.agingBreakdown || []).filter(bucket => bucket.range === '61-90' || bucket.range === '90+').reduce((sum, bucket) => sum + bucket.count, 0)
+  const lowStock = opMetrics?.parts?.lowStockCount ?? serviceMetrics?.lowStockParts.length ?? 0
+  const watch = [
+    { key: 'aged', label: `Units over ${AGED_UNIT_DAYS} days in stock`, count: agedUnits, status: 'Aged', tone: 'warn' as DeskTone, href: `${platform}/vehicles`, place: 'Inventory' },
+    { key: 'parts', label: 'Parts at or below minimum', count: lowStock, status: 'Low stock', tone: 'warn' as DeskTone, href: `${platform}/parts`, place: 'Parts' },
+    { key: 'funding', label: 'Funding exceptions', count: operations?.exceptions?.funding || 0, status: 'Exception', tone: 'bad' as DeskTone, href: `${platform}/finance`, place: 'Finance' },
+    { key: 'payments', label: 'Payment exceptions', count: operations?.exceptions?.payments || 0, status: 'Exception', tone: 'bad' as DeskTone, href: `${platform}/payments`, place: 'Payments' },
+    { key: 'accounting', label: 'Accounting exceptions', count: operations?.exceptions?.accounting || 0, status: 'Exception', tone: 'bad' as DeskTone, href: `${platform}/accounting`, place: 'Accounting' },
+  ].filter(item => item.count > 0)
+
   const header = (
     <DeskHeader
       title="Analytics"
       tone={error ? 'bad' : exceptions > 0 ? 'warn' : 'ok'}
       status={error ? 'Unavailable' : exceptions > 0 ? `${exceptions} open exceptions` : 'No open exceptions'}
-      meta={operations?.generatedAt ? `Updated ${new Date(operations.generatedAt).toLocaleString('en-US', { timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : undefined}
+      meta={
+        error
+          ? 'Unavailable'
+          : operations?.generatedAt
+            ? `${currentKey ? `${monthLabel(currentKey)} to date` : 'Month to date'} · Updated ${new Date(operations.generatedAt).toLocaleString('en-US', { timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
+            : undefined
+      }
       actions={
-        <Track>
-          <Pill onClick={loadData} disabled={loading} aria-label="Refresh">
-            <RefreshCw className={loading ? 'animate-spin' : undefined} />
-            {error ? 'Retry' : 'Refresh'}
-          </Pill>
-        </Track>
+        <Pill variant="plain" className="h-10 sm:h-8" onClick={loadData} disabled={loading} aria-label="Refresh">
+          <RefreshCw className={loading ? 'animate-spin' : undefined} />
+          {error ? 'Retry' : 'Refresh'}
+        </Pill>
       }
     />
   )
@@ -162,80 +223,116 @@ export function AnalyticsDashboardPageClient({ initialData, timeZone }: { initia
 
   const allMonths = salesMetrics?.salesByMonth || []
   const months = (period === 'all' ? allMonths : allMonths.slice(-Number(period))).map(month => ({ ...month, label: monthLabel(month.month) }))
-  const latestMonth = months[months.length - 1]?.month
+  const periodGross = grossChart.filter(item => months.some(month => month.month === item.month))
   const periodUnits = months.reduce((sum, month) => sum + month.count, 0)
   const periodRevenue = months.reduce((sum, month) => sum + month.revenue, 0)
-  const slowMoving = (inventoryMetrics?.slowMoving || []).filter(v => v.daysInStock > 60)
-
-  const axis = { tickLine: false, axisLine: false, tick: { fontSize: 11 } } as const
+  const slowMoving = (inventoryMetrics?.slowMoving || []).filter(v => v.daysInStock > AGED_UNIT_DAYS)
+  const isCurrent = (row: { month: string }) => row.month === currentKey
 
   return (
     <PageContainer title="Analytics" header={header} breadcrumbs={breadcrumbs}>
     <div className="min-w-0 max-w-full space-y-8 overflow-x-hidden px-4 pb-24 md:px-6 [&_.recharts-responsive-container]:max-w-full">
 
-      <DeskSection title="Operations">
-        <ReadoutStrip>
-          <Readout label="F&I penetration" value={financePenetration} sub={financePenetration === NO_DATA ? 'No data' : undefined} />
-          <Readout label="Effective labor rate" value={laborRate} sub={laborRate === NO_DATA ? 'No data' : undefined} />
-          <Readout label="Parts fill rate" value={partsFillRate} sub={partsFillRate === NO_DATA ? 'No data' : undefined} />
-          <Readout
-            label="Open exceptions"
-            value={exceptions}
-            tone={exceptions > 0 ? 'bad' : 'ok'}
-            sub={`${operations?.exceptions?.accounting || 0} accounting · ${operations?.exceptions?.payments || 0} payments`}
+      <section aria-labelledby="analytics-mtd" className="min-w-0">
+        <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2 border-b border-foreground/15 pb-2">
+          <h2 id="analytics-mtd" className="text-[15px] font-semibold text-foreground">
+            {currentKey ? `${monthLabel(currentKey)} to date` : 'Month to date'}
+          </h2>
+          <span className="text-[12px] text-muted-foreground">Delivered deals by sale date</span>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-md border bg-border lg:grid-cols-4">
+          <MonthFigure
+            lead
+            label="Units delivered"
+            value={mtd.count}
+            sub={lastMonth ? `${lastMonthName}: ${lastMonth.count}` : `${lastMonthName}: none`}
           />
-        </ReadoutStrip>
-      </DeskSection>
+          <MonthFigure
+            lead
+            label="Gross"
+            value={formatCurrency(mtd.grossCents / 100)}
+            sub={lastMonth ? `${lastMonthName}: ${formatCurrency(lastMonth.grossCents / 100)}` : `${lastMonthName}: none`}
+          />
+          <MonthFigure
+            label="Gross per unit"
+            value={mtd.count ? formatCurrency(mtd.grossCents / 100 / mtd.count) : NO_DATA}
+            sub={lastMonth?.count ? `${lastMonthName}: ${formatCurrency(lastMonth.grossCents / 100 / lastMonth.count)}` : undefined}
+          />
+          <MonthFigure
+            label="Delivered revenue"
+            value={formatCurrency(mtd.revenueCents / 100)}
+            sub={lastMonth ? `${lastMonthName}: ${formatCurrency(lastMonth.revenueCents / 100)}` : undefined}
+          />
+        </div>
+      </section>
+
+      {watch.length > 0 && (
+        <DeskSection id="analytics-watch" title="Needs attention" count={watch.length}>
+          <ul className="divide-y rounded-md border bg-card">
+            {watch.map(item => (
+              <li key={item.key}>
+                <Link
+                  href={item.href}
+                  className="grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 px-4 py-2.5 transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none sm:grid-cols-[7.5rem_minmax(0,1fr)_4rem_7rem]"
+                >
+                  <span className="max-sm:hidden"><Status tone={item.tone}>{item.status}</Status></span>
+                  <span className="min-w-0 truncate text-[14px] font-medium text-foreground">{item.label}</span>
+                  <span className="text-right"><Figure size="md" attention>{item.count}</Figure></span>
+                  <span className="inline-flex items-center justify-end gap-1 text-[12px] font-medium max-sm:hidden">
+                    {item.place}
+                    <ArrowRight className="size-3.5" aria-hidden="true" />
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </DeskSection>
+      )}
+
+      <ReadoutStrip>
+        <Readout label="F&I penetration" value={financePenetration} sub={financePenetration === NO_DATA ? 'No deliveries' : undefined} />
+        <Readout label="Effective labor rate" value={laborRate} sub={laborRate === NO_DATA ? 'No sold hours' : undefined} />
+        <Readout label="Parts fill rate" value={partsFillRate} sub={partsFillRate === NO_DATA ? 'No committed parts' : undefined} />
+        <Readout
+          label="Open exceptions"
+          value={exceptions}
+          sub={`${operations?.exceptions?.accounting || 0} accounting · ${operations?.exceptions?.payments || 0} payments · ${operations?.exceptions?.funding || 0} funding`}
+        />
+      </ReadoutStrip>
 
       <Segmented label="Analytics area" value={area} onChange={setArea} options={AREA_OPTIONS} />
 
       {area === 'sales' && (
         <div className="space-y-8">
-          <ReadoutStrip>
-            <Readout label="Delivered sales" value={salesMetrics?.totalSales || 0} />
-            <Readout label="Delivered revenue" value={formatCurrency(salesMetrics?.totalRevenue || 0)} />
-            <Readout label="Avg deal profit" value={salesMetrics?.totalSales ? formatCurrency(salesMetrics.avgDealProfit || 0) : NO_DATA} />
-            <Readout label="Reps active" value={salesMetrics?.salesByRep.length || 0} />
-          </ReadoutStrip>
-
           <DeskSection
+            id="analytics-by-month"
             title="By month"
             actions={<Segmented label="Period" size="sm" value={period} onChange={setPeriod} options={PERIOD_OPTIONS} />}
           >
-            <div className="space-y-6">
-              <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-                <span className="text-muted-foreground">Units <span className="ml-1 font-semibold tabular-nums text-foreground">{periodUnits}</span></span>
-                <span className="text-muted-foreground">Revenue <span className="ml-1 font-semibold tabular-nums text-foreground">{formatCurrency(periodRevenue)}</span></span>
-              </div>
+            <div className="space-y-4">
+              <p className="flex flex-wrap gap-x-6 gap-y-1 text-[13px] text-muted-foreground">
+                <span>Units <Figure size="sm" className="ml-1 text-foreground">{periodUnits}</Figure></span>
+                <span>Revenue <Figure size="sm" className="ml-1 text-foreground">{formatCurrency(periodRevenue)}</Figure></span>
+                <span>All-time delivered <Figure size="sm" className="ml-1 text-foreground">{salesMetrics?.totalSales || 0}</Figure></span>
+                <span>Avg deal gross <Figure size="sm" className="ml-1 text-foreground">{salesMetrics?.totalSales ? formatCurrency(salesMetrics.avgDealProfit || 0) : NO_DATA}</Figure></span>
+              </p>
               {months.length ? (
-                <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+                <div className="grid grid-cols-1 gap-x-8 gap-y-6 lg:grid-cols-3">
                   <div className="min-w-0">
-                    <p className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Units delivered</p>
-                    <ChartContainer config={chartConfig} className="h-[220px] w-full">
-                      <BarChart data={months} margin={{ left: 0, right: 0, top: 8 }}>
-                        <CartesianGrid vertical={false} strokeDasharray="2 4" />
-                        <XAxis dataKey="label" {...axis} />
-                        <YAxis width={32} allowDecimals={false} {...axis} />
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                        <Bar dataKey="count" radius={[6, 6, 2, 2]} maxBarSize={36}>
-                          {months.map(month => <Cell key={month.month} fill={month.month === latestMonth ? ACCENT : 'var(--color-count)'} />)}
-                        </Bar>
-                      </BarChart>
-                    </ChartContainer>
+                    <p className="mb-1 text-[12px] font-medium text-muted-foreground">Units delivered</p>
+                    <HairlineChart data={months} xKey="label" yKey="count" label="Units" highlight={isCurrent} yWidth={28} />
                   </div>
                   <div className="min-w-0">
-                    <p className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Revenue</p>
-                    <ChartContainer config={chartConfig} className="h-[220px] w-full">
-                      <BarChart data={months} margin={{ left: 0, right: 0, top: 8 }}>
-                        <CartesianGrid vertical={false} strokeDasharray="2 4" />
-                        <XAxis dataKey="label" {...axis} />
-                        <YAxis width={56} {...axis} tickFormatter={(v) => compactCurrency.format(Number(v))} />
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                        <Bar dataKey="revenue" radius={[6, 6, 2, 2]} maxBarSize={36}>
-                          {months.map(month => <Cell key={month.month} fill={month.month === latestMonth ? ACCENT : 'var(--color-revenue)'} />)}
-                        </Bar>
-                      </BarChart>
-                    </ChartContainer>
+                    <p className="mb-1 text-[12px] font-medium text-muted-foreground">Gross</p>
+                    {periodGross.length ? (
+                      <HairlineChart data={periodGross} xKey="label" yKey="gross" label="Gross" highlight={isCurrent} yWidth={52} format={value => compactCurrency.format(value)} />
+                    ) : (
+                      <Empty>No gross recorded</Empty>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="mb-1 text-[12px] font-medium text-muted-foreground">Revenue</p>
+                    <HairlineChart data={months} xKey="label" yKey="revenue" label="Revenue" highlight={isCurrent} yWidth={52} format={value => compactCurrency.format(value)} />
                   </div>
                 </div>
               ) : (
@@ -245,38 +342,61 @@ export function AnalyticsDashboardPageClient({ initialData, timeZone }: { initia
           </DeskSection>
 
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-            <DeskSection title="Top sales reps" count={Math.min(5, salesMetrics?.salesByRep.length || 0)}>
-              <BarRows
-                empty="No delivered deals"
-                rows={(salesMetrics?.salesByRep || []).slice(0, 5).map((rep, index) => ({
-                  key: `${rep.name}-${index}`,
-                  label: rep.name,
-                  value: rep.count,
-                  accent: index === 0,
-                  figure: <>{rep.count} <span className="text-muted-foreground">· {compactCurrency.format(rep.revenue)}</span></>,
-                }))}
-              />
+            <DeskSection id="analytics-reps" title="Sales reps" count={salesMetrics?.salesByRep.length || 0}>
+              {salesMetrics?.salesByRep.length ? (
+                <DeskTable>
+                  <thead>
+                    <tr>
+                      <Th>Rep</Th>
+                      <Th align="right">Units</Th>
+                      <Th align="right">Revenue</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {salesMetrics.salesByRep.slice(0, 10).map((rep, index) => (
+                      <Tr key={`${rep.name}-${index}`}>
+                        <Td className="max-w-[14rem] truncate font-medium">{rep.name}</Td>
+                        <Td align="right"><Figure size="sm">{rep.count}</Figure></Td>
+                        <Td align="right" className="whitespace-nowrap text-muted-foreground">{formatCurrency(rep.revenue)}</Td>
+                      </Tr>
+                    ))}
+                  </tbody>
+                </DeskTable>
+              ) : (
+                <Empty>No delivered deals</Empty>
+              )}
             </DeskSection>
 
-            <DeskSection title="Sales by make" count={Math.min(8, salesMetrics?.vehiclesSold.length || 0)}>
-              <BarRows
+            <DeskSection id="analytics-makes" title="Sales by make" count={salesMetrics?.vehiclesSold.length || 0}>
+              <ShareTable
+                labelHeading="Make"
+                countHeading="Units"
                 empty="No delivered deals"
-                rows={(salesMetrics?.vehiclesSold || []).slice(0, 8).map((item, index) => ({ key: item.make, label: item.make, value: item.count, accent: index === 0 }))}
+                rows={(salesMetrics?.vehiclesSold || []).slice(0, 10).map(item => ({ key: item.make, label: item.make, value: item.count }))}
               />
             </DeskSection>
           </div>
 
-          <DeskSection title="Top selling vehicles" count={salesMetrics?.topVehicles?.length || 0}>
+          <DeskSection id="analytics-top-vehicles" title="Top selling vehicles" count={salesMetrics?.topVehicles?.length || 0}>
             {salesMetrics?.topVehicles?.length ? (
-              <Panel className="divide-y">
-                {salesMetrics.topVehicles.map((vehicle, idx) => (
-                  <div key={idx} className="flex min-w-0 items-center gap-3 px-4 py-2.5 text-sm">
-                    <span className="w-5 shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{String(idx + 1).padStart(2, '0')}</span>
-                    <span className="min-w-0 flex-1 truncate">{vehicle.year} {vehicle.make} {vehicle.model}</span>
-                    <span className="shrink-0 text-right font-mono text-xs tabular-nums">{vehicle.count} sold · {formatCurrency(vehicle.revenue)}</span>
-                  </div>
-                ))}
-              </Panel>
+              <DeskTable>
+                <thead>
+                  <tr>
+                    <Th>Vehicle</Th>
+                    <Th align="right">Sold</Th>
+                    <Th align="right" priority={2}>Revenue</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {salesMetrics.topVehicles.map(vehicle => (
+                    <Tr key={`${vehicle.year}-${vehicle.make}-${vehicle.model}`}>
+                      <Td className="max-w-[18rem] truncate font-medium">{vehicle.year} {vehicle.make} {vehicle.model}</Td>
+                      <Td align="right"><Figure size="sm">{vehicle.count}</Figure></Td>
+                      <Td align="right" priority={2} className="whitespace-nowrap text-muted-foreground">{formatCurrency(vehicle.revenue)}</Td>
+                    </Tr>
+                  ))}
+                </tbody>
+              </DeskTable>
             ) : (
               <Empty>No sales</Empty>
             )}
@@ -286,146 +406,172 @@ export function AnalyticsDashboardPageClient({ initialData, timeZone }: { initia
 
       {area === 'inventory' && (
         <div className="space-y-8">
-          <ReadoutStrip>
-            <Readout label="Total vehicles" value={inventoryMetrics?.totalVehicles || 0} />
-            <Readout label="Inventory value" value={formatCurrency(inventoryMetrics?.totalValue || 0)} />
-            <Readout
-              label="Avg days in stock"
-              value={inventoryMetrics?.totalVehicles ? Math.round(inventoryMetrics.avgDaysInStock || 0) : NO_DATA}
-              tone={inventoryMetrics?.avgDaysInStock && inventoryMetrics.avgDaysInStock > 60 ? 'warn' : undefined}
-            />
-            <Readout label="Available" value={inventoryMetrics?.vehiclesByStatus.find(s => s.status === 'available')?.count || 0} tone="ok" />
-          </ReadoutStrip>
+          <DeskSection
+            id="analytics-slow"
+            title={`Over ${AGED_UNIT_DAYS} days in stock`}
+            count={slowMoving.length}
+            actions={<SectionLink href={`${platform}/vehicles`}>Inventory</SectionLink>}
+          >
+            {slowMoving.length ? (
+              <DeskTable>
+                <thead>
+                  <tr>
+                    <Th>Status</Th>
+                    <Th>Vehicle</Th>
+                    <Th priority={2}>Stock #</Th>
+                    <Th align="right" priority={2}>Price</Th>
+                    <Th align="right">Days</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {slowMoving.map(vehicle => (
+                    <Tr key={vehicle.id}>
+                      <Td className="w-[1%]">
+                        <Status tone={vehicle.daysInStock > 90 ? 'bad' : 'warn'}>{vehicle.daysInStock > 90 ? '90+ days' : '61-90 days'}</Status>
+                      </Td>
+                      <Td className="max-w-[16rem]">
+                        <Link href={`${platform}/vehicles/${vehicle.id}`} className="block truncate font-medium text-foreground hover:underline">
+                          {vehicle.year} {vehicle.make} {vehicle.model}
+                        </Link>
+                        <span className="md:hidden"><Code>#{vehicle.stockNumber}</Code></span>
+                      </Td>
+                      <Td priority={2} className="whitespace-nowrap"><Code>#{vehicle.stockNumber}</Code></Td>
+                      <Td align="right" priority={2} className="whitespace-nowrap text-muted-foreground">{formatCurrency(vehicle.price)}</Td>
+                      <Td align="right" className="whitespace-nowrap"><Figure size="sm" attention>{vehicle.daysInStock}</Figure></Td>
+                    </Tr>
+                  ))}
+                </tbody>
+              </DeskTable>
+            ) : (
+              <Empty>No units over {AGED_UNIT_DAYS} days</Empty>
+            )}
+          </DeskSection>
 
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-            <DeskSection title="By status">
-              <BarRows
-                empty="No vehicles"
-                rows={(inventoryMetrics?.vehiclesByStatus || []).map(item => ({ key: item.status, label: item.status, value: item.count, tone: statusTone[item.status] || 'idle' }))}
-              />
-            </DeskSection>
-
-            <DeskSection title="Aging">
+            <DeskSection id="analytics-aging" title="Aging, available units">
               {inventoryMetrics?.agingBreakdown?.length ? (
-                <ChartContainer config={chartConfig} className="h-[220px] w-full">
-                  <BarChart data={inventoryMetrics.agingBreakdown} margin={{ left: 0, right: 0, top: 8 }}>
-                    <CartesianGrid vertical={false} strokeDasharray="2 4" />
-                    <XAxis dataKey="range" {...axis} />
-                    <YAxis width={32} allowDecimals={false} {...axis} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="count" radius={[6, 6, 2, 2]} maxBarSize={48}>
-                      {inventoryMetrics.agingBreakdown.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.range === '90+' ? ACCENT : 'var(--color-count)'} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ChartContainer>
+                <HairlineChart
+                  data={inventoryMetrics.agingBreakdown.map(bucket => ({ ...bucket, label: `${bucket.range} days` }))}
+                  xKey="label"
+                  yKey="count"
+                  label="Units"
+                  yWidth={28}
+                  highlight={bucket => bucket.range === '61-90' || bucket.range === '90+'}
+                />
               ) : (
                 <Empty>No vehicles</Empty>
               )}
             </DeskSection>
+
+            <DeskSection id="analytics-status" title="By status" count={inventoryMetrics?.totalVehicles || 0}>
+              <ShareTable
+                labelHeading="Status"
+                countHeading="Units"
+                empty="No vehicles"
+                rows={(inventoryMetrics?.vehiclesByStatus || []).map(item => ({
+                  key: item.status,
+                  label: <Status tone={statusTone[item.status] || 'idle'}>{humanize(item.status)}</Status>,
+                  value: item.count,
+                }))}
+              />
+            </DeskSection>
           </div>
 
-          <DeskSection title="Slow moving" count={slowMoving.length} actions={<SectionLink href={`${basePath}/platform/vehicles`}>Inventory</SectionLink>}>
-            {slowMoving.length ? (
-              <Panel className="divide-y">
-                {slowMoving.map(vehicle => (
-                  <div key={vehicle.id} className="flex min-w-0 items-start justify-between gap-4 px-4 py-3">
-                    <div className="min-w-0">
-                      <TitleLine as="p" tone={vehicle.daysInStock > 90 ? 'bad' : 'warn'} status={vehicle.daysInStock > 90 ? '90+ days' : '61-90 days'} className="text-sm font-medium">
-                        {vehicle.year} {vehicle.make} {vehicle.model}
-                      </TitleLine>
-                      <p className="pl-4"><Code>{vehicle.stockNumber}</Code></p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-sm font-medium tabular-nums">{formatCurrency(vehicle.price)}</p>
-                      <p className={`font-mono text-xs tabular-nums ${vehicle.daysInStock > 90 ? 'text-red-600 dark:text-red-400' : 'text-amber-700 dark:text-amber-300'}`}>{vehicle.daysInStock} days</p>
-                    </div>
-                  </div>
-                ))}
-              </Panel>
-            ) : (
-              <Empty>No slow-moving inventory</Empty>
-            )}
-          </DeskSection>
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+            <DeskSection id="analytics-condition" title="By condition">
+              <ShareTable
+                labelHeading="Condition"
+                countHeading="Units"
+                empty="No vehicles"
+                rows={(inventoryMetrics?.vehiclesByCondition || []).map(item => ({ key: item.condition, label: humanize(item.condition), value: item.count }))}
+              />
+            </DeskSection>
 
-          <DeskSection title="By condition">
-            {inventoryMetrics?.vehiclesByCondition?.length ? (
-              <ReadoutStrip>
-                {inventoryMetrics.vehiclesByCondition.map((item, idx) => (
-                  <Readout key={idx} label={item.condition} value={item.count} />
-                ))}
-              </ReadoutStrip>
-            ) : (
-              <Empty>No vehicles</Empty>
-            )}
-          </DeskSection>
+            <ReadoutStrip className="self-start">
+              <Readout label="Total vehicles" value={inventoryMetrics?.totalVehicles || 0} />
+              <Readout label="Inventory value" value={formatCurrency(inventoryMetrics?.totalValue || 0)} />
+              <Readout
+                label="Avg days in stock"
+                value={inventoryMetrics?.totalVehicles ? Math.round(inventoryMetrics.avgDaysInStock || 0) : NO_DATA}
+                sub={inventoryMetrics?.avgDaysInStock && inventoryMetrics.avgDaysInStock > AGED_UNIT_DAYS ? <Attention>Aged</Attention> : undefined}
+              />
+              <Readout label="Available" value={inventoryMetrics?.vehiclesByStatus.find(s => s.status === 'available')?.count || 0} />
+            </ReadoutStrip>
+          </div>
         </div>
       )}
 
       {area === 'service' && (
         <div className="space-y-8">
           <ReadoutStrip>
-            <Readout label="Today's appointments" value={serviceMetrics?.todayAppointments || 0} tone={serviceMetrics?.todayAppointments ? 'info' : undefined} />
+            <Readout label="Today's appointments" value={serviceMetrics?.todayAppointments || 0} />
             <Readout label="Active ROs" value={serviceMetrics?.activeRepairOrders || 0} />
             <Readout label="Settled RO revenue" value={formatCurrency(serviceMetrics?.serviceRevenue || 0)} />
             <Readout label="Avg settled RO" value={serviceMetrics?.settledRepairOrders ? formatCurrency(serviceMetrics.avgRepairOrder || 0) : NO_DATA} />
           </ReadoutStrip>
 
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-            <DeskSection title="Appointments by status">
-              <BarRows
-                empty="No appointments"
-                rows={(serviceMetrics?.appointmentsByStatus || []).map(item => ({ key: item.status, label: item.status, value: item.count }))}
-              />
-            </DeskSection>
-
-            <DeskSection title="Repair orders by status">
-              {serviceMetrics?.repairOrdersByStatus?.length ? (
-                <ChartContainer config={chartConfig} className="h-[220px] w-full">
-                  <BarChart data={serviceMetrics.repairOrdersByStatus} margin={{ left: 0, right: 0, top: 8 }}>
-                    <CartesianGrid vertical={false} strokeDasharray="2 4" />
-                    <XAxis dataKey="status" {...axis} />
-                    <YAxis width={32} allowDecimals={false} {...axis} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="count" fill="var(--color-count)" radius={[6, 6, 2, 2]} maxBarSize={48} />
-                  </BarChart>
-                </ChartContainer>
-              ) : (
-                <Empty>No repair orders</Empty>
-              )}
-            </DeskSection>
-          </div>
-
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-            <DeskSection title="Service mix">
-              <BarRows
-                empty="No appointments"
-                rows={(serviceMetrics?.serviceTypeBreakdown || []).map(item => ({ key: item.serviceType, label: item.serviceType, value: item.count }))}
-              />
-            </DeskSection>
-
-            <DeskSection title="Low stock parts" count={serviceMetrics?.lowStockParts?.length || 0} actions={<SectionLink href={`${basePath}/platform/service`}>Service</SectionLink>}>
-              {serviceMetrics?.lowStockParts?.length ? (
-                <Panel className="divide-y">
+          <DeskSection
+            id="analytics-low-stock"
+            title="Low stock parts"
+            count={serviceMetrics?.lowStockParts?.length || 0}
+            actions={<SectionLink href={`${platform}/parts`}>Parts</SectionLink>}
+          >
+            {serviceMetrics?.lowStockParts?.length ? (
+              <DeskTable>
+                <thead>
+                  <tr>
+                    <Th>Part #</Th>
+                    <Th>Description</Th>
+                    <Th align="right">On hand</Th>
+                    <Th align="right" priority={2}>Minimum</Th>
+                  </tr>
+                </thead>
+                <tbody>
                   {serviceMetrics.lowStockParts.map(part => (
-                    <div key={part.id} className="flex min-w-0 items-start justify-between gap-4 px-4 py-3">
-                      <div className="min-w-0">
-                        <TitleLine as="p" tone="bad" status="Low stock" className="text-sm font-medium">{part.description}</TitleLine>
-                        <p className="pl-4"><Code>#{part.partNumber}</Code></p>
-                      </div>
-                      <div className="shrink-0 text-right font-mono text-xs tabular-nums">
-                        <p className="text-sm font-semibold text-red-600 dark:text-red-400">{part.quantity}</p>
-                        <p className="text-muted-foreground">min {part.minimumQuantity}</p>
-                      </div>
-                    </div>
+                    <Tr key={part.id}>
+                      <Td className="whitespace-nowrap">
+                        <Link href={`${platform}/parts/${part.id}`} className="hover:underline"><Code className="text-foreground">#{part.partNumber}</Code></Link>
+                      </Td>
+                      <Td className="max-w-[16rem] truncate">{part.description}</Td>
+                      <Td align="right"><Figure size="sm" attention>{part.quantity}</Figure></Td>
+                      <Td align="right" priority={2} className="text-muted-foreground">{part.minimumQuantity}</Td>
+                    </Tr>
                   ))}
-                </Panel>
-              ) : (
-                <Empty>No low-stock parts</Empty>
-              )}
+                </tbody>
+              </DeskTable>
+            ) : (
+              <Empty>No low-stock parts</Empty>
+            )}
+          </DeskSection>
+
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+            <DeskSection id="analytics-ro-status" title="Repair orders by status">
+              <ShareTable
+                labelHeading="Status"
+                countHeading="ROs"
+                extraHeading="Total"
+                empty="No repair orders"
+                rows={(serviceMetrics?.repairOrdersByStatus || []).map(item => ({ key: item.status, label: humanize(item.status), value: item.count, extra: formatCurrency(item.revenue) }))}
+              />
+            </DeskSection>
+
+            <DeskSection id="analytics-appt-status" title="Appointments by status">
+              <ShareTable
+                labelHeading="Status"
+                empty="No appointments"
+                rows={(serviceMetrics?.appointmentsByStatus || []).map(item => ({ key: item.status, label: humanize(item.status), value: item.count }))}
+              />
             </DeskSection>
           </div>
+
+          <DeskSection id="analytics-mix" title="Service mix">
+            <ShareTable
+              labelHeading="Service type"
+              countHeading="Appointments"
+              empty="No appointments"
+              rows={(serviceMetrics?.serviceTypeBreakdown || []).map(item => ({ key: item.serviceType, label: humanize(item.serviceType), value: item.count }))}
+            />
+          </DeskSection>
         </div>
       )}
     </div>

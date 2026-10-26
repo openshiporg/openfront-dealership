@@ -6,16 +6,20 @@ import { ArrowLeft, ExternalLink, Pencil, Plus, RefreshCw } from 'lucide-react'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
 import {
+  Attention,
   Code,
   DeskHeader,
   DeskSection,
+  DeskTable,
   Facts,
   Notice,
   Panel,
   Pill,
-  Readout,
-  ReadoutStrip,
+  Status,
+  Td,
+  Th,
   TitleLine,
+  Tr,
   Track,
   type DeskTone,
 } from '@/features/platform/components/desk'
@@ -42,6 +46,7 @@ import {
   type VehicleDetail,
 } from '../actions/detail'
 import { LiveVehiclePhotos } from '../components/VehiclePhotos'
+import { Windshield, WindshieldFigure } from '../components/Windshield'
 import { InventoryFormDialog, type FieldErrors, type InventoryFormField } from '../components/InventoryFormDialog'
 import {
   COST_TYPES,
@@ -402,16 +407,23 @@ export function VehicleDetailPageClient({
   // Render ----------------------------------------------------------------------------------------
 
   const title = `${vehicle.year} ${vehicle.make} ${vehicle.model}${vehicle.trim ? ` ${vehicle.trim}` : ''}`
+  // Aged per the existing 60-day mark; a sold unit's clock has stopped.
+  const aged = Boolean(stock) && vehicle.status !== 'sold' && stock!.daysInStock != null && stock!.daysInStock >= 60
+  const stateLine = [
+    vehicleStatusLabels[stage] || stage,
+    stock ? (stock.publicListing.live ? 'live on storefront' : 'not live') : 'not stocked',
+    nextStep ? `next: ${nextStep.label.toLowerCase()}` : null,
+  ].filter(Boolean).join(' · ')
   const header = (
     <DeskHeader
       eyebrow={<Link href={VEHICLES_HREF} className="inline-flex min-h-11 items-center gap-1 hover:text-foreground sm:min-h-0"><ArrowLeft className="size-3" /> Inventory</Link>}
       title={title}
       tone={vehicleStatusTones[stage] || 'idle'}
       status={vehicleStatusLabels[stage] || stage}
-      meta={<span className="flex flex-wrap gap-x-3 gap-y-1"><Code className="text-foreground">{vehicle.stockNumber}</Code><Code>{vehicle.vin}</Code><span>{vehicleStatusLabels[stage] || stage}</span>{vehicle.rooftopName && <span>{vehicle.rooftopName}</span>}</span>}
+      meta={<span className="flex flex-wrap gap-x-3 gap-y-1"><span className="font-medium text-foreground">{stateLine}</span><Code>{vehicle.vin}</Code>{vehicle.rooftopName && <span>{vehicle.rooftopName}</span>}</span>}
       actions={
         <Track>
-          <Pill onClick={reload} disabled={loading} aria-label="Refresh"><RefreshCw className={loading ? 'animate-spin' : undefined} /><span className="max-sm:sr-only">Refresh</span></Pill>
+          <Pill variant="plain" onClick={reload} disabled={loading} aria-label="Refresh"><RefreshCw className={loading ? 'animate-spin' : undefined} /><span className="max-sm:sr-only">Refresh</span></Pill>
           <Pill onClick={openDetails} disabled={!editable || Boolean(busy)} title={editable ? undefined : notEditableReason}><Pencil /> Edit</Pill>
           {nextStep && <Pill variant="primary" onClick={nextStep.onClick} disabled={Boolean(busy)}>{nextStep.label}</Pill>}
         </Track>
@@ -487,20 +499,28 @@ export function VehicleDetailPageClient({
         {error && <Notice tone="warn">Reload failed: {error}</Notice>}
         {!editable && <Notice tone="idle">{notEditableReason}</Notice>}
 
-        <ReadoutStrip>
-          <Readout label="Retail" value={money(vehicle.priceCents)} sub={vehicle.listPriceCents != null && vehicle.listPriceCents !== vehicle.priceCents ? `List ${money(vehicle.listPriceCents)}` : undefined} />
-          {stock?.cost && <Readout label="Total cost" value={money(stock.cost.totalCostCents)} sub={vehicle.priceCents ? `Margin ${money(vehicle.priceCents - stock.cost.totalCostCents)}` : undefined} />}
+        <div className="min-w-0 space-y-3">
+          <Windshield label="Price, stock and days">
+            <WindshieldFigure label="Price" value={money(vehicle.priceCents)} sub={vehicle.listPriceCents != null && vehicle.listPriceCents !== vehicle.priceCents ? `List ${money(vehicle.listPriceCents)}` : undefined} />
+            <WindshieldFigure label="Stock #" value={vehicle.stockNumber || '-'} />
+            {stock && (
+              <WindshieldFigure
+                label="Days in stock"
+                value={stock.daysInStock ?? 'Sold'}
+                attention={aged}
+                sub={stock.soldAt ? `Sold ${formatDate(stock.soldAt, timeZone)}` : aged ? 'Aged 60+ days' : undefined}
+              />
+            )}
+            {stock?.cost && <WindshieldFigure label="Total cost" value={money(stock.cost.totalCostCents)} sub={vehicle.priceCents ? `Margin ${money(vehicle.priceCents - stock.cost.totalCostCents)}` : undefined} />}
+          </Windshield>
           {stock && (
-            <Readout
-              label="Days in stock"
-              value={stock.daysInStock ?? 'Sold'}
-              sub={stock.soldAt ? `Sold ${formatDate(stock.soldAt, timeZone)}` : undefined}
-              tone={vehicle.status !== 'sold' && stock.daysInStock != null && stock.daysInStock >= 60 ? 'warn' : undefined}
-            />
+            <div className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-2 text-[13px]">
+              <span className="inline-flex min-w-0 items-center gap-2"><span className="text-muted-foreground">Storefront</span><Status tone={listingLive ? 'ok' : publicAction ? 'warn' : 'idle'}>{listingLive ? 'Live' : 'Not live'}</Status>{!listingLive && stock.publicListing.reason && <span className="min-w-0 truncate text-muted-foreground">{stock.publicListing.reason}</span>}</span>
+              <span className="inline-flex items-center gap-2"><span className="text-muted-foreground">Listing</span><Status tone={merchandisingStatusTones[stock.merchandisingStatus]}>{merchandisingStatusLabels[stock.merchandisingStatus] || stock.merchandisingStatus}</Status></span>
+              <span className="inline-flex items-center gap-2"><span className="text-muted-foreground">Feed</span><Status tone={feedStatusTones[stock.feedStatus]}>{feedStatusLabels[stock.feedStatus] || stock.feedStatus}</Status></span>
+            </div>
           )}
-          {stock && <Readout label="Storefront" value={listingLive ? 'Live' : 'Not live'} tone={listingLive ? 'ok' : publicAction ? 'warn' : 'idle'} sub={listingLive ? undefined : stock.publicListing.reason || undefined} />}
-          {stock && <Readout label="Feed" value={feedStatusLabels[stock.feedStatus] || stock.feedStatus} tone={feedStatusTones[stock.feedStatus]} />}
-        </ReadoutStrip>
+        </div>
 
         <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
           <div className="min-w-0 space-y-8">
@@ -525,11 +545,11 @@ export function VehicleDetailPageClient({
               </div>
               {vehicle.features.length > 0 && (
                 <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="Features">
-                  {vehicle.features.map(feature => <li key={feature} className="rounded-full bg-muted px-2.5 py-1 text-xs">{feature}</li>)}
+                  {vehicle.features.map(feature => <li key={feature} className="rounded-[4px] border px-2 py-0.5 text-xs">{feature}</li>)}
                 </ul>
               )}
               <div className="mt-3 border-t pt-3 text-sm">
-                <p className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Description</p>
+                <p className="text-[12px] font-medium text-muted-foreground">Description</p>
                 <p className="mt-1 whitespace-pre-line break-words text-muted-foreground">{vehicle.description || 'No description'}</p>
               </div>
             </DeskSection>
@@ -541,8 +561,8 @@ export function VehicleDetailPageClient({
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {detail.images.map(image => image.url
                     // eslint-disable-next-line @next/next/no-img-element
-                    ? <img key={image.id} src={image.url} alt="" className="aspect-[4/3] w-full rounded-lg bg-muted object-contain" />
-                    : <div key={image.id} className="aspect-[4/3] rounded-lg bg-muted" />)}
+                    ? <img key={image.id} src={image.url} alt="" className="aspect-[4/3] w-full rounded-[4px] bg-muted object-cover" />
+                    : <div key={image.id} className="aspect-[4/3] rounded-[4px] bg-muted" />)}
                 </div>
               ) : <EmptyRow>No photos</EmptyRow>}
             </DeskSection>
@@ -555,34 +575,49 @@ export function VehicleDetailPageClient({
             >
               <SectionError section={detail.reconWorkItems}>
                 {!stock ? <EmptyRow>Not stocked</EmptyRow> : reconItems.length === 0 ? <EmptyRow>No work items</EmptyRow> : (
-                  <Panel className="divide-y">
-                    {reconItems.map(item => {
-                      const open = ['open', 'in-progress'].includes(item.status)
-                      const overdue = open && item.dueAt && new Date(item.dueAt).getTime() < Date.now()
-                      return (
-                        <div key={item.id} className="min-w-0 px-4 py-3">
-                          <TitleLine tone={reconStatusTones[item.status]} status={reconStatusLabels[item.status]} className="text-sm font-medium">{item.title}</TitleLine>
-                          <p className="mt-0.5 flex flex-wrap gap-x-2 pl-4 text-xs text-muted-foreground">
-                            <span>{reconStatusLabels[item.status] || item.status}</span>
-                            <span>· {reconCategoryLabels[item.category] || item.category}</span>
-                            {item.vendorName && <span>· {item.vendorName}</span>}
-                            {item.assignedTo?.name && <span>· {item.assignedTo.name}</span>}
-                            {item.dueAt && <span className={overdue ? 'text-red-600 dark:text-red-400' : undefined}>· Due {formatDate(item.dueAt, timeZone)}</span>}
-                            {item.estimatedCostCents != null && <span>· Est. {money(item.estimatedCostCents)}</span>}
-                            {item.actualCostCents != null && <span>· Actual {money(item.actualCostCents)}</span>}
-                            {item.completedAt && <span>· Done {formatDate(item.completedAt, timeZone)}</span>}
-                          </p>
-                          {open && editable && (
-                            <Track className="ml-4 mt-2">
-                              {item.status === 'open' && <Pill size="sm" variant="primary" disabled={!editable || Boolean(busy)} onClick={() => startRecon(item)}>Start</Pill>}
-                              <Pill size="sm" variant={item.status === 'in-progress' ? 'primary' : undefined} disabled={!editable || Boolean(busy)} onClick={() => openDialog('recon-complete', { actual: item.estimatedCostCents ? formatCentsForInput(item.estimatedCostCents) : '' }, item.id)}>Complete</Pill>
-                              <Pill size="sm" variant="plain" disabled={!editable || Boolean(busy)} onClick={() => openDialog('recon-cancel', { reason: '' }, item.id)}>Cancel</Pill>
-                            </Track>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </Panel>
+                  <DeskTable aria-label="Recon work items">
+                    <thead>
+                      <tr>
+                        <Th>Work item</Th>
+                        <Th>Status</Th>
+                        <Th priority={2}>Due</Th>
+                        <Th align="right" priority={3}>Cost</Th>
+                        <Th align="right"><span className="sr-only">Actions</span></Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reconItems.map(item => {
+                        const open = ['open', 'in-progress'].includes(item.status)
+                        const overdue = open && item.dueAt && new Date(item.dueAt).getTime() < Date.now()
+                        return (
+                          <Tr key={item.id}>
+                            <Td className="min-w-0">
+                              <p className="break-words font-medium text-foreground">{item.title}</p>
+                              <p className="mt-0.5 text-xs text-muted-foreground">{[reconCategoryLabels[item.category] || item.category, item.vendorName, item.assignedTo?.name].filter(Boolean).join(' · ')}</p>
+                              {item.dueAt && <p className="mt-0.5 text-xs text-muted-foreground md:hidden">Due {formatDate(item.dueAt, timeZone)}{overdue && <> <Attention>Overdue</Attention></>}</p>}
+                            </Td>
+                            <Td><Status tone={reconStatusTones[item.status]}>{reconStatusLabels[item.status] || item.status}</Status></Td>
+                            <Td priority={2} className="whitespace-nowrap">
+                              {item.dueAt ? <span className="inline-flex items-center gap-2">{formatDate(item.dueAt, timeZone)}{overdue && <Attention>Overdue</Attention>}</span> : <span className="text-muted-foreground">-</span>}
+                              {item.completedAt && <p className="text-xs text-muted-foreground">Done {formatDate(item.completedAt, timeZone)}</p>}
+                            </Td>
+                            <Td align="right" priority={3} className="whitespace-nowrap text-xs text-muted-foreground">
+                              {item.actualCostCents != null ? <span className="text-foreground">{money(item.actualCostCents)}</span> : item.estimatedCostCents != null ? `Est. ${money(item.estimatedCostCents)}` : '-'}
+                            </Td>
+                            <Td align="right" className="whitespace-nowrap">
+                              {open && editable && (
+                                <div className="flex flex-wrap items-center justify-end gap-1">
+                                  {item.status === 'open' && <Pill size="sm" className="max-md:h-10" disabled={!editable || Boolean(busy)} onClick={() => startRecon(item)}>Start</Pill>}
+                                  <Pill size="sm" className="max-md:h-10" disabled={!editable || Boolean(busy)} onClick={() => openDialog('recon-complete', { actual: item.estimatedCostCents ? formatCentsForInput(item.estimatedCostCents) : '' }, item.id)}>Complete</Pill>
+                                  <Pill size="sm" variant="plain" className="max-md:h-10" disabled={!editable || Boolean(busy)} onClick={() => openDialog('recon-cancel', { reason: '' }, item.id)}>Cancel</Pill>
+                                </div>
+                              )}
+                            </Td>
+                          </Tr>
+                        )
+                      })}
+                    </tbody>
+                  </DeskTable>
                 )}
               </SectionError>
             </DeskSection>
@@ -631,14 +666,14 @@ export function VehicleDetailPageClient({
                           {version.decisionReason && <p className="mt-1 break-words pl-4 text-xs">{version.decisionReason}</p>}
                           {current && version.status === 'submitted' && stock?.merchandisingStatus === 'submitted' && (
                             <Track className="ml-4 mt-2">
-                              {editable && <Pill size="sm" variant="primary" disabled={Boolean(busy)} onClick={() => approveVersion(version.id, version.updatedAt)}>Approve</Pill>}
+                              {editable && <Pill size="sm" className="max-md:h-10" disabled={Boolean(busy)} onClick={() => approveVersion(version.id, version.updatedAt)}>Approve</Pill>}
                               {/* Rejecting a stale review stays open on a sold unit; approving would relist it. */}
                               <Pill size="sm" disabled={!stock || Boolean(busy)} onClick={() => openDialog('reject', { reason: '' }, version.id)}>Reject</Pill>
                             </Track>
                           )}
                           {current && editable && version.status === 'approved' && publicAction === 'reapprove' && (
                             <Track className="ml-4 mt-2">
-                              <Pill size="sm" variant="primary" disabled={!editable || Boolean(busy)} onClick={() => approveVersion(version.id, version.updatedAt, true)}>Re-approve</Pill>
+                              <Pill size="sm" className="max-md:h-10" disabled={!editable || Boolean(busy)} onClick={() => approveVersion(version.id, version.updatedAt, true)}>Re-approve</Pill>
                             </Track>
                           )}
                         </div>
@@ -689,7 +724,7 @@ export function VehicleDetailPageClient({
                   {detail.history.hasAccidents && detail.history.accidentDetails && <p className="mt-2 whitespace-pre-line break-words text-sm text-muted-foreground">{detail.history.accidentDetails}</p>}
                   {detail.history.serviceRecords && (
                     <div className="mt-3 border-t pt-3 text-sm">
-                      <p className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Service records</p>
+                      <p className="text-[12px] font-medium text-muted-foreground">Service records</p>
                       <p className="mt-1 whitespace-pre-line break-words text-muted-foreground">{detail.history.serviceRecords}</p>
                     </div>
                   )}
@@ -771,7 +806,7 @@ export function VehicleDetailPageClient({
                     <ol className="mt-3 space-y-2 border-l pl-4">
                       {acquisition.events.map(event => (
                         <li key={event.id} className="relative text-sm">
-                          <span aria-hidden="true" className="absolute -left-[21px] top-1.5 size-2 rounded-full bg-muted-foreground/40" />
+                          <span aria-hidden="true" className="absolute -left-[21px] top-1.5 size-2 rounded-[1px] bg-muted-foreground/40" />
                           <p className="font-medium">{event.fromStatus ? `${acquisitionStatusLabels[event.fromStatus] || event.fromStatus} to ${acquisitionStatusLabels[event.toStatus] || event.toStatus}` : acquisitionStatusLabels[event.toStatus] || event.toStatus}</p>
                           <p className="text-xs text-muted-foreground">{formatDateTime(event.occurredAt, timeZone)} · {personName(event.actor)}</p>
                           <p className="break-words text-xs text-muted-foreground">{event.reason}</p>
@@ -792,7 +827,7 @@ export function VehicleDetailPageClient({
                       return (
                         <div key={entry.id} className="min-w-0 px-4 py-2.5 text-sm">
                           <p className="flex flex-wrap items-baseline justify-between gap-x-3">
-                            <span className="font-mono tabular-nums">{entry.previousPriceCents == null ? 'Set' : money(entry.previousPriceCents)} to <span className={down ? 'text-amber-700 dark:text-amber-400' : 'text-foreground'}>{money(entry.newPriceCents)}</span></span>
+                            <span className="tabular-nums">{entry.previousPriceCents == null ? 'Set' : money(entry.previousPriceCents)} to <span className="font-medium text-foreground">{money(entry.newPriceCents)}</span>{down && <span className="text-xs text-muted-foreground"> (reduced)</span>}</span>
                             <span className="text-xs text-muted-foreground">{formatDateTime(entry.effectiveDate, timeZone)}</span>
                           </p>
                           <p className="break-words text-xs text-muted-foreground">{[entry.changeReason, personName(entry.changedBy)].filter(Boolean).join(' · ')}</p>
@@ -812,7 +847,7 @@ export function VehicleDetailPageClient({
                       <div key={entry.id} className="min-w-0 px-4 py-2.5 text-sm">
                         <p className="flex flex-wrap items-baseline justify-between gap-x-3">
                           <span className="font-medium">{eventTypeLabel(entry.eventType)}</span>
-                          {entry.amountCents != null && <span className="font-mono text-xs tabular-nums">{money(entry.amountCents)}</span>}
+                          {entry.amountCents != null && <span className="text-xs tabular-nums">{money(entry.amountCents)}</span>}
                         </p>
                         <p className="text-xs text-muted-foreground">{formatDateTime(entry.occurredAt, timeZone)} · {personName(entry.actor)}</p>
                         <p className="break-words text-xs text-muted-foreground">{entry.reason}</p>

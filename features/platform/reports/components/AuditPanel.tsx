@@ -17,8 +17,8 @@ function JsonBlock({ label, value }: { label: string; value: unknown }) {
   if (value === null || value === undefined || (typeof value === 'object' && Object.keys(value as object).length === 0)) return null
   return (
     <div className="min-w-0 space-y-1">
-      <p className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">{label}</p>
-      <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-muted/50 p-3 font-mono text-[11px]">{JSON.stringify(value, null, 2)}</pre>
+      <p className="text-[12px] font-medium text-muted-foreground">{label}</p>
+      <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/50 p-3 font-mono text-[11px]">{JSON.stringify(value, null, 2)}</pre>
     </div>
   )
 }
@@ -123,8 +123,8 @@ export function AuditPanel({ rooftops, timeZone }: { rooftops: ReportRooftop[]; 
 
       {error && <Notice tone="bad">{error}</Notice>}
       <div className="flex items-baseline justify-between gap-2 border-b pb-2">
-        <h2 className="text-sm font-semibold">Events <span className="font-mono text-xs font-normal tabular-nums text-muted-foreground">{events.length}{events.length === LIMIT ? '+' : ''}</span></h2>
-        <span className="text-xs text-muted-foreground">Newest first</span>
+        <h2 className="text-[15px] font-semibold">Events <span className="text-[13px] font-normal tabular-nums text-muted-foreground">{events.length}{events.length === LIMIT ? '+' : ''}</span></h2>
+        <span className="text-[12px] text-muted-foreground">Newest first</span>
       </div>
       {events.length === LIMIT && <Notice tone="warn">Newest {LIMIT} shown</Notice>}
 

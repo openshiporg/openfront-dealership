@@ -7,14 +7,14 @@ import { ArrowLeft, Plus, RefreshCw, Search, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
-import { Code, DeskHeader, DeskSection, Facts, Notice, Panel, Pill, Readout, ReadoutStrip, Segmented, TitleLine, Track } from '@/features/platform/components/desk'
+import { Code, DeskHeader, DeskSection, DeskTable, Facts, Figure, Notice, Panel, Pill, Readout, ReadoutStrip, Segmented, Status, Td, Th, TitleLine, Tr, Track } from '@/features/platform/components/desk'
 import { formatCentsForInput, parseDollarsToCents } from '@/features/platform/deals/lib/moneyInput'
 import { cn } from '@/lib/utils'
 import { getCancellationsWorkspace, recordProductCancellation } from '../actions/cancellations'
 import { FinanceFormDialog, type FieldErrors, type FinanceFormField } from '../components/FinanceFormDialog'
 import type { AcceptedMenu, CancellationDeal, CancellationRecord, CancellationsWorkspace } from '../lib/cancellationTypes'
 import type { MenuOption } from '../lib/menuTypes'
-import { formatCents, formatDateTime, formatDay, newIdempotencyKey, personName, stateTone, vehicleName } from '../lib/display'
+import { daysSince, formatAge, formatCents, formatDateTime, formatDay, newIdempotencyKey, personName, stateTone, vehicleName } from '../lib/display'
 import { calculateRefund, monthsBetween, type RefundBasis } from '../lib/refund'
 
 type Tab = 'requested' | 'completed' | 'denied' | 'all'
@@ -98,7 +98,7 @@ export function FinanceCancellationsPageClient({
   const visible = scoped
     .filter(item => tab === 'all' || item.latest.status === tab)
     .filter(item => !term || `${personName(item.deal?.lead)} ${vehicleName(item.deal?.vehicle)} ${item.deal?.vehicle?.stockNumber || ''} ${item.productCode} ${item.option?.name || ''}`.toLowerCase().includes(term))
-  const selected = visible.find(item => item.key === selectedKey) ?? visible[0] ?? null
+  const selected = visible.find(item => item.key === selectedKey) ?? null
   const refundedTotal = cases.filter(item => item.latest.status === 'completed').reduce((sum, item) => sum + (item.latest.refundCents || 0), 0)
 
   // Accepted-menu products that can still be cancelled: no open or completed case.
@@ -216,13 +216,13 @@ export function FinanceCancellationsPageClient({
       status={error ? 'Unavailable' : `${counts.requested} requested`}
       meta={error ? 'Unavailable' : `${counts.requested} requested · ${counts.completed} completed · ${counts.denied} denied`}
       actions={
-        <Track>
+        <>
           <Pill asChild variant="plain"><Link href={`${basePath}/platform/finance`}><ArrowLeft />Finance</Link></Pill>
-          <Pill onClick={reload} disabled={loading} aria-label="Refresh"><RefreshCw className={loading ? 'animate-spin' : undefined} />Refresh</Pill>
+          <Pill variant="plain" onClick={reload} disabled={loading} aria-label="Refresh"><RefreshCw className={loading ? 'animate-spin' : undefined} />Refresh</Pill>
           <Pill variant="primary" onClick={openNew} disabled={!cancellableForFilter.length} title={!cancellableForFilter.length ? 'No accepted menu products to cancel' : undefined}>
             <Plus />New cancellation
           </Pill>
-        </Track>
+        </>
       }
     />
   )
@@ -269,12 +269,12 @@ export function FinanceCancellationsPageClient({
 
         <DeskSection title="Product">
           <Facts items={[
-            { label: 'Retail price', value: formatCents(item.option?.retailPriceCents ?? null), mono: true },
+            { label: 'Retail price', value: formatCents(item.option?.retailPriceCents ?? null) },
             { label: 'Term', value: item.option?.termMonths ? `${item.option.termMonths} mo` : 'Not recorded' },
             { label: 'Sold', value: formatDay(saleDateOf(item), timeZone) },
             { label: 'Menu', value: `v${item.menu.version}` },
             item.deal?.rooftop ? { label: 'Rooftop', value: item.deal.rooftop.name } : null,
-            { label: 'Refund recorded', value: formatCents(item.latest.refundCents ?? 0), mono: true },
+            { label: 'Refund recorded', value: formatCents(item.latest.refundCents ?? 0) },
           ]} />
         </DeskSection>
 
@@ -283,23 +283,23 @@ export function FinanceCancellationsPageClient({
             {open ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="grid gap-1.5 text-sm">
-                  <span className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Months used</span>
-                  <Input className="h-11" inputMode="numeric" value={calcState.monthsUsed} aria-invalid={monthsInvalid} onChange={event => setCalc({ ...calcState, monthsUsed: event.target.value })} />
+                  <span className="text-[12px] font-medium text-muted-foreground">Months used</span>
+                  <Input className="h-10 rounded-[4px]" inputMode="numeric" value={calcState.monthsUsed} aria-invalid={monthsInvalid} onChange={event => setCalc({ ...calcState, monthsUsed: event.target.value })} />
                   {monthsInvalid && <span className="text-xs text-red-600 dark:text-red-400">Enter whole months.</span>}
                 </label>
                 <label className="grid gap-1.5 text-sm">
-                  <span className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Cancellation fee</span>
-                  <Input className="h-11" inputMode="decimal" value={calcState.fee} aria-invalid={feeInvalid} onChange={event => setCalc({ ...calcState, fee: event.target.value })} />
+                  <span className="text-[12px] font-medium text-muted-foreground">Cancellation fee</span>
+                  <Input className="h-10 rounded-[4px]" inputMode="decimal" value={calcState.fee} aria-invalid={feeInvalid} onChange={event => setCalc({ ...calcState, fee: event.target.value })} />
                   {feeInvalid && <span className="text-xs text-red-600 dark:text-red-400">Enter a dollar amount.</span>}
                 </label>
               </div>
             ) : null}
             <Facts items={[
               { label: 'Method', value: basis.method === 'pro-rata-months' ? 'Pro-rata by month' : 'Flat (no term)' },
-              basis.method === 'pro-rata-months' ? { label: 'Unused months', value: `${result.unusedMonths} of ${basis.termMonths}`, mono: true } : null,
-              { label: 'Unused value', value: formatCents(result.unusedCents), mono: true },
-              { label: 'Fee', value: formatCents(basis.cancellationFeeCents), mono: true },
-              { label: open ? 'Refund due' : 'Calculated refund', value: <span className="font-semibold">{formatCents(result.refundCents)}</span>, mono: true },
+              basis.method === 'pro-rata-months' ? { label: 'Unused months', value: `${result.unusedMonths} of ${basis.termMonths}` } : null,
+              { label: 'Unused value', value: formatCents(result.unusedCents) },
+              { label: 'Fee', value: formatCents(basis.cancellationFeeCents) },
+              { label: open ? 'Refund due' : 'Calculated refund', value: <span className="font-semibold">{formatCents(result.refundCents)}</span> },
             ]} />
           </div>
         </DeskSection>
@@ -343,8 +343,8 @@ export function FinanceCancellationsPageClient({
                   <p className="break-words pl-4 text-xs text-muted-foreground">{record.reason}{record.evidence?.evidenceReference ? ` · ${record.evidence.evidenceReference}` : ''}</p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="font-mono text-xs tabular-nums">{formatCents(record.refundCents ?? 0)}</p>
-                  <p className="font-mono text-[11px] tabular-nums text-muted-foreground">{formatDateTime(record.createdAt, timeZone)}</p>
+                  <p className="text-xs font-medium tabular-nums">{formatCents(record.refundCents ?? 0)}</p>
+                  <p className="text-[11px] tabular-nums text-muted-foreground">{formatDateTime(record.createdAt, timeZone)}</p>
                 </div>
               </li>
             ))}
@@ -369,13 +369,6 @@ export function FinanceCancellationsPageClient({
         )}
         {error && <Notice tone="bad">{error}</Notice>}
 
-        <ReadoutStrip>
-          <Readout label="Requested" value={counts.requested} tone={counts.requested ? 'warn' : 'idle'} />
-          <Readout label="Completed" value={counts.completed} tone="ok" />
-          <Readout label="Refunded" value={formatCents(refundedTotal)} sub="Completed cancellations" />
-          <Readout label="Cancellable" value={cancellableForFilter.length} sub="Sold products" />
-        </ReadoutStrip>
-
         <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
           <Segmented
             label="Cancellation status"
@@ -390,7 +383,7 @@ export function FinanceCancellationsPageClient({
           />
           <div className="relative min-w-0 flex-1 lg:max-w-sm">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input className="h-11 rounded-full pl-9" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search customer, stock or product" aria-label="Search cancellations" />
+            <Input className="h-10 rounded-[4px] pl-9" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search customer, stock or product" aria-label="Search cancellations" />
           </div>
           {dealFilter && (
             <Track>
@@ -403,45 +396,76 @@ export function FinanceCancellationsPageClient({
           {loading && <span className="text-sm text-muted-foreground" role="status">Refreshing…</span>}
         </div>
 
-        <div className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
-          <DeskSection title="Cancellations" count={visible.length}>
-            {visible.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-muted-foreground">
-                <p>{scoped.length === 0 ? 'No cancellations' : 'No matching cancellations'}</p>
-                <Track>
-                  {scoped.length > 0 && <Pill size="sm" onClick={() => { setSearch(''); setTab('all') }}>Reset filters</Pill>}
-                  {cancellableForFilter.length > 0 && <Pill size="sm" variant="primary" onClick={openNew}>New cancellation</Pill>}
-                </Track>
-              </div>
-            ) : (
-              <Panel className="divide-y overflow-hidden">
-                {visible.map(item => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => setSelectedKey(item.key)}
-                    aria-pressed={selected?.key === item.key}
-                    className={cn('flex min-h-11 w-full min-w-0 items-start justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring', selected?.key === item.key && 'bg-muted/60')}
-                  >
-                    <div className="min-w-0">
-                      <TitleLine as="p" tone={stateTone(item.latest.status)} status={statusLabels[item.latest.status]} className="text-sm font-medium">
-                        {personName(item.deal?.lead)} · {item.option?.name || item.productCode}
-                      </TitleLine>
-                      <p className="truncate pl-4 text-xs text-muted-foreground">
-                        <Code>{item.productCode}</Code> · {statusLabels[item.latest.status] || item.latest.status} · {vehicleName(item.deal?.vehicle)}
-                      </p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-sm font-medium tabular-nums">{formatCents(item.latest.refundCents ?? 0)}</p>
-                      <p className="font-mono text-[11px] tabular-nums text-muted-foreground">{formatDay(item.latest.createdAt, timeZone)}</p>
-                    </div>
-                  </button>
-                ))}
-              </Panel>
-            )}
-          </DeskSection>
-          <div className="min-w-0">{selected ? renderDetail(selected) : <p className="py-10 text-center text-sm text-muted-foreground">No cancellation selected</p>}</div>
-        </div>
+        {selected && (
+          <Panel className="p-4 md:p-5" aria-label="Selected cancellation">
+            <div className="mb-3 flex justify-end">
+              <Pill size="sm" variant="plain" className="max-md:h-10" onClick={() => setSelectedKey(null)}><X />Close</Pill>
+            </div>
+            {renderDetail(selected)}
+          </Panel>
+        )}
+
+        <DeskSection title="Cancellations" count={visible.length}>
+          {visible.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-muted-foreground">
+              <p>{scoped.length === 0 ? 'No cancellations' : 'No matching cancellations'}</p>
+              <Track>
+                {scoped.length > 0 && <Pill size="sm" onClick={() => { setSearch(''); setTab('all') }}>Reset filters</Pill>}
+                {cancellableForFilter.length > 0 && <Pill size="sm" variant="primary" onClick={openNew}>New cancellation</Pill>}
+              </Track>
+            </div>
+          ) : (
+            <DeskTable>
+              <thead>
+                <tr>
+                  <Th>Customer · product</Th>
+                  <Th>Status</Th>
+                  <Th priority={3}>Vehicle</Th>
+                  <Th priority={2}>Requested</Th>
+                  <Th priority={2} align="right">Age</Th>
+                  <Th align="right">Refund</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map(item => {
+                  const isSelected = selected?.key === item.key
+                  const open = item.latest.status === 'requested'
+                  const requestedAt = item.records[item.records.length - 1]?.requestedAt || item.latest.requestedAt
+                  return (
+                    <Tr key={item.key} className={cn('cursor-pointer', isSelected && 'bg-muted/60')} onClick={() => setSelectedKey(item.key)}>
+                      <Td>
+                        <button
+                          type="button"
+                          onClick={event => { event.stopPropagation(); setSelectedKey(item.key) }}
+                          aria-pressed={isSelected}
+                          className="flex min-h-10 min-w-0 flex-col items-start justify-center text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <span className="font-medium text-foreground hover:underline">{personName(item.deal?.lead)} · {item.option?.name || item.productCode}</span>
+                          <Code>{item.productCode}</Code>
+                        </button>
+                      </Td>
+                      <Td><Status tone={stateTone(item.latest.status)}>{statusLabels[item.latest.status] || item.latest.status}</Status></Td>
+                      <Td priority={3} className="text-muted-foreground">
+                        {vehicleName(item.deal?.vehicle)}
+                        {item.deal?.vehicle?.stockNumber && <> <Code>#{item.deal.vehicle.stockNumber}</Code></>}
+                      </Td>
+                      <Td priority={2} className="whitespace-nowrap text-muted-foreground">{formatDay(requestedAt, timeZone)}</Td>
+                      <Td priority={2} align="right">{open ? <Figure size="sm">{formatAge(daysSince(requestedAt))}</Figure> : <span className="text-muted-foreground">-</span>}</Td>
+                      <Td align="right"><Figure size="sm">{formatCents(item.latest.refundCents ?? 0)}</Figure></Td>
+                    </Tr>
+                  )
+                })}
+              </tbody>
+            </DeskTable>
+          )}
+        </DeskSection>
+
+        <ReadoutStrip>
+          <Readout label="Requested" value={counts.requested} tone={counts.requested ? 'warn' : 'idle'} />
+          <Readout label="Completed" value={counts.completed} tone="ok" />
+          <Readout label="Refunded" value={formatCents(refundedTotal)} sub="Completed cancellations" />
+          <Readout label="Cancellable" value={cancellableForFilter.length} sub="Sold products" />
+        </ReadoutStrip>
 
         <FinanceFormDialog
           open={Boolean(dialog)}

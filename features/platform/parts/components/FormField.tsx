@@ -10,6 +10,7 @@ export function FormField({
   error,
   hint,
   className,
+  labelClassName,
   children,
 }: {
   id: string
@@ -17,11 +18,12 @@ export function FormField({
   error?: string | null
   hint?: ReactNode
   className?: string
+  labelClassName?: string
   children: ReactNode
 }) {
   return (
-    <div className={cn('grid min-w-0 gap-1.5 text-sm', className)}>
-      <label htmlFor={id} className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+    <div className={cn('grid min-w-0 gap-1.5 text-[13px]', className)}>
+      <label htmlFor={id} className={cn('text-[12px] font-medium text-muted-foreground', labelClassName)}>
         {label}
       </label>
       {children}

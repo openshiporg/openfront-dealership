@@ -30,7 +30,7 @@ export const EMPTY_TRADE_IN_FORM: TradeInFormValues = {
 }
 
 const NO_LEAD = 'none'
-const fieldLabel = 'font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground'
+const fieldLabel = 'text-[12px] font-medium text-muted-foreground'
 
 export function validateTradeInForm(values: TradeInFormValues, mode: 'create' | 'edit', leadRequired: boolean) {
   const errors: Partial<Record<keyof TradeInFormValues, string>> = {}
@@ -128,6 +128,7 @@ export function TradeInFormDialog({
       aria-invalid={shown[name] ? true : undefined}
       aria-describedby={shown[name] ? `trade-in-${name}-error` : undefined}
       {...props}
+      className={['rounded-[4px]', typeof props.className === 'string' ? props.className : ''].join(' ').trim()}
     />
   )
 
@@ -144,13 +145,13 @@ export function TradeInFormDialog({
               <>
                 <Field label="Rooftop" htmlFor="trade-in-rooftopId" error={shown.rooftopId}>
                   <Select value={values.rooftopId} onValueChange={value => setValues(current => ({ ...current, rooftopId: value, leadId: '' }))}>
-                    <SelectTrigger id="trade-in-rooftopId" aria-invalid={shown.rooftopId ? true : undefined}><SelectValue placeholder="Select rooftop" /></SelectTrigger>
+                    <SelectTrigger className="rounded-[4px]" id="trade-in-rooftopId" aria-invalid={shown.rooftopId ? true : undefined}><SelectValue placeholder="Select rooftop" /></SelectTrigger>
                     <SelectContent>{rooftops.map(rooftop => <SelectItem key={rooftop.id} value={rooftop.id}>{rooftop.name}</SelectItem>)}</SelectContent>
                   </Select>
                 </Field>
                 <Field label={leadRequired ? 'Customer lead' : 'Customer lead (optional)'} htmlFor="trade-in-leadId" error={shown.leadId}>
                   <Select value={values.leadId || (leadRequired ? '' : NO_LEAD)} onValueChange={value => set('leadId', value === NO_LEAD ? '' : value)} disabled={!values.rooftopId}>
-                    <SelectTrigger id="trade-in-leadId" aria-invalid={shown.leadId ? true : undefined}><SelectValue placeholder={values.rooftopId ? 'Select lead' : 'Choose a rooftop first'} /></SelectTrigger>
+                    <SelectTrigger className="rounded-[4px]" id="trade-in-leadId" aria-invalid={shown.leadId ? true : undefined}><SelectValue placeholder={values.rooftopId ? 'Select lead' : 'Choose a rooftop first'} /></SelectTrigger>
                     <SelectContent>
                       {!leadRequired && <SelectItem value={NO_LEAD}>No lead</SelectItem>}
                       {rooftopLeads.map(lead => (
@@ -171,13 +172,13 @@ export function TradeInFormDialog({
             <Field label="Mileage" htmlFor="trade-in-mileage" error={shown.mileage}>{input('mileage', { inputMode: 'numeric' })}</Field>
             <Field label="Condition" htmlFor="trade-in-condition">
               <Select value={values.condition} onValueChange={value => set('condition', value)}>
-                <SelectTrigger id="trade-in-condition"><SelectValue placeholder="Select condition" /></SelectTrigger>
+                <SelectTrigger className="rounded-[4px]" id="trade-in-condition"><SelectValue placeholder="Select condition" /></SelectTrigger>
                 <SelectContent>{CONDITION_OPTIONS.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
               </Select>
             </Field>
             {(['exteriorCondition', 'interiorCondition', 'mechanicalIssues'] as const).map(name => (
               <Field key={name} wide htmlFor={`trade-in-${name}`} label={name === 'exteriorCondition' ? 'Exterior notes' : name === 'interiorCondition' ? 'Interior notes' : 'Mechanical issues'}>
-                <Textarea id={`trade-in-${name}`} rows={2} maxLength={2000} value={values[name]} onChange={event => set(name, event.target.value)} />
+                <Textarea className="rounded-[4px]" id={`trade-in-${name}`} rows={2} maxLength={2000} value={values[name]} onChange={event => set(name, event.target.value)} />
               </Field>
             ))}
           </div>

@@ -19,7 +19,8 @@ export type AnalyticsOperations = {
     financeProductPenetrationPercent?: number
     deliveredDeals?: number
     service?: { effectiveLaborRateCents?: number; soldHours?: number }
-    parts?: { fillRatePercent?: number }
+    parts?: { fillRatePercent?: number; lowStockCount?: number }
+    deliveredByMonth?: Array<{ month: string; revenueCents: number; grossCents: number; count: number }>
   } | null
   exceptions: { accounting?: number; payments?: number; funding?: number; total?: number } | null
 }

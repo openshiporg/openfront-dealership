@@ -4,7 +4,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
-import { Notice, Panel, Pill, Segmented, TitleLine, Track } from '@/features/platform/components/desk'
+import { DeskTable, Notice, Panel, Pill, Segmented, Status, Td, Th, Tr, Track } from '@/features/platform/components/desk'
 import { createRole, deleteRole, updateRole } from '../actions'
 import { PERMISSION_GROUPS, PERMISSION_KEYS, roleIsTenantAssignable, rolePermissionCount } from '../lib/permissions'
 import type { Role, Viewer } from '../lib/types'
@@ -135,38 +135,54 @@ export function RolesSection({
           {roles.length > 0 && <Track><Pill size="sm" onClick={() => { setSearch(''); setFilter('all') }}>Reset filters</Pill></Track>}
         </Panel>
       ) : (
-        <Panel className="divide-y">
-          {visible.map(role => {
-            const assignable = roleIsTenantAssignable(role)
-            const used = usage(role)
-            const deleteBlocked = lockedReason || (used > 0 ? 'Role is in use' : role.id === viewer?.roleId ? 'This is your role' : undefined)
-            return (
-              <div key={role.id} className="flex min-w-0 flex-col gap-3 px-4 py-3 md:flex-row md:items-start md:justify-between">
-                <div className="min-w-0">
-                  <TitleLine as="p" tone={assignable ? 'info' : 'accent'} status={assignable ? 'Assignable' : 'Admin'} className="text-sm font-medium">
-                    {role.name}
-                  </TitleLine>
-                  <p className="break-words pl-4 text-xs text-muted-foreground">
-                    {assignable ? 'Assignable to memberships' : 'Admin permissions'} · {rolePermissionCount(role)} of {PERMISSION_KEYS.length} permissions
-                  </p>
-                  <p className="break-words pl-4 text-xs text-muted-foreground">
-                    {role.assignedToCount ?? 0} users · {(role.dealerGroupMembershipsCount ?? 0) + (role.rooftopMembershipsCount ?? 0)} memberships
-                  </p>
-                </div>
-                <Track className="self-end md:self-auto">
-                  <Pill size="sm" className="h-11 sm:h-7" disabled={Boolean(deleteBlocked)} title={deleteBlocked} onClick={() => { setError(null); setRemoving(role) }} aria-label={`Delete ${role.name}`}>
-                    <Trash2 />
-                    Delete
-                  </Pill>
-                  <Pill size="sm" className="h-11 sm:h-7" onClick={() => openForm(role)} aria-label={`${canManage ? 'Edit' : 'View'} ${role.name}`}>
-                    <Pencil />
-                    {canManage ? 'Edit' : 'View'}
-                  </Pill>
-                </Track>
-              </div>
-            )
-          })}
-        </Panel>
+        <DeskTable aria-label="Roles">
+          <thead>
+            <tr>
+              <Th>Role</Th>
+              <Th>Type</Th>
+              <Th align="right" priority={2}>Permissions</Th>
+              <Th align="right" priority={2}>Users</Th>
+              <Th align="right" priority={3}>Memberships</Th>
+              <Th align="right"><span className="sr-only">Actions</span></Th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map(role => {
+              const assignable = roleIsTenantAssignable(role)
+              const used = usage(role)
+              const deleteBlocked = lockedReason || (used > 0 ? 'Role is in use' : role.id === viewer?.roleId ? 'This is your role' : undefined)
+              return (
+                <Tr key={role.id}>
+                  <Td className="max-w-0 min-w-[8rem]">
+                    <span className="block truncate font-medium text-foreground">{role.name}</span>
+                    <span className="block truncate text-xs text-muted-foreground md:hidden">
+                      {rolePermissionCount(role)} of {PERMISSION_KEYS.length} permissions · {role.assignedToCount ?? 0} users
+                    </span>
+                  </Td>
+                  <Td>
+                    <Status tone={assignable ? 'info' : 'accent'}>{assignable ? 'Assignable' : 'Admin'}</Status>
+                    {used === 0 && <span className="block text-xs text-muted-foreground">Unused</span>}
+                  </Td>
+                  <Td align="right" priority={2}>{rolePermissionCount(role)} of {PERMISSION_KEYS.length}</Td>
+                  <Td align="right" priority={2}>{role.assignedToCount ?? 0}</Td>
+                  <Td align="right" priority={3}>{(role.dealerGroupMembershipsCount ?? 0) + (role.rooftopMembershipsCount ?? 0)}</Td>
+                  <Td align="right" className="w-px whitespace-nowrap">
+                    <div className="inline-flex justify-end gap-1">
+                      <Pill size="sm" variant="plain" className="h-11 sm:h-7" disabled={Boolean(deleteBlocked)} title={deleteBlocked} onClick={() => { setError(null); setRemoving(role) }} aria-label={`Delete ${role.name}`}>
+                        <Trash2 />
+                        <span className="max-sm:sr-only">Delete</span>
+                      </Pill>
+                      <Pill size="sm" className="h-11 sm:h-7" onClick={() => openForm(role)} aria-label={`${canManage ? 'Edit' : 'View'} ${role.name}`}>
+                        <Pencil />
+                        {canManage ? 'Edit' : 'View'}
+                      </Pill>
+                    </div>
+                  </Td>
+                </Tr>
+              )
+            })}
+          </tbody>
+        </DeskTable>
       )}
 
       <FormDialog
@@ -187,7 +203,7 @@ export function RolesSection({
             </Field>
             {PERMISSION_GROUPS.map(group => (
               <fieldset key={group.title} className="min-w-0">
-                <legend className="mb-1 font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">{group.title}</legend>
+                <legend className="mb-1 text-[12px] font-medium text-muted-foreground">{group.title}</legend>
                 <div className="grid gap-x-4 sm:grid-cols-2">
                   {group.flags.map(flag => (
                     <label key={flag.key} className="flex min-h-11 items-center gap-2 text-sm sm:min-h-9">

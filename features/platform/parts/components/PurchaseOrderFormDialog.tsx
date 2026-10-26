@@ -139,7 +139,7 @@ export function PurchaseOrderFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={value => { if (!busy) onOpenChange(value) }}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto rounded-md sm:rounded-md sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{order ? `Edit ${order.reference}` : 'New purchase order'}</DialogTitle>
         </DialogHeader>
@@ -148,22 +148,22 @@ export function PurchaseOrderFormDialog({
             {!order && rooftops.length > 1 && (
               <FormField id="po-rooftop" label="Rooftop" error={errors.rooftopId} className="sm:col-span-2">
                 <Select value={rooftopId} onValueChange={value => { setRooftopId(value); setLines([newLine()]); setErrors(current => ({ ...current, rooftopId: undefined })) }}>
-                  <SelectTrigger id="po-rooftop" className="h-11 sm:h-9" aria-invalid={Boolean(errors.rooftopId)}><SelectValue placeholder="Select rooftop" /></SelectTrigger>
+                  <SelectTrigger id="po-rooftop" className="h-11 rounded-[4px] px-3 text-[13px] sm:h-9" aria-invalid={Boolean(errors.rooftopId)}><SelectValue placeholder="Select rooftop" /></SelectTrigger>
                   <SelectContent>{rooftops.map(rooftop => <SelectItem key={rooftop.id} value={rooftop.id}>{rooftop.name || rooftop.id}</SelectItem>)}</SelectContent>
                 </Select>
               </FormField>
             )}
             <FormField id="po-reference" label="PO reference" error={errors.reference}>
-              <Input id="po-reference" className="h-11 font-mono uppercase sm:h-9" value={reference} maxLength={100} aria-invalid={Boolean(errors.reference)} onChange={event => { setReference(event.target.value); setErrors(current => ({ ...current, reference: undefined })) }} />
+              <Input id="po-reference" className="h-11 rounded-[4px] text-[13px] font-mono uppercase sm:h-9" value={reference} maxLength={100} aria-invalid={Boolean(errors.reference)} onChange={event => { setReference(event.target.value); setErrors(current => ({ ...current, reference: undefined })) }} />
             </FormField>
             <FormField id="po-supplier" label="Supplier" error={errors.supplier}>
-              <Input id="po-supplier" className="h-11 sm:h-9" value={supplier} maxLength={200} aria-invalid={Boolean(errors.supplier)} onChange={event => { setSupplier(event.target.value); setErrors(current => ({ ...current, supplier: undefined })) }} />
+              <Input id="po-supplier" className="h-11 rounded-[4px] text-[13px] sm:h-9" value={supplier} maxLength={200} aria-invalid={Boolean(errors.supplier)} onChange={event => { setSupplier(event.target.value); setErrors(current => ({ ...current, supplier: undefined })) }} />
             </FormField>
           </div>
 
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-2 border-b pb-2">
-              <p className="text-sm font-semibold">Lines <span className="font-mono text-xs font-normal text-muted-foreground">{lines.length}</span></p>
+              <p className="text-sm font-semibold">Lines <span className="text-xs font-normal tabular-nums text-muted-foreground">{lines.length}</span></p>
               <Track>
                 <Pill size="sm" className="h-11 sm:h-7" onClick={() => setLines(current => [...current, newLine()])} disabled={lines.length >= 200 || (!order && rooftops.length > 1 && !rooftopId)}>
                   <Plus />
@@ -173,10 +173,10 @@ export function PurchaseOrderFormDialog({
             </div>
             {errors.lines && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{errors.lines}</p>}
             {lines.map((line, index) => (
-              <div key={line.key} className="grid min-w-0 gap-2 rounded-lg border p-3 sm:grid-cols-[minmax(0,1fr)_5.5rem_7.5rem_auto] sm:items-start sm:border-0 sm:p-0">
+              <div key={line.key} className="grid min-w-0 gap-2 rounded-md border p-3 sm:grid-cols-[minmax(0,1fr)_5.5rem_7.5rem_auto] sm:items-start sm:border-0 sm:p-0">
                 <FormField id={`po-line-${line.key}-part`} label={`Part ${index + 1}`} error={errors[`${line.key}:partId`]}>
                   <Select value={line.partId} onValueChange={value => updateLine(line.key, { partId: value })}>
-                    <SelectTrigger id={`po-line-${line.key}-part`} className="h-11 min-w-0 sm:h-9" aria-invalid={Boolean(errors[`${line.key}:partId`])}>
+                    <SelectTrigger id={`po-line-${line.key}-part`} className="h-11 rounded-[4px] px-3 text-[13px] min-w-0 sm:h-9" aria-invalid={Boolean(errors[`${line.key}:partId`])}>
                       <SelectValue placeholder={rooftopParts.length ? 'Select part' : 'No parts'} />
                     </SelectTrigger>
                     <SelectContent>
@@ -187,10 +187,10 @@ export function PurchaseOrderFormDialog({
                   </Select>
                 </FormField>
                 <FormField id={`po-line-${line.key}-qty`} label="Qty" error={errors[`${line.key}:quantity`]}>
-                  <Input id={`po-line-${line.key}-qty`} className="h-11 sm:h-9" inputMode="numeric" value={line.quantity} aria-invalid={Boolean(errors[`${line.key}:quantity`])} onChange={event => updateLine(line.key, { quantity: event.target.value })} />
+                  <Input id={`po-line-${line.key}-qty`} className="h-11 rounded-[4px] text-[13px] sm:h-9" inputMode="numeric" value={line.quantity} aria-invalid={Boolean(errors[`${line.key}:quantity`])} onChange={event => updateLine(line.key, { quantity: event.target.value })} />
                 </FormField>
                 <FormField id={`po-line-${line.key}-cost`} label="Unit cost" error={errors[`${line.key}:unitCost`]}>
-                  <Input id={`po-line-${line.key}-cost`} className="h-11 sm:h-9" inputMode="decimal" placeholder="$0.00" value={line.unitCost} aria-invalid={Boolean(errors[`${line.key}:unitCost`])} onChange={event => updateLine(line.key, { unitCost: event.target.value })} />
+                  <Input id={`po-line-${line.key}-cost`} className="h-11 rounded-[4px] text-[13px] sm:h-9" inputMode="decimal" placeholder="$0.00" value={line.unitCost} aria-invalid={Boolean(errors[`${line.key}:unitCost`])} onChange={event => updateLine(line.key, { unitCost: event.target.value })} />
                 </FormField>
                 <div className="flex justify-end sm:pt-6">
                   <Track>
@@ -201,7 +201,7 @@ export function PurchaseOrderFormDialog({
                 </div>
               </div>
             ))}
-            <p className="text-right font-mono text-sm tabular-nums">Total {formatCents(total)}</p>
+            <p className="text-right text-[13px] tabular-nums"><span className="text-muted-foreground">Total</span> <span className="font-semibold">{formatCents(total)}</span></p>
           </div>
 
           {formError && <Notice tone="bad">{formError}</Notice>}

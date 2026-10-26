@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
-import { Code, DeskHeader, Notice, Panel, Pill, Segmented, TitleLine, Track, type DeskTone } from '@/features/platform/components/desk'
+import { Attention, Code, DeskHeader, DeskSection, DeskTable, Notice, Panel, Pill, Segmented, Status, Td, Th, Tr, Track, type DeskTone } from '@/features/platform/components/desk'
 import { dayKey } from '@/features/platform/lib/format'
 import { Field, FormDialog, fieldA11y, formatDate, formatWhen, type FieldErrors } from '@/features/platform/organization/components/FormDialog'
 import { createApiKey, setApiKeyStatus, updateApiKey } from '../actions'
@@ -136,6 +136,11 @@ export function ApiKeysPageClient({ data, timeZone }: { data: ApiKeysData; timeZ
     }
   }
 
+  // Needs you: keys past their expiry that were never revoked, oldest expiry first. Integrations using them are being refused.
+  const expiredKeys = data.keys
+    .filter(key => key.status !== 'revoked' && isExpired(key))
+    .sort((a, b) => Date.parse(a.expiresAt || '') - Date.parse(b.expiresAt || ''))
+
   const breadcrumbs = [
     { type: 'link' as const, label: 'Dashboard', href: basePath },
     { type: 'page' as const, label: 'Platform' },
@@ -145,12 +150,11 @@ export function ApiKeysPageClient({ data, timeZone }: { data: ApiKeysData; timeZ
   const header = (
     <DeskHeader
       title="API keys"
-      tone={data.error ? 'bad' : counts.expired ? 'warn' : counts.active ? 'ok' : 'idle'}
       status={data.error ? 'Unavailable' : `${counts.active} active`}
-      meta={`${counts.active} active · ${counts.inactive} inactive · ${counts.expired} expired · ${counts.revoked} revoked`}
+      meta={data.error ? 'Unavailable' : `${counts.active} active · ${counts.inactive} inactive · ${counts.expired} expired · ${counts.revoked} revoked`}
       actions={
-        <Track>
-          <Pill className="h-11 sm:h-8" onClick={refresh} disabled={refreshing}>
+        <>
+          <Pill variant="plain" className="h-11 sm:h-8" onClick={refresh} disabled={refreshing}>
             <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
             Refresh
           </Pill>
@@ -158,7 +162,7 @@ export function ApiKeysPageClient({ data, timeZone }: { data: ApiKeysData; timeZ
             <Plus />
             New key
           </Pill>
-        </Track>
+        </>
       }
     />
   )
@@ -175,6 +179,38 @@ export function ApiKeysPageClient({ data, timeZone }: { data: ApiKeysData; timeZ
           </Notice>
         )}
         {!data.error && !data.grantableScopes.length && <Notice tone="warn">Your permissions allow no API scopes</Notice>}
+        {!data.error && expiredKeys.length > 0 && (
+          <DeskSection title="Needs you" count={expiredKeys.length} id="api-keys-needs-you" className="pb-4">
+            <DeskTable aria-labelledby="api-keys-needs-you">
+              <thead>
+                <tr>
+                  <Th>Key</Th>
+                  <Th>Status</Th>
+                  <Th priority={2}>Last used</Th>
+                  <Th align="right"><span className="sr-only">Actions</span></Th>
+                </tr>
+              </thead>
+              <tbody>
+                {expiredKeys.map(key => (
+                  <Tr key={key.id}>
+                    <Td className="max-w-0 min-w-[9rem]">
+                      <span className="block truncate font-medium text-foreground">{key.name}</span>
+                      <Code>{key.tokenPreview || ''}</Code>
+                    </Td>
+                    <Td><Attention>Expired {key.expiresAt ? formatDate(key.expiresAt, timeZone) : ''}</Attention></Td>
+                    <Td priority={2} className="whitespace-nowrap text-muted-foreground">{key.lastUsedAt ? formatWhen(key.lastUsedAt, timeZone) : 'Never'}</Td>
+                    <Td align="right" className="w-px whitespace-nowrap">
+                      <div className="inline-flex gap-1">
+                        <Pill size="sm" className="h-11 sm:h-7" onClick={() => openForm(key)} aria-label={`Change expiry for ${key.name}`}>Change expiry</Pill>
+                        <Pill size="sm" variant="plain" className="h-11 sm:h-7" onClick={() => { setError(null); setStatusChange({ key, status: 'revoked' }) }}>Revoke</Pill>
+                      </div>
+                    </Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </DeskTable>
+          </DeskSection>
+        )}
         <Segmented<Filter>
           label="Filter API keys"
           value={filter}
@@ -206,47 +242,60 @@ export function ApiKeysPageClient({ data, timeZone }: { data: ApiKeysData; timeZ
             {data.keys.length > 0 && <Track><Pill size="sm" onClick={() => { setSearch(''); setFilter('all') }}>Reset filters</Pill></Track>}
           </Panel>
         ) : (
-          <Panel className="divide-y">
-            {visible.map(key => {
-              const state = keyState(key)
-              const scopes = key.scopes || []
-              const ips = key.restrictedToIPs || []
-              return (
-                <div key={key.id} className="flex min-w-0 flex-col gap-3 px-4 py-3 md:flex-row md:items-start md:justify-between">
-                  <div className="min-w-0">
-                    <TitleLine as="p" tone={state.tone} status={state.label} className="text-sm font-medium">
-                      {key.name} <Code>{key.tokenPreview || ''}</Code>
-                    </TitleLine>
-                    <p className="break-words pl-4 text-xs text-muted-foreground">
-                      {scopes.length ? scopes.map(scope => SCOPE_LABEL.get(scope) || scope).join(' · ') : 'No scopes'}
-                    </p>
-                    <p className="break-words pl-4 text-xs text-muted-foreground">
-                      {state.label}
-                      {key.expiresAt ? ` · ${isExpired(key) ? 'Expired' : 'Expires'} ${formatDate(key.expiresAt, timeZone)}` : ' · No expiry'}
-                      {` · ${key.lastUsedAt ? `Last used ${formatWhen(key.lastUsedAt, timeZone)}` : 'Never used'}`}
-                      {` · ${key.usageCount?.total ?? 0} requests`}
-                      {ips.length ? ` · ${ips.length === 1 ? ips[0] : `${ips.length} IPs`}` : ' · Any IP'}
-                      {key.createdAt ? ` · Created ${formatDate(key.createdAt, timeZone)}` : ''}
-                    </p>
-                  </div>
-                  {key.status !== 'revoked' && (
-                    <Track className="self-end md:self-auto">
-                      {key.status === 'active' ? (
-                        <Pill size="sm" className="h-11 sm:h-7" onClick={() => { setError(null); setStatusChange({ key, status: 'inactive' }) }}>Deactivate</Pill>
-                      ) : (
-                        <Pill size="sm" className="h-11 sm:h-7" onClick={() => { setError(null); setStatusChange({ key, status: 'active' }) }}>Activate</Pill>
+          <DeskTable aria-label="API keys">
+            <thead>
+              <tr>
+                <Th>Key</Th>
+                <Th priority={3}>Scopes</Th>
+                <Th>Status</Th>
+                <Th priority={2}>Expires</Th>
+                <Th priority={2}>Last used</Th>
+                <Th align="right" priority={3}>Requests</Th>
+                <Th priority={3}>Allowed IPs</Th>
+                <Th align="right"><span className="sr-only">Actions</span></Th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map(key => {
+                const state = keyState(key)
+                const scopes = key.scopes || []
+                const ips = key.restrictedToIPs || []
+                return (
+                  <Tr key={key.id}>
+                    <Td className="max-w-0 min-w-[9rem]">
+                      <span className="block truncate font-medium text-foreground">{key.name}</span>
+                      <span className="block truncate"><Code>{key.tokenPreview || ''}</Code></span>
+                      {key.createdAt && <span className="block truncate text-xs text-muted-foreground">Created {formatDate(key.createdAt, timeZone)}</span>}
+                    </Td>
+                    <Td priority={3} className="max-w-[16rem] text-muted-foreground">
+                      <span className="line-clamp-2">{scopes.length ? scopes.map(scope => SCOPE_LABEL.get(scope) || scope).join(', ') : 'No scopes'}</span>
+                    </Td>
+                    <Td><Status tone={state.tone}>{state.label}</Status></Td>
+                    <Td priority={2} className="whitespace-nowrap text-muted-foreground">{key.expiresAt ? formatDate(key.expiresAt, timeZone) : 'No expiry'}</Td>
+                    <Td priority={2} className="whitespace-nowrap text-muted-foreground">{key.lastUsedAt ? formatWhen(key.lastUsedAt, timeZone) : 'Never'}</Td>
+                    <Td align="right" priority={3}>{key.usageCount?.total ?? 0}</Td>
+                    <Td priority={3}>{ips.length ? <Code>{ips.length === 1 ? ips[0] : `${ips.length} IPs`}</Code> : <span className="text-muted-foreground">Any IP</span>}</Td>
+                    <Td align="right" className="w-px whitespace-nowrap">
+                      {key.status !== 'revoked' && (
+                        <div className="inline-flex flex-wrap justify-end gap-1">
+                          {key.status === 'active' ? (
+                            <Pill size="sm" className="h-11 sm:h-7" onClick={() => { setError(null); setStatusChange({ key, status: 'inactive' }) }}>Deactivate</Pill>
+                          ) : (
+                            <Pill size="sm" className="h-11 sm:h-7" onClick={() => { setError(null); setStatusChange({ key, status: 'active' }) }}>Activate</Pill>
+                          )}
+                          <Pill size="sm" className="h-11 sm:h-7" onClick={() => { setError(null); setStatusChange({ key, status: 'revoked' }) }}>Revoke</Pill>
+                          <Pill size="sm" className="h-11 sm:h-7" onClick={() => openForm(key)} aria-label={`Edit ${key.name}`}>
+                            <Pencil />
+                            Edit
+                          </Pill>
+                        </div>
                       )}
-                      <Pill size="sm" className="h-11 sm:h-7" onClick={() => { setError(null); setStatusChange({ key, status: 'revoked' }) }}>Revoke</Pill>
-                      <Pill size="sm" className="h-11 sm:h-7" onClick={() => openForm(key)} aria-label={`Edit ${key.name}`}>
-                        <Pencil />
-                        Edit
-                      </Pill>
-                    </Track>
-                  )}
-                </div>
-              )
-            })}
-          </Panel>
+                    </Td>
+                  </Tr>
+                )
+              })}
+            </tbody>
+          </DeskTable>
         )}
       </div>
 
@@ -266,7 +315,7 @@ export function ApiKeysPageClient({ data, timeZone }: { data: ApiKeysData; timeZ
               <Input {...fieldA11y('key-name', fieldErrors.name)} className="h-11 sm:h-9" value={form.name} maxLength={200} placeholder="Inventory syndication" onChange={event => setForm({ ...form, name: event.target.value })} />
             </Field>
             <fieldset className="min-w-0" aria-describedby={fieldErrors.scopes ? 'key-scopes-error' : undefined}>
-              <legend className="mb-1 font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Scopes</legend>
+              <legend className="mb-1 text-[12px] font-medium text-muted-foreground">Scopes</legend>
               <div className="grid gap-x-4 sm:grid-cols-2">
                 {API_KEY_SCOPES.map(scope => {
                   const allowed = grantable.has(scope.value)
@@ -322,7 +371,7 @@ export function ApiKeysPageClient({ data, timeZone }: { data: ApiKeysData; timeZ
           </DialogHeader>
           <div className="grid gap-3">
             <Notice tone="warn">Shown once. Copy it now.</Notice>
-            <label htmlFor="api-key-secret" className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Secret</label>
+            <label htmlFor="api-key-secret" className="text-[12px] font-medium text-muted-foreground">Secret</label>
             <Input id="api-key-secret" readOnly value={secret?.token || ''} className="h-11 font-mono text-xs" onFocus={event => event.currentTarget.select()} />
           </div>
           <DialogFooter className="sm:justify-end">

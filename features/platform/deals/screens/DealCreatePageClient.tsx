@@ -22,8 +22,8 @@ import {
   Notice,
   Panel,
   Pill,
-  Readout,
-  TitleLine,
+  Figure,
+  Status,
   Track,
 } from '@/features/platform/components/desk'
 import {
@@ -47,18 +47,18 @@ interface User {
   name: string
 }
 
-const fieldLabel = 'font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground'
+const fieldLabel = 'text-[12px] font-medium text-muted-foreground'
+const controlClass = 'h-10 rounded-[4px] text-[13px] shadow-none'
 
-/** One numbered step of the form; the dot on the title line shows whether it is filled. */
+/** One section of the worksheet; the word on the right says whether it is filled. */
 function Step({ index, title, done, optional, children }: { index: number; title: string; done: boolean; optional?: boolean; children: ReactNode }) {
   return (
     <section className="min-w-0" aria-labelledby={`deal-step-${index}`}>
-      <div className="flex min-w-0 items-baseline gap-3 border-b pb-2">
-        <span className="font-mono text-xs tabular-nums text-muted-foreground">{String(index).padStart(2, '0')}</span>
-        <TitleLine as="h2" tone={done ? 'ok' : 'idle'} status={done ? 'Complete' : 'Open'} className="text-sm font-semibold text-foreground">
-          <span id={`deal-step-${index}`}>{title}</span>
-        </TitleLine>
-        {optional && <span className="ml-auto text-xs text-muted-foreground">Optional</span>}
+      <div className="flex min-w-0 items-baseline gap-3 border-b border-foreground/15 pb-2">
+        <h2 id={`deal-step-${index}`} className="text-[15px] font-semibold text-foreground">{title}</h2>
+        <span className="ml-auto text-xs text-muted-foreground">
+          {done ? <Status tone="ok" className="text-xs">Filled</Status> : optional ? 'Optional' : 'Required'}
+        </span>
       </div>
       <div className="space-y-4 pt-4">{children}</div>
     </section>
@@ -67,9 +67,9 @@ function Step({ index, title, done, optional, children }: { index: number; title
 
 function SummaryRow({ label, value, emphasis, credit }: { label: string; value: string; emphasis?: boolean; credit?: boolean }) {
   return (
-    <div className={`flex min-w-0 items-baseline justify-between gap-4 px-4 ${emphasis ? 'border-t-2 border-foreground/80 py-3 text-base font-semibold' : 'py-2 text-sm'}`}>
+    <div className={`flex min-w-0 items-baseline justify-between gap-4 px-4 ${emphasis ? 'border-t border-foreground/60 py-3 text-base font-semibold' : 'py-2 text-[13px]'}`}>
       <dt className={emphasis ? 'text-foreground' : 'text-muted-foreground'}>{label}</dt>
-      <dd className={`shrink-0 text-right font-mono tabular-nums ${credit ? 'text-emerald-700 dark:text-emerald-400' : 'text-foreground'}`}>{value}</dd>
+      <dd className={`shrink-0 text-right tabular-nums ${credit ? 'text-muted-foreground' : 'text-foreground'}`}>{emphasis ? <Figure size="md">{value}</Figure> : value}</dd>
     </div>
   )
 }
@@ -349,9 +349,8 @@ export function DealCreatePageClient({
 
   const header = (
     <DeskHeader
-      eyebrow="Deals"
       title="New deal"
-      meta={selectedVehicle ? `${selectedVehicle.year} ${selectedVehicle.make} ${selectedVehicle.model}${selectedLead ? ` · ${selectedLead.firstName} ${selectedLead.lastName}` : ''}` : 'Pencil worksheet'}
+      meta={selectedVehicle ? `${selectedVehicle.year} ${selectedVehicle.make} ${selectedVehicle.model}${selectedLead ? ` · ${selectedLead.firstName} ${selectedLead.lastName}` : ''}` : 'Pencil worksheet · choose a vehicle to start'}
       actions={
         <Track>
           <Pill asChild variant="plain">
@@ -403,11 +402,58 @@ export function DealCreatePageClient({
         ) : (
           <div className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
             <div className="min-w-0 space-y-8">
+              <Step index={2} title="Vehicle" done={Boolean(formData.vehicleId)}>
+                <label className="grid min-w-0 gap-1.5">
+                  <span className={fieldLabel}>Vehicle</span>
+                  <Select value={formData.vehicleId} onValueChange={handleVehicleChange}>
+                    <SelectTrigger aria-label="Select vehicle" className={controlClass}>
+                      <SelectValue placeholder="Choose a vehicle" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {vehicles.map(v => (
+                        <SelectItem key={v.id} value={v.id}>
+                          {v.year} {v.make} {v.model} · #{v.stockNumber} · {formatPrice(v.price)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+
+                {selectedVehicle && (
+                  <Panel className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="font-medium">{selectedVehicle.year} {selectedVehicle.make} {selectedVehicle.model}</p>
+                      <Code>#{selectedVehicle.stockNumber}</Code>
+                    </div>
+                    <dl className="flex gap-5 tabular-nums">
+                      <div className="text-right"><dt className="text-[12px] text-muted-foreground">{selectedVehicle.condition === 'new' ? 'MSRP' : 'Price'}</dt><dd><Figure size="sm">{formatPrice(selectedVehicle.price)}</Figure></dd></div>
+                      <div className="text-right"><dt className="text-[12px] text-muted-foreground">Cost</dt><dd className="text-[13px] text-muted-foreground">{formatPrice(selectedVehicle.purchasePrice || 0)}</dd></div>
+                    </dl>
+                  </Panel>
+                )}
+
+                <label className="grid min-w-0 gap-1.5">
+                  <span className={fieldLabel}>Sales rep</span>
+                  <Select value={formData.salespersonId} onValueChange={(v) => setFormData(prev => ({ ...prev, salespersonId: v }))} disabled={!formData.vehicleId || salesRepsLoading || salesReps.length === 0}>
+                    <SelectTrigger aria-label="Sales representative" className={controlClass}>
+                      <SelectValue placeholder={salesRepPlaceholder} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {salesReps.map(u => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+              </Step>
+
               <Step index={1} title="Customer" done={Boolean(formData.leadId)} optional>
                 <label className="grid min-w-0 gap-1.5">
                   <span className={fieldLabel}>Customer (lead)</span>
                   <Select value={formData.leadId} onValueChange={value => value === NEW_CUSTOMER ? openWalkIn() : chooseLead(value)}>
-                    <SelectTrigger aria-label="Customer">
+                    <SelectTrigger aria-label="Customer" className={controlClass}>
                       <SelectValue placeholder="Select customer" />
                     </SelectTrigger>
                     <SelectContent>
@@ -435,58 +481,11 @@ export function DealCreatePageClient({
                 </Track>
               </Step>
 
-              <Step index={2} title="Vehicle" done={Boolean(formData.vehicleId)}>
-                <label className="grid min-w-0 gap-1.5">
-                  <span className={fieldLabel}>Vehicle</span>
-                  <Select value={formData.vehicleId} onValueChange={handleVehicleChange}>
-                    <SelectTrigger aria-label="Select vehicle">
-                      <SelectValue placeholder="Choose a vehicle" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {vehicles.map(v => (
-                        <SelectItem key={v.id} value={v.id}>
-                          {v.year} {v.make} {v.model} · #{v.stockNumber} · {formatPrice(v.price)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
-
-                {selectedVehicle && (
-                  <Panel className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3 text-sm">
-                    <div className="min-w-0">
-                      <p className="font-medium">{selectedVehicle.year} {selectedVehicle.make} {selectedVehicle.model}</p>
-                      <Code>#{selectedVehicle.stockNumber}</Code>
-                    </div>
-                    <dl className="flex gap-4 font-mono text-xs tabular-nums">
-                      <div className="text-right"><dt className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">{selectedVehicle.condition === 'new' ? 'MSRP' : 'Price'}</dt><dd>{formatPrice(selectedVehicle.price)}</dd></div>
-                      <div className="text-right"><dt className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Cost</dt><dd>{formatPrice(selectedVehicle.purchasePrice || 0)}</dd></div>
-                    </dl>
-                  </Panel>
-                )}
-
-                <label className="grid min-w-0 gap-1.5">
-                  <span className={fieldLabel}>Sales rep</span>
-                  <Select value={formData.salespersonId} onValueChange={(v) => setFormData(prev => ({ ...prev, salespersonId: v }))} disabled={!formData.vehicleId || salesRepsLoading || salesReps.length === 0}>
-                    <SelectTrigger aria-label="Sales representative">
-                      <SelectValue placeholder={salesRepPlaceholder} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {salesReps.map(u => (
-                        <SelectItem key={u.id} value={u.id}>
-                          {u.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
-              </Step>
-
               <Step index={3} title="Trade-in" done={Boolean(formData.tradeInId)} optional>
                 <label className="grid min-w-0 gap-1.5">
                   <span className={fieldLabel}>Trade-in record</span>
                   <Select value={formData.tradeInId || NO_TRADE_IN} onValueChange={(value) => chooseTradeIn(value === NO_TRADE_IN ? '' : value)}>
-                    <SelectTrigger aria-label="Trade-in record">
+                    <SelectTrigger aria-label="Trade-in record" className={controlClass}>
                       <SelectValue placeholder="No trade-in record" />
                     </SelectTrigger>
                     <SelectContent>
@@ -519,6 +518,7 @@ export function DealCreatePageClient({
                       cents={Math.round(formData.vehiclePrice * 100)}
                       onCentsChange={(cents) => setFormData(prev => ({ ...prev, vehiclePrice: cents / 100 }))}
                       placeholder="0"
+                      className="h-10 text-[13px]"
                     />
                   </label>
                   <label htmlFor="deal-trade-in-value" className="grid min-w-0 gap-1.5">
@@ -528,6 +528,7 @@ export function DealCreatePageClient({
                       cents={Math.round(formData.tradeInValue * 100)}
                       onCentsChange={(cents) => setFormData(prev => ({ ...prev, tradeInValue: cents / 100 }))}
                       placeholder="0"
+                      className="h-10 text-[13px]"
                       disabled={Boolean(formData.tradeInId)}
                       aria-describedby={formData.tradeInId ? 'deal-trade-in-value-source' : undefined}
                     />
@@ -540,6 +541,7 @@ export function DealCreatePageClient({
                       cents={Math.round(formData.downPayment * 100)}
                       onCentsChange={(cents) => setFormData(prev => ({ ...prev, downPayment: cents / 100 }))}
                       placeholder="0"
+                      className="h-10 text-[13px]"
                     />
                   </label>
                 </div>
@@ -548,7 +550,7 @@ export function DealCreatePageClient({
 
             <aside className="min-w-0 lg:sticky lg:top-6 lg:self-start">
               <section aria-labelledby="deal-summary" className="min-w-0 space-y-3">
-                <h2 id="deal-summary" className="border-b pb-2 text-sm font-semibold text-foreground">Summary</h2>
+                <h2 id="deal-summary" className="border-b border-foreground/15 pb-2 text-[15px] font-semibold text-foreground">Summary</h2>
                 <Panel className="overflow-hidden">
                   <dl className="divide-y divide-border/60">
                     <SummaryRow label="Vehicle price" value={formatCurrency(formData.vehiclePrice)} />
@@ -562,8 +564,9 @@ export function DealCreatePageClient({
                   </dl>
                 </Panel>
                 {frontGross !== null && (
-                  <Panel>
-                    <Readout label="Front gross" value={formatCurrency(frontGross)} tone={frontGross > 0 ? 'ok' : frontGross < 0 ? 'bad' : 'idle'} />
+                  <Panel className="flex min-w-0 items-baseline justify-between gap-4 px-4 py-3">
+                    <span className="text-[13px] text-muted-foreground">Front gross{frontGross < 0 ? ' · under cost' : ''}</span>
+                    <Figure size="lg" attention={frontGross < 0}>{formatCurrency(frontGross)}</Figure>
                   </Panel>
                 )}
                 {saveError && <Notice tone="bad">{saveError}</Notice>}
@@ -597,6 +600,7 @@ export function DealCreatePageClient({
                   <span className={fieldLabel}>{label}</span>
                   <Input
                     id={`walk-in-${name}`}
+                    className={controlClass}
                     value={walkIn[name]}
                     autoComplete={autoComplete}
                     maxLength={100}
@@ -612,6 +616,7 @@ export function DealCreatePageClient({
               <span className={fieldLabel}>Phone</span>
               <Input
                 id="walk-in-phone"
+                className={controlClass}
                 type="tel"
                 inputMode="tel"
                 autoComplete="tel"
@@ -628,6 +633,7 @@ export function DealCreatePageClient({
               <span className={fieldLabel}>Email</span>
               <Input
                 id="walk-in-email"
+                className={controlClass}
                 type="email"
                 autoComplete="email"
                 maxLength={320}

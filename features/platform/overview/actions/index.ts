@@ -41,6 +41,8 @@ export type DashboardMetrics = {
   }>
   inventory: { available: number; averageAgeDays: number; retailCents: number; costCents: number }
   service: { soldHours: number; actualHours: number; effectiveLaborRateCents: number; ordersByStatus: Array<{ label: string; count: number }> }
+  financeProductPenetrationPercent?: number
+  parts?: { lowStockCount: number; fillRatePercent: number; obsoleteCount: number }
 }
 
 export type OperationalReport = {

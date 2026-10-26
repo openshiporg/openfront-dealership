@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
-import { Code, DeskHeader, DeskSection, Notice, Panel, Pill, Readout, ReadoutStrip, Segmented, TitleLine, Track, type DeskTone } from '@/features/platform/components/desk'
+import { Code, DeskHeader, DeskSection, DeskTable, Figure, Notice, Pill, Readout, ReadoutStrip, Segmented, Status, Td, Th, Tr, Track, type DeskTone } from '@/features/platform/components/desk'
 import { getInventoryWorkspace, recordInventoryFeedRun, type InventoryVehicle } from '../actions'
 import { getFeedHistory, recordMarketplaceExport, type FeedRun } from '../actions/feed'
 import { selectPublicFeedRunCandidates } from '../lib/publicFeedCandidates'
@@ -86,6 +86,15 @@ export function FeedHistoryPageClient({
   const liveCount = vehicles.filter(vehicle => vehicle.publicListing.live).length
   const exportable = vehicles.filter(vehicle => ['available', 'service'].includes(vehicle.status))
   const lastRun = runs[0]
+  // Units the feed is holding up: a failed or partial push, or ready for the storefront but never published.
+  const candidateIds = new Set(candidates.map(vehicle => vehicle.inventoryStockId))
+  const feedWaiting = exportable
+    .map(vehicle => ({
+      vehicle,
+      reason: vehicle.feedStatus === 'failed' ? 'Feed failed' : vehicle.feedStatus === 'partial' ? 'Partly published' : candidateIds.has(vehicle.inventoryStockId) && vehicle.feedStatus === 'not-published' ? 'Ready, not published' : null,
+    }))
+    .filter((entry): entry is { vehicle: InventoryVehicle; reason: string } => Boolean(entry.reason))
+    .sort((a, b) => Number(b.vehicle.feedStatus === 'failed') - Number(a.vehicle.feedStatus === 'failed'))
 
   const publish = async () => {
     const attempt = resolvePublicFeedRunAttempt(pendingFeedRun, candidates.map(vehicle => vehicle.inventoryStockId), () => `public-feed:${crypto.randomUUID()}`)
@@ -169,10 +178,10 @@ export function FeedHistoryPageClient({
       title="Feed"
       tone={error ? 'bad' : lastRun ? runStatusTones[lastRun.status] : 'idle'}
       status={error ? 'Unavailable' : lastRun ? `Last run ${runStatusLabels[lastRun.status]}` : 'No runs'}
-      meta={`${liveCount} live · ${candidates.length} ready to publish`}
+      meta={[error ? 'Unavailable' : lastRun ? `Last run ${(runStatusLabels[lastRun.status] || lastRun.status).toLowerCase()}` : 'No runs', `${liveCount} live`, `${candidates.length} ready to publish`].join(' · ')}
       actions={
         <Track>
-          <Pill onClick={() => void load()} disabled={loading} aria-label="Refresh"><RefreshCw className={loading ? 'animate-spin' : undefined} /><span className="max-sm:sr-only">Refresh</span></Pill>
+          <Pill variant="plain" onClick={() => void load()} disabled={loading} aria-label="Refresh"><RefreshCw className={loading ? 'animate-spin' : undefined} /><span className="max-sm:sr-only">Refresh</span></Pill>
           <Pill onClick={openExport} disabled={Boolean(busy) || !exportable.length} title={exportable.length ? undefined : 'No active units'}><FileOutput /> Record export</Pill>
           <Pill variant="primary" onClick={publish} disabled={Boolean(busy) || (!candidates.length && !pendingFeedRun)} title={candidates.length || pendingFeedRun ? undefined : 'No vehicles ready'}>
             <Upload /> {pendingFeedRun ? 'Retry publishing' : 'Publish feed'}
@@ -195,25 +204,49 @@ export function FeedHistoryPageClient({
         {message && <Notice tone={message.tone}>{message.text}</Notice>}
         {!candidates.length && !pendingFeedRun && <Notice tone="idle">Publish feed: no units are frontline with recon done and an approved listing.</Notice>}
 
-        <ReadoutStrip>
-          <Readout label="Live" value={liveCount} tone={liveCount ? 'ok' : 'idle'} />
-          <Readout label="Ready to publish" value={candidates.length} />
-          <Readout label="Runs" value={counts?.all ?? '-'} />
-          <Readout label="Failed runs" value={counts ? (counts.failed || 0) + (counts.partial || 0) : '-'} tone={counts && (counts.failed || counts.partial) ? 'warn' : 'idle'} />
-        </ReadoutStrip>
-
-        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
-          <Segmented label="Filter by result" value={status} onChange={setStatus} options={statusOptions} className="self-start" />
-          <Select value={channel} onValueChange={setChannel}>
-            <SelectTrigger className="w-full rounded-full max-sm:h-11 sm:w-[220px]" aria-label="Channel"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All channels</SelectItem>
-              {Object.entries(feedChannelLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
+        {!error && (
+          <DeskSection title="Needs you" count={feedWaiting.length} id="feed-needs-you">
+            {feedWaiting.length === 0 ? (
+              <p className="py-3 text-[13px] text-muted-foreground">No failed or unpublished units.</p>
+            ) : (
+              <DeskTable aria-label="Units waiting on the feed">
+                <thead>
+                  <tr>
+                    <Th>Vehicle</Th>
+                    <Th priority={2}>Stock #</Th>
+                    <Th>Feed</Th>
+                    <Th priority={3}>Storefront</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {feedWaiting.map(({ vehicle, reason }) => (
+                    <Tr key={vehicle.inventoryStockId}>
+                      <Td className="min-w-0">
+                        <Link href={`${VEHICLES_HREF}/${vehicle.id}`} className="font-medium text-foreground hover:underline">{vehicle.year} {vehicle.make} {vehicle.model}</Link>
+                        <div className="mt-0.5 md:hidden"><Code>{vehicle.stockNumber}</Code></div>
+                      </Td>
+                      <Td priority={2}><Code className="text-foreground">{vehicle.stockNumber}</Code></Td>
+                      <Td><Status tone={feedStatusTones[vehicle.feedStatus] === 'idle' ? 'warn' : feedStatusTones[vehicle.feedStatus]}>{reason}</Status></Td>
+                      <Td priority={3} className="text-muted-foreground">{vehicle.publicListing.live ? 'Live' : `Not live: ${vehicle.publicListing.reason || 'Not available'}`}</Td>
+                    </Tr>
+                  ))}
+                </tbody>
+              </DeskTable>
+            )}
+          </DeskSection>
+        )}
 
         <DeskSection title="Runs" count={loading || error ? undefined : runs.length}>
+          <div className="mb-3 flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <Segmented label="Filter by result" value={status} onChange={setStatus} options={statusOptions} className="min-w-0 self-stretch sm:self-auto" />
+            <Select value={channel} onValueChange={setChannel}>
+              <SelectTrigger className="w-full rounded-[4px] max-md:h-10 sm:w-[220px]" aria-label="Channel"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All channels</SelectItem>
+                {Object.entries(feedChannelLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
           {loading && runs.length === 0 ? (
             <div className="flex justify-center py-12" role="status"><RefreshCw className="size-5 animate-spin text-muted-foreground" aria-hidden="true" /><span className="sr-only">Loading feed runs</span></div>
           ) : error ? (
@@ -228,35 +261,43 @@ export function FeedHistoryPageClient({
               {(status !== 'all' || channel !== 'all') && <Track><Pill size="sm" onClick={() => { setStatus('all'); setChannel('all') }}>Reset filters</Pill></Track>}
             </div>
           ) : (
-            <Panel className="divide-y">
-              {runs.map(run => {
-                const open = expanded === run.id
-                return (
-                  <div key={run.id} className="min-w-0 px-4 py-3">
-                    <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                      <div className="min-w-0">
-                        <TitleLine tone={runStatusTones[run.status]} status={runStatusLabels[run.status]} className="text-sm font-medium">
-                          {feedChannelLabels[run.channelKey] || run.channelKey}
-                          <span className="font-normal text-muted-foreground"> · {runStatusLabels[run.status] || run.status}</span>
-                        </TitleLine>
-                        <p className="mt-0.5 flex flex-wrap gap-x-2 pl-4 text-xs text-muted-foreground">
-                          <span>{formatDateTime(run.completedAt, timeZone)}</span>
-                          {run.recordedBy?.name && <span>· {run.recordedBy.name}</span>}
-                        </p>
-                      </div>
-                      <p className="pl-4 font-mono text-xs tabular-nums text-muted-foreground md:pl-0">
-                        {run.attemptedCount} sent · {run.succeededCount} ok · <span className={run.failedCount ? 'text-red-600 dark:text-red-400' : undefined}>{run.failedCount} failed</span>
-                      </p>
-                    </div>
-                    {run.errors.length > 0 && (
-                      <div className="mt-2 pl-4">
-                        <Track>
-                          <Pill size="sm" variant={open ? undefined : 'plain'} aria-expanded={open} onClick={() => setExpanded(open ? null : run.id)}>
+            <DeskTable aria-label="Feed runs">
+              <thead>
+                <tr>
+                  <Th>Channel</Th>
+                  <Th>Result</Th>
+                  <Th priority={2}>Completed</Th>
+                  <Th priority={3}>Recorded by</Th>
+                  <Th align="right" priority={2}>Sent</Th>
+                  <Th align="right" priority={3}>OK</Th>
+                  <Th align="right">Failed</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {runs.map(run => {
+                  const open = expanded === run.id
+                  return [
+                    <Tr key={run.id} className={open ? 'border-b-0' : undefined}>
+                      <Td className="min-w-0">
+                        <p className="font-medium text-foreground">{feedChannelLabels[run.channelKey] || run.channelKey}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground md:hidden">{formatDateTime(run.completedAt, timeZone)} · {run.attemptedCount} sent</p>
+                        {run.errors.length > 0 && (
+                          <Pill size="sm" variant="plain" className="-ml-2.5 mt-1 max-md:h-10" aria-expanded={open} onClick={() => setExpanded(open ? null : run.id)}>
                             {open ? <ChevronDown /> : <ChevronRight />} {run.errors.length} {run.errors.length === 1 ? 'error' : 'errors'}
                           </Pill>
-                        </Track>
-                        {open && (
-                          <ul className="mt-2 divide-y rounded-lg border">
+                        )}
+                      </Td>
+                      <Td><Status tone={runStatusTones[run.status]}>{runStatusLabels[run.status] || run.status}</Status></Td>
+                      <Td priority={2} className="whitespace-nowrap text-muted-foreground">{formatDateTime(run.completedAt, timeZone)}</Td>
+                      <Td priority={3} className="text-muted-foreground">{run.recordedBy?.name || '-'}</Td>
+                      <Td align="right" priority={2}>{run.attemptedCount}</Td>
+                      <Td align="right" priority={3}>{run.succeededCount}</Td>
+                      <Td align="right"><span className="sr-only">Failed </span><Figure size="sm" className={run.failedCount ? 'text-red-700 dark:text-red-300' : 'text-muted-foreground'}>{run.failedCount}</Figure></Td>
+                    </Tr>,
+                    open ? (
+                      <tr key={`${run.id}-errors`} className="border-b">
+                        <td colSpan={7} className="px-4 pb-3">
+                          <ul className="divide-y rounded-md border">
                             {run.errors.map(item => (
                               <li key={item.id} className="min-w-0 px-3 py-2 text-sm">
                                 <p className="flex flex-wrap items-baseline gap-x-2">
@@ -272,32 +313,52 @@ export function FeedHistoryPageClient({
                               </li>
                             ))}
                           </ul>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </Panel>
+                        </td>
+                      </tr>
+                    ) : null,
+                  ]
+                })}
+              </tbody>
+            </DeskTable>
           )}
         </DeskSection>
 
         <DeskSection title="Feed status by unit" count={exportable.length}>
           {exportable.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No active units</p> : (
-            <Panel className="divide-y">
-              {exportable.map(vehicle => (
-                <div key={vehicle.inventoryStockId} className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-2.5 text-sm">
-                  <TitleLine as="span" tone={feedStatusTones[vehicle.feedStatus]} status={feedStatusLabels[vehicle.feedStatus]}>
-                    <Link href={`${VEHICLES_HREF}/${vehicle.id}`} className="hover:underline">{vehicle.stockNumber} · {vehicle.year} {vehicle.make} {vehicle.model}</Link>
-                  </TitleLine>
-                  <span className="pl-4 text-xs text-muted-foreground">
-                    {feedStatusLabels[vehicle.feedStatus] || vehicle.feedStatus} · {vehicle.publicListing.live ? <span className="text-emerald-700 dark:text-emerald-400">Live</span> : `Not live: ${vehicle.publicListing.reason || 'Not available'}`}
-                  </span>
-                </div>
-              ))}
-            </Panel>
+            <DeskTable aria-label="Feed status by unit">
+              <thead>
+                <tr>
+                  <Th>Vehicle</Th>
+                  <Th priority={2}>Stock #</Th>
+                  <Th>Feed</Th>
+                  <Th priority={2}>Storefront</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {exportable.map(vehicle => (
+                  <Tr key={vehicle.inventoryStockId}>
+                    <Td className="min-w-0">
+                      <Link href={`${VEHICLES_HREF}/${vehicle.id}`} className="font-medium text-foreground hover:underline">{vehicle.year} {vehicle.make} {vehicle.model}</Link>
+                      <div className="mt-0.5 md:hidden"><Code>{vehicle.stockNumber}</Code></div>
+                    </Td>
+                    <Td priority={2}><Code className="text-foreground">{vehicle.stockNumber}</Code></Td>
+                    <Td><Status tone={feedStatusTones[vehicle.feedStatus]}>{feedStatusLabels[vehicle.feedStatus] || vehicle.feedStatus}</Status></Td>
+                    <Td priority={2}>
+                      {vehicle.publicListing.live ? <Status tone="ok">Live</Status> : <span className="text-muted-foreground">Not live: {vehicle.publicListing.reason || 'Not available'}</span>}
+                    </Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </DeskTable>
           )}
         </DeskSection>
+
+        <ReadoutStrip>
+          <Readout label="Live" value={liveCount} tone={liveCount ? 'ok' : undefined} />
+          <Readout label="Ready to publish" value={candidates.length} />
+          <Readout label="Runs" value={counts?.all ?? '-'} />
+          <Readout label="Failed runs" value={counts ? (counts.failed || 0) + (counts.partial || 0) : '-'} tone={counts && (counts.failed || counts.partial) ? 'warn' : undefined} />
+        </ReadoutStrip>
 
         <Dialog open={exportOpen} onOpenChange={open => { if (!open && busy !== 'export') setExportOpen(false) }}>
           <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
@@ -307,10 +368,10 @@ export function FeedHistoryPageClient({
             </DialogHeader>
             <form onSubmit={submitExport} className="space-y-4">
               <label htmlFor="export-reference" className="grid gap-1.5 text-sm">
-                <span className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Export file or batch reference</span>
+                <span className="text-[12px] font-medium text-muted-foreground">Export file or batch reference</span>
                 <Input id="export-reference" maxLength={200} value={exportReference} onChange={event => setExportReference(event.target.value)} className="max-sm:h-11" />
               </label>
-              <ul className="divide-y rounded-lg border">
+              <ul className="divide-y rounded-md border">
                 {exportable.map(vehicle => {
                   const row = exportRows[vehicle.inventoryStockId] || { included: false, error: '' }
                   const update = (patch: Partial<ExportRow>) => setExportRows(current => ({ ...current, [vehicle.inventoryStockId]: { ...row, ...patch } }))

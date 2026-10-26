@@ -19,7 +19,7 @@ export function FormField({
 }) {
   return (
     <div className={cn('grid min-w-0 gap-1.5 text-sm', className)}>
-      <label htmlFor={id} className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+      <label htmlFor={id} className="text-[12px] font-medium text-muted-foreground">
         {label}
       </label>
       {children}

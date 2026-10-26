@@ -6,7 +6,7 @@ import { ArrowLeft, Pencil, RefreshCw } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
-import { Code, DeskHeader, DeskSection, Facts, Notice, Panel, Pill, Readout, ReadoutStrip, TitleLine, Track } from '@/features/platform/components/desk'
+import { Code, DeskHeader, DeskSection, DeskTable, Facts, Figure, Notice, Panel, Pill, Status, Td, Th, Tr, Track } from '@/features/platform/components/desk'
 
 import { getPurchaseOrder, managePurchaseOrder } from '../actions'
 import { PurchaseOrderFormDialog } from '../components/PurchaseOrderFormDialog'
@@ -77,8 +77,8 @@ export function PurchaseOrderDetailPageClient({
             <p className="font-medium">Purchase order unavailable</p>
             <p className="mt-0.5 text-muted-foreground">{error || 'Purchase order not found'}</p>
             <Track className="mt-2">
-              <Pill size="sm" onClick={load} disabled={loading}>Retry</Pill>
-              <Pill size="sm" asChild><Link href={`${basePath}/platform/parts/purchase-orders`}>Back to purchase orders</Link></Pill>
+              <Pill size="sm" className="max-sm:h-10" onClick={load} disabled={loading}>Retry</Pill>
+              <Pill size="sm" className="max-sm:h-10" asChild><Link href={`${basePath}/platform/parts/purchase-orders`}>Back to purchase orders</Link></Pill>
             </Track>
           </Notice>
         </div>
@@ -124,21 +124,33 @@ export function PurchaseOrderDetailPageClient({
 
   const header = (
     <DeskHeader
-      eyebrow={order.rooftop?.name || undefined}
       title={<><span className="font-mono">{order.reference}</span> <span className="font-normal">{order.supplier}</span></>}
       tone={PO_STATUS_TONE[order.status] || 'idle'}
       status={PO_STATUS_LABEL[order.status] || order.status}
-      meta={`${PO_STATUS_LABEL[order.status] || order.status} · ${lines.length} ${lines.length === 1 ? 'line' : 'lines'} · ${received}/${ordered} received`}
+      meta={
+        <span className="flex flex-wrap items-baseline gap-x-2">
+          <Status tone={PO_STATUS_TONE[order.status] || 'idle'}>{PO_STATUS_LABEL[order.status] || order.status}</Status>
+          <span>· {lines.length} {lines.length === 1 ? 'line' : 'lines'}</span>
+          <span>· {received} of {ordered} received</span>
+          {order.rooftop?.name && <span>· {order.rooftop.name}</span>}
+        </span>
+      }
       actions={
-        <Track>
-          <Pill asChild className="h-11 sm:h-8">
+        <>
+          <Pill variant="plain" asChild className="h-11 sm:h-8">
             <Link href={`${basePath}/platform/parts/purchase-orders`}><ArrowLeft />Purchase orders</Link>
           </Pill>
-          <Pill onClick={load} disabled={loading} className="h-11 sm:h-8">
+          <Pill variant="plain" onClick={load} disabled={loading} className="h-11 sm:h-8">
             <RefreshCw className={loading ? 'animate-spin' : undefined} />
             Refresh
           </Pill>
-        </Track>
+          {primary === 'receive' && (
+            <Pill variant="primary" className="h-11 sm:h-8" onClick={() => setReceiving(true)}>Receive</Pill>
+          )}
+          {primary === 'order' && (
+            <Pill variant="primary" className="h-11 sm:h-8" onClick={() => openConfirm('order')}>Place order</Pill>
+          )}
+        </>
       }
     />
   )
@@ -150,85 +162,101 @@ export function PurchaseOrderDetailPageClient({
     { key: 'close', label: 'Close short', reason: reasons.close, onClick: () => openConfirm('close') },
     { key: 'cancel', label: 'Cancel PO', reason: reasons.cancel, onClick: () => openConfirm('cancel') },
   ]
+  // The primary action sits in the header; the rest stay one click away under it.
+  const secondary = actions.filter(action => !action.reason && !action.primary)
   const terminal = order.status === 'received' || order.status === 'cancelled'
 
   return (
     <PageContainer title={order.reference} header={header} breadcrumbs={breadcrumbs}>
-      <div className="min-w-0 max-w-full space-y-6 px-4 pb-24 md:px-6">
-        {notice && (
-          <Notice tone="ok">
-            <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
-              <p className="min-w-0">{notice}</p>
-              <Track><Pill size="sm" variant="plain" onClick={() => setNotice(null)}>Dismiss</Pill></Track>
-            </div>
-          </Notice>
+      <div className="min-w-0 max-w-full space-y-8 px-4 pb-24 md:px-6">
+        {(notice || error || terminal || secondary.length > 0) && (
+          <div className="space-y-2">
+            {notice && (
+              <Notice tone="ok">
+                <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
+                  <p className="min-w-0">{notice}</p>
+                  <Pill size="sm" variant="plain" className="max-sm:h-10" onClick={() => setNotice(null)}>Dismiss</Pill>
+                </div>
+              </Notice>
+            )}
+            {error && <Notice tone="bad">{error}</Notice>}
+            {terminal ? (
+              <p className="text-[13px] text-muted-foreground">{PO_STATUS_LABEL[order.status]} · no further actions</p>
+            ) : secondary.length > 0 && (
+              <Track className="flex-wrap" aria-label="Purchase order actions">
+                {secondary.map(action => (
+                  <Pill key={action.key} className="h-11 sm:h-8" onClick={action.onClick}>
+                    {action.icon}
+                    {action.label}
+                  </Pill>
+                ))}
+              </Track>
+            )}
+          </div>
         )}
-        {error && <Notice tone="bad">{error}</Notice>}
 
-        <ReadoutStrip>
-          <Readout label="Total" value={formatCents(poTotalCents(order))} />
-          <Readout label="Received" value={`${received}/${ordered}`} sub="units" tone={received >= ordered && ordered > 0 ? 'ok' : received > 0 ? 'warn' : undefined} />
-          <Readout label="Received at cost" value={formatCents(receivedValue)} />
-          <Readout label="Lines" value={lines.length} />
-        </ReadoutStrip>
-
-        <DeskSection title="Actions">
-          {terminal ? (
-            <p className="text-sm text-muted-foreground">{PO_STATUS_LABEL[order.status]}</p>
-          ) : (
-            <Track className="flex-wrap rounded-2xl">
-              {actions.filter(action => !action.reason).map(action => (
-                <Pill key={action.key} variant={action.primary ? 'primary' : 'raised'} className="h-11 sm:h-8" onClick={action.onClick}>
-                  {action.icon}
-                  {action.label}
-                </Pill>
-              ))}
-            </Track>
-          )}
-        </DeskSection>
-
-        <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)]">
-          <DeskSection title="Lines" count={lines.length}>
+        <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)]">
+          <DeskSection title="Lines" count={lines.length} id="po-lines">
             {lines.length === 0 ? (
-              <Panel className="px-4 py-10 text-center text-sm text-muted-foreground">No lines</Panel>
+              <Panel className="border-dashed px-4 py-8 text-center text-[13px] text-muted-foreground">No lines</Panel>
             ) : (
-              <Panel className="divide-y">
-                {lines.map(line => {
-                  const part = partById.get(line.partId)
-                  const outstanding = Math.max(0, line.quantity - line.receivedQuantity)
-                  const tone = line.receivedQuantity >= line.quantity ? 'ok' : line.receivedQuantity > 0 ? 'warn' : order.status === 'draft' || order.status === 'cancelled' ? 'idle' : 'info'
-                  return (
-                    <div key={line.partId} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 px-4 py-3">
-                      <TitleLine as="p" tone={tone} className="text-sm font-medium">
-                        {part ? (
-                          <Link href={`${basePath}/platform/parts/${line.partId}`} className="font-mono hover:underline">{line.partNumber}</Link>
-                        ) : (
-                          <span className="font-mono">{line.partNumber || line.partId}</span>
-                        )}
-                        <span className="ml-2 font-normal">{line.description}</span>
-                      </TitleLine>
-                      <p className="text-right font-mono text-sm tabular-nums">{formatCents(line.quantity * line.unitCostCents)}</p>
-                      <p className="col-span-2 pl-4 font-mono text-[11px] tabular-nums text-muted-foreground">
-                        {line.quantity} × {formatCents(line.unitCostCents)} · Received {line.receivedQuantity}
-                        {order.status !== 'draft' && order.status !== 'cancelled' && outstanding > 0 ? ` · Outstanding ${outstanding}` : ''}
-                        {part ? ` · On hand ${part.quantity ?? 0}` : ''}
-                        {part?.binLocation ? <> · Bin <Code>{part.binLocation}</Code></> : null}
-                      </p>
-                    </div>
-                  )
-                })}
-              </Panel>
+              <DeskTable aria-labelledby="po-lines">
+                <thead>
+                  <tr>
+                    <Th>Part</Th>
+                    <Th align="right">Qty</Th>
+                    <Th align="right" priority={2}>Received</Th>
+                    <Th align="right">Outstanding</Th>
+                    <Th align="right" priority={3}>Unit cost</Th>
+                    <Th align="right" priority={2}>Total</Th>
+                    <Th align="right" priority={3}>On hand</Th>
+                    <Th priority={3}>Bin</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map(line => {
+                    const part = partById.get(line.partId)
+                    const outstanding = Math.max(0, line.quantity - line.receivedQuantity)
+                    const live = order.status !== 'draft' && order.status !== 'cancelled'
+                    const tone = line.receivedQuantity >= line.quantity ? 'ok' : line.receivedQuantity > 0 ? 'warn' : live ? 'info' : 'idle'
+                    const label = line.receivedQuantity >= line.quantity ? 'Received' : line.receivedQuantity > 0 ? 'Partial' : live ? 'On order' : 'Not ordered'
+                    return (
+                      <Tr key={line.partId}>
+                        <Td className="min-w-0 max-w-[18rem]">
+                          {part ? (
+                            <Link href={`${basePath}/platform/parts/${line.partId}`} className="hover:underline"><Code className="text-foreground">{line.partNumber}</Code></Link>
+                          ) : (
+                            <Code className="text-foreground">{line.partNumber || line.partId}</Code>
+                          )}
+                          <p className="break-words">{line.description}</p>
+                          <Status tone={tone} className="text-xs">{label}</Status>
+                        </Td>
+                        <Td align="right">{line.quantity}</Td>
+                        <Td align="right" priority={2}>{line.receivedQuantity}</Td>
+                        <Td align="right">{live && outstanding > 0 ? <Figure size="sm">{outstanding}</Figure> : <span className="text-muted-foreground">{outstanding}</span>}</Td>
+                        <Td align="right" priority={3} className="whitespace-nowrap text-muted-foreground">{formatCents(line.unitCostCents)}</Td>
+                        <Td align="right" priority={2} className="whitespace-nowrap font-medium">{formatCents(line.quantity * line.unitCostCents)}</Td>
+                        <Td align="right" priority={3} className="text-muted-foreground">{part ? part.quantity ?? 0 : '-'}</Td>
+                        <Td priority={3}>{part?.binLocation ? <Code>{part.binLocation}</Code> : <span className="text-muted-foreground">-</span>}</Td>
+                      </Tr>
+                    )
+                  })}
+                </tbody>
+              </DeskTable>
             )}
           </DeskSection>
 
           <DeskSection title="Details">
             <Facts
               items={[
-                { label: 'Status', value: PO_STATUS_LABEL[order.status] || order.status },
+                { label: 'Total', value: <Figure size="md">{formatCents(poTotalCents(order))}</Figure> },
+                { label: 'Received', value: <span className="tabular-nums">{received} of {ordered} units</span> },
+                { label: 'Received at cost', value: <span className="tabular-nums">{formatCents(receivedValue)}</span> },
+                { label: 'Status', value: <Status tone={PO_STATUS_TONE[order.status] || 'idle'}>{PO_STATUS_LABEL[order.status] || order.status}</Status> },
                 { label: 'Supplier', value: order.supplier },
                 { label: 'Created', value: formatDateTime(order.createdAt, timeZone) },
                 { label: 'Ordered', value: formatDateTime(order.orderedAt, timeZone) },
-                { label: 'Received', value: formatDateTime(order.receivedAt, timeZone) },
+                { label: 'Received on', value: formatDateTime(order.receivedAt, timeZone) },
                 order.rooftop?.name ? { label: 'Rooftop', value: order.rooftop.name } : null,
               ]}
             />
@@ -236,7 +264,7 @@ export function PurchaseOrderDetailPageClient({
         </div>
 
         <Dialog open={Boolean(confirm)} onOpenChange={open => { if (!open && !busy) setConfirm(null) }}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="rounded-md sm:max-w-md sm:rounded-md">
             {confirm && (
               <>
                 <DialogHeader>

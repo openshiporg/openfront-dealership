@@ -72,34 +72,41 @@ export function ReceivePurchaseOrderDialog({
 
   return (
     <Dialog open={open} onOpenChange={value => { if (!busy) onOpenChange(value) }}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto rounded-md sm:max-w-lg sm:rounded-md">
         <DialogHeader>
           <DialogTitle>Receive {order.reference}</DialogTitle>
         </DialogHeader>
         <form onSubmit={submit} noValidate className="space-y-4">
-          <div className="divide-y rounded-xl border">
-            {lines.map(line => (
-              <div key={line.partId} className="grid min-w-0 grid-cols-[minmax(0,1fr)_6rem] items-start gap-3 px-3 py-3">
-                <div className="min-w-0 text-sm">
-                  <p className="font-mono font-medium">{line.partNumber}</p>
-                  <p className="break-words text-xs text-muted-foreground">{line.description}</p>
-                  <p className="font-mono text-[11px] tabular-nums text-muted-foreground">{line.receivedQuantity}/{line.quantity} received</p>
+          <div className="min-w-0 overflow-hidden rounded-md border">
+            <div className="grid grid-cols-[minmax(0,1fr)_4.5rem_5.5rem] items-center gap-3 border-b bg-muted/60 px-3 py-2 text-[12px] font-medium text-muted-foreground">
+              <span>Part</span>
+              <span className="text-right">Received</span>
+              <span className="text-right">Receive now</span>
+            </div>
+            <div className="divide-y">
+              {lines.map(line => (
+                <div key={line.partId} className="grid min-w-0 grid-cols-[minmax(0,1fr)_4.5rem_5.5rem] items-start gap-3 px-3 py-2.5">
+                  <div className="min-w-0 text-[13px]">
+                    <p className="font-mono text-[12px] font-medium">{line.partNumber}</p>
+                    <p className="break-words text-xs text-muted-foreground">{line.description}</p>
+                  </div>
+                  <p className="pt-2 text-right text-[13px] tabular-nums text-muted-foreground">{line.receivedQuantity} of {line.quantity}</p>
+                  <FormField id={`receive-${line.partId}`} label={`Receive ${line.partNumber}`} labelClassName="sr-only" error={errors[line.partId]}>
+                    <Input
+                      id={`receive-${line.partId}`}
+                      className="h-11 rounded-[4px] text-right text-[13px] tabular-nums sm:h-9"
+                      inputMode="numeric"
+                      value={quantities[line.partId] || ''}
+                      aria-invalid={Boolean(errors[line.partId])}
+                      onChange={event => {
+                        setQuantities(current => ({ ...current, [line.partId]: event.target.value }))
+                        setErrors(current => ({ ...current, [line.partId]: undefined, form: undefined }))
+                      }}
+                    />
+                  </FormField>
                 </div>
-                <FormField id={`receive-${line.partId}`} label="Receive" error={errors[line.partId]}>
-                  <Input
-                    id={`receive-${line.partId}`}
-                    className="h-11 sm:h-9"
-                    inputMode="numeric"
-                    value={quantities[line.partId] || ''}
-                    aria-invalid={Boolean(errors[line.partId])}
-                    onChange={event => {
-                      setQuantities(current => ({ ...current, [line.partId]: event.target.value }))
-                      setErrors(current => ({ ...current, [line.partId]: undefined, form: undefined }))
-                    }}
-                  />
-                </FormField>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
           {errors.form && <Notice tone="bad">{errors.form}</Notice>}
           {formError && <Notice tone="bad">{formError}</Notice>}

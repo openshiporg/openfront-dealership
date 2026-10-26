@@ -11,7 +11,7 @@ import { CirclePlus } from 'lucide-react'
 import { PageContainer } from '../../../dashboard/components/PageContainer'
 import { PlatformFilterBar } from '../../components/PlatformFilterBar'
 import { StatusTabs } from '../components/StatusTabs'
-import { UserDetailsComponent } from '../components/UserDetailsComponent'
+import { UserDetailsComponent, staffFunctions } from '../components/UserDetailsComponent'
 import { Pagination } from '../../../dashboard/components/Pagination'
 import { FilterList } from '../../../dashboard/components/FilterList'
 import { CreateItemDrawerClientWrapper } from '@/features/platform/components/CreateItemDrawerClientWrapper'
@@ -22,7 +22,8 @@ import { useQuery } from '@tanstack/react-query'
 import { getUsers } from '../actions'
 import { buildOrderByClause } from '../../../dashboard/lib/buildOrderByClause'
 import { buildWhereClause } from '../../../dashboard/lib/buildWhereClause'
-import { DeskHeader, Notice, Panel, Pill, Track } from '../../components/desk'
+import { DeskHeader, DeskSection, DeskTable, Notice, Pill, Status, Td, Th, Tr, Track } from '../../components/desk'
+import Link from 'next/link'
 
 interface UserListPageClientProps {
   list: any
@@ -166,9 +167,20 @@ export function UserListPageClient({
   const header = (
     <DeskHeader
       title="Staff"
-      meta={statusCounts ? `${statusCounts.all} members` : undefined}
+      meta={statusCounts ? `${statusCounts.all} members · ${statusCounts.sales} sales · ${statusCounts.service} service · ${statusCounts.finance} finance` : undefined}
+      actions={
+        <Pill variant="primary" onClick={() => setIsCreateDrawerOpen(true)} aria-label="Add staff member">
+          <CirclePlus />
+          Add staff member
+        </Pill>
+      }
     />
   )
+
+  // Needs you: members on this page with no role, oldest first. They can't be routed leads or deals until one is set.
+  const needsRole = (data?.items ?? [])
+    .filter((user: any) => !user.role)
+    .sort((a: any, b: any) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')))
 
   // Check if we have any active filters (search or actual filters)
   const hasFilters = !!searchString || Object.keys(currentSearchParams).some((key) => key.startsWith('!'))
@@ -177,27 +189,62 @@ export function UserListPageClient({
 
   return (
     <PageContainer title="Staff" header={header} breadcrumbs={breadcrumbs}>
-      {/* Filter Bar - includes search, filters, sorting, and create button */}
-      <div className="px-4 md:px-6">
-        <PlatformFilterBar 
-          list={list}
-          customCreateButton={
-            <Track>
-              <Pill variant="primary" onClick={() => setIsCreateDrawerOpen(true)} aria-label="Add staff member">
-                <CirclePlus />
-                <span className="hidden lg:inline">Add staff member</span>
-              </Pill>
-            </Track>
-          }
-        />
-      </div>
+      {/* Needs you: staff waiting on a role */}
+      {!error && needsRole.length > 0 && (
+        <div className="px-4 pb-6 md:px-6">
+          <DeskSection title="Needs a role" count={needsRole.length} id="staff-needs-role">
+            <DeskTable aria-labelledby="staff-needs-role">
+              <thead>
+                <tr>
+                  <Th>Member</Th>
+                  <Th priority={2}>Functions</Th>
+                  <Th>Status</Th>
+                  <Th align="right" priority={2}>Added</Th>
+                  <Th align="right"><span className="sr-only">Action</span></Th>
+                </tr>
+              </thead>
+              <tbody>
+                {needsRole.map((user: any) => {
+                  const functions = staffFunctions(user)
+                  return (
+                    <Tr key={user.id}>
+                      <Td className="max-w-0 min-w-[9rem]">
+                        <span className="block truncate font-medium text-foreground">{user.name || user.email}</span>
+                        <span className="block truncate text-xs text-muted-foreground">{user.email}</span>
+                      </Td>
+                      <Td priority={2} className="text-muted-foreground">{functions.length ? functions.map((item) => item.label).join(', ') : 'None'}</Td>
+                      <Td><Status tone="warn">No role</Status></Td>
+                      <Td align="right" priority={2} className="whitespace-nowrap text-muted-foreground">
+                        {user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown'}
+                      </Td>
+                      <Td align="right" className="w-px">
+                        <Pill size="sm" asChild className="max-sm:h-10">
+                          <Link href={`${basePath}/users/${user.id}`}>Assign role</Link>
+                        </Pill>
+                      </Td>
+                    </Tr>
+                  )
+                })}
+              </tbody>
+            </DeskTable>
+          </DeskSection>
+        </div>
+      )}
 
-      {/* Status Tabs */}
+      {/* Role tabs */}
       {statusCounts && (
-        <div className="px-4 md:px-6">
+        <div className="px-4 pb-4 md:px-6">
           <StatusTabs statusCounts={statusCounts} />
         </div>
       )}
+
+      {/* Filter Bar - search, filters and sorting; the create action lives in the header */}
+      <div className="px-4 md:px-6">
+        <PlatformFilterBar
+          list={list}
+          customCreateButton={<span hidden />}
+        />
+      </div>
 
       {/* Active Filters */}
       <div className="px-4 md:px-6">
@@ -219,15 +266,26 @@ export function UserListPageClient({
         </div>
       ) : (
         <>
-          {/* Data grid - full width */}
           <div className="px-4 pb-2 md:px-6">
-            <Panel className="divide-y">
-              {data?.items?.map((user: any) => (
-                <UserDetailsComponent key={user.id} user={user} list={list} />
-              ))}
-            </Panel>
+            <DeskTable aria-label="Staff">
+              <thead>
+                <tr>
+                  <Th>Member</Th>
+                  <Th priority={2}>Role</Th>
+                  <Th priority={3}>Functions</Th>
+                  <Th>Status</Th>
+                  <Th align="right" priority={2}>Workload</Th>
+                  <Th align="right"><span className="sr-only">Actions</span></Th>
+                </tr>
+              </thead>
+              <tbody>
+                {data?.items?.map((user: any) => (
+                  <UserDetailsComponent key={user.id} user={user} list={list} />
+                ))}
+              </tbody>
+            </DeskTable>
           </div>
-          
+
           {/* Pagination */}
           {data && data.count > pageSize && (
             <div className="px-4 md:px-6 py-4">

@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Code, DeskSection, Notice, Panel, Pill, Segmented, TitleLine, Track } from '@/features/platform/components/desk'
+import { DeskSection, DeskTable, Figure, Notice, Panel, Pill, Segmented, Status, Td, Th, Tr, Track } from '@/features/platform/components/desk'
 import { cn } from '@/lib/utils'
 import { type CatalogMake, type CatalogModel, type InventoryPair, addInventoryPairs, deleteMake, deleteModel, saveMake, saveModel } from '../actions'
 import { ConfirmDialog, EmptyRow, Field, FormDialog, TAP, TAP_INPUT, TAP_SM } from './formKit'
@@ -156,25 +156,34 @@ export function MakesModelsPanel({
           }
         >
           {pairError && <Notice tone="bad" className="mb-3">{pairError}</Notice>}
-          <ul className="flex flex-wrap gap-2">
-            {missingPairs.map(pair => {
-              const key = pairKey(pair.make, pair.model)
-              return (
-                <li key={key}>
-                  <button
-                    type="button"
-                    disabled={addingPairs !== null}
-                    onClick={() => addPairs([pair], key)}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-full border bg-card px-3 text-sm hover:bg-muted/50 disabled:opacity-50 sm:min-h-8"
-                  >
-                    <Plus className="size-3.5" />
-                    <span>{pair.make} {pair.model}</span>
-                    <Code>{pair.units}</Code>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
+          <DeskTable aria-label="Inventory models missing from catalog">
+            <thead>
+              <tr>
+                <Th>Make and model</Th>
+                <Th>Status</Th>
+                <Th align="right">Units</Th>
+                <Th align="right"><span className="sr-only">Action</span></Th>
+              </tr>
+            </thead>
+            <tbody>
+              {missingPairs.map(pair => {
+                const key = pairKey(pair.make, pair.model)
+                return (
+                  <Tr key={key}>
+                    <Td className="font-medium text-foreground">{pair.make} {pair.model}</Td>
+                    <Td><Status tone="warn">Not in catalog</Status></Td>
+                    <Td align="right"><Figure size="sm">{pair.units}</Figure></Td>
+                    <Td align="right" className="w-px whitespace-nowrap">
+                      <Pill size="sm" className={TAP_SM} disabled={addingPairs !== null} onClick={() => addPairs([pair], key)} aria-label={`Add ${pair.make} ${pair.model}`}>
+                        <Plus />
+                        {addingPairs === key ? 'Adding…' : 'Add'}
+                      </Pill>
+                    </Td>
+                  </Tr>
+                )
+              })}
+            </tbody>
+          </DeskTable>
         </DeskSection>
       )}
 
@@ -203,29 +212,37 @@ export function MakesModelsPanel({
       </div>
 
       <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-        <Panel className="overflow-hidden">
-          {visible.length === 0 ? (
-            <EmptyRow>{makes.length === 0 ? 'No makes yet' : 'No makes match'}</EmptyRow>
-          ) : (
-            <ul className="divide-y">
+        {visible.length === 0 ? (
+          <Panel><EmptyRow>{makes.length === 0 ? 'No makes yet' : 'No makes match'}</EmptyRow></Panel>
+        ) : (
+          <DeskTable aria-label="Makes">
+            <thead>
+              <tr>
+                <Th>Make</Th>
+                <Th>Status</Th>
+                <Th align="right">Models</Th>
+              </tr>
+            </thead>
+            <tbody>
               {visible.map(make => (
-                <li key={make.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(make.id)}
-                    aria-pressed={make.id === selectedId}
-                    className={cn('flex min-h-11 w-full min-w-0 items-baseline justify-between gap-3 px-4 py-3 text-left hover:bg-muted/40', make.id === selectedId && 'bg-muted/60')}
-                  >
-                    <TitleLine as="span" tone={make.modelsCount > 0 ? 'ok' : 'warn'} status={make.modelsCount > 0 ? 'Has models' : 'No models'} className="text-sm font-medium">
+                <Tr key={make.id} className={cn(make.id === selectedId && 'bg-muted/60 hover:bg-muted/60')}>
+                  <Td className="p-0 first:pl-0">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(make.id)}
+                      aria-pressed={make.id === selectedId}
+                      className="flex min-h-11 w-full min-w-0 items-center px-4 text-left font-medium text-foreground hover:underline"
+                    >
                       {make.name}
-                    </TitleLine>
-                    <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{make.modelsCount} {make.modelsCount === 1 ? 'model' : 'models'}</span>
-                  </button>
-                </li>
+                    </button>
+                  </Td>
+                  <Td>{make.modelsCount > 0 ? <Status tone="ok">Has models</Status> : <Status tone="warn">No models</Status>}</Td>
+                  <Td align="right">{make.modelsCount}</Td>
+                </Tr>
               ))}
-            </ul>
-          )}
-        </Panel>
+            </tbody>
+          </DeskTable>
+        )}
 
         <Panel className="overflow-hidden">
           {!selected ? (
@@ -233,10 +250,10 @@ export function MakesModelsPanel({
           ) : (
             <div>
               <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
-                <TitleLine as="h3" tone={selected.modelsCount > 0 ? 'ok' : 'warn'} className="text-base font-semibold">
+                <h3 className="flex min-w-0 items-baseline gap-2 text-base font-semibold">
                   {selected.name}
-                  <span className="ml-2 font-mono text-xs font-normal tabular-nums text-muted-foreground">{selected.modelsCount}</span>
-                </TitleLine>
+                  <span className="text-[13px] font-normal tabular-nums text-muted-foreground">{selected.modelsCount} {selected.modelsCount === 1 ? 'model' : 'models'}</span>
+                </h3>
                 <Track>
                   <Pill size="sm" className={TAP_SM} onClick={() => { closeForms(); setMakeDraft({ id: selected.id, name: selected.name }) }}>
                     <Pencil />
@@ -262,25 +279,39 @@ export function MakesModelsPanel({
               {selected.models.length === 0 ? (
                 <EmptyRow>No models</EmptyRow>
               ) : (
-                <ul className="divide-y">
-                  {selected.models.map(model => (
-                    <li key={model.id} className="flex min-w-0 flex-wrap items-center justify-between gap-2 px-4 py-2.5">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium">{model.name}</p>
-                        <p className="text-xs text-muted-foreground">{[bodyStyleLabel(model.bodyStyle), model.baseYear ? `Since ${model.baseYear}` : null].filter(Boolean).join(' · ') || 'No body style'}</p>
-                      </div>
-                      <Track>
-                        <Pill size="sm" className={TAP_SM} aria-label={`Edit ${model.name}`} onClick={() => { closeForms(); setModelDraft({ id: model.id, makeId: selected.id, name: model.name, bodyStyle: model.bodyStyle || 'none', baseYear: model.baseYear ? String(model.baseYear) : '' }) }}>
-                          <Pencil />
-                          Edit
-                        </Pill>
-                        <Pill size="sm" className={TAP_SM} aria-label={`Delete ${model.name}`} onClick={() => { setFormError(null); setPending({ kind: 'model', model }) }}>
-                          <Trash2 />
-                        </Pill>
-                      </Track>
-                    </li>
-                  ))}
-                </ul>
+                <table className="w-full border-collapse text-[13px]" aria-label={`${selected.name} models`}>
+                  <thead>
+                    <tr>
+                      <Th>Model</Th>
+                      <Th priority={2}>Body style</Th>
+                      <Th align="right" priority={2}>Since</Th>
+                      <Th align="right"><span className="sr-only">Actions</span></Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selected.models.map(model => (
+                      <Tr key={model.id}>
+                        <Td className="max-w-0 min-w-[7rem]">
+                          <span className="block truncate font-medium text-foreground">{model.name}</span>
+                          <span className="block truncate text-xs text-muted-foreground md:hidden">{[bodyStyleLabel(model.bodyStyle), model.baseYear ? `Since ${model.baseYear}` : null].filter(Boolean).join(' · ') || 'No body style'}</span>
+                        </Td>
+                        <Td priority={2} className="text-muted-foreground">{bodyStyleLabel(model.bodyStyle) || 'None'}</Td>
+                        <Td align="right" priority={2} className="text-muted-foreground">{model.baseYear || ''}</Td>
+                        <Td align="right" className="w-px whitespace-nowrap">
+                          <div className="inline-flex gap-1">
+                            <Pill size="sm" className={TAP_SM} aria-label={`Edit ${model.name}`} onClick={() => { closeForms(); setModelDraft({ id: model.id, makeId: selected.id, name: model.name, bodyStyle: model.bodyStyle || 'none', baseYear: model.baseYear ? String(model.baseYear) : '' }) }}>
+                              <Pencil />
+                              Edit
+                            </Pill>
+                            <Pill size="sm" variant="plain" className={cn(TAP_SM, 'max-sm:w-11')} aria-label={`Delete ${model.name}`} onClick={() => { setFormError(null); setPending({ kind: 'model', model }) }}>
+                              <Trash2 />
+                            </Pill>
+                          </div>
+                        </Td>
+                      </Tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </div>
           )}

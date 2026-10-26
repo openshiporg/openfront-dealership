@@ -5,7 +5,7 @@ import { Download, History, Pencil, Play, Plus, Power, Search } from 'lucide-rea
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { Notice, Panel, Pill, Segmented, StatusDot, TitleLine, Track } from '@/features/platform/components/desk'
+import { DeskTable, Notice, Panel, Pill, Segmented, Status, Td, Th, Tr, Track } from '@/features/platform/components/desk'
 import { EmptyRow, Field, FormDialog, TAP, TAP_INPUT, TAP_SM } from '@/features/platform/catalog/components/formKit'
 import { cn } from '@/lib/utils'
 import { type ReportRooftop, type ReportRun, type SavedReport, runReport, saveReport } from '../actions'
@@ -214,64 +214,92 @@ export function SavedReportsPanel({
         </Track>
       </div>
 
-      <Panel className="overflow-hidden">
-        {visible.length === 0 ? (
+      {visible.length === 0 ? (
+        <Panel>
           <EmptyRow>{reports.length === 0 ? 'No saved reports yet' : 'No reports match'}</EmptyRow>
-        ) : (
-          <ul className="divide-y">
+        </Panel>
+      ) : (
+        <DeskTable>
+          <thead>
+            <tr>
+              <Th>Status</Th>
+              <Th>Report</Th>
+              <Th priority={3}>Type</Th>
+              <Th priority={2}>Schedule</Th>
+              <Th priority={2}>Last run</Th>
+              <Th align="right" priority={3}><span className="sr-only">Actions</span></Th>
+            </tr>
+          </thead>
+          <tbody>
             {visible.map(report => {
               const latest = lastRun.get(report.id)
               const latestStatus = latest ? effectiveRunStatus(latest) : null
               const filters = describeFilters(report.reportType, report.filters)
+              const nextDue = report.active && report.schedule !== 'manual' && report.nextRunAt ? formatDateTime(report.nextRunAt, timeZone) : null
+              const actions = (
+                <Track className="flex-wrap justify-start lg:justify-end">
+                  <Pill size="sm" className={TAP_SM} disabled={workingId === report.id} onClick={() => run(report)}>
+                    <Play />
+                    {workingId === report.id ? 'Working…' : 'Run now'}
+                  </Pill>
+                  {latest && latestStatus === 'completed' && (
+                    <Pill size="sm" variant="plain" className={TAP_SM} aria-label={`Download last ${report.name} run`} onClick={() => download(latest.id)}>
+                      <Download />
+                    </Pill>
+                  )}
+                  <Pill size="sm" variant="plain" className={TAP_SM} aria-label={`Run history for ${report.name}`} onClick={() => onShowRuns(report.id)}>
+                    <History />
+                  </Pill>
+                  <Pill size="sm" variant="plain" className={TAP_SM} onClick={() => open(report)}>
+                    <Pencil />
+                    Edit
+                  </Pill>
+                  <Pill size="sm" variant="plain" className={TAP_SM} disabled={workingId === report.id} onClick={() => toggle(report)}>
+                    <Power />
+                    {report.active ? 'Pause' : 'Resume'}
+                  </Pill>
+                </Track>
+              )
               return (
-                <li key={report.id} className="flex min-w-0 flex-col gap-3 px-4 py-3 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="min-w-0">
-                    <TitleLine as="p" tone={report.active ? 'ok' : 'idle'} status={report.active ? 'Active' : 'Paused'} className="text-sm font-medium">{report.name}</TitleLine>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {[reportTypeLabel(report.reportType), report.exportFormat.toUpperCase(), scheduleLabel(report.schedule), report.active && report.schedule !== 'manual' && report.nextRunAt ? `Next due ${formatDateTime(report.nextRunAt, timeZone)}` : null, rooftops.length > 1 ? report.rooftop?.name : null].filter(Boolean).join(' · ')}
-                    </p>
-                    {filters.length > 0 && (
-                      <ul className="mt-1.5 flex flex-wrap gap-1.5">
-                        {filters.map(text => <li key={text} className="rounded-full bg-muted px-2 py-0.5 text-xs">{text}</li>)}
-                      </ul>
+                <Tr key={report.id}>
+                  <Td className="w-[1%] align-top md:align-middle">
+                    <Status tone={report.active ? 'ok' : 'idle'}>{report.active ? 'Active' : 'Paused'}</Status>
+                  </Td>
+                  <Td className="min-w-0 max-w-[22rem]">
+                    <span className="block break-words font-medium text-foreground">{report.name}</span>
+                    <span className="block text-[12px] text-muted-foreground">
+                      {[report.exportFormat.toUpperCase(), filters.length ? filters.join(' · ') : null, rooftops.length > 1 ? report.rooftop?.name : null].filter(Boolean).join(' · ')}
+                    </span>
+                    <span className="block text-[12px] text-muted-foreground md:hidden">
+                      {[reportTypeLabel(report.reportType), scheduleLabel(report.schedule), nextDue ? `Next due ${nextDue}` : null].filter(Boolean).join(' · ')}
+                    </span>
+                    <span className="block text-[12px] text-muted-foreground md:hidden">
+                      {latest && latestStatus ? `Last run ${RUN_STATE[latestStatus].label.toLowerCase()} ${formatDateTime(latest.completedAt || latest.createdAt, timeZone)}` : 'Never run'}
+                    </span>
+                    <div className="mt-2 lg:hidden">{actions}</div>
+                  </Td>
+                  <Td priority={3} className="whitespace-nowrap text-muted-foreground">{reportTypeLabel(report.reportType)}</Td>
+                  <Td priority={2} className="whitespace-nowrap">
+                    <span className="block">{scheduleLabel(report.schedule)}</span>
+                    {nextDue && <span className="block text-[12px] text-muted-foreground">Next {nextDue}</span>}
+                  </Td>
+                  <Td priority={2} className="whitespace-nowrap">
+                    {latest && latestStatus ? (
+                      <>
+                        <Status tone={RUN_STATE[latestStatus].tone} className="text-[12px]">{RUN_STATE[latestStatus].label}</Status>
+                        <span className="block text-[12px] text-muted-foreground">{formatDateTime(latest.completedAt || latest.createdAt, timeZone)}</span>
+                      </>
+                    ) : (
+                      <span className="text-[12px] text-muted-foreground">Never run</span>
                     )}
-                    <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                      {latest && latestStatus ? (
-                        <>
-                          <StatusDot tone={RUN_STATE[latestStatus].tone} className="size-1.5 shadow-none" />
-                          Last run {RUN_STATE[latestStatus].label.toLowerCase()} {formatDateTime(latest.completedAt || latest.createdAt, timeZone)}
-                        </>
-                      ) : 'Never run'}
-                    </p>
-                  </div>
-                  <Track className="shrink-0 self-start">
-                    <Pill size="sm" variant="primary" className={TAP_SM} disabled={workingId === report.id} onClick={() => run(report)}>
-                      <Play />
-                      {workingId === report.id ? 'Working…' : 'Run now'}
-                    </Pill>
-                    {latest && latestStatus === 'completed' && (
-                      <Pill size="sm" className={TAP_SM} aria-label={`Download last ${report.name} run`} onClick={() => download(latest.id)}>
-                        <Download />
-                      </Pill>
-                    )}
-                    <Pill size="sm" className={TAP_SM} aria-label={`Run history for ${report.name}`} onClick={() => onShowRuns(report.id)}>
-                      <History />
-                    </Pill>
-                    <Pill size="sm" className={TAP_SM} onClick={() => open(report)}>
-                      <Pencil />
-                      Edit
-                    </Pill>
-                    <Pill size="sm" className={TAP_SM} disabled={workingId === report.id} onClick={() => toggle(report)}>
-                      <Power />
-                      {report.active ? 'Pause' : 'Resume'}
-                    </Pill>
-                  </Track>
-                </li>
+                  </Td>
+                  <Td align="right" priority={3} className="w-[1%] whitespace-nowrap">{actions}</Td>
+                </Tr>
               )
             })}
-          </ul>
-        )}
-      </Panel>
+          </tbody>
+        </DeskTable>
+      )}
 
       <FormDialog
         open={draft !== null}
@@ -318,7 +346,7 @@ export function SavedReportsPanel({
               Active
             </label>
           )}
-          {filterFields.length > 0 && <p className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground sm:col-span-2">Filters</p>}
+          {filterFields.length > 0 && <p className="text-[12px] font-medium text-muted-foreground sm:col-span-2">Filters</p>}
           {filterFields.map(field => {
             const id = `report-filter-${field.key}`
             const value = draft?.filters[field.key] || ''

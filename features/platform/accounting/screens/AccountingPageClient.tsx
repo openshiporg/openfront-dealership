@@ -3,12 +3,12 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
+import { Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
-import { Code, DeskHeader, Notice, Panel, Pill, Readout, ReadoutStrip, Segmented, TitleLine, Track } from '@/features/platform/components/desk'
+import { Attention, Code, DeskHeader, DeskSection, DeskTable, Figure, Notice, Panel, Pill, Readout, ReadoutStrip, Segmented, Status, Td, Th, Tr, Track } from '@/features/platform/components/desk'
 import { recordReference } from '@/features/platform/lib/format'
 
 import {
@@ -39,6 +39,20 @@ type View = 'batches' | 'mappings'
 type MappingForm = { mode: 'create' | 'edit'; values: Record<string, string> }
 
 const EMPTY_COUNTS: BatchCounts = { all: 0, staged: 0, posting: 0, failed: 0, posted: 0, reconciled: 0, locked: 0 }
+const ALL_FILTERS = { status: 'all', sourceType: 'all', search: '' }
+const QUEUE_RANK: Record<string, number> = { failed: 0, staged: 1, posting: 2 }
+const DAY_MS = 86_400_000
+
+function ageDays(value: string) {
+  return Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / DAY_MS))
+}
+
+/** What the office has to do with an unposted batch. */
+function nextStepLabel(batch: AccountingBatchListItem) {
+  if (batch.status === 'failed') return 'Fix and queue again'
+  if (batch.status === 'staged') return 'Queue for posting'
+  return 'Record posting result'
+}
 
 export function AccountingPageClient({
   timeZone,
@@ -70,6 +84,9 @@ export function AccountingPageClient({
   const [sourceType, setSourceType] = useState('all')
   const [search, setSearch] = useState('')
   const firstLoad = useRef(true)
+  // The queue reads the unfiltered list, so tabs and search below do not hide unposted batches.
+  const [queueSource, setQueueSource] = useState(initialBatches)
+  const [queueError, setQueueError] = useState(initialBatchError)
 
   const loadBatches = useCallback(async (filters: { status: string; sourceType: string; search: string }) => {
     setBatchLoading(true)
@@ -78,6 +95,10 @@ export function AccountingPageClient({
       setBatches(result.data.batches)
       setCounts(result.data.counts)
       setBatchError(null)
+      if (filters.status === 'all' && filters.sourceType === 'all' && !filters.search.trim()) {
+        setQueueSource(result.data.batches)
+        setQueueError(null)
+      }
     } else {
       setBatchError(result.error)
     }
@@ -305,9 +326,32 @@ export function AccountingPageClient({
     return missing
   }, [mappings, rooftops, mappingRooftop, mappingType])
 
+  const loadQueue = useCallback(async () => {
+    const result = await getAccountingBatches(ALL_FILTERS)
+    if (result.success) {
+      setQueueSource(result.data.batches)
+      setQueueError(null)
+    } else {
+      setQueueError(result.error)
+    }
+  }, [])
+
   const refresh = async () => {
-    await Promise.all([loadBatches({ status, sourceType, search }), loadMappings()])
+    await Promise.all([loadBatches({ status, sourceType, search }), loadMappings(), loadQueue()])
   }
+
+  const queue = useMemo(
+    () =>
+      queueSource
+        .filter(batch => batch.status in QUEUE_RANK || batch.totalDebitCents !== batch.totalCreditCents)
+        .sort((a, b) => (QUEUE_RANK[a.status] ?? 3) - (QUEUE_RANK[b.status] ?? 3) || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+    [queueSource],
+  )
+  // Unmapped codes across every rooftop and source; the mapping tab's notice follows its own filters.
+  const unmappedCount = useMemo(
+    () => rooftops.reduce((total, rooftop) => total + SOURCE_TYPES.reduce((sum, type) => sum + SOURCE_CODES[type].filter(code => !mappings.some(m => m.rooftop?.id === rooftop.id && m.sourceType === type && m.sourceCode === code)).length, 0), 0),
+    [mappings, rooftops],
+  )
 
   const needsAction = counts.staged + counts.posting + counts.failed
   const breadcrumbs = [
@@ -322,10 +366,19 @@ export function AccountingPageClient({
       title="Accounting"
       tone={batchError ? 'bad' : counts.failed > 0 ? 'bad' : needsAction > 0 ? 'warn' : 'ok'}
       status={batchError ? 'Unavailable' : counts.failed > 0 ? `${counts.failed} failed` : needsAction > 0 ? `${needsAction} open` : 'Clear'}
-      meta={`${counts.all} batches · ${mappings.length} mappings`}
+      meta={
+        batchError
+          ? 'Unavailable'
+          : [
+              counts.failed > 0 ? `${counts.failed} failed` : '',
+              counts.staged + counts.posting > 0 ? `${counts.staged + counts.posting} not posted` : '',
+              `${counts.all} batches`,
+              `${mappings.length} mappings`,
+            ].filter(Boolean).join(' · ')
+      }
       actions={
-        <Track>
-          <Pill onClick={refresh} disabled={batchLoading} aria-label="Refresh" className="h-11 sm:h-8">
+        <>
+          <Pill variant="plain" onClick={refresh} disabled={batchLoading} aria-label="Refresh" className="h-11 sm:h-8">
             <RefreshCw className={batchLoading ? 'animate-spin' : undefined} />
             Refresh
           </Pill>
@@ -340,7 +393,7 @@ export function AccountingPageClient({
               Add mapping
             </Pill>
           )}
-        </Track>
+        </>
       }
     />
   )
@@ -353,11 +406,88 @@ export function AccountingPageClient({
             <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
               <p className="min-w-0">{message}</p>
               <Track>
-                <Pill size="sm" variant="plain" onClick={() => setMessage(null)}>Dismiss</Pill>
+                <Pill size="sm" variant="plain" onClick={() => setMessage(null)} className="h-10 sm:h-7">Dismiss</Pill>
               </Track>
             </div>
           </Notice>
         )}
+
+        <DeskSection title="Needs you" count={queueError ? undefined : queue.length + (unmappedCount > 0 && !mappingError ? 1 : 0)} id="accounting-queue">
+          {queueError ? (
+            <Notice tone="bad">Queue unavailable: {queueError}</Notice>
+          ) : queue.length === 0 && (unmappedCount === 0 || mappingError) ? (
+            <p className="py-3 text-sm text-muted-foreground">No unposted batches or exceptions</p>
+          ) : (
+            <div className="space-y-3">
+              {unmappedCount > 0 && !mappingError && (
+                <Notice tone="warn">
+                  <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                    <p className="min-w-0 font-medium">{unmappedCount} unmapped {unmappedCount === 1 ? 'code' : 'codes'}</p>
+                    <Pill size="sm" onClick={() => setView('mappings')} className="h-10 sm:h-7">Open mappings</Pill>
+                  </div>
+                </Notice>
+              )}
+              {queue.length > 0 && (
+                <DeskTable aria-labelledby="accounting-queue">
+                  <thead>
+                    <tr>
+                      <Th>Batch</Th>
+                      <Th>Status</Th>
+                      <Th priority={2}>Next step</Th>
+                      <Th priority={3} align="right">Attempts</Th>
+                      <Th priority={2} align="right">Age</Th>
+                      <Th align="right">Amount</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {queue.map(batch => {
+                      const days = ageDays(batch.createdAt)
+                      const unbalanced = batch.totalDebitCents !== batch.totalCreditCents
+                      return (
+                        <Tr key={batch.id} className="cursor-pointer" onClick={() => router.push(`${basePath}/platform/accounting/${batch.id}`)}>
+                          <Td className="min-w-0">
+                            <Link href={`${basePath}/platform/accounting/${batch.id}`} className="block font-medium text-foreground hover:underline" onClick={event => event.stopPropagation()}>
+                              {SOURCE_TYPE_LABEL[batch.sourceType] || batch.sourceType}
+                            </Link>
+                            <p className="mt-0.5 flex min-w-0 flex-wrap gap-x-2 text-xs text-muted-foreground">
+                              <Code>{recordReference('SRC', batch.sourceId)}</Code>
+                              {batch.rooftop?.name && <span>{batch.rooftop.name}</span>}
+                              <span className="md:hidden">{days}d</span>
+                            </p>
+                          </Td>
+                          <Td>
+                            <span className="inline-flex flex-wrap items-center gap-1.5">
+                              <Status tone={batchTone(batch.status)}>{BATCH_STATUS_LABEL[batch.status] || batch.status}</Status>
+                              {batch.status === 'failed' && <Attention>Failed</Attention>}
+                              {unbalanced && <Attention>Out of balance</Attention>}
+                            </span>
+                            {batch.status === 'failed' && batch.lastErrorCode && <p className="mt-0.5"><Code>{batch.lastErrorCode}</Code></p>}
+                          </Td>
+                          <Td priority={2} className="text-muted-foreground">{batch.status in QUEUE_RANK ? nextStepLabel(batch) : 'Review lines'}</Td>
+                          <Td priority={3} align="right">{batch.attemptCount}</Td>
+                          <Td priority={2} align="right" className="whitespace-nowrap">
+                            <Figure size="sm">{days}</Figure>
+                            <span className="ml-1 text-xs text-muted-foreground">{days === 1 ? 'day' : 'days'}</span>
+                          </Td>
+                          <Td align="right" className="whitespace-nowrap">
+                            <Figure size="sm">{money(batch.totalDebitCents)}</Figure>
+                          </Td>
+                        </Tr>
+                      )
+                    })}
+                  </tbody>
+                </DeskTable>
+              )}
+            </div>
+          )}
+        </DeskSection>
+
+        <ReadoutStrip>
+          <Readout label="Staged" value={counts.staged} tone={counts.staged ? 'warn' : 'idle'} />
+          <Readout label="Posting" value={counts.posting} tone={counts.posting ? 'warn' : 'idle'} />
+          <Readout label="Failed" value={counts.failed} tone={counts.failed ? 'bad' : 'idle'} />
+          <Readout label="Locked" value={counts.locked} tone={counts.locked ? 'ok' : 'idle'} />
+        </ReadoutStrip>
 
         <Segmented<View>
           label="Accounting view"
@@ -371,12 +501,6 @@ export function AccountingPageClient({
 
         {view === 'batches' ? (
           <div className="space-y-4">
-            <ReadoutStrip>
-              <Readout label="Staged" value={counts.staged} tone={counts.staged ? 'warn' : 'idle'} />
-              <Readout label="Posting" value={counts.posting} tone={counts.posting ? 'warn' : 'idle'} />
-              <Readout label="Failed" value={counts.failed} tone={counts.failed ? 'bad' : 'idle'} />
-              <Readout label="Locked" value={counts.locked} tone={counts.locked ? 'ok' : 'idle'} />
-            </ReadoutStrip>
 
             <div className="flex min-w-0 flex-col gap-3">
               <Segmented
@@ -391,10 +515,10 @@ export function AccountingPageClient({
               <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
                 <div className="relative min-w-0 flex-1">
                   <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input value={search} onChange={event => setSearch(event.target.value)} placeholder="Source ID, reference or error" aria-label="Search batches" className="h-11 pl-9 sm:h-9" />
+                  <Input value={search} onChange={event => setSearch(event.target.value)} placeholder="Source ID, reference or error" aria-label="Search batches" className="h-11 rounded-[4px] pl-9 sm:h-9" />
                 </div>
                 <Select value={sourceType} onValueChange={setSourceType}>
-                  <SelectTrigger className="h-11 w-full sm:h-9 sm:w-48" aria-label="Source type">
+                  <SelectTrigger className="h-11 w-full rounded-[4px] sm:h-9 sm:w-48" aria-label="Source type">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -414,41 +538,63 @@ export function AccountingPageClient({
                   <p className="mt-0.5 text-muted-foreground">{batchError}</p>
                 </Notice>
                 <Track>
-                  <Pill onClick={() => loadBatches({ status, sourceType, search })}>Retry</Pill>
+                  <Pill onClick={() => loadBatches({ status, sourceType, search })} className="h-10 sm:h-8">Retry</Pill>
                 </Track>
               </div>
             ) : (
-              <Panel className={batchLoading ? 'opacity-60 transition-opacity' : undefined} aria-busy={batchLoading}>
-                {batches.length === 0 ? (
+              batches.length === 0 ? (
+                <Panel aria-busy={batchLoading}>
                   <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-muted-foreground">
                     <p>{batchLoading ? 'Loading…' : filtered ? 'No batches match' : 'No batches'}</p>
                     {filtered && !batchLoading && (
                       <Track>
-                        <Pill size="sm" onClick={() => { setSearch(''); setStatus('all'); setSourceType('all') }}>Reset filters</Pill>
+                        <Pill size="sm" className="h-10 sm:h-7" onClick={() => { setSearch(''); setStatus('all'); setSourceType('all') }}>Reset filters</Pill>
                       </Track>
                     )}
                   </div>
-                ) : (
-                  <ul className="divide-y">
-                    {batches.map(batch => (
-                      <li key={batch.id}>
-                        <Link href={`${basePath}/platform/accounting/${batch.id}`} className="flex min-h-11 min-w-0 items-center gap-3 px-4 py-3 hover:bg-muted/40">
-                          <div className="min-w-0 flex-1">
-                            <TitleLine as="p" tone={batchTone(batch.status)} status={BATCH_STATUS_LABEL[batch.status] || batch.status} className="text-sm font-medium text-foreground">
-                              {SOURCE_TYPE_LABEL[batch.sourceType] || batch.sourceType} <Code>{recordReference('SRC', batch.sourceId)}</Code>
-                            </TitleLine>
-                            <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                              {[BATCH_STATUS_LABEL[batch.status] || batch.status, batch.rooftop?.name, batch.attemptCount ? `${batch.attemptCount} attempt${batch.attemptCount === 1 ? '' : 's'}` : '', batch.lastErrorCode && batch.status === 'failed' ? batch.lastErrorCode : '', batch.externalReference, dateTime(batch.updatedAt, timeZone)].filter(Boolean).join(' · ')}
+                </Panel>
+              ) : (
+                <div className={batchLoading ? 'opacity-60 transition-opacity' : undefined} aria-busy={batchLoading}>
+                  <DeskTable>
+                    <thead>
+                      <tr>
+                        <Th>Batch</Th>
+                        <Th>Status</Th>
+                        <Th priority={3}>Reference</Th>
+                        <Th priority={3} align="right">Attempts</Th>
+                        <Th priority={2}>Updated</Th>
+                        <Th align="right">Debits</Th>
+                        <Th priority={2} align="right">Credits</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {batches.map(batch => (
+                        <Tr key={batch.id} className="cursor-pointer" onClick={() => router.push(`${basePath}/platform/accounting/${batch.id}`)}>
+                          <Td className="min-w-0">
+                            <Link href={`${basePath}/platform/accounting/${batch.id}`} className="block font-medium text-foreground hover:underline" onClick={event => event.stopPropagation()}>
+                              {SOURCE_TYPE_LABEL[batch.sourceType] || batch.sourceType}
+                            </Link>
+                            <p className="mt-0.5 flex min-w-0 flex-wrap gap-x-2 text-xs text-muted-foreground">
+                              <Code>{recordReference('SRC', batch.sourceId)}</Code>
+                              {batch.rooftop?.name && <span>{batch.rooftop.name}</span>}
+                              <span className="md:hidden">{dateTime(batch.updatedAt, timeZone)}</span>
                             </p>
-                          </div>
-                          <span className="shrink-0 font-mono text-[13px] tabular-nums">{money(batch.totalDebitCents)}</span>
-                          <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Panel>
+                          </Td>
+                          <Td>
+                            <Status tone={batchTone(batch.status)}>{BATCH_STATUS_LABEL[batch.status] || batch.status}</Status>
+                            {batch.lastErrorCode && batch.status === 'failed' && <p className="mt-0.5"><Code>{batch.lastErrorCode}</Code></p>}
+                          </Td>
+                          <Td priority={3}>{batch.externalReference ? <Code>{batch.externalReference}</Code> : <span className="text-muted-foreground">-</span>}</Td>
+                          <Td priority={3} align="right">{batch.attemptCount}</Td>
+                          <Td priority={2} className="whitespace-nowrap text-muted-foreground">{dateTime(batch.updatedAt, timeZone)}</Td>
+                          <Td align="right" className="whitespace-nowrap font-medium">{money(batch.totalDebitCents)}</Td>
+                          <Td priority={2} align="right" className="whitespace-nowrap">{money(batch.totalCreditCents)}</Td>
+                        </Tr>
+                      ))}
+                    </tbody>
+                  </DeskTable>
+                </div>
+              )
             )}
           </div>
         ) : (
@@ -465,7 +611,7 @@ export function AccountingPageClient({
               />
               {rooftops.length > 1 && (
                 <Select value={mappingRooftop} onValueChange={setMappingRooftop}>
-                  <SelectTrigger className="h-11 w-full sm:h-9 sm:w-56" aria-label="Rooftop">
+                  <SelectTrigger className="h-11 w-full rounded-[4px] sm:h-9 sm:w-56" aria-label="Rooftop">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -492,41 +638,55 @@ export function AccountingPageClient({
                   <p className="mt-0.5 text-muted-foreground">{mappingError}</p>
                 </Notice>
                 <Track>
-                  <Pill onClick={loadMappings}>Retry</Pill>
+                  <Pill onClick={loadMappings} className="h-10 sm:h-8">Retry</Pill>
                 </Track>
               </div>
             ) : (
-              <Panel>
-                {filteredMappings.length === 0 ? (
+              filteredMappings.length === 0 ? (
+                <Panel>
                   <p className="py-10 text-center text-sm text-muted-foreground">No mappings</p>
-                ) : (
-                  <ul className="divide-y">
+                </Panel>
+              ) : (
+                <DeskTable>
+                  <thead>
+                    <tr>
+                      <Th>Source code</Th>
+                      <Th>Debit account</Th>
+                      <Th priority={2}>Credit account</Th>
+                      {rooftops.length > 1 && <Th priority={3}>Rooftop</Th>}
+                      <Th align="right"><span className="sr-only">Actions</span></Th>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {filteredMappings.map(mapping => (
-                      <li key={mapping.id} className="flex min-w-0 flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-foreground">
-                            {SOURCE_TYPE_LABEL[mapping.sourceType] || mapping.sourceType} <Code>{mapping.sourceCode}</Code>
-                          </p>
-                          <p className="mt-0.5 break-words text-xs text-muted-foreground">
-                            Dr {mapping.debitAccount} · Cr {mapping.creditAccount}
-                            {rooftops.length > 1 && mapping.rooftop ? ` · ${mapping.rooftop.name}` : ''}
-                          </p>
-                        </div>
-                        <Track className="self-start sm:self-auto">
-                          <Pill size="sm" className="h-11 sm:h-7" onClick={() => openMappingEdit(mapping)}>
-                            <Pencil />
-                            Edit
-                          </Pill>
-                          <Pill size="sm" className="h-11 sm:h-7" onClick={() => { setDeleting(mapping); setDeleteError(null) }}>
-                            <Trash2 />
-                            Delete
-                          </Pill>
-                        </Track>
-                      </li>
+                      <Tr key={mapping.id}>
+                        <Td className="min-w-0">
+                          <p className="font-medium text-foreground">{SOURCE_TYPE_LABEL[mapping.sourceType] || mapping.sourceType}</p>
+                          <Code>{mapping.sourceCode}</Code>
+                        </Td>
+                        <Td className="break-words">
+                          {mapping.debitAccount}
+                          <p className="mt-0.5 break-words text-xs text-muted-foreground md:hidden">Cr {mapping.creditAccount}</p>
+                        </Td>
+                        <Td priority={2} className="break-words">{mapping.creditAccount}</Td>
+                        {rooftops.length > 1 && <Td priority={3} className="text-muted-foreground">{mapping.rooftop?.name || '-'}</Td>}
+                        <Td align="right">
+                          <div className="flex flex-wrap justify-end gap-2">
+                            <Pill size="sm" className="h-10 sm:h-7" onClick={() => openMappingEdit(mapping)}>
+                              <Pencil />
+                              Edit
+                            </Pill>
+                            <Pill size="sm" className="h-10 sm:h-7" onClick={() => { setDeleting(mapping); setDeleteError(null) }}>
+                              <Trash2 />
+                              Delete
+                            </Pill>
+                          </div>
+                        </Td>
+                      </Tr>
                     ))}
-                  </ul>
-                )}
-              </Panel>
+                  </tbody>
+                </DeskTable>
+              )
             )}
           </div>
         )}

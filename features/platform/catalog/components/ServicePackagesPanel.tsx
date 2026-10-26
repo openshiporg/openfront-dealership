@@ -5,7 +5,7 @@ import { Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Notice, Panel, Pill, Segmented, TitleLine, Track } from '@/features/platform/components/desk'
+import { DeskTable, Figure, Notice, Panel, Pill, Segmented, Td, Th, Tr, Track } from '@/features/platform/components/desk'
 import { formatCentsForInput, parseDollarsToCents } from '@/features/platform/deals/lib/moneyInput'
 import { cn } from '@/lib/utils'
 import { type CatalogRooftop, type CatalogServicePackage, type IncludedService, deleteServicePackage, saveServicePackage } from '../actions'
@@ -136,42 +136,55 @@ export function ServicePackagesPanel({
       </div>
       {rooftops.length === 0 && <Notice tone="warn">No rooftop available for new packages</Notice>}
 
-      <Panel className="overflow-hidden">
-        {visible.length === 0 ? (
-          <EmptyRow>{packages.length === 0 ? 'No service packages yet' : 'No packages match'}</EmptyRow>
-        ) : (
-          <ul className="divide-y">
+      {visible.length === 0 ? (
+        <Panel><EmptyRow>{packages.length === 0 ? 'No service packages yet' : 'No packages match'}</EmptyRow></Panel>
+      ) : (
+        <DeskTable aria-label="Service packages">
+          <thead>
+            <tr>
+              <Th>Package</Th>
+              {rooftops.length > 1 && <Th priority={2}>Rooftop</Th>}
+              <Th priority={3}>Included</Th>
+              <Th align="right" priority={2}>Duration</Th>
+              <Th align="right">Price</Th>
+              <Th align="right"><span className="sr-only">Actions</span></Th>
+            </tr>
+          </thead>
+          <tbody>
             {visible.map(item => {
               const included = Array.isArray(item.includedServices) ? item.includedServices : []
               return (
-                <li key={item.id} className="flex min-w-0 flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <TitleLine as="p" className="text-sm font-medium">{item.name}</TitleLine>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {[money.format(item.priceCents / 100), formatDuration(item.estimatedDuration), rooftops.length > 1 ? item.rooftop?.name : null].filter(Boolean).join(' · ')}
-                    </p>
-                    {item.description && <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{item.description}</p>}
-                    {included.length > 0 && (
-                      <ul className="mt-1.5 flex flex-wrap gap-1.5">
-                        {included.map((service, index) => <li key={index} className="rounded-full bg-muted px-2 py-0.5 text-xs">{service.service}</li>)}
-                      </ul>
-                    )}
-                  </div>
-                  <Track className="shrink-0 self-start">
-                    <Pill size="sm" className={TAP_SM} onClick={() => open(item)}>
-                      <Pencil />
-                      Edit
-                    </Pill>
-                    <Pill size="sm" className={TAP_SM} aria-label={`Delete ${item.name}`} onClick={() => { setFormError(null); setPending(item) }}>
-                      <Trash2 />
-                    </Pill>
-                  </Track>
-                </li>
+                <Tr key={item.id}>
+                  <Td className="max-w-0 min-w-[9rem]">
+                    <span className="block truncate font-medium text-foreground">{item.name}</span>
+                    {item.description && <span className="block truncate text-xs text-muted-foreground">{item.description}</span>}
+                    <span className="block truncate text-xs text-muted-foreground md:hidden">
+                      {[formatDuration(item.estimatedDuration), rooftops.length > 1 ? item.rooftop?.name : null].filter(Boolean).join(' · ')}
+                    </span>
+                  </Td>
+                  {rooftops.length > 1 && <Td priority={2} className="text-muted-foreground">{item.rooftop?.name || 'None'}</Td>}
+                  <Td priority={3} className="max-w-[16rem] text-muted-foreground">
+                    <span className="line-clamp-2">{included.length ? included.map(service => service.service).join(', ') : 'None'}</span>
+                  </Td>
+                  <Td align="right" priority={2} className="whitespace-nowrap text-muted-foreground">{formatDuration(item.estimatedDuration) || ''}</Td>
+                  <Td align="right"><Figure size="sm">{money.format(item.priceCents / 100)}</Figure></Td>
+                  <Td align="right" className="w-px whitespace-nowrap">
+                    <div className="inline-flex gap-1">
+                      <Pill size="sm" className={TAP_SM} onClick={() => open(item)}>
+                        <Pencil />
+                        Edit
+                      </Pill>
+                      <Pill size="sm" variant="plain" className={cn(TAP_SM, 'max-sm:w-11')} aria-label={`Delete ${item.name}`} onClick={() => { setFormError(null); setPending(item) }}>
+                        <Trash2 />
+                      </Pill>
+                    </div>
+                  </Td>
+                </Tr>
               )
             })}
-          </ul>
-        )}
-      </Panel>
+          </tbody>
+        </DeskTable>
+      )}
 
       <FormDialog
         open={draft !== null}

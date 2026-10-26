@@ -5,13 +5,13 @@ import * as RadioGroupPrimitive from '@radix-ui/react-radio-group'
 import { RadioGroup } from '@/components/ui/radio-group'
 import { sanitizeStoreLogoSvg } from '@/features/lib/sanitize-store-logo'
 import { StoreLogo } from '../components/StoreLogo'
-import { LogoPicker } from '../components/LogoPicker'
+import { CustomSvgEditor, LogoPicker } from '../components/LogoPicker'
 import { Save } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { DeskHeader, DeskSection, Notice, Pill, Track } from '@/features/platform/components/desk'
+import { DeskHeader, DeskSection, Notice, Pill, Status } from '@/features/platform/components/desk'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
@@ -77,7 +77,7 @@ function TimezoneSelect({ value, onChange, disabled }: { value: string; onChange
     <div className="min-w-0 space-y-1.5">
       <Label htmlFor="store-settings-timezone" className={labelClass}>Timezone</Label>
       <Select value={value || undefined} onValueChange={onChange} disabled={disabled}>
-        <SelectTrigger id="store-settings-timezone" className="w-full" aria-label="Timezone">
+        <SelectTrigger id="store-settings-timezone" className="h-10 w-full rounded-[4px]" aria-label="Timezone">
           <SelectValue placeholder={disabled ? 'Unavailable' : 'Select timezone'} />
         </SelectTrigger>
         <SelectContent className="max-h-[min(420px,var(--radix-select-content-available-height))]">
@@ -96,11 +96,15 @@ function TimezoneSelect({ value, onChange, disabled }: { value: string; onChange
   )
 }
 
-const labelClass = 'font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground'
+const labelClass = 'text-[12px] font-medium text-muted-foreground'
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function fieldId(label: string) {
+  return `store-settings-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+}
+
+function Section({ title, children, id }: { title: string; children: ReactNode; id?: string }) {
   return (
-    <DeskSection title={title}>
+    <DeskSection title={title} id={id}>
       <div className="space-y-4">{children}</div>
     </DeskSection>
   )
@@ -127,7 +131,7 @@ function Field({
   error?: string | null
   className?: string
 }) {
-  const id = `store-settings-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+  const id = fieldId(label)
   return (
     <div className="min-w-0 space-y-1.5">
       <Label htmlFor={id} className={labelClass}>{label}{required ? ' *' : ''}</Label>
@@ -135,7 +139,7 @@ function Field({
         id={id}
         type={type}
         inputMode={inputMode}
-        className={className}
+        className={`h-10 rounded-[4px] ${className ?? ''}`}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
@@ -205,24 +209,49 @@ export function StoreSettingsPageClient({
   }
 
   const invalidMark = Boolean(form.logoIcon.trim()) && !safePreviewMark
+  const [svgEditorOpen, setSvgEditorOpen] = useState(() => !LOGO_ICONS.some(icon => icon.lightSvg === (initialSettings?.logoIcon || EMPTY_SETTINGS.logoIcon)))
+  const openSvgEditor = (open: boolean) => {
+    setSvgEditorOpen(open)
+    if (open) requestAnimationFrame(() => document.getElementById('store-settings-custom-svg')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
+  }
+
+  // Needs you: the details shoppers look for first, still blank. Required ones first.
+  const missing = [
+    { label: 'Dealership name', value: form.name, required: true },
+    { label: 'Short name', value: form.shortName, required: true },
+    { label: 'Phone', value: form.phone },
+    { label: 'Sales email', value: form.salesEmail },
+    { label: 'Service email', value: form.serviceEmail },
+    { label: 'Monday–Friday', value: form.hoursMonFri, display: 'Weekday hours' },
+    { label: 'Saturday', value: form.hoursSaturday, display: 'Saturday hours' },
+    { label: 'Address line 1', value: form.addressLine1, display: 'Street address' },
+    { label: 'City', value: form.city },
+    { label: 'State', value: form.state },
+    { label: 'Postal code', value: form.postalCode },
+  ].filter(item => !item.value.trim())
 
   const saveButton = (
-    <Track>
-      <Pill variant="primary" onClick={save} disabled={isSaving || Boolean(initialError) || invalidMark || invalidDealDefaults}>
-        <Save />
-        {isSaving ? 'Saving…' : 'Save settings'}
-      </Pill>
-    </Track>
+    <Pill variant="primary" className="max-sm:h-10" onClick={save} disabled={isSaving || Boolean(initialError) || invalidMark || invalidDealDefaults}>
+      <Save />
+      {isSaving ? 'Saving…' : 'Save settings'}
+    </Pill>
   )
+
+  const stateWord = initialError ? 'Unavailable' : !initialSettings ? 'Not set up' : missing.length ? `${missing.length} details missing` : 'Set up'
+
+  const presets = [
+    ...HUE_PRESETS,
+    // A rotation saved before the presets were renamed keeps its own swatch.
+    ...(HUE_PRESETS.some(preset => String(preset.value) === form.logoColor) ? [] : [{ name: 'Current', value: Number(form.logoColor) }]),
+  ]
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto min-w-0 max-w-6xl space-y-8 px-4 py-6 md:px-6">
+      <div className="mx-auto min-w-0 max-w-5xl space-y-8 px-4 py-6 md:px-6">
         <DeskHeader
           title="Store settings"
-          tone={initialError ? 'bad' : !initialSettings ? 'warn' : 'ok'}
-          status={initialError ? 'Unavailable' : !initialSettings ? 'Not set up' : 'Set up'}
-          meta={[form.name || null, form.currencyCode || null].filter(Boolean).join(' · ') || undefined}
+          status={stateWord}
+          meta={[stateWord, form.name || null, form.currencyCode || null].filter(Boolean).join(' · ')}
           actions={saveButton}
         />
 
@@ -239,94 +268,131 @@ export function StoreSettingsPageClient({
           </Notice>
         ) : null}
 
-        <div className="grid gap-8 xl:grid-cols-2 xl:items-start">
-          <div className="min-w-0 space-y-8">
-            <Section title="Identity">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Dealership name" value={form.name} onChange={value => update('name', value)} required />
-                <Field label="Short name" value={form.shortName} onChange={value => update('shortName', value)} required />
-              </div>
-              <div className="space-y-1.5">
-                <p className={labelClass}>Logo color</p>
-                <RadioGroup value={form.logoColor} onValueChange={value => update('logoColor', value)} className="grid grid-cols-2 gap-1 rounded-2xl bg-muted p-1 shadow-[inset_0_1px_2px_rgb(0_0_0/0.08)] min-[400px]:grid-cols-3 sm:grid-cols-4 dark:bg-black/30" aria-label="Logo color">
-                  {[
-                    ...HUE_PRESETS,
-                    // A rotation saved before the presets were renamed keeps its own swatch.
-                    ...(HUE_PRESETS.some(preset => String(preset.value) === form.logoColor) ? [] : [{ name: 'Current', value: Number(form.logoColor) }]),
-                  ].map(preset => {
-                    const value = String(preset.value)
-                    const selected = form.logoColor === value
-                    return (
-                      <RadioGroupPrimitive.Item
-                        key={preset.value}
-                        value={value}
-                        aria-label={preset.name}
-                        className={`flex min-h-9 min-w-0 items-center gap-2 rounded-full px-3 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? 'bg-background font-medium text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.12)] dark:bg-zinc-800' : 'text-muted-foreground hover:text-foreground'}`}
-                      >
-                        <span aria-hidden="true" className="size-4 shrink-0 rounded-full" style={{ background: '#155eef', filter: `hue-rotate(${preset.value}deg)` }} />
-                        <span className="truncate">{preset.name}</span>
-                      </RadioGroupPrimitive.Item>
-                    )
-                  })}
-                </RadioGroup>
-              </div>
+        {!initialError && missing.length > 0 ? (
+          <DeskSection title="Missing" count={missing.length} id="store-settings-missing">
+            <ul className="flex flex-wrap gap-x-2 gap-y-2" aria-labelledby="store-settings-missing">
+              {missing.map(item => (
+                <li key={item.label}>
+                  <a
+                    href={`#${fieldId(item.label)}`}
+                    className="inline-flex min-h-10 items-center gap-2 rounded-[4px] border bg-card px-3 text-[13px] text-foreground hover:bg-muted sm:min-h-8"
+                  >
+                    {item.display || item.label}
+                    <Status tone={item.required ? 'bad' : 'warn'} className="text-[12px]">{item.required ? 'Required' : 'Blank'}</Status>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </DeskSection>
+        ) : null}
 
-              <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start">
-                <div className="min-w-0 flex-1">
-                  <LogoPicker value={form.logoIcon} hue={form.logoColor} onChange={value => update('logoIcon', value)} />
+        <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
+          <Section title="Dealership">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Dealership name" value={form.name} onChange={value => update('name', value)} required />
+              <Field label="Short name" value={form.shortName} onChange={value => update('shortName', value)} required />
+            </div>
+          </Section>
+
+          <Section title="Contact">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Phone" type="tel" value={form.phone} onChange={value => update('phone', value)} />
+              <Field label="Sales email" type="email" value={form.salesEmail} onChange={value => update('salesEmail', value)} />
+              <Field label="Service email" type="email" value={form.serviceEmail} onChange={value => update('serviceEmail', value)} />
+              <Field label="Website URL" type="url" value={form.websiteUrl} onChange={value => update('websiteUrl', value)} placeholder="https://example.com" />
+            </div>
+          </Section>
+
+          <Section title="Hours">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Monday–Friday" value={form.hoursMonFri} onChange={value => update('hoursMonFri', value)} />
+              <Field label="Saturday" value={form.hoursSaturday} onChange={value => update('hoursSaturday', value)} />
+              <Field label="Sunday" value={form.hoursSunday} onChange={value => update('hoursSunday', value)} />
+            </div>
+          </Section>
+
+          <Section title="Address">
+            <Field label="Address line 1" value={form.addressLine1} onChange={value => update('addressLine1', value)} />
+            <Field label="Address line 2" value={form.addressLine2} onChange={value => update('addressLine2', value)} />
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="City" value={form.city} onChange={value => update('city', value)} />
+              <Field label="State" value={form.state} onChange={value => update('state', value)} />
+              <Field label="Postal code" value={form.postalCode} onChange={value => update('postalCode', value)} />
+            </div>
+            <div className="sm:max-w-sm">
+              <TimezoneSelect value={form.timezone} onChange={value => update('timezone', value)} disabled={Boolean(initialSettings) && !initialSettings?.timezone} />
+            </div>
+          </Section>
+        </div>
+
+        <Section title="Branding">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+            <div className="min-w-0 space-y-1.5">
+              <p className={labelClass} id="store-settings-logo-color">Logo color</p>
+              <RadioGroup
+                value={form.logoColor}
+                onValueChange={value => update('logoColor', value)}
+                className="grid grid-cols-2 gap-1.5 min-[400px]:grid-cols-3 sm:grid-cols-4"
+                aria-labelledby="store-settings-logo-color"
+                aria-label="Logo color"
+              >
+                {presets.map(preset => {
+                  const value = String(preset.value)
+                  const selected = form.logoColor === value
+                  return (
+                    <RadioGroupPrimitive.Item
+                      key={preset.value}
+                      value={value}
+                      aria-label={preset.name}
+                      className={`flex min-h-10 min-w-0 items-center gap-2 rounded-[4px] border px-2.5 text-[13px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9 ${selected ? 'border-foreground bg-background font-medium text-foreground' : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+                    >
+                      <span aria-hidden="true" className="size-4 shrink-0 rounded-[4px]" style={{ background: '#155eef', filter: `hue-rotate(${preset.value}deg)` }} />
+                      <span className="truncate">{preset.name}</span>
+                    </RadioGroupPrimitive.Item>
+                  )
+                })}
+              </RadioGroup>
+            </div>
+
+            <div className="flex min-w-0 flex-col gap-4">
+              <LogoPicker
+                value={form.logoIcon}
+                hue={form.logoColor}
+                onChange={value => update('logoIcon', value)}
+                editing={svgEditorOpen}
+                onEditingChange={openSvgEditor}
+              />
+              {safePreviewMark ? (
+                <div aria-label="Logo" className="flex items-center gap-3 self-start rounded-md border bg-card p-3">
+                  <StoreLogo svg={safePreviewMark} color={form.logoColor} className="size-10" />
+                  {(form.shortName || form.name) && <span className="text-sm font-semibold">{form.shortName || form.name}</span>}
                 </div>
-                {safePreviewMark ? (
-                  <div aria-label="Logo" className="flex shrink-0 items-center gap-3 self-start rounded-xl border bg-card p-3">
-                    <StoreLogo svg={safePreviewMark} color={form.logoColor} className="size-10" />
-                    {(form.shortName || form.name) && <span className="text-sm font-semibold">{form.shortName || form.name}</span>}
-                  </div>
-                ) : null}
-              </div>
-              {invalidMark ? <Notice tone="bad">Invalid or unsupported SVG.</Notice> : null}
-            </Section>
-
-            <Section title="Contact">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Sales email" type="email" value={form.salesEmail} onChange={value => update('salesEmail', value)} />
-                <Field label="Service email" type="email" value={form.serviceEmail} onChange={value => update('serviceEmail', value)} />
-                <Field label="Phone" type="tel" value={form.phone} onChange={value => update('phone', value)} />
-                <Field label="Website URL" type="url" value={form.websiteUrl} onChange={value => update('websiteUrl', value)} placeholder="https://example.com" />
-              </div>
-            </Section>
-
-            <Section title="Location">
-              <Field label="Address line 1" value={form.addressLine1} onChange={value => update('addressLine1', value)} />
-              <Field label="Address line 2" value={form.addressLine2} onChange={value => update('addressLine2', value)} />
-              <div className="grid gap-4 sm:grid-cols-3">
-                <Field label="City" value={form.city} onChange={value => update('city', value)} />
-                <Field label="State" value={form.state} onChange={value => update('state', value)} />
-                <Field label="Postal code" value={form.postalCode} onChange={value => update('postalCode', value)} />
-              </div>
-              <div className="sm:max-w-sm">
-                <TimezoneSelect value={form.timezone} onChange={value => update('timezone', value)} disabled={Boolean(initialSettings) && !initialSettings?.timezone} />
-              </div>
-            </Section>
+              ) : null}
+            </div>
           </div>
+          {invalidMark ? <Notice tone="bad">Invalid or unsupported SVG.</Notice> : null}
+        </Section>
+
+        <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
+          <Section title="Storefront">
+            <Field label="Homepage title" value={form.homepageTitle} onChange={value => update('homepageTitle', value)} placeholder="Inventory and service" />
+            <div className="space-y-1.5">
+              <Label htmlFor="store-settings-homepage-description" className={labelClass}>Description</Label>
+              <Textarea
+                id="store-settings-homepage-description"
+                className="rounded-[4px]"
+                value={form.homepageDescription}
+                onChange={event => update('homepageDescription', event.target.value)}
+                maxLength={1000}
+              />
+            </div>
+          </Section>
 
           <div className="min-w-0 space-y-8">
-            <Section title="Hours">
-              <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
-                <Field label="Monday–Friday" value={form.hoursMonFri} onChange={value => update('hoursMonFri', value)} />
-                <Field label="Saturday" value={form.hoursSaturday} onChange={value => update('hoursSaturday', value)} />
-                <Field label="Sunday" value={form.hoursSunday} onChange={value => update('hoursSunday', value)} />
-              </div>
-            </Section>
-
-            <Section title="Storefront">
-              <Field label="Homepage title" value={form.homepageTitle} onChange={value => update('homepageTitle', value)} placeholder="Inventory and service" />
-              <div className="space-y-1.5">
-                <Label htmlFor="store-settings-homepage-description" className={labelClass}>Description</Label>
-                <Textarea
-                  id="store-settings-homepage-description"
-                  value={form.homepageDescription}
-                  onChange={event => update('homepageDescription', event.target.value)}
-                  maxLength={1000}
-                />
+            <Section title="Deal defaults">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Sales tax rate (%)" inputMode="decimal" className="text-right tabular-nums" value={taxRateText} onChange={setTaxRateText} placeholder="0" error={salesTaxRateBps === null ? TAX_RATE_ERROR : null} />
+                <Field label="Documentation fee ($)" inputMode="decimal" className="text-right tabular-nums" value={docFeeText} onChange={setDocFeeText} placeholder="0" error={docFeeCents === null ? DOC_FEE_ERROR : null} />
               </div>
             </Section>
 
@@ -335,15 +401,20 @@ export function StoreSettingsPageClient({
                 <Field label="Currency code" value={form.currencyCode} onChange={value => update('currencyCode', value.toUpperCase())} required />
               </div>
             </Section>
-
-            <Section title="Deal defaults">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Sales tax rate (%)" inputMode="decimal" className="text-right tabular-nums" value={taxRateText} onChange={setTaxRateText} placeholder="0" error={salesTaxRateBps === null ? TAX_RATE_ERROR : null} />
-                <Field label="Documentation fee ($)" inputMode="decimal" className="text-right tabular-nums" value={docFeeText} onChange={setDocFeeText} placeholder="0" error={docFeeCents === null ? DOC_FEE_ERROR : null} />
-              </div>
-            </Section>
           </div>
         </div>
+
+        {svgEditorOpen ? (
+          <Section title="Custom logo SVG">
+            <CustomSvgEditor
+              key={form.logoIcon}
+              value={form.logoIcon}
+              hue={form.logoColor}
+              onChange={value => update('logoIcon', value)}
+              onClose={() => setSvgEditorOpen(false)}
+            />
+          </Section>
+        ) : null}
 
         <div className="flex justify-end border-t pt-4">{saveButton}</div>
       </div>

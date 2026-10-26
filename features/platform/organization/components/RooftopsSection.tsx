@@ -4,7 +4,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { Pencil, Plus, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Code, Notice, Panel, Pill, Segmented, TitleLine, Track } from '@/features/platform/components/desk'
+import { Code, DeskTable, Notice, Panel, Pill, Segmented, Status, Td, Th, Tr, Track } from '@/features/platform/components/desk'
 import { createRooftop, updateRooftop } from '../actions'
 import { SLUG_PATTERN, US_TIME_ZONES, isValidTimeZone } from '../lib/permissions'
 import type { DealerGroup, RecordStatus, Rooftop, Viewer } from '../lib/types'
@@ -158,35 +158,51 @@ export function RooftopsSection({
           )}
         </Panel>
       ) : (
-        <Panel className="divide-y">
-          {visible.map(rooftop => {
-            const state = RECORD_STATUS[rooftop.status] || RECORD_STATUS.active
-            const transitions: RecordStatus[] = rooftop.status === 'active' ? ['suspended', 'archived'] : rooftop.status === 'suspended' ? ['active', 'archived'] : ['active']
-            return (
-              <div key={rooftop.id} className="flex min-w-0 flex-col gap-3 px-4 py-3 md:flex-row md:items-start md:justify-between">
-                <div className="min-w-0">
-                  <TitleLine as="p" tone={state.tone} status={state.label} className="text-sm font-medium">
-                    {rooftop.name} <Code>{rooftop.code}</Code>
-                  </TitleLine>
-                  <p className="break-words pl-4 text-xs text-muted-foreground">
-                    {state.label} · {rooftop.dealerGroup?.name || 'No group'} · /{rooftop.publicSlug} · {timeZoneLabel(rooftop.timezone)} · {rooftop.currencyCode} · {rooftop.membershipsCount ?? 0} members
-                  </p>
-                </div>
-                <Track className="self-end md:self-auto">
-                  {transitions.map(status => (
-                    <Pill key={status} size="sm" className="h-11 sm:h-7" disabled={!canManage} title={lockedReason} onClick={() => { setError(null); setStatusChange({ rooftop, status }) }}>
-                      {verb(status)}
-                    </Pill>
-                  ))}
-                  <Pill size="sm" className="h-11 sm:h-7" disabled={!canManage} title={lockedReason} onClick={() => openEdit(rooftop)} aria-label={`Edit ${rooftop.name}`}>
-                    <Pencil />
-                    Edit
-                  </Pill>
-                </Track>
-              </div>
-            )
-          })}
-        </Panel>
+        <DeskTable aria-label="Rooftops">
+          <thead>
+            <tr>
+              <Th>Rooftop</Th>
+              <Th priority={2}>Group</Th>
+              <Th priority={3}>Storefront</Th>
+              <Th priority={3}>Time zone</Th>
+              <Th>Status</Th>
+              <Th align="right" priority={2}>Members</Th>
+              <Th align="right"><span className="sr-only">Actions</span></Th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map(rooftop => {
+              const state = RECORD_STATUS[rooftop.status] || RECORD_STATUS.active
+              const transitions: RecordStatus[] = rooftop.status === 'active' ? ['suspended', 'archived'] : rooftop.status === 'suspended' ? ['active', 'archived'] : ['active']
+              return (
+                <Tr key={rooftop.id}>
+                  <Td className="max-w-0 min-w-[9rem]">
+                    <span className="block truncate font-medium text-foreground">{rooftop.name}</span>
+                    <span className="block truncate"><Code>{rooftop.code}</Code> <span className="text-xs text-muted-foreground">· {rooftop.currencyCode}</span></span>
+                  </Td>
+                  <Td priority={2} className="text-muted-foreground">{rooftop.dealerGroup?.name || 'No group'}</Td>
+                  <Td priority={3}><Code>/{rooftop.publicSlug}</Code></Td>
+                  <Td priority={3} className="whitespace-nowrap text-muted-foreground">{timeZoneLabel(rooftop.timezone)}</Td>
+                  <Td><Status tone={state.tone}>{state.label}</Status></Td>
+                  <Td align="right" priority={2}>{rooftop.membershipsCount ?? 0}</Td>
+                  <Td align="right" className="w-px whitespace-nowrap">
+                    <div className="inline-flex flex-wrap justify-end gap-1">
+                      {transitions.map(status => (
+                        <Pill key={status} size="sm" className="h-11 sm:h-7" disabled={!canManage} title={lockedReason} onClick={() => { setError(null); setStatusChange({ rooftop, status }) }}>
+                          {verb(status)}
+                        </Pill>
+                      ))}
+                      <Pill size="sm" className="h-11 sm:h-7" disabled={!canManage} title={lockedReason} onClick={() => openEdit(rooftop)} aria-label={`Edit ${rooftop.name}`}>
+                        <Pencil />
+                        Edit
+                      </Pill>
+                    </div>
+                  </Td>
+                </Tr>
+              )
+            })}
+          </tbody>
+        </DeskTable>
       )}
 
       <FormDialog

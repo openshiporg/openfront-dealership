@@ -10,7 +10,7 @@ import { Code, DeskHeader, DeskSection, Facts, Notice, Panel, Pill, TitleLine, T
 import { OperatorActionDialog } from '@/features/platform/components/OperatorActionDialog'
 import { formatPhone, recordReference } from '@/features/platform/lib/format'
 import type { CrmViewer } from '@/features/platform/crm/actions'
-import { VISIT_STATUSES, formatDateTime, formatDay, leadStatus, personName, sourceLabel } from '@/features/platform/crm/lib/leadOptions'
+import { CLOSED_LEAD_STATUSES, VISIT_STATUSES, formatDateTime, formatDay, leadStatus, personName, sourceLabel } from '@/features/platform/crm/lib/leadOptions'
 import {
   getCustomer,
   getDuplicateCandidates,
@@ -141,9 +141,9 @@ export function CustomerDetailPageClient({
     return (
       <PageContainer title="Customers" breadcrumbs={breadcrumbs}>
         <div className="space-y-3 px-4 pb-24 md:px-6" role="status" aria-label="Loading customer">
-          <div className="h-7 w-56 max-w-full animate-pulse rounded bg-muted" />
-          <div className="h-4 w-72 max-w-full animate-pulse rounded bg-muted" />
-          <div className="h-48 animate-pulse rounded-xl bg-muted" />
+          <div className="h-7 w-56 max-w-full animate-pulse rounded-[2px] bg-muted" />
+          <div className="h-4 w-72 max-w-full animate-pulse rounded-[2px] bg-muted" />
+          <div className="h-48 animate-pulse rounded-md bg-muted" />
         </div>
       </PageContainer>
     )
@@ -169,6 +169,7 @@ export function CustomerDetailPageClient({
   const disabledReason = merged ? 'Merged customers are read only' : canManage ? undefined : 'Requires lead management permission'
   const canAct = canManage && !merged
   const leads = customer.leads
+  const openLeadCount = leads.filter(lead => !CLOSED_LEAD_STATUSES.includes(lead.status || '')).length
   const deals = leads.flatMap(lead => lead.deals.map(deal => ({ ...deal, lead })))
   const testDrives = leads.flatMap(lead => lead.testDrives.map(drive => ({ ...drive, lead })))
   const tradeIns = leads.flatMap(lead => lead.tradeIns.map(tradeIn => ({ ...tradeIn, lead })))
@@ -256,14 +257,14 @@ export function CustomerDetailPageClient({
       title={name}
       tone={merged ? 'idle' : 'ok'}
       status={merged ? 'Merged' : 'Active'}
-      meta={<span>{merged ? 'Merged' : 'Active'}{customer.rooftop?.name ? ` · ${customer.rooftop.name}` : ''} · Customer since {formatDay(customer.createdAt, timeZone)} · <Code>{recordReference('CUS', customer.id)}</Code></span>}
+      meta={<span>{merged ? 'Merged' : 'Active'} · {openLeadCount} open lead{openLeadCount === 1 ? '' : 's'}{customer.rooftop?.name ? ` · ${customer.rooftop.name}` : ''} · Customer since {formatDay(customer.createdAt, timeZone)} · <Code>{recordReference('CUS', customer.id)}</Code></span>}
       actions={
-        <Track>
-          {customer.primaryPhone && <Pill asChild><a href={`tel:${customer.primaryPhone}`}><Phone />Call</a></Pill>}
-          {customer.primaryEmail && <Pill asChild><a href={`mailto:${customer.primaryEmail}`}><Mail />Email</a></Pill>}
-          <Pill onClick={() => { keyFor('customer-contact', true); setContactOpen(true) }} disabled={!canAct} title={disabledReason}><Pencil />Edit contact</Pill>
-          <Pill onClick={() => load()} aria-label="Refresh"><RefreshCw /></Pill>
-        </Track>
+        <>
+          <Pill variant="plain" className="max-md:h-10" onClick={() => load()} aria-label="Refresh"><RefreshCw /></Pill>
+          <Pill variant={!customer.primaryPhone && !customer.primaryEmail ? 'primary' : 'raised'} className="max-md:h-10" onClick={() => { keyFor('customer-contact', true); setContactOpen(true) }} disabled={!canAct} title={disabledReason}><Pencil />Edit contact</Pill>
+          {customer.primaryEmail && <Pill asChild className="max-md:h-10" variant={customer.primaryPhone ? 'raised' : 'primary'}><a href={`mailto:${customer.primaryEmail}`}><Mail />Email</a></Pill>}
+          {customer.primaryPhone && <Pill asChild className="max-md:h-10" variant="primary"><a href={`tel:${customer.primaryPhone}`}><Phone />Call</a></Pill>}
+        </>
       }
     />
   )
@@ -284,6 +285,21 @@ export function CustomerDetailPageClient({
         )}
         {notice && <Notice tone={notice.tone} className="mb-4">{notice.text}</Notice>}
         {!canManage && <p className="mb-4 text-xs text-muted-foreground">Read only · requires lead management permission</p>}
+
+        <DeskSection title="Contact" id="customer-contact" className="mb-8">
+          <div className="grid min-w-0 grid-cols-1 gap-x-8 md:grid-cols-2">
+            <Facts items={[
+              { label: 'Phone', value: customer.primaryPhone ? <a className="underline-offset-2 hover:underline" href={`tel:${customer.primaryPhone}`}>{formatPhone(customer.primaryPhone)}</a> : '-' },
+              { label: 'Email', value: customer.primaryEmail ? <a className="break-all underline-offset-2 hover:underline" href={`mailto:${customer.primaryEmail}`}>{customer.primaryEmail}</a> : '-' },
+              { label: 'Preferred', value: <span className="capitalize">{customer.preferredChannel && customer.preferredChannel !== 'none' ? (customer.preferredChannel === 'sms' ? 'SMS' : customer.preferredChannel) : 'None'}</span> },
+            ]} />
+            <Facts items={[
+              { label: 'Name', value: name },
+              { label: 'Household', value: customer.household?.displayName || 'None' },
+              { label: 'Updated', value: formatDateTime(customer.updatedAt, timeZone) },
+            ]} />
+          </div>
+        </DeskSection>
 
         <div className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="min-w-0 space-y-8">
@@ -335,7 +351,7 @@ export function CustomerDetailPageClient({
                     return (
                       <div key={drive.id} className="flex min-w-0 items-baseline justify-between gap-3 px-4 py-2.5">
                         <TitleLine as="p" tone={drive.completed ? 'ok' : drive.noShow ? 'bad' : 'info'} status={state} className="text-sm">{vehicleName(drive.vehicle)}</TitleLine>
-                        <span className="shrink-0 text-right text-xs text-muted-foreground"><span className="font-mono tabular-nums">{formatDateTime(drive.scheduledTime, timeZone)}</span> · {state}</span>
+                        <span className="shrink-0 text-right text-xs text-muted-foreground"><span className="tabular-nums">{formatDateTime(drive.scheduledTime, timeZone)}</span> · {state}</span>
                       </div>
                     )
                   })}
@@ -371,7 +387,7 @@ export function CustomerDetailPageClient({
                         <TitleLine as="p" tone={SERVICE_TONE[appointment.status || ''] ?? 'idle'} status={appointment.status || undefined} className="text-sm font-medium capitalize">
                           {label(appointment.serviceType)} · {appointment.customerVehicleDescription || 'Vehicle'}
                         </TitleLine>
-                        <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{formatDateTime(appointment.appointmentDate, timeZone)}</span>
+                        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatDateTime(appointment.appointmentDate, timeZone)}</span>
                       </div>
                       <p className="pl-4 text-xs capitalize text-muted-foreground">{label(appointment.status)}</p>
                       {appointment.serviceOrder && (
@@ -402,7 +418,7 @@ export function CustomerDetailPageClient({
                           <p className="pl-4 text-xs text-muted-foreground">{[visit.vehicle ? vehicleName(visit.vehicle) : null, visit.outcome ? `Outcome: ${label(visit.outcome)}` : null].filter(Boolean).join(' · ') || '-'}</p>
                         </div>
                         <div className="shrink-0 text-right text-xs">
-                          <p className="font-mono tabular-nums text-muted-foreground">{formatDateTime(visit.completedAt || visit.scheduledAt, timeZone)}</p>
+                          <p className="tabular-nums text-muted-foreground">{formatDateTime(visit.completedAt || visit.scheduledAt, timeZone)}</p>
                           {visit.lead && leadLink({ id: visit.lead.id, firstName: null, lastName: null }, 'Lead')}
                         </div>
                       </div>
@@ -414,15 +430,6 @@ export function CustomerDetailPageClient({
           </div>
 
           <div className="min-w-0 space-y-8">
-            <DeskSection title="Contact">
-              <Facts items={[
-                { label: 'Name', value: name },
-                { label: 'Email', value: customer.primaryEmail || '-' },
-                { label: 'Phone', value: formatPhone(customer.primaryPhone) || '-', mono: true },
-                { label: 'Updated', value: formatDateTime(customer.updatedAt, timeZone), mono: true },
-              ]} />
-            </DeskSection>
-
             <DeskSection
               title="Household"
               actions={
@@ -499,12 +506,12 @@ export function CustomerDetailPageClient({
                 { label: 'Preferred', value: <span className="capitalize">{customer.preferredChannel && customer.preferredChannel !== 'none' ? (customer.preferredChannel === 'sms' ? 'SMS' : customer.preferredChannel) : 'None'}</span> },
                 ...(customer.suppressionReason ? [{ label: 'Suppression', value: <span>{customer.suppressionReason}</span> }] : []),
               ])} />
-              <p className="mt-4 font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">History</p>
+              <p className="mt-4 text-[12px] font-medium text-muted-foreground">History</p>
               {customer.contactPreferenceEvents.length === 0 ? <p className="mt-1 text-sm text-muted-foreground">No changes</p> : (
                 <ol className="mt-2 space-y-0">
                   {customer.contactPreferenceEvents.map(event => (
                     <li key={event.id} className="relative border-l pb-3 pl-4 last:pb-0">
-                      <span className="absolute -left-[4px] top-1.5 size-2 rounded-full bg-muted-foreground/50" aria-hidden="true" />
+                      <span className="absolute -left-[4px] top-1.5 size-2 rounded-[1px] bg-muted-foreground/50" aria-hidden="true" />
                       <p className="text-sm">{sourceName(event.source)}</p>
                       <p className="text-xs text-muted-foreground">{[formatDateTime(event.occurredAt, timeZone), event.actor?.name].filter(Boolean).join(' · ')}</p>
                       {event.reason && <p className="break-words text-xs">{event.reason}</p>}
@@ -523,7 +530,7 @@ export function CustomerDetailPageClient({
                     const other = asSurvivor ? event.duplicate : event.survivor
                     return (
                       <li key={event.id} className="relative border-l pb-3 pl-4 last:pb-0">
-                        <span className="absolute -left-[4px] top-1.5 size-2 rounded-full bg-muted-foreground/50" aria-hidden="true" />
+                        <span className="absolute -left-[4px] top-1.5 size-2 rounded-[1px] bg-muted-foreground/50" aria-hidden="true" />
                         <p className="text-sm">
                           {asSurvivor ? 'Absorbed ' : 'Merged into '}
                           {other ? <Link href={`${basePath}/platform/customers/${other.id}`} className="underline underline-offset-2">{personName(other.firstName, other.lastName)}</Link> : 'customer'}

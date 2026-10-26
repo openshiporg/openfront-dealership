@@ -2,41 +2,47 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ArrowRight, RefreshCw } from 'lucide-react'
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
 import {
+  Attention,
   DeskHeader,
   DeskSection,
+  DeskTable,
+  Figure,
   Meter,
   Notice,
-  Panel,
   Pill,
   Readout,
   ReadoutStrip,
-  TitleLine,
-  Track,
+  Status,
+  Td,
+  Th,
+  Tr,
   type DeskTone,
 } from '@/features/platform/components/desk'
 import { getOperationalReport, type OperationalReport, type PeriodMetric } from '../actions'
 import { useHydrated } from '../../lib/useHydrated'
 import { monthLabel } from '../../analytics/lib/monthLabel'
+import { HairlineChart } from '../../analytics/components/HairlineChart'
 
-const chartConfig = {
-  revenue: { label: 'Delivered revenue', color: 'var(--foreground)' },
-}
+const DAY_MS = 86_400_000
+/** Same threshold the deal desk uses: a pencil or submitted deal is stale after two days. */
+const DESK_STALE_DAYS = 2
+/** Same threshold the inventory list uses: an available unit is aging past 60 days. */
+const AGED_UNIT_DAYS = 60
 
-const statusLabels: Record<string, string> = {
-  new: 'New',
-  contacted: 'Contacted',
-  'test-drive-scheduled': 'Test drive',
-  negotiating: 'Negotiating',
-  'closed-won': 'Closed won',
-  'closed-lost': 'Closed lost',
-}
+const leadStages: Array<{ value: string; label: string }> = [
+  { value: 'new', label: 'New' },
+  { value: 'contacted', label: 'Contacted' },
+  { value: 'test-drive-scheduled', label: 'Test drive' },
+  { value: 'negotiating', label: 'Negotiating' },
+  { value: 'closed-won', label: 'Closed won' },
+  { value: 'closed-lost', label: 'Closed lost' },
+]
 
 const dealTone: Record<string, DeskTone> = {
   pencil: 'idle',
@@ -45,6 +51,29 @@ const dealTone: Record<string, DeskTone> = {
   financed: 'info',
   delivered: 'ok',
   cancelled: 'bad',
+}
+
+const dealLabel: Record<string, string> = {
+  pencil: 'Pencil',
+  submitted: 'Submitted',
+  approved: 'Approved',
+  financed: 'Financed',
+  delivered: 'Delivered',
+  cancelled: 'Cancelled',
+}
+
+type QueueItem = {
+  key: string
+  label: string
+  detail?: string
+  count: number
+  figure?: string
+  status: string
+  tone: DeskTone
+  attention: boolean
+  href: string
+  place: string
+  also?: { href: string; label: string }
 }
 
 function formatDate(value: string) {
@@ -62,6 +91,54 @@ function comparisonTone(metric: PeriodMetric): DeskTone | undefined {
   return metric.direction === 'up' ? 'ok' : metric.direction === 'down' ? 'bad' : 'idle'
 }
 
+function plural(count: number, one: string, many = `${one}s`) {
+  return count === 1 ? one : many
+}
+
+/** One queue row: the whole row opens the page that holds the work; an optional second link sits above it. */
+function QueueRow({ item }: { item: QueueItem }) {
+  return (
+    <li className="relative grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-0.5 px-4 py-2.5 transition-colors hover:bg-muted/40 has-[a:focus-visible]:bg-muted/40 sm:grid-cols-[7.5rem_minmax(0,1fr)_5rem_8rem]">
+      <span className="max-sm:hidden">
+        <Status tone={item.tone}>{item.status}</Status>
+      </span>
+      <span className="min-w-0">
+        <Link
+          href={item.href}
+          className="block truncate text-[14px] font-medium text-foreground after:absolute after:inset-0 focus-visible:outline-none"
+        >
+          {item.label}
+        </Link>
+        <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 text-[12px] text-muted-foreground">
+          <span className="sm:hidden">
+            <Status tone={item.tone} className="text-[12px]">{item.status}</Status>
+          </span>
+          {item.detail && <span className="truncate">{item.detail}</span>}
+          {item.also && (
+            <Link href={item.also.href} className="relative z-[1] py-1 font-medium text-foreground underline underline-offset-4 sm:hidden">
+              {item.also.label}
+            </Link>
+          )}
+        </span>
+      </span>
+      <span className="text-right max-sm:col-start-2 max-sm:row-start-1 max-sm:row-span-2">
+        <Figure size="md" attention={item.attention}>{item.figure ?? item.count}</Figure>
+      </span>
+      <span className="flex items-center justify-end gap-3 text-[12px] max-sm:hidden">
+        {item.also && (
+          <Link href={item.also.href} className="relative z-[1] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+            {item.also.label}
+          </Link>
+        )}
+        <span className="inline-flex items-center gap-1 font-medium text-foreground">
+          {item.place}
+          <ArrowRight className="size-3.5" aria-hidden="true" />
+        </span>
+      </span>
+    </li>
+  )
+}
+
 export function OverviewDashboardPageClient({
   initialReport,
   initialCurrencyCode,
@@ -72,6 +149,7 @@ export function OverviewDashboardPageClient({
   initialError: string | null
 }) {
   const hydrated = useHydrated()
+  const router = useRouter()
   const [report, setReport] = useState<OperationalReport | null>(initialReport)
   const [currencyCode, setCurrencyCode] = useState(initialCurrencyCode)
   const [loading, setLoading] = useState(false)
@@ -99,38 +177,195 @@ export function OverviewDashboardPageClient({
     { type: 'page' as const, label: 'Overview' },
   ]
 
+  const platform = `${basePath}/platform`
+  const metrics = report?.metrics
   const exceptions = report?.exceptions.total ?? 0
+
+  // Work queue, built only from counts the operational report returns. Each row opens the page that lists the records.
+  const reportNow = report ? new Date(report.generatedAt).getTime() : 0
+  const pendingRecent = (metrics?.recentDeals ?? []).filter(deal => deal.status === 'pencil' || deal.status === 'submitted')
+  const ageInDays = (value: string) => Math.max(0, Math.floor((reportNow - new Date(value).getTime()) / DAY_MS))
+  const staleDesk = pendingRecent.some(deal => ageInDays(deal.occurredAt) >= DESK_STALE_DAYS)
+  const orderCount = (status: string) => metrics?.service.ordersByStatus.find(item => item.label === status)?.count ?? 0
+  const newLeads = metrics?.salesFunnel.find(stage => stage.label === 'new')?.count ?? 0
+  const averageAge = Math.round(metrics?.inventory.averageAgeDays ?? 0)
+  const unitsAging = (metrics?.inventory.available ?? 0) > 0 && averageAge > AGED_UNIT_DAYS
+
+  const queue: QueueItem[] = metrics && report
+    ? [
+        {
+          key: 'today',
+          label: 'Appointments and test drives today',
+          detail: 'Service appointments and scheduled test drives',
+          count: metrics.todayAppointments,
+          status: 'Today',
+          tone: 'info',
+          attention: false,
+          href: `${platform}/service`,
+          place: 'Service',
+          also: { href: `${platform}/test-drives`, label: 'Test drives' },
+        },
+        {
+          key: 'desk',
+          label: 'Deals on the desk',
+          detail: staleDesk ? `Pencil or submitted · some waiting ${DESK_STALE_DAYS}+ days` : 'Pencil or submitted',
+          count: metrics.pendingDeals,
+          status: 'Waiting',
+          tone: 'warn',
+          attention: staleDesk,
+          href: `${platform}/deals`,
+          place: 'Deals',
+        },
+        {
+          key: 'leads',
+          label: 'New leads not yet contacted',
+          detail: 'Lead status New',
+          count: newLeads,
+          status: 'New',
+          tone: 'info',
+          attention: false,
+          href: `${platform}/crm`,
+          place: 'CRM',
+          also: { href: `${platform}/crm/tasks`, label: 'Tasks' },
+        },
+        {
+          key: 'ro-estimate',
+          label: 'Estimates awaiting approval',
+          detail: 'Repair orders in Estimate',
+          count: orderCount('estimate'),
+          status: 'Estimate',
+          tone: 'warn',
+          attention: false,
+          href: `${platform}/service`,
+          place: 'Service',
+        },
+        {
+          key: 'ro-approved',
+          label: 'Approved repair orders not started',
+          detail: 'Repair orders in Approved',
+          count: orderCount('approved'),
+          status: 'Approved',
+          tone: 'info',
+          attention: false,
+          href: `${platform}/service`,
+          place: 'Service',
+        },
+        {
+          key: 'ro-progress',
+          label: 'Repair orders in the shop',
+          detail: 'Repair orders in progress',
+          count: orderCount('in-progress'),
+          status: 'In progress',
+          tone: 'info',
+          attention: false,
+          href: `${platform}/service`,
+          place: 'Service',
+        },
+        {
+          key: 'ro-completed',
+          label: 'Completed repair orders not invoiced',
+          detail: 'Repair orders in Completed',
+          count: orderCount('completed'),
+          status: 'To invoice',
+          tone: 'warn',
+          attention: false,
+          href: `${platform}/service`,
+          place: 'Service',
+        },
+        {
+          key: 'funding',
+          label: 'Contracts with a funding exception',
+          detail: 'Funding cases in Exception',
+          count: report.exceptions.funding,
+          status: 'Exception',
+          tone: 'bad',
+          attention: true,
+          href: `${platform}/finance`,
+          place: 'Finance',
+        },
+        {
+          key: 'payments',
+          label: 'Payments failed or stuck creating',
+          detail: 'Payment transactions in Failed or Creating',
+          count: report.exceptions.payments,
+          status: 'Exception',
+          tone: 'bad',
+          attention: true,
+          href: `${platform}/payments`,
+          place: 'Payments',
+        },
+        {
+          key: 'accounting',
+          label: 'Accounting batches failed or posting',
+          detail: 'Journal batches in Failed or Posting',
+          count: report.exceptions.accounting,
+          status: 'Exception',
+          tone: 'bad',
+          attention: true,
+          href: `${platform}/accounting`,
+          place: 'Accounting',
+        },
+        {
+          key: 'parts',
+          label: 'Parts at or below minimum',
+          detail: 'On hand less committed, at or under the minimum',
+          count: metrics.parts?.lowStockCount ?? 0,
+          status: 'Low stock',
+          tone: 'warn',
+          attention: true,
+          href: `${platform}/parts`,
+          place: 'Parts',
+        },
+      ]
+    : []
+  if (metrics && unitsAging) {
+    queue.push({
+      key: 'aged',
+      label: `Units in stock averaging over ${AGED_UNIT_DAYS} days`,
+      detail: `${metrics.inventory.available} ${plural(metrics.inventory.available, 'unit')} available`,
+      count: averageAge,
+      figure: `${averageAge}d`,
+      status: 'Aged',
+      tone: 'warn',
+      attention: true,
+      href: `${platform}/vehicles`,
+      place: 'Inventory',
+    })
+  }
+  const waiting = queue.filter(item => item.count > 0)
+  const clear = queue.filter(item => item.count === 0)
 
   const header = (
     <DeskHeader
       title="Overview"
-      tone={report ? (exceptions > 0 ? 'warn' : 'ok') : 'bad'}
-      status={report ? (exceptions > 0 ? `${exceptions} open exceptions` : 'No open exceptions') : 'Unavailable'}
+      tone={report ? (waiting.length > 0 ? 'warn' : 'ok') : 'bad'}
+      status={report ? (waiting.length > 0 ? `${waiting.length} waiting` : 'Nothing waiting') : 'Unavailable'}
       meta={
-        report
-          ? hydrated
-            ? `30 days to ${formatDate(report.metrics.period.generatedAt)} · Updated ${new Date(report.generatedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
-            : '30 days'
-          : 'Unavailable'
+        report ? (
+          <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className="font-medium text-foreground">{waiting.length > 0 ? `${waiting.length} ${plural(waiting.length, 'item')} need you` : 'Nothing waiting'}</span>
+            {hydrated && <span>Updated {new Date(report.generatedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>}
+          </span>
+        ) : 'Unavailable'
       }
       actions={
-        <Track>
-          <Pill onClick={loadDashboardData} disabled={loading} aria-label="Refresh">
+        <>
+          <Pill variant="plain" onClick={loadDashboardData} disabled={loading} aria-label="Refresh" className="h-10 sm:h-8">
             <RefreshCw className={loading ? 'animate-spin' : undefined} />
             Refresh
           </Pill>
-          <Pill asChild variant="primary">
-            <Link href={`${basePath}/platform/analytics`}>
+          <Pill asChild variant="primary" className="h-10 sm:h-8">
+            <Link href={`${platform}/analytics`}>
               Analytics
               <ArrowRight />
             </Link>
           </Pill>
-        </Track>
+        </>
       }
     />
   )
 
-  if (!report) {
+  if (!report || !metrics) {
     return (
       <PageContainer title="Overview" header={header} breadcrumbs={breadcrumbs}>
         <div className="px-4 pb-24 md:px-6">
@@ -143,11 +378,14 @@ export function OverviewDashboardPageClient({
     )
   }
 
-  const metrics = report.metrics
   const revenueChart = metrics.deliveredByMonth.map(item => ({ ...item, label: monthLabel(item.month), revenue: item.revenueCents / 100 }))
+  const latestMonth = revenueChart[revenueChart.length - 1]?.month
   const compactCurrency = new Intl.NumberFormat('en-US', { style: 'currency', currency: currencyCode, notation: 'compact', maximumFractionDigits: 0 })
-  const funnelMax = Math.max(1, ...metrics.salesFunnel.map(stage => stage.count))
-  const leaderRevenue = Math.max(1, ...metrics.topSalespeople.map(person => person.revenueCents))
+  const knownStages = new Set(leadStages.map(stage => stage.value))
+  const pipeline = [
+    ...leadStages.map(stage => ({ ...stage, count: metrics.salesFunnel.find(item => item.label === stage.value)?.count ?? 0 })),
+    ...metrics.salesFunnel.filter(item => !knownStages.has(item.label)).map(item => ({ value: item.label, label: item.label, count: item.count })),
+  ]
   const pc = metrics.periodComparison
 
   return (
@@ -155,33 +393,102 @@ export function OverviewDashboardPageClient({
       <div className="min-w-0 max-w-full space-y-8 px-4 pb-24 md:px-6">
         {error && <Notice tone="bad">{error}</Notice>}
 
-        <DeskSection title="Today">
-          <ReadoutStrip>
-            <Link href={`${basePath}/platform/test-drives`} className="transition-colors hover:bg-muted/40">
-              <Readout label="Appointments" value={metrics.todayAppointments} tone={metrics.todayAppointments > 0 ? 'info' : 'idle'} />
-            </Link>
-            <Link href={`${basePath}/platform/deals`} className="transition-colors hover:bg-muted/40">
-              <Readout label="Pending deals" value={metrics.pendingDeals} tone={metrics.pendingDeals > 0 ? 'warn' : 'idle'} />
-            </Link>
-            <Link href={`${basePath}/platform/accounting`} className="transition-colors hover:bg-muted/40">
-              <Readout
-                label="Exceptions"
-                value={exceptions}
-                tone={exceptions > 0 ? 'bad' : 'ok'}
-                sub={`Acct ${report.exceptions.accounting} · Pay ${report.exceptions.payments} · Fund ${report.exceptions.funding}`}
-              />
-            </Link>
-            <Link href={`${basePath}/platform/vehicles`} className="transition-colors hover:bg-muted/40">
-              <Readout label="Units in stock" value={metrics.inventory.available} sub={`Avg age ${Math.round(metrics.inventory.averageAgeDays)} days`} />
-            </Link>
-          </ReadoutStrip>
+        <DeskSection id="overview-needs-you" title="Needs you today" count={waiting.length}>
+          {waiting.length > 0 ? (
+            <ul className="divide-y rounded-md border bg-card">
+              {waiting.map(item => <QueueRow key={item.key} item={item} />)}
+            </ul>
+          ) : (
+            <p className="py-3 text-[13px] text-muted-foreground">Nothing waiting</p>
+          )}
+          {clear.length > 0 && (
+            <p className="mt-3 flex flex-wrap items-baseline gap-x-1 gap-y-1 text-[12px] text-muted-foreground">
+              <span className="font-medium">Clear:</span>
+              {clear.map((item, index) => (
+                <span key={item.key}>
+                  <Link href={item.href} className="inline-flex min-h-10 items-center underline-offset-4 hover:text-foreground hover:underline sm:min-h-0">
+                    {item.label}
+                  </Link>
+                  {index < clear.length - 1 && <span aria-hidden="true">,</span>}
+                </span>
+              ))}
+            </p>
+          )}
         </DeskSection>
 
-        <DeskSection title="Last 30 days">
+        <DeskSection
+          id="overview-recent-deals"
+          title="Latest deals"
+          count={metrics.recentDeals.length}
+          actions={
+            <Link href={`${platform}/deals`} className="inline-flex min-h-10 items-center gap-1 text-[12px] font-medium text-muted-foreground hover:text-foreground sm:min-h-0">
+              Desk log
+              <ArrowRight className="size-3.5" aria-hidden="true" />
+            </Link>
+          }
+        >
+          {metrics.recentDeals.length > 0 ? (
+            <DeskTable>
+              <thead>
+                <tr>
+                  <Th>Status</Th>
+                  <Th>Vehicle</Th>
+                  <Th priority={2}>Customer</Th>
+                  <Th align="right">Price</Th>
+                  <Th align="right" priority={3}>Gross</Th>
+                  <Th align="right" priority={2}>Age</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {metrics.recentDeals.map(deal => {
+                  const pending = deal.status === 'pencil' || deal.status === 'submitted'
+                  const days = ageInDays(deal.occurredAt)
+                  const stale = pending && days >= DESK_STALE_DAYS
+                  const href = `${platform}/deals/${deal.id}`
+                  return (
+                    <Tr key={deal.id} className="cursor-pointer" onClick={() => router.push(href)}>
+                      <Td className="w-[1%]">
+                        <Status tone={dealTone[deal.status] ?? 'idle'}>{dealLabel[deal.status] ?? deal.status}</Status>
+                      </Td>
+                      <Td className="min-w-0 max-w-[16rem]">
+                        <Link href={href} onClick={event => event.stopPropagation()} className="block truncate font-medium text-foreground hover:underline">
+                          {deal.vehicle ? `${deal.vehicle.year} ${deal.vehicle.make} ${deal.vehicle.model}` : 'No vehicle'}
+                        </Link>
+                        <span className="block truncate text-[12px] text-muted-foreground md:hidden">
+                          {deal.lead ? `${deal.lead.firstName} ${deal.lead.lastName}` : 'No customer'}
+                        </span>
+                      </Td>
+                      <Td priority={2} className="max-w-[12rem] truncate">
+                        {deal.lead ? `${deal.lead.firstName} ${deal.lead.lastName}` : <span className="text-muted-foreground">No customer</span>}
+                      </Td>
+                      <Td align="right" className="whitespace-nowrap">
+                        <Figure size="sm">{formatCurrencyCents(deal.vehiclePriceCents)}</Figure>
+                      </Td>
+                      <Td align="right" priority={3} className="whitespace-nowrap text-muted-foreground">{formatCurrencyCents(deal.grossCents)}</Td>
+                      <Td align="right" priority={2} className="whitespace-nowrap text-[12px] text-muted-foreground">
+                        {stale ? (
+                          <Attention>{days} days</Attention>
+                        ) : pending ? (
+                          <span className="tabular-nums">{days === 0 ? 'Today' : `${days} ${plural(days, 'day')}`}</span>
+                        ) : hydrated ? (
+                          formatDate(deal.occurredAt)
+                        ) : null}
+                      </Td>
+                    </Tr>
+                  )
+                })}
+              </tbody>
+            </DeskTable>
+          ) : (
+            <p className="py-3 text-[13px] text-muted-foreground">No deals yet</p>
+          )}
+        </DeskSection>
+
+        <DeskSection id="overview-30d" title="Last 30 days">
           <ReadoutStrip>
-            <Readout label="Delivered revenue" value={formatCurrencyCents(pc.deliveredRevenueCents.current)} sub={comparisonLabel(pc.deliveredRevenueCents)} tone={comparisonTone(pc.deliveredRevenueCents)} />
             <Readout label="Units delivered" value={pc.deliveredCount.current} sub={comparisonLabel(pc.deliveredCount)} tone={comparisonTone(pc.deliveredCount)} />
-            <Readout label="Gross" value={formatCurrencyCents(pc.deliveredGrossCents.current)} sub={`Avg ${formatCurrencyCents(metrics.averageDeliveredGrossCents)}`} tone={comparisonTone(pc.deliveredGrossCents)} />
+            <Readout label="Gross" value={formatCurrencyCents(pc.deliveredGrossCents.current)} sub={metrics.deliveredDeals ? `Avg ${formatCurrencyCents(metrics.averageDeliveredGrossCents)} all time` : comparisonLabel(pc.deliveredGrossCents)} tone={comparisonTone(pc.deliveredGrossCents)} />
+            <Readout label="Delivered revenue" value={formatCurrencyCents(pc.deliveredRevenueCents.current)} sub={comparisonLabel(pc.deliveredRevenueCents)} tone={comparisonTone(pc.deliveredRevenueCents)} />
             <Readout label="New leads" value={pc.newLeads.current} sub={comparisonLabel(pc.newLeads)} tone={comparisonTone(pc.newLeads)} />
             <Readout label="Lead conversion" value={`${metrics.leadConversionPercent.toFixed(1)}%`} sub={metrics.convertedLeads != null ? `${metrics.convertedLeads} of ${metrics.totalLeads} leads` : `${metrics.totalLeads} leads`} />
             <Readout label="Service revenue" value={formatCurrencyCents(pc.settledServiceRevenueCents.current)} sub={comparisonLabel(pc.settledServiceRevenueCents)} tone={comparisonTone(pc.settledServiceRevenueCents)} />
@@ -189,106 +496,101 @@ export function OverviewDashboardPageClient({
         </DeskSection>
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1.4fr_1fr]">
-          <DeskSection title="Delivered revenue by month">
+          <DeskSection id="overview-revenue" title="Delivered revenue by month">
             {revenueChart.length > 0 ? (
-              <ChartContainer config={chartConfig} className="h-[240px] w-full">
-                <BarChart data={revenueChart} margin={{ left: 0, right: 0, top: 8 }}>
-                  <CartesianGrid vertical={false} strokeDasharray="2 4" />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
-                  <YAxis width={56} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} tickFormatter={value => compactCurrency.format(Number(value))} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[6, 6, 2, 2]} maxBarSize={40} />
-                </BarChart>
-              </ChartContainer>
+              <HairlineChart
+                data={revenueChart}
+                xKey="label"
+                yKey="revenue"
+                label="Delivered revenue"
+                yWidth={52}
+                format={value => compactCurrency.format(value)}
+                highlight={row => row.month === latestMonth}
+              />
             ) : (
-              <p className="py-10 text-center text-sm text-muted-foreground">No deliveries</p>
+              <p className="py-3 text-[13px] text-muted-foreground">No deliveries</p>
             )}
           </DeskSection>
 
-          <DeskSection title="Lead pipeline" count={metrics.totalLeads} actions={<Link href={`${basePath}/platform/crm`} className="text-xs font-medium text-muted-foreground hover:text-foreground">CRM</Link>}>
-            {metrics.salesFunnel.length > 0 ? (
-              <ul className="space-y-2.5">
-                {metrics.salesFunnel.map(stage => (
-                  <li key={stage.label} className="flex items-center gap-3 text-sm">
-                    <span className="w-28 shrink-0 truncate text-muted-foreground">{statusLabels[stage.label] || stage.label}</span>
-                    <span className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
-                      <span className="block h-full rounded-full bg-foreground/80" style={{ width: `${(stage.count / funnelMax) * 100}%` }} />
-                    </span>
-                    <span className="w-8 shrink-0 text-right font-mono text-xs tabular-nums">{stage.count}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="py-10 text-center text-sm text-muted-foreground">No leads</p>
-            )}
-          </DeskSection>
-        </div>
-
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
           <DeskSection
-            title="Recent deals"
-            count={metrics.recentDeals.length}
-            actions={<Link href={`${basePath}/platform/deals`} className="text-xs font-medium text-muted-foreground hover:text-foreground">All deals</Link>}
+            id="overview-pipeline"
+            title="Lead pipeline"
+            count={metrics.totalLeads}
+            actions={
+              <Link href={`${platform}/crm`} className="inline-flex min-h-10 items-center gap-1 text-[12px] font-medium text-muted-foreground hover:text-foreground sm:min-h-0">
+                CRM
+                <ArrowRight className="size-3.5" aria-hidden="true" />
+              </Link>
+            }
           >
-            {metrics.recentDeals.length > 0 ? (
-              <Panel className="divide-y">
-                {metrics.recentDeals.map(deal => (
-                  <Link
-                    key={deal.id}
-                    href={`${basePath}/platform/deals/${deal.id}`}
-                    className="flex min-w-0 items-start justify-between gap-4 px-4 py-3 transition-colors hover:bg-muted/40"
-                  >
-                    <div className="min-w-0">
-                      <TitleLine as="p" tone={dealTone[deal.status] ?? 'idle'} status={deal.status} className="text-sm font-medium">
-                        {deal.vehicle ? `${deal.vehicle.year} ${deal.vehicle.make} ${deal.vehicle.model}` : 'No vehicle'}
-                      </TitleLine>
-                      <p className="truncate pl-4 text-xs text-muted-foreground">
-                        {deal.lead ? `${deal.lead.firstName} ${deal.lead.lastName}` : 'No customer'}{hydrated && ` · ${formatDate(deal.occurredAt)}`}
-                      </p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-sm font-medium tabular-nums">{formatCurrencyCents(deal.vehiclePriceCents)}</p>
-                      <p className="text-xs capitalize text-muted-foreground">{deal.status}</p>
-                    </div>
-                  </Link>
-                ))}
-              </Panel>
+            {metrics.totalLeads > 0 ? (
+              <DeskTable>
+                <thead>
+                  <tr>
+                    <Th>Stage</Th>
+                    <Th align="right">Leads</Th>
+                    <Th align="right" priority={2}>Share</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pipeline.map(stage => (
+                    <Tr key={stage.value}>
+                      <Td className={stage.count === 0 ? 'text-muted-foreground' : 'text-foreground'}>{stage.label}</Td>
+                      <Td align="right" className="w-[1%] whitespace-nowrap">
+                        <Figure size="sm" className={stage.count === 0 ? 'text-muted-foreground' : undefined}>{stage.count}</Figure>
+                      </Td>
+                      <Td align="right" priority={2} className="w-[1%] whitespace-nowrap">
+                        <span className="inline-flex items-center gap-2 text-[12px] text-muted-foreground">
+                          <Meter value={stage.count / metrics.totalLeads} label={`${stage.label} share of leads`} />
+                          <span className="w-9 text-right tabular-nums">{Math.round((stage.count / metrics.totalLeads) * 100)}%</span>
+                        </span>
+                      </Td>
+                    </Tr>
+                  ))}
+                </tbody>
+              </DeskTable>
             ) : (
-              <p className="py-6 text-center text-sm text-muted-foreground">No recent deals</p>
-            )}
-          </DeskSection>
-
-          <DeskSection title="Top salespeople" count={metrics.topSalespeople.length}>
-            {metrics.topSalespeople.length > 0 ? (
-              <Panel className="divide-y">
-                {metrics.topSalespeople.map((person, index) => (
-                  <div key={person.id} className="flex min-w-0 items-center gap-3 px-4 py-3">
-                    <span className="w-5 shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{String(index + 1).padStart(2, '0')}</span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{person.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {person.deals} delivered · Gross {formatCurrencyCents(person.grossCents)}
-                      </p>
-                    </div>
-                    <div className="hidden sm:block">
-                      <Meter value={person.revenueCents / leaderRevenue} label={`${person.name} share of leader revenue`} />
-                    </div>
-                    <p className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">{formatCurrencyCents(person.revenueCents)}</p>
-                  </div>
-                ))}
-              </Panel>
-            ) : (
-              <p className="py-6 text-center text-sm text-muted-foreground">No delivered deals</p>
+              <p className="py-3 text-[13px] text-muted-foreground">No leads</p>
             )}
           </DeskSection>
         </div>
 
-        <DeskSection title="Inventory value">
+        <DeskSection id="overview-salespeople" title="Salespeople by gross" count={metrics.topSalespeople.length}>
+          {metrics.topSalespeople.length > 0 ? (
+            <DeskTable>
+              <thead>
+                <tr>
+                  <Th>Salesperson</Th>
+                  <Th align="right">Delivered</Th>
+                  <Th align="right">Gross</Th>
+                  <Th align="right" priority={2}>Revenue</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {metrics.topSalespeople.map(person => (
+                  <Tr key={person.id}>
+                    <Td className="max-w-[14rem] truncate font-medium">{person.name}</Td>
+                    <Td align="right" className="text-muted-foreground">{person.deals}</Td>
+                    <Td align="right" className="whitespace-nowrap">
+                      <Figure size="sm">{formatCurrencyCents(person.grossCents)}</Figure>
+                    </Td>
+                    <Td align="right" priority={2} className="whitespace-nowrap text-muted-foreground">{formatCurrencyCents(person.revenueCents)}</Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </DeskTable>
+          ) : (
+            <p className="py-3 text-[13px] text-muted-foreground">No delivered deals</p>
+          )}
+        </DeskSection>
+
+        <DeskSection id="overview-stock-service" title="Stock and shop">
           <ReadoutStrip>
+            <Readout label="Units in stock" value={metrics.inventory.available} sub={metrics.inventory.available ? `Avg age ${averageAge} days` : undefined} />
             <Readout label="Retail" value={formatCurrencyCents(metrics.inventory.retailCents)} />
-            <Readout label="Cost" value={formatCurrencyCents(metrics.inventory.costCents)} />
-            <Readout label="Spread" value={formatCurrencyCents(metrics.inventory.retailCents - metrics.inventory.costCents)} />
-            <Readout label="Service hours" value={metrics.service.soldHours.toFixed(1)} sub={`Actual ${metrics.service.actualHours.toFixed(1)} · ELR ${formatCurrencyCents(metrics.service.effectiveLaborRateCents)}`} />
+            <Readout label="Cost" value={formatCurrencyCents(metrics.inventory.costCents)} sub={`Spread ${formatCurrencyCents(metrics.inventory.retailCents - metrics.inventory.costCents)}`} />
+            <Readout label="Sold hours" value={metrics.service.soldHours.toFixed(1)} sub={`Actual ${metrics.service.actualHours.toFixed(1)} · ELR ${formatCurrencyCents(metrics.service.effectiveLaborRateCents)}`} />
+            <Readout label="Open exceptions" value={exceptions} sub={`Acct ${report.exceptions.accounting} · Pay ${report.exceptions.payments} · Fund ${report.exceptions.funding}`} />
           </ReadoutStrip>
         </DeskSection>
       </div>

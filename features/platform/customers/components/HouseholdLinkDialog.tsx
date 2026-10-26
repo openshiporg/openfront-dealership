@@ -87,7 +87,7 @@ export function HouseholdLinkDialog({
           <FormField id="household-search" label="Customer" error={errors.member}>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input id="household-search" className="h-11 pl-9 sm:h-9" placeholder="Search name, email, phone" value={search} onChange={event => setSearch(event.target.value)} autoComplete="off" />
+              <Input id="household-search" className="rounded-[4px] h-11 pl-9 sm:h-9" placeholder="Search name, email, phone" value={search} onChange={event => setSearch(event.target.value)} autoComplete="off" />
             </div>
           </FormField>
           {member ? (
@@ -123,7 +123,7 @@ export function HouseholdLinkDialog({
           )}
           {conflict && <Notice tone="warn">Selected customer is already in another household</Notice>}
           <FormField id="household-name" label="Household name" error={errors.displayName}>
-            <Input id="household-name" className="h-11 sm:h-9" maxLength={200} value={displayName} aria-invalid={Boolean(errors.displayName)} onChange={event => { setDisplayName(event.target.value); setErrors(prev => ({ ...prev, displayName: undefined })) }} />
+            <Input id="household-name" className="rounded-[4px] h-11 sm:h-9" maxLength={200} value={displayName} aria-invalid={Boolean(errors.displayName)} onChange={event => { setDisplayName(event.target.value); setErrors(prev => ({ ...prev, displayName: undefined })) }} />
           </FormField>
           {formError && <Notice tone="bad">{formError}</Notice>}
           <DialogFooter className="sm:justify-end">

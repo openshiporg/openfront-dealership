@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from 'react'
 import { Pencil } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { DeskSection, Facts, Notice, Panel, Pill, TitleLine, Track, type DeskTone } from '@/features/platform/components/desk'
+import { DeskSection, Facts, Notice, Panel, Pill, Status, Track, type DeskTone } from '@/features/platform/components/desk'
 import { updateDealerGroup } from '../actions'
 import { SLUG_PATTERN } from '../lib/permissions'
 import type { DealerGroup, RecordStatus, Viewer } from '../lib/types'
@@ -102,7 +102,7 @@ export function DealerGroupSection({
         return (
           <DeskSection
             key={group.id}
-            title={<TitleLine as="span" tone={state.tone} status={state.label}>{group.name}</TitleLine>}
+            title={<span className="flex min-w-0 flex-wrap items-baseline gap-x-3">{group.name}<Status tone={state.tone}>{state.label}</Status></span>}
             actions={
               <Track>
                 {transitions.map(transition => (
@@ -119,12 +119,13 @@ export function DealerGroupSection({
           >
             <Panel className="px-4">
               <Facts
+                className="md:grid md:grid-cols-2 md:gap-x-8 md:divide-y-0 md:[&>div]:border-b md:[&>div:nth-last-child(-n+2)]:border-b-0"
                 items={[
                   { label: 'Status', value: state.label },
                   { label: 'Slug', value: group.slug, mono: true },
                   { label: 'Legal name', value: group.legalName || 'Not set' },
-                  { label: 'Rooftops', value: group.rooftopsCount ?? 0, mono: true },
-                  { label: 'Group members', value: group.membershipsCount ?? 0, mono: true },
+                  { label: 'Rooftops', value: group.rooftopsCount ?? 0 },
+                  { label: 'Group members', value: group.membershipsCount ?? 0 },
                   group.createdAt ? { label: 'Created', value: formatDate(group.createdAt, timeZone) } : null,
                 ]}
               />

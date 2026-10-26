@@ -9,12 +9,15 @@ import {
   Code,
   DeskHeader,
   DeskSection,
+  DeskTable,
   Facts,
+  Figure,
   Notice,
   Pill,
-  Readout,
-  ReadoutStrip,
-  TitleLine,
+  Status,
+  Td,
+  Th,
+  Tr,
   Track,
 } from '@/features/platform/components/desk'
 import { formatCentsForInput, parseDollarsToCents } from '@/features/platform/deals/lib/moneyInput'
@@ -465,7 +468,7 @@ export function ServiceOrderDetailPageClient({
       return (
         <p className="flex items-baseline justify-between border-t pt-3 text-sm">
           <span className="text-muted-foreground">Line total</span>
-          <span className="font-mono tabular-nums">{quantity !== null && unit !== null ? formatCents(Math.round(unit * quantity)) : '-'}</span>
+          <span className="tabular-nums">{quantity !== null && unit !== null ? formatCents(Math.round(unit * quantity)) : '-'}</span>
         </p>
       )
     }
@@ -473,7 +476,7 @@ export function ServiceOrderDetailPageClient({
       const suggested = taxRateBps ? Math.round((lineSubtotal * taxRateBps) / 10_000) : null
       return (
         <div className="space-y-2 border-t pt-3 text-sm">
-          <p className="flex items-baseline justify-between"><span className="text-muted-foreground">Line subtotal</span><span className="font-mono tabular-nums">{formatCents(lineSubtotal)}</span></p>
+          <p className="flex items-baseline justify-between"><span className="text-muted-foreground">Line subtotal</span><span className="tabular-nums">{formatCents(lineSubtotal)}</span></p>
           {suggested !== null && (
             <Track>
               <Pill size="sm" className="max-sm:h-11" onClick={() => changeFormValues({ ...form.values, tax: formatCentsForInput(suggested) })}>
@@ -494,23 +497,31 @@ export function ServiceOrderDetailPageClient({
     return null
   })()
 
+  const authTone = order.authorizationStatus === 'authorized' ? 'ok' : order.authorizationStatus === 'declined' ? 'bad' : 'warn'
+  const rowButton = 'max-sm:h-10'
+  const iconButton = 'w-7 max-sm:h-10 max-sm:w-10 px-0'
+
   const header = (
     <DeskHeader
-      eyebrow={`Repair order · ${reference}`}
-      title={vehicle}
+      title={
+        <span className="flex min-w-0 flex-wrap items-baseline gap-x-3">
+          <span className="font-mono text-[20px] font-semibold tracking-tight">{reference}</span>
+          <span className="min-w-0 break-words">{vehicle}</span>
+        </span>
+      }
       tone={STATUS_TONES[status] || 'idle'}
       status={ORDER_STATUS_LABELS[status] || status}
       meta={
-        <span className="flex flex-wrap gap-x-2">
-          <span className="text-foreground">{ORDER_STATUS_LABELS[status] || status}</span>
+        <span className="flex flex-wrap items-baseline gap-x-2">
+          <Status tone={STATUS_TONES[status] || 'idle'}>{ORDER_STATUS_LABELS[status] || status}</Status>
           {name && <span>· {name}</span>}
           {order.rooftop?.name && <span>· {order.rooftop.name}</span>}
           <span>· {appointment?.assignedTech?.name || 'Unassigned'}</span>
         </span>
       }
       actions={
-        <Track>
-          <Pill className="max-sm:h-11" onClick={reload} disabled={loading} aria-label="Refresh">
+        <>
+          <Pill variant="plain" className="max-sm:h-11" onClick={reload} disabled={loading} aria-label="Refresh">
             <RefreshCw className={loading ? 'animate-spin' : undefined} />
             Refresh
           </Pill>
@@ -519,7 +530,7 @@ export function ServiceOrderDetailPageClient({
               {ORDER_ACTION_LABELS[nextStatus]}
             </Pill>
           )}
-        </Track>
+        </>
       }
     />
   )
@@ -533,7 +544,7 @@ export function ServiceOrderDetailPageClient({
               <Notice tone={notice.tone}>
                 <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
                   <p className="min-w-0">{notice.text}</p>
-                  <Track><Pill size="sm" variant="plain" className="max-sm:h-11" onClick={() => setNotice(null)}>Dismiss</Pill></Track>
+                  <Pill size="sm" variant="plain" className="max-sm:h-11" onClick={() => setNotice(null)}>Dismiss</Pill>
                 </div>
               </Notice>
             )}
@@ -542,181 +553,272 @@ export function ServiceOrderDetailPageClient({
           </div>
         )}
 
-        <ReadoutStrip>
-          <Readout label="Total" value={formatCents(order.grandTotalCents)} sub={`Tax ${formatCents(order.taxCents)}`} />
-          <Readout label="Line sum" value={formatCents(lineSubtotal)} sub={`${order.lineItems.length} lines`} tone={totals?.matches ? 'ok' : 'warn'} />
-          <Readout label="Labor ops" value={`${order.laborOperations.length - openOps}/${order.laborOperations.length}`} sub="Closed" tone={openOps ? 'warn' : 'ok'} />
-          <Readout label="Authorization" value={<span className="capitalize">{order.authorizationStatus || 'pending'}</span>} tone={order.authorizationStatus === 'authorized' ? 'ok' : order.authorizationStatus === 'declined' ? 'bad' : 'warn'} />
-        </ReadoutStrip>
-
-        <div className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <div className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
           <div className="min-w-0 space-y-8">
-            <DeskSection
-              title="Labor operations"
-              count={order.laborOperations.length}
-              actions={
-                <Track>
-                  <Pill size="sm" className="max-sm:h-11" disabled={!editable || Boolean(busy)} title={lockedReason || undefined} onClick={() => openForm({ kind: 'labor-create', title: 'Add labor operation', submitLabel: 'Add operation', values: { operationCode: '', description: '', soldHours: '' } })}>
-                    <Plus />
-                    Add operation
-                  </Pill>
-                </Track>
-              }
-            >
-              {order.laborOperations.length === 0 ? (
-                <p className="py-3 text-sm text-muted-foreground">No labor operations</p>
-              ) : (
-                <ul className="divide-y text-sm">
-                  {order.laborOperations.map(operation => {
-                    const actions = laborActions(order, operation.status)
-                    const blocked = actions.find(item => item.blocked)?.blocked
-                    return (
-                      <li key={operation.id} className="flex min-w-0 flex-col gap-2 py-3">
-                        <div className="flex min-w-0 items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            <TitleLine as="p" tone={LABOR_TONES[operation.status] || 'idle'} status={LABOR_STATUS_LABELS[operation.status] || operation.status} className="font-medium">
-                              <Code className="text-foreground">{operation.operationCode}</Code> {operation.description}
-                            </TitleLine>
-                            <p className="pl-4 text-xs text-muted-foreground">
-                              {[
-                                LABOR_STATUS_LABELS[operation.status] || operation.status,
-                                operation.technician?.name || 'Unassigned',
-                                operation.startedAt ? `Started ${formatDateTime(operation.startedAt, timeZone)}` : null,
-                                operation.completedAt ? `Done ${formatDateTime(operation.completedAt, timeZone)}` : null,
-                              ].filter(Boolean).join(' · ')}
-                            </p>
-                          </div>
-                          <div className="shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
-                            <p>{operation.soldHours ?? 0} h sold</p>
-                            {operation.actualMinutes != null && <p>{operation.actualMinutes} min actual</p>}
-                          </div>
-                        </div>
-                        {actions.length > 0 && (
-                          <div className="flex min-w-0 flex-wrap items-center gap-2 pl-4">
-                            <Track>
-                              {actions.map(({ action, blocked: reason }) => (
-                                <Pill key={action} size="sm" className="max-sm:h-11" disabled={Boolean(reason) || Boolean(busy)} title={reason || undefined} onClick={() => laborAction(operation, action)}>
-                                  {LABOR_ACTION_LABELS[action]}
-                                </Pill>
-                              ))}
-                            </Track>
-                            {blocked && <span className="text-xs text-muted-foreground">{blocked}</span>}
-                          </div>
-                        )}
-                      </li>
-                    )
-                  })}
-                </ul>
-              )}
-            </DeskSection>
-
             <DeskSection
               title="Line items"
               count={order.lineItems.length}
+              id="ro-lines"
               actions={
-                <Track>
-                  <Pill size="sm" className="max-sm:h-11" disabled={!editable || Boolean(busy)} title={lockedReason || undefined} onClick={() => openLine()}>
-                    <Plus />
-                    Add line
-                  </Pill>
-                </Track>
+                <Pill size="sm" className="max-sm:h-11" disabled={!editable || Boolean(busy)} title={lockedReason || undefined} onClick={() => openLine()}>
+                  <Plus />
+                  Add line
+                </Pill>
               }
             >
               {!editable && <p className="pb-2 text-xs text-muted-foreground">{lockedReason}</p>}
               {order.lineItems.length === 0 ? (
-                <p className="py-3 text-sm text-muted-foreground">No line items</p>
+                <p className="rounded-md border border-dashed py-6 text-center text-[13px] text-muted-foreground">No line items</p>
               ) : (
-                <ul className="divide-y text-sm">
-                  {order.lineItems.map(line => (
-                    <li key={line.id} className="flex min-w-0 items-start justify-between gap-3 py-2.5">
-                      <div className="min-w-0">
-                        <p className="break-words font-medium">{line.description}</p>
-                        <p className="break-words text-xs text-muted-foreground">
-                          {[LINE_TYPE_LABELS[line.itemType] || line.itemType, line.partNumber ? `#${line.partNumber}` : null, `${formatQuantity(line.quantity)} × ${formatCents(line.unitPriceCents)}`].filter(Boolean).join(' · ')}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <p className="font-mono text-[13px] tabular-nums">{formatCents(line.priceCents)}</p>
+                <DeskTable aria-labelledby="ro-lines">
+                  <thead>
+                    <tr>
+                      <Th priority={2}>Type</Th>
+                      <Th>Description</Th>
+                      <Th align="right" priority={2}>Qty</Th>
+                      <Th align="right" priority={2}>Unit</Th>
+                      <Th align="right">Amount</Th>
+                      {editable && <Th align="right"><span className="sr-only">Actions</span></Th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {order.lineItems.map(line => (
+                      <Tr key={line.id}>
+                        <Td priority={2} className="whitespace-nowrap text-muted-foreground">{LINE_TYPE_LABELS[line.itemType] || line.itemType}</Td>
+                        <Td className="min-w-0">
+                          <p className="break-words font-medium">{line.description}</p>
+                          {line.partNumber && <Code>#{line.partNumber}</Code>}
+                          <p className="text-xs text-muted-foreground md:hidden">
+                            {LINE_TYPE_LABELS[line.itemType] || line.itemType} · {formatQuantity(line.quantity)} × {formatCents(line.unitPriceCents)}
+                          </p>
+                        </Td>
+                        <Td align="right" priority={2}>{formatQuantity(line.quantity)}</Td>
+                        <Td align="right" priority={2} className="whitespace-nowrap text-muted-foreground">{formatCents(line.unitPriceCents)}</Td>
+                        <Td align="right" className="whitespace-nowrap font-medium">{formatCents(line.priceCents)}</Td>
                         {editable && (
-                          <Track>
-                            <Pill size="sm" variant="plain" className="max-sm:h-11 max-sm:w-11" aria-label={`Edit ${line.description}`} disabled={Boolean(busy)} onClick={() => openLine(line)}>
-                              <Pencil />
-                            </Pill>
-                            <Pill size="sm" variant="plain" className="max-sm:h-11 max-sm:w-11" aria-label={`Remove ${line.description}`} disabled={Boolean(busy)} onClick={() => openForm({ kind: 'line-remove', title: 'Remove line', lineId: line.id, submitLabel: 'Remove line', variant: 'danger', values: {} })}>
-                              <Trash2 />
-                            </Pill>
-                          </Track>
+                          <Td align="right" className="w-[1%] whitespace-nowrap">
+                            <div className="flex justify-end gap-0.5">
+                              <Pill size="sm" variant="plain" className={iconButton} aria-label={`Edit ${line.description}`} disabled={Boolean(busy)} onClick={() => openLine(line)}>
+                                <Pencil />
+                              </Pill>
+                              <Pill size="sm" variant="plain" className={iconButton} aria-label={`Remove ${line.description}`} disabled={Boolean(busy)} onClick={() => openForm({ kind: 'line-remove', title: 'Remove line', lineId: line.id, submitLabel: 'Remove line', variant: 'danger', values: {} })}>
+                                <Trash2 />
+                              </Pill>
+                            </div>
+                          </Td>
                         )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                      </Tr>
+                    ))}
+                  </tbody>
+                </DeskTable>
+              )}
+            </DeskSection>
+
+            <DeskSection
+              title="Labor operations"
+              count={order.laborOperations.length}
+              id="ro-labor"
+              actions={
+                <Pill size="sm" className="max-sm:h-11" disabled={!editable || Boolean(busy)} title={lockedReason || undefined} onClick={() => openForm({ kind: 'labor-create', title: 'Add labor operation', submitLabel: 'Add operation', values: { operationCode: '', description: '', soldHours: '' } })}>
+                  <Plus />
+                  Add operation
+                </Pill>
+              }
+            >
+              {order.laborOperations.length === 0 ? (
+                <p className="rounded-md border border-dashed py-6 text-center text-[13px] text-muted-foreground">No labor operations</p>
+              ) : (
+                <DeskTable aria-labelledby="ro-labor">
+                  <thead>
+                    <tr>
+                      <Th>Op</Th>
+                      <Th>Description</Th>
+                      <Th priority={3}>Tech</Th>
+                      <Th priority={2}>Status</Th>
+                      <Th align="right" priority={2}>Sold h</Th>
+                      <Th align="right" priority={3}>Actual min</Th>
+                      <Th align="right"><span className="sr-only">Actions</span></Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {order.laborOperations.map(operation => {
+                      const actions = laborActions(order, operation.status)
+                      const blocked = actions.find(item => item.blocked)?.blocked
+                      const label = LABOR_STATUS_LABELS[operation.status] || operation.status
+                      return (
+                        <Tr key={operation.id}>
+                          <Td className="whitespace-nowrap"><Code className="text-foreground">{operation.operationCode}</Code></Td>
+                          <Td className="min-w-0">
+                            <p className="break-words">{operation.description}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {[
+                                operation.startedAt ? `Started ${formatDateTime(operation.startedAt, timeZone)}` : null,
+                                operation.completedAt ? `Done ${formatDateTime(operation.completedAt, timeZone)}` : null,
+                              ].filter(Boolean).join(' · ')}
+                            </p>
+                            <div className="mt-1 md:hidden"><Status tone={LABOR_TONES[operation.status] || 'idle'}>{label}</Status></div>
+                            {blocked && <p className="text-xs text-muted-foreground">{blocked}</p>}
+                          </Td>
+                          <Td priority={3} className="whitespace-nowrap text-muted-foreground">{operation.technician?.name || 'Unassigned'}</Td>
+                          <Td priority={2}><Status tone={LABOR_TONES[operation.status] || 'idle'}>{label}</Status></Td>
+                          <Td align="right" priority={2}>{operation.soldHours ?? 0}</Td>
+                          <Td align="right" priority={3} className="text-muted-foreground">{operation.actualMinutes ?? '—'}</Td>
+                          <Td align="right">
+                            {actions.length > 0 && (
+                              <div className="flex flex-wrap justify-end gap-1.5">
+                                {actions.map(({ action, blocked: reason }) => (
+                                  <Pill key={action} size="sm" className={rowButton} disabled={Boolean(reason) || Boolean(busy)} title={reason || undefined} onClick={() => laborAction(operation, action)}>
+                                    {LABOR_ACTION_LABELS[action]}
+                                  </Pill>
+                                ))}
+                              </div>
+                            )}
+                          </Td>
+                        </Tr>
+                      )
+                    })}
+                  </tbody>
+                </DeskTable>
               )}
             </DeskSection>
 
             <DeskSection
               title="Totals"
+              id="ro-totals"
               actions={
-                <Track>
-                  <Pill size="sm" className="max-sm:h-11" disabled={!editable || Boolean(busy)} title={lockedReason || undefined} onClick={() => openForm({ kind: 'tax', title: 'Set tax', submitLabel: 'Save tax', values: { tax: formatCentsForInput(order.taxCents ?? 0) } })}>
-                    Set tax
-                  </Pill>
-                </Track>
+                <Pill size="sm" className="max-sm:h-11" disabled={!editable || Boolean(busy)} title={lockedReason || undefined} onClick={() => openForm({ kind: 'tax', title: 'Set tax', submitLabel: 'Save tax', values: { tax: formatCentsForInput(order.taxCents ?? 0) } })}>
+                  Set tax
+                </Pill>
               }
             >
               {totals && !totals.matches && (
-                <Notice tone="warn" className="mb-2">
+                <Notice tone="warn" className="mb-3">
                   <div className="min-w-0">
                     <p className="font-medium">Totals don&apos;t match line items</p>
-                    <p className="mt-0.5 font-mono text-xs tabular-nums text-muted-foreground">
+                    <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
                       Lines: Labor {formatCents(totals.lineLaborCents)} · Parts {formatCents(totals.linePartsCents)}
                     </p>
                   </div>
                 </Notice>
               )}
-              <dl className="divide-y text-sm">
-                <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 pb-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                  <dt />
-                  <dd className="text-right">Lines</dd>
-                  <dd className="w-24 text-right">Recorded</dd>
-                </div>
-                {([
-                  ['Labor and sublet', totals?.lineLaborCents ?? 0, order.laborTotalCents ?? 0],
-                  ['Parts', totals?.linePartsCents ?? 0, order.partsTotalCents ?? 0],
-                  ['Tax', order.taxCents ?? 0, order.taxCents ?? 0],
-                ] as const).map(([label, line, recorded]) => (
-                  <div key={label} className="grid grid-cols-[1fr_auto_auto] items-baseline gap-x-4 py-2">
-                    <dt className="text-muted-foreground">{label}</dt>
-                    <dd className="text-right font-mono text-[13px] tabular-nums text-muted-foreground">{formatCents(line)}</dd>
-                    <dd className={`w-24 text-right font-mono text-[13px] tabular-nums ${line !== recorded ? 'text-amber-700 dark:text-amber-300' : ''}`}>{formatCents(recorded)}</dd>
-                  </div>
-                ))}
-                <div className="grid grid-cols-[1fr_auto_auto] items-baseline gap-x-4 border-t border-foreground/20 py-2.5">
-                  <dt className="font-semibold">Total</dt>
-                  <dd className="text-right font-mono text-[13px] tabular-nums text-muted-foreground">{formatCents(lineSubtotal + (order.taxCents ?? 0))}</dd>
-                  <dd className="w-24 text-right font-mono text-sm font-semibold tabular-nums">{formatCents(order.grandTotalCents)}</dd>
-                </div>
-              </dl>
+              <DeskTable aria-labelledby="ro-totals">
+                <thead>
+                  <tr>
+                    <Th><span className="sr-only">Total</span></Th>
+                    <Th align="right">Lines</Th>
+                    <Th align="right">Recorded</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {([
+                    ['Labor and sublet', totals?.lineLaborCents ?? 0, order.laborTotalCents ?? 0],
+                    ['Parts', totals?.linePartsCents ?? 0, order.partsTotalCents ?? 0],
+                    ['Tax', order.taxCents ?? 0, order.taxCents ?? 0],
+                  ] as const).map(([label, line, recorded]) => (
+                    <Tr key={label}>
+                      <Td className="text-muted-foreground">{label}</Td>
+                      <Td align="right" className="text-muted-foreground">{formatCents(line)}</Td>
+                      <Td align="right" className={line !== recorded ? 'font-medium text-amber-700 dark:text-amber-300' : undefined}>
+                        {formatCents(recorded)}
+                        {line !== recorded && <span className="sr-only"> (differs from lines)</span>}
+                      </Td>
+                    </Tr>
+                  ))}
+                  <tr className="border-t border-foreground/20">
+                    <Td className="font-semibold">Total</Td>
+                    <Td align="right" className="text-muted-foreground">{formatCents(lineSubtotal + (order.taxCents ?? 0))}</Td>
+                    <Td align="right"><Figure size="md">{formatCents(order.grandTotalCents)}</Figure></Td>
+                  </tr>
+                </tbody>
+              </DeskTable>
             </DeskSection>
 
             {order.partsMovements.length > 0 && (
-              <DeskSection title="Parts movements" count={order.partsMovements.length}>
-                <ul className="divide-y text-sm">
-                  {order.partsMovements.map(movement => (
-                    <li key={movement.id} className="flex min-w-0 items-start justify-between gap-4 py-2.5">
-                      <div className="min-w-0">
-                        <p className="break-words font-medium">{movement.part?.description || movement.part?.partNumber || 'Part'}</p>
-                        <p className="text-xs capitalize text-muted-foreground">{movement.movementType} · {movement.reference} · {formatDateTime(movement.occurredAt, timeZone)}</p>
-                      </div>
-                      <p className="shrink-0 font-mono text-[13px] tabular-nums">{movement.quantityDelta > 0 ? '+' : ''}{movement.quantityDelta}</p>
-                    </li>
-                  ))}
-                </ul>
+              <DeskSection title="Parts movements" count={order.partsMovements.length} id="ro-movements">
+                <DeskTable aria-labelledby="ro-movements">
+                  <thead>
+                    <tr>
+                      <Th>Part</Th>
+                      <Th priority={2}>Type</Th>
+                      <Th priority={3}>Reference</Th>
+                      <Th priority={2}>When</Th>
+                      <Th align="right">Qty</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {order.partsMovements.map(movement => (
+                      <Tr key={movement.id}>
+                        <Td className="min-w-0">
+                          <p className="break-words font-medium">{movement.part?.description || movement.part?.partNumber || 'Part'}</p>
+                          {movement.part?.partNumber && <Code>#{movement.part.partNumber}</Code>}
+                        </Td>
+                        <Td priority={2} className="capitalize text-muted-foreground">{movement.movementType}</Td>
+                        <Td priority={3} className="text-muted-foreground">{movement.reference}</Td>
+                        <Td priority={2} className="whitespace-nowrap text-muted-foreground">{formatDateTime(movement.occurredAt, timeZone)}</Td>
+                        <Td align="right" className="font-medium">{movement.quantityDelta > 0 ? '+' : ''}{movement.quantityDelta}</Td>
+                      </Tr>
+                    ))}
+                  </tbody>
+                </DeskTable>
               </DeskSection>
             )}
           </div>
 
           <div className="min-w-0 space-y-8">
+            <DeskSection title="Summary">
+              <Facts
+                items={[
+                  { label: 'Total', value: <Figure size="md">{formatCents(order.grandTotalCents)}</Figure> },
+                  { label: 'Tax', value: <span className="tabular-nums">{formatCents(order.taxCents)}</span> },
+                  { label: 'Line sum', value: <span className="tabular-nums">{formatCents(lineSubtotal)} · {order.lineItems.length} lines</span> },
+                  { label: 'Labor ops closed', value: <span className="tabular-nums">{order.laborOperations.length - openOps} of {order.laborOperations.length}</span> },
+                  { label: 'Authorization', value: <Status tone={authTone} className="capitalize">{order.authorizationStatus || 'pending'}</Status> },
+                ]}
+              />
+            </DeskSection>
+
+            <DeskSection
+              title="Authorization and repair"
+              actions={
+                <Pill
+                  size="sm"
+                  className="max-sm:h-11"
+                  disabled={!editable || Boolean(busy)}
+                  title={lockedReason || undefined}
+                  onClick={() => openForm({
+                    kind: 'evidence',
+                    title: 'Concern, cause, correction',
+                    submitLabel: 'Save',
+                    values: {
+                      concern: order.concern || appointment?.description || '',
+                      cause: order.cause || '',
+                      correction: order.correction || '',
+                      payType: order.payType || 'customer',
+                      authorizationStatus: order.authorizationStatus || 'pending',
+                      reference: order.authorizationEvidence?.reference || '',
+                      invoiceNumber: order.invoiceNumber || '',
+                    },
+                  })}
+                >
+                  <Pencil />
+                  Edit
+                </Pill>
+              }
+            >
+              <Facts
+                items={[
+                  order.authorizationEvidence?.reference ? { label: 'Reference', value: order.authorizationEvidence.reference, mono: true } : null,
+                  { label: 'Pay type', value: <span className="capitalize">{order.payType || 'customer'}</span> },
+                  { label: 'Concern', value: order.concern || '-' },
+                  { label: 'Cause', value: order.cause || '-' },
+                  { label: 'Correction', value: order.correction || '-' },
+                  { label: 'Invoice', value: order.invoiceNumber || '-', mono: Boolean(order.invoiceNumber) },
+                  order.completedAt ? { label: 'Completed', value: formatDateTime(order.completedAt, timeZone) } : null,
+                  order.settledAt ? { label: 'Paid', value: formatDateTime(order.settledAt, timeZone) } : null,
+                ]}
+              />
+            </DeskSection>
+
             <DeskSection title="Customer and vehicle">
               <Facts
                 items={[
@@ -734,17 +836,15 @@ export function ServiceOrderDetailPageClient({
             <DeskSection
               title="Appointment"
               actions={appointment ? (
-                <Track>
-                  <Pill size="sm" className="max-sm:h-11" asChild>
-                    <Link href={`${basePath}/platform/service/appointments/${appointment.id}`}>Open</Link>
-                  </Pill>
-                </Track>
+                <Pill size="sm" variant="plain" className="max-sm:h-11" asChild>
+                  <Link href={`${basePath}/platform/service/appointments/${appointment.id}`}>Open</Link>
+                </Pill>
               ) : undefined}
             >
               {appointment ? (
                 <Facts
                   items={[
-                    { label: 'Status', value: <TitleLine as="span" tone={STATUS_TONES[appointment.status || ''] || 'idle'} className="justify-end">{APPOINTMENT_STATUS_LABELS[appointment.status || ''] || appointment.status}</TitleLine> },
+                    { label: 'Status', value: <Status tone={STATUS_TONES[appointment.status || ''] || 'idle'}>{APPOINTMENT_STATUS_LABELS[appointment.status || ''] || appointment.status}</Status> },
                     { label: 'Date', value: formatDateTime(appointment.appointmentDate, timeZone) },
                     { label: 'Service', value: <span className="capitalize">{appointment.servicePackage?.name || appointment.serviceType || 'Service'}</span> },
                     appointment.description ? { label: 'Request', value: appointment.description } : null,
@@ -752,98 +852,44 @@ export function ServiceOrderDetailPageClient({
                   ]}
                 />
               ) : (
-                <p className="py-3 text-sm text-muted-foreground">No appointment</p>
+                <p className="py-3 text-[13px] text-muted-foreground">No appointment</p>
               )}
-            </DeskSection>
-
-            <DeskSection
-              title="Authorization and repair"
-              actions={
-                <Track>
-                  <Pill
-                    size="sm"
-                    className="max-sm:h-11"
-                    disabled={!editable || Boolean(busy)}
-                    title={lockedReason || undefined}
-                    onClick={() => openForm({
-                      kind: 'evidence',
-                      title: 'Concern, cause, correction',
-                      submitLabel: 'Save',
-                      values: {
-                        concern: order.concern || appointment?.description || '',
-                        cause: order.cause || '',
-                        correction: order.correction || '',
-                        payType: order.payType || 'customer',
-                        authorizationStatus: order.authorizationStatus || 'pending',
-                        reference: order.authorizationEvidence?.reference || '',
-                        invoiceNumber: order.invoiceNumber || '',
-                      },
-                    })}
-                  >
-                    <Pencil />
-                    Edit
-                  </Pill>
-                </Track>
-              }
-            >
-              <Facts
-                items={[
-                  {
-                    label: 'Authorization',
-                    value: (
-                      <TitleLine as="span" tone={order.authorizationStatus === 'authorized' ? 'ok' : order.authorizationStatus === 'declined' ? 'bad' : 'warn'} className="justify-end capitalize">
-                        {order.authorizationStatus || 'pending'}
-                      </TitleLine>
-                    ),
-                  },
-                  order.authorizationEvidence?.reference ? { label: 'Reference', value: order.authorizationEvidence.reference, mono: true } : null,
-                  { label: 'Pay type', value: <span className="capitalize">{order.payType || 'customer'}</span> },
-                  { label: 'Concern', value: order.concern || '-' },
-                  { label: 'Cause', value: order.cause || '-' },
-                  { label: 'Correction', value: order.correction || '-' },
-                  { label: 'Invoice', value: order.invoiceNumber || '-', mono: Boolean(order.invoiceNumber) },
-                  order.completedAt ? { label: 'Completed', value: formatDateTime(order.completedAt, timeZone) } : null,
-                  order.settledAt ? { label: 'Paid', value: formatDateTime(order.settledAt, timeZone) } : null,
-                ]}
-              />
             </DeskSection>
 
             <DeskSection
               title="Payments"
               count={order.payments?.length}
               actions={
-                <Track>
-                  <Pill size="sm" className="max-sm:h-11" asChild>
-                    <Link href={`${basePath}/platform/payments`}>Payments</Link>
-                  </Pill>
-                </Track>
+                <Pill size="sm" variant="plain" className="max-sm:h-11" asChild>
+                  <Link href={`${basePath}/platform/payments`}>Payments</Link>
+                </Pill>
               }
             >
               {order.payments === null ? (
-                <p className="py-3 text-sm text-muted-foreground">Requires reporting permission</p>
+                <p className="py-3 text-[13px] text-muted-foreground">Requires reporting permission</p>
               ) : order.payments.length === 0 ? (
-                <p className="py-3 text-sm text-muted-foreground">No payments</p>
+                <p className="py-3 text-[13px] text-muted-foreground">No payments</p>
               ) : (
                 <>
-                  <ul className="divide-y text-sm">
+                  <ul className="divide-y text-[13px]">
                     {order.payments.map(payment => (
                       <li key={payment.id} className="flex min-w-0 items-start justify-between gap-4 py-2.5">
                         <div className="min-w-0">
-                          <TitleLine as="p" tone={['captured', 'partially-refunded'].includes(payment.status) && payment.providerTransactionId ? 'ok' : payment.status === 'failed' ? 'bad' : 'idle'} status={PAYMENT_LABELS[payment.status] || payment.status} className="font-medium">
+                          <Status tone={['captured', 'partially-refunded'].includes(payment.status) && payment.providerTransactionId ? 'ok' : payment.status === 'failed' ? 'bad' : 'idle'}>
                             {PAYMENT_LABELS[payment.status] || payment.status}
-                          </TitleLine>
-                          <p className="pl-4 text-xs text-muted-foreground">{payment.providerKey} · {formatDateTime(payment.createdAt, timeZone, '-')}</p>
+                          </Status>
+                          <p className="pl-3.5 text-xs text-muted-foreground">{payment.providerKey} · {formatDateTime(payment.createdAt, timeZone, '-')}</p>
                         </div>
-                        <div className="shrink-0 text-right font-mono text-[13px] tabular-nums">
-                          <p>{formatCents(payment.capturedCents)}</p>
+                        <div className="shrink-0 text-right tabular-nums">
+                          <p className="font-medium">{formatCents(payment.capturedCents)}</p>
                           {payment.refundedCents > 0 && <p className="text-xs text-muted-foreground">-{formatCents(payment.refundedCents)}</p>}
                         </div>
                       </li>
                     ))}
                   </ul>
-                  <p className="flex items-baseline justify-between border-t pt-2 text-sm">
+                  <p className="flex items-baseline justify-between border-t pt-2 text-[13px]">
                     <span className="text-muted-foreground">Verified net</span>
-                    <span className="font-mono tabular-nums">{formatCents(settledNetCents(order.payments))} of {formatCents(order.grandTotalCents)}</span>
+                    <span className="tabular-nums">{formatCents(settledNetCents(order.payments))} of {formatCents(order.grandTotalCents)}</span>
                   </p>
                 </>
               )}

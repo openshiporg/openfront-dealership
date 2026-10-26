@@ -103,7 +103,7 @@ export function LeadFormDialog({
     if (error) setFormError(error)
   }
 
-  const fieldClass = 'h-11 sm:h-9'
+  const fieldClass = 'h-11 rounded-[4px] sm:h-9'
 
   return (
     <Dialog open={open} onOpenChange={next => { if (!busy) onOpenChange(next) }}>
@@ -182,7 +182,7 @@ export function LeadFormDialog({
               <Input id="lead-trade" className={fieldClass} value={values.tradeInVehicle} maxLength={300} placeholder="Year, make, model, miles" onChange={event => set('tradeInVehicle', event.target.value)} />
             </FormField>
             <FormField id="lead-notes" label="Notes" error={errors.notes} className="sm:col-span-2">
-              <Textarea id="lead-notes" rows={3} value={values.notes} maxLength={4000} onChange={event => set('notes', event.target.value)} />
+              <Textarea className="rounded-[4px]" id="lead-notes" rows={3} value={values.notes} maxLength={4000} onChange={event => set('notes', event.target.value)} />
             </FormField>
           </div>
           {formError && <Notice tone="bad">{formError}</Notice>}

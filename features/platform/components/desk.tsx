@@ -1,30 +1,52 @@
 /**
  * Desk kit: the shared building blocks for the dealership platform screens.
- * Status dots sit on the title line; in-page buttons and segmented choices are
- * raised pills inside a recessed track.
+ * Flat and square: underline tabs, 4px controls, 6px panels, hairline tables.
+ * Figures (price, stock, days, gross) are set condensed, like the numbers a lot
+ * writes on the glass; lot yellow marks only what needs attention.
  */
 
 import * as React from 'react'
 import { Slot } from '@radix-ui/react-slot'
 import { cn } from '@/lib/utils'
 import { ScrollFadeTrack } from './deskScrollTrack'
+import { deskFigureFont } from './deskFont'
 
 export type DeskTone = 'ok' | 'warn' | 'bad' | 'info' | 'idle' | 'accent'
 
-const DOT_TONE: Record<DeskTone, string> = {
-  ok: 'bg-emerald-500 shadow-[0_0_0_3px] shadow-emerald-500/20',
-  warn: 'bg-amber-500 shadow-[0_0_0_3px] shadow-amber-500/20',
-  bad: 'bg-red-500 shadow-[0_0_0_3px] shadow-red-500/20',
-  info: 'bg-sky-500 shadow-[0_0_0_3px] shadow-sky-500/20',
+const MARK_TONE: Record<DeskTone, string> = {
+  ok: 'bg-emerald-600 dark:bg-emerald-400',
+  warn: 'bg-amber-500 dark:bg-amber-400',
+  bad: 'bg-red-600 dark:bg-red-400',
+  info: 'bg-sky-600 dark:bg-sky-400',
   idle: 'bg-zinc-400 dark:bg-zinc-500',
   accent: 'bg-foreground',
 }
 
-export function StatusDot({ tone = 'idle', className }: { tone?: DeskTone; className?: string }) {
-  return <span aria-hidden="true" className={cn('inline-block size-2 shrink-0 rounded-full', DOT_TONE[tone], className)} />
+const TEXT_TONE: Record<DeskTone, string> = {
+  ok: 'text-emerald-700 dark:text-emerald-300',
+  warn: 'text-amber-700 dark:text-amber-300',
+  bad: 'text-red-700 dark:text-red-300',
+  info: 'text-sky-700 dark:text-sky-300',
+  idle: 'text-muted-foreground',
+  accent: 'text-foreground',
 }
 
-/** A heading whose status dot sits on its first line, not vertically centred against wrapped text. */
+/** Status mark: a small square. Always paired with a word somewhere on the row; colour is never the only signal. */
+export function StatusDot({ tone = 'idle', className }: { tone?: DeskTone; className?: string }) {
+  return <span aria-hidden="true" className={cn('inline-block size-2 shrink-0 rounded-[1px]', MARK_TONE[tone], className)} />
+}
+
+/** Status column cell: mark plus word. */
+export function Status({ tone = 'idle', children, className }: { tone?: DeskTone; children: React.ReactNode; className?: string }) {
+  return (
+    <span className={cn('inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap text-[13px] font-medium', TEXT_TONE[tone], className)}>
+      <StatusDot tone={tone} />
+      <span className="truncate">{children}</span>
+    </span>
+  )
+}
+
+/** A heading whose status mark sits on its first line, not vertically centred against wrapped text. */
 export function TitleLine({
   tone,
   status,
@@ -47,10 +69,12 @@ export function TitleLine({
   )
 }
 
-/** Page header for PageContainer's `header` slot. */
+/**
+ * Page header for PageContainer's `header` slot. The page's state is said in words in `meta`, so a
+ * header carries no status mark. `eyebrow` is accepted for compatibility and rendered as plain meta.
+ */
 export function DeskHeader({
   title,
-  tone,
   status,
   meta,
   actions,
@@ -64,18 +88,21 @@ export function DeskHeader({
   eyebrow?: React.ReactNode
 }) {
   return (
-    // Actions wrap below the title when they don't fit beside it, and a header Track wraps its own pills
-    // instead of scrolling them out of sight, so no action is ever clipped at phone width.
-    <div className="flex min-w-0 flex-wrap items-end justify-between gap-x-4 gap-y-3 pb-1">
+    <div className="flex min-w-0 flex-wrap items-end justify-between gap-x-6 gap-y-3 pb-1">
       <div className="min-w-0 max-w-full flex-[1_1_16rem]">
-        {eyebrow && <p className="mb-1 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">{eyebrow}</p>}
-        <TitleLine as="h1" tone={tone} status={status} className="text-2xl font-semibold tracking-tight text-foreground">
+        <h1 className="min-w-0 break-words text-2xl font-semibold tracking-[-0.015em] text-foreground">
+          {status && <span className="sr-only">{status}: </span>}
           {title}
-        </TitleLine>
-        {meta && <div className="mt-1 text-sm text-muted-foreground">{meta}</div>}
+        </h1>
+        {(meta || eyebrow) && (
+          <div className="mt-1 flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
+            {eyebrow && <span>{eyebrow}</span>}
+            {meta && <div className="min-w-0">{meta}</div>}
+          </div>
+        )}
       </div>
       {actions && (
-        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 [&_[data-slot=track]]:flex-wrap [&_[data-slot=track]]:overflow-visible [&_[data-slot=track]]:rounded-[20px]">
+        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 [&_[data-slot=track]]:flex-wrap [&_[data-slot=track]]:overflow-visible">
           {actions}
         </div>
       )}
@@ -83,11 +110,15 @@ export function DeskHeader({
   )
 }
 
+// A track is a plain row of controls. When it holds segment choices (pills with `active`), it becomes an
+// underline tab bar: a hairline under the row, the current choice underlined in ink.
 const TRACK_CLASS =
-  'inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-full bg-muted p-1 shadow-[inset_0_1px_2px_rgb(0_0_0/0.08)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:bg-black/30 dark:shadow-[inset_0_1px_2px_rgb(0_0_0/0.5)]'
+  'inline-flex max-w-full items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden has-[>[data-segment]]:gap-0 has-[>[data-segment]]:border-b has-[>[data-segment]]:border-border'
+const TABS_CLASS =
+  'flex max-w-full items-stretch gap-0 overflow-x-auto border-b border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
 const TRACK_BLOCK_CLASS = 'flex w-full [&>*]:flex-1'
 
-/** Recessed track that holds raised pills. */
+/** Row of controls; becomes an underline tab bar when it holds segment choices. */
 export function Track({
   children,
   className,
@@ -95,11 +126,7 @@ export function Track({
   ...props
 }: React.HTMLAttributes<HTMLDivElement> & { block?: boolean }) {
   return (
-    <div
-      data-slot="track"
-      className={cn(TRACK_CLASS, block && TRACK_BLOCK_CLASS, className)}
-      {...props}
-    >
+    <div data-slot="track" className={cn(TRACK_CLASS, block && TRACK_BLOCK_CLASS, className)} {...props}>
       {children}
     </div>
   )
@@ -107,37 +134,44 @@ export function Track({
 
 type PillVariant = 'plain' | 'raised' | 'primary' | 'danger'
 
-const PILL_VARIANT: Record<PillVariant, string> = {
-  plain: 'text-muted-foreground hover:text-foreground',
-  raised: 'bg-background text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.12),inset_0_1px_0_rgb(255_255_255/0.6)] dark:bg-zinc-800 dark:shadow-[0_1px_2px_rgb(0_0_0/0.5),inset_0_1px_0_rgb(255_255_255/0.06)]',
-  primary: 'bg-foreground text-background shadow-[0_1px_2px_rgb(0_0_0/0.2)] hover:bg-foreground/90',
-  danger: 'bg-red-600 text-white shadow-[0_1px_2px_rgb(0_0_0/0.2)] hover:bg-red-600/90',
+const BUTTON_VARIANT: Record<PillVariant, string> = {
+  plain: 'text-muted-foreground hover:bg-muted hover:text-foreground',
+  raised: 'border border-input bg-background text-foreground hover:bg-muted',
+  primary: 'bg-foreground text-background hover:bg-foreground/85',
+  danger: 'bg-red-600 text-white hover:bg-red-700',
 }
+
+const SEGMENT_CLASS =
+  'relative -mb-px rounded-none border-b-2 px-3 text-muted-foreground hover:text-foreground data-[active=true]:border-foreground data-[active=true]:text-foreground border-transparent'
 
 export interface PillProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: PillVariant
-  /** Selected state for segmented choices: renders raised. */
+  /** Selected state for segmented choices: renders as an underline tab. */
   active?: boolean
   size?: 'sm' | 'md'
   asChild?: boolean
 }
 
-/** A pill for use inside <Track>. Unselected segments are plain; actions are raised or primary. */
+/**
+ * The kit's button. Actions are `raised` (outlined, the default), `primary` (ink), `plain` (ghost) or `danger`.
+ * Passing `active` makes it a segment choice, drawn as an underline tab.
+ */
 export const Pill = React.forwardRef<HTMLButtonElement, PillProps>(function Pill(
   { variant, active, size = 'md', asChild, className, type, ...props },
   ref,
 ) {
   const Comp = asChild ? Slot : 'button'
-  const resolved: PillVariant = variant ?? (active === undefined ? 'raised' : active ? 'raised' : 'plain')
+  const segment = active !== undefined && variant === undefined
   return (
     <Comp
       ref={ref}
       type={asChild ? undefined : (type ?? 'button')}
       data-active={active ? 'true' : undefined}
+      data-segment={segment ? '' : undefined}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-medium transition-[color,background-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0',
-        size === 'sm' ? 'h-7 px-2.5 text-xs' : 'h-8 px-3.5 text-sm',
-        PILL_VARIANT[resolved],
+        'inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0',
+        size === 'sm' ? 'h-7 text-xs' : 'h-8 text-[13px]',
+        segment ? cn(SEGMENT_CLASS, size === 'sm' ? 'h-8' : 'h-9') : cn('rounded-[4px]', size === 'sm' ? 'px-2.5' : 'px-3', BUTTON_VARIANT[variant ?? 'raised']),
         className,
       )}
       {...props}
@@ -145,7 +179,7 @@ export const Pill = React.forwardRef<HTMLButtonElement, PillProps>(function Pill
   )
 })
 
-/** Segmented control: one raised pill marks the current choice. */
+/** Underline tabs: one choice is current. Counts sit beside each label in tabular figures. */
 export function Segmented<T extends string>({
   value,
   onChange,
@@ -163,9 +197,9 @@ export function Segmented<T extends string>({
   block?: boolean
   className?: string
 }) {
-  // Overflowing choices scroll sideways behind an edge fade rather than being cut off.
+  // Overflowing tabs scroll sideways behind an edge fade rather than being cut off.
   return (
-    <ScrollFadeTrack role="group" aria-label={label} activeKey={value} className={cn(TRACK_CLASS, block && TRACK_BLOCK_CLASS, className)}>
+    <ScrollFadeTrack role="group" aria-label={label} activeKey={value} className={cn(TABS_CLASS, block && TRACK_BLOCK_CLASS, className)}>
       {options.map((option) => (
         <Pill
           key={option.value}
@@ -175,16 +209,57 @@ export function Segmented<T extends string>({
           disabled={option.disabled}
           onClick={() => onChange(option.value)}
         >
-          {option.tone && <StatusDot tone={option.tone} className="size-1.5 shadow-none" />}
+          {option.tone && <StatusDot tone={option.tone} className="size-1.5" />}
           {option.label}
-          {option.count !== undefined && <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{option.count}</span>}
+          {option.count !== undefined && (
+            <span className={cn('text-[11px] tabular-nums', option.count > 0 ? 'text-foreground/70' : 'text-muted-foreground/70')}>{option.count}</span>
+          )}
         </Pill>
       ))}
     </ScrollFadeTrack>
   )
 }
 
-/** One headline figure. */
+/** A desk figure: condensed, heavy, tabular. Use for the one number a row or summary is about. */
+export function Figure({
+  children,
+  size = 'md',
+  attention,
+  className,
+}: {
+  children: React.ReactNode
+  size?: 'sm' | 'md' | 'lg'
+  /** Marks the figure in lot yellow: aged, overdue, waiting. */
+  attention?: boolean
+  className?: string
+}) {
+  return (
+    <span
+      className={cn(
+        deskFigureFont.className,
+        'inline-block font-bold leading-none tabular-nums tracking-[-0.01em] [font-stretch:72%]',
+        size === 'sm' && 'text-[15px]',
+        size === 'md' && 'text-xl',
+        size === 'lg' && 'text-[28px]',
+        attention && 'rounded-[2px] bg-[oklch(0.9_0.17_95)] px-1 text-zinc-950 dark:bg-[oklch(0.84_0.16_92)]',
+        className,
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
+/** Lot-yellow attention marker beside a word: "Overdue", "42 days", "Waiting". */
+export function Attention({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <span className={cn('inline-flex items-center rounded-[2px] bg-[oklch(0.93_0.13_95)] px-1.5 py-px text-[12px] font-semibold text-zinc-950 dark:bg-[oklch(0.84_0.16_92)]', className)}>
+      {children}
+    </span>
+  )
+}
+
+/** One summary figure. Summary strips sit below the work, so they stay quiet. */
 export function Readout({
   label,
   value,
@@ -199,22 +274,24 @@ export function Readout({
   className?: string
 }) {
   return (
-    <div className={cn('min-w-0 px-4 py-3 md:px-5 md:py-4', className)}>
-      <TitleLine as="p" tone={tone} className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+    <div className={cn('min-w-0 px-4 py-3', className)}>
+      <TitleLine as="p" tone={tone && tone !== 'idle' ? tone : undefined} className="text-[12px] font-medium text-muted-foreground">
         {label}
       </TitleLine>
-      <p className="mt-1.5 truncate text-2xl font-semibold tabular-nums tracking-tight text-foreground">{value}</p>
-      {sub && <p className="mt-0.5 truncate text-xs text-muted-foreground">{sub}</p>}
+      <p className="mt-1.5 truncate text-foreground">
+        <Figure size="lg">{value}</Figure>
+      </p>
+      {sub && <p className="mt-1 truncate text-xs text-muted-foreground">{sub}</p>}
     </div>
   )
 }
 
-/** Hairline-divided row of readouts; two up on phones. */
+/** Hairline-divided row of summary figures; two up on phones. */
 export function ReadoutStrip({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <div
       className={cn(
-        'grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border md:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] [&>*]:bg-card max-md:[&>*:last-child:nth-child(odd)]:col-span-2',
+        'grid grid-cols-2 gap-px overflow-hidden rounded-md border bg-border md:grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] [&>*]:bg-card max-md:[&>*:last-child:nth-child(odd)]:col-span-2',
         className,
       )}
     >
@@ -241,10 +318,10 @@ export function DeskSection({
 }) {
   return (
     <section className={cn('min-w-0', className)} aria-labelledby={id}>
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b pb-2">
-        <h2 id={id} className="flex items-baseline gap-2 text-sm font-semibold text-foreground">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-foreground/15 pb-2">
+        <h2 id={id} className="flex items-baseline gap-2 text-[15px] font-semibold text-foreground">
           {title}
-          {count !== undefined && <span className="font-mono text-xs font-normal tabular-nums text-muted-foreground">{count}</span>}
+          {count !== undefined && <span className="text-[13px] font-normal tabular-nums text-muted-foreground">{count}</span>}
         </h2>
         {actions}
       </div>
@@ -256,9 +333,71 @@ export function DeskSection({
 /** Bordered surface for lists and forms. */
 export function Panel({ children, className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn('min-w-0 rounded-xl border bg-card', className)} {...props}>
+    <div className={cn('min-w-0 rounded-md border bg-card', className)} {...props}>
       {children}
     </div>
+  )
+}
+
+/** Dense table inside a panel. Columns marked `priority` 2/3 drop at narrower widths. */
+export function DeskTable({ children, className, ...props }: React.TableHTMLAttributes<HTMLTableElement>) {
+  return (
+    <div className="min-w-0 overflow-x-auto rounded-md border bg-card">
+      <table className={cn('w-full border-collapse text-[13px]', className)} {...props}>
+        {children}
+      </table>
+    </div>
+  )
+}
+
+const PRIORITY: Record<1 | 2 | 3, string> = { 1: '', 2: 'max-md:hidden', 3: 'max-lg:hidden' }
+
+export function Th({
+  children,
+  className,
+  align = 'left',
+  priority = 1,
+  ...props
+}: React.ThHTMLAttributes<HTMLTableCellElement> & { align?: 'left' | 'right'; priority?: 1 | 2 | 3 }) {
+  return (
+    <th
+      scope="col"
+      className={cn(
+        'sticky top-0 z-[1] h-9 whitespace-nowrap border-b bg-muted/60 px-3 text-[12px] font-medium text-muted-foreground backdrop-blur-sm first:pl-4 last:pr-4',
+        align === 'right' ? 'text-right' : 'text-left',
+        PRIORITY[priority],
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </th>
+  )
+}
+
+export function Td({
+  children,
+  className,
+  align = 'left',
+  priority = 1,
+  ...props
+}: React.TdHTMLAttributes<HTMLTableCellElement> & { align?: 'left' | 'right'; priority?: 1 | 2 | 3 }) {
+  return (
+    <td
+      className={cn('px-3 py-2.5 align-middle first:pl-4 last:pr-4', align === 'right' && 'text-right tabular-nums', PRIORITY[priority], className)}
+      {...props}
+    >
+      {children}
+    </td>
+  )
+}
+
+/** Table row; pass `href` to make the whole row open a record. */
+export function Tr({ children, className, ...props }: React.HTMLAttributes<HTMLTableRowElement>) {
+  return (
+    <tr className={cn('border-b last:border-b-0 transition-colors hover:bg-muted/40', className)} {...props}>
+      {children}
+    </tr>
   )
 }
 
@@ -271,13 +410,13 @@ export function Facts({
   className?: string
 }) {
   return (
-    <dl className={cn('divide-y text-sm', className)}>
+    <dl className={cn('divide-y text-[13px]', className)}>
       {items.filter(Boolean).map((item, index) => {
         const row = item as { label: React.ReactNode; value: React.ReactNode; mono?: boolean }
         return (
           <div key={index} className="flex min-w-0 items-baseline justify-between gap-4 py-2">
             <dt className="shrink-0 text-muted-foreground">{row.label}</dt>
-            <dd className={cn('min-w-0 break-words text-right text-foreground', row.mono && 'font-mono text-[13px] tabular-nums')}>{row.value}</dd>
+            <dd className={cn('min-w-0 break-words text-right text-foreground', row.mono && 'font-mono text-[12px] tabular-nums')}>{row.value}</dd>
           </div>
         )
       })}
@@ -301,15 +440,15 @@ export function Notice({
     <div
       role={role ?? (tone === 'bad' ? 'alert' : 'status')}
       className={cn(
-        'flex min-w-0 items-baseline gap-2 rounded-lg border px-3 py-2 text-sm',
-        tone === 'bad' && 'border-red-500/30 bg-red-500/5 text-red-700 dark:text-red-300',
-        tone === 'warn' && 'border-amber-500/30 bg-amber-500/5 text-amber-800 dark:text-amber-200',
-        tone === 'ok' && 'border-emerald-500/30 bg-emerald-500/5 text-emerald-800 dark:text-emerald-200',
+        'flex min-w-0 items-baseline gap-2 rounded-[4px] border px-3 py-2 text-[13px]',
+        tone === 'bad' && 'border-red-600/30 bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200',
+        tone === 'warn' && 'border-amber-500/40 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100',
+        tone === 'ok' && 'border-emerald-600/30 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100',
         (tone === 'idle' || tone === 'info' || tone === 'accent') && 'bg-muted/50 text-foreground',
         className,
       )}
     >
-      <StatusDot tone={tone} className="-translate-y-[0.1em] shadow-none" />
+      <StatusDot tone={tone} className="-translate-y-[0.1em]" />
       <div className="min-w-0 break-words">{children}</div>
     </div>
   )
@@ -320,15 +459,20 @@ export function Code({ children, className }: { children: React.ReactNode; class
   return <span className={cn('font-mono text-[12px] tabular-nums tracking-tight text-muted-foreground', className)}>{children}</span>
 }
 
-/** Thin segmented meter for a share or progress value from real data (0..1). */
+/** Thin bar for a share or progress value from real data (0..1). */
 export function Meter({ value, tone = 'accent', segments = 12, label }: { value: number; tone?: DeskTone; segments?: number; label?: string }) {
-  const filled = Math.round(Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0)) * segments)
-  const color = tone === 'ok' ? 'bg-emerald-500' : tone === 'warn' ? 'bg-amber-500' : tone === 'bad' ? 'bg-red-500' : tone === 'info' ? 'bg-sky-500' : 'bg-foreground'
+  const share = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0))
+  const filled = Math.round(share * segments)
   return (
-    <span role="meter" aria-valuemin={0} aria-valuemax={segments} aria-valuenow={filled} aria-label={label} className="inline-flex gap-0.5">
-      {Array.from({ length: segments }, (_, index) => (
-        <span key={index} className={cn('h-2.5 w-1 rounded-[1px]', index < filled ? color : 'bg-muted-foreground/20')} />
-      ))}
+    <span
+      role="meter"
+      aria-valuemin={0}
+      aria-valuemax={segments}
+      aria-valuenow={filled}
+      aria-label={label}
+      className="relative inline-block h-1.5 w-16 overflow-hidden rounded-[1px] bg-muted-foreground/15 align-middle"
+    >
+      <span className={cn('absolute inset-y-0 left-0', MARK_TONE[tone])} style={{ width: `${share * 100}%` }} />
     </span>
   )
 }

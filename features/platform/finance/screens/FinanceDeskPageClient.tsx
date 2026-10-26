@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Plus, RefreshCw, Search } from 'lucide-react'
+import { Plus, RefreshCw, Search, X } from 'lucide-react'
 import { DealMenuPanel, type MenuRequest } from '../components/DealMenuPanel'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -10,20 +10,27 @@ import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
 import { OperatorActionDialog, type OperatorActionField } from '@/features/platform/components/OperatorActionDialog'
 import {
+  Attention,
   Code,
   DeskHeader,
   DeskSection,
+  DeskTable,
   Facts,
+  Figure,
   Notice,
-  Panel,
   Pill,
   Readout,
   ReadoutStrip,
   Segmented,
+  Status,
+  Td,
+  Th,
   TitleLine,
+  Tr,
   Track,
   type DeskTone,
 } from '@/features/platform/components/desk'
+import { daysSince, formatAge } from '../lib/display'
 import { centsToDollarInput, parseDollarsToCents, readDeskFinanceEvidence, type FinanceStep, type FinanceStepCode } from '../lib/financeEvidence'
 import { FinanceEvidenceHistory } from '@/features/platform/deals/components/FinanceEvidenceHistory'
 import { formatPhone } from '@/features/platform/lib/format'
@@ -54,6 +61,22 @@ import type {
   FundingCase,
   ProductCancellation,
 } from '../lib/types'
+
+type QueueItem = {
+  key: string
+  who: string
+  vehicle: string
+  stock: string | null
+  stage: string
+  tone: DeskTone
+  waitingOn: string
+  attention: boolean
+  attentionWord: string | null
+  ageDays: number | null
+  amount: string
+  deal?: Deal
+  application?: FinanceApplication
+}
 
 type FinanceTask = { kind: string; deal?: Deal; application?: FinanceApplication; menu?: FinanceMenu; submission?: FinanceSubmission; decision?: string; nextStatus?: string; fields: Record<string, string>; idempotencyKey: string }
 
@@ -670,7 +693,87 @@ export function FinanceDeskPageClient({
     } as Record<string, number>
   }, [deals])
 
-  const selectedDeal = filteredDeals.find(deal => deal.id === selectedId) ?? filteredDeals[0] ?? null
+  // The deal panel opens only once a deal is chosen, from the queue or the table.
+  const selectedDeal = selectedId ? deals.find(deal => deal.id === selectedId) ?? null : null
+  const detailRef = useRef<HTMLDivElement>(null)
+  const [scrollToDetail, setScrollToDetail] = useState(0)
+  const selectDeal = (id: string) => {
+    setSelectedId(id)
+    setScrollToDetail(value => value + 1)
+  }
+  useEffect(() => {
+    if (!scrollToDetail || !detailRef.current) return
+    detailRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    detailRef.current.focus({ preventScroll: true })
+  }, [scrollToDetail])
+
+  // F&I queue: approvals waiting, deals in F&I, contracts in transit or unfunded, and applications waiting on a lender.
+  const queue = useMemo<QueueItem[]>(() => {
+    const now = Date.now()
+    const items: QueueItem[] = []
+    for (const deal of deals) {
+      const status = deal.status || 'pencil'
+      if (!['submitted', 'approved', 'financed'].includes(status)) continue
+      const evidence = deal.financeEvidence
+      const next = nextStepFor(deal)
+      const cash = isCashDeal(deal)
+      const contract = contractPackages.find(item => item.deal?.id === deal.id)
+      const fundingCase = fundingCases.find(item => item.deal?.id === deal.id)
+      const openExceptions = (fundingCase?.exceptions || []).filter(item => item.status === 'open').length
+      const funded = Boolean(evidence?.fundingCurrent)
+      if (status === 'financed' && funded && (!next || next.code === 'delivery')) continue
+      const inTransit = !cash && !funded && contract != null && ['sent', 'viewed', 'signed'].includes(contract.status)
+      const exception = fundingCase?.status === 'exception' || openExceptions > 0
+      const stage = status === 'submitted' ? 'Waiting approval'
+        : exception ? 'Funding exception'
+          : inTransit ? (contract!.status === 'signed' ? 'Signed, unfunded' : 'Contract in transit')
+            : status === 'financed' && !funded ? 'Unfunded'
+              : 'In F&I'
+      const tone: DeskTone = exception ? 'bad' : status === 'submitted' || inTransit || (status === 'financed' && !funded) ? 'warn' : 'info'
+      const since = exception || inTransit ? fundingCase?.updatedAt || deal.updatedAt || deal.createdAt : deal.updatedAt || deal.createdAt
+      const amount = cash
+        ? evidence?.payment ? formatCurrencyCents(Math.max(0, evidence.payment.remainingCents)) : formatCurrency(deal.totalPrice)
+        : formatCurrency(deal.financingAmount)
+      items.push({
+        key: `deal:${deal.id}`,
+        who: getCustomerName(deal),
+        vehicle: getVehicleName(deal),
+        stock: deal.vehicle?.stockNumber || null,
+        stage,
+        tone,
+        waitingOn: status === 'submitted' ? 'Manager approval' : next ? (next.available ? next.label : `${next.label}: ${next.blockedReason || 'blocked'}`) : contract ? label(contractStatusLabels, contract.status) : '-',
+        attention: exception,
+        attentionWord: exception ? `${openExceptions || 1} exception${openExceptions > 1 ? 's' : ''}` : null,
+        ageDays: daysSince(since, now),
+        amount,
+        deal,
+      })
+    }
+    for (const application of applications) {
+      if (!['submitted', 'under-review'].includes(application.status)) continue
+      const lead = application.lead
+      const submission = application.submissions[0]
+      const openTask = lead?.tasks?.find(task => !task.completed)
+      const overdue = Boolean(openTask?.dueDate && new Date(openTask.dueDate).getTime() < now)
+      const vehicle = application.vehicle || lead?.interestedVehicle
+      items.push({
+        key: `application:${application.id}`,
+        who: application.applicantName || [lead?.firstName, lead?.lastName].filter(Boolean).join(' ') || 'Finance applicant',
+        vehicle: vehicle ? [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(' ') || 'No vehicle selected' : 'No vehicle selected',
+        stock: vehicle?.stockNumber || null,
+        stage: submission ? 'Pending decision' : 'Not queued',
+        tone: 'warn',
+        waitingOn: submission ? `Lender decision · ${label(providerLabels, submission.providerKey)}` : openTask ? openTask.title || 'Open task' : 'Queue for lender review',
+        attention: overdue,
+        attentionWord: overdue ? 'Task overdue' : null,
+        ageDays: daysSince(submission?.queuedAt || application.submittedAt, now),
+        amount: application.requestedAmountCents != null ? formatCurrency(application.requestedAmountCents / 100) : '-',
+        application,
+      })
+    }
+    // Marked items first, then oldest first.
+    return items.sort((a, b) => Number(b.attention) - Number(a.attention) || (b.ageDays ?? -1) - (a.ageDays ?? -1))
+  }, [deals, applications, contractPackages, fundingCases])
   const activeFinanced = deals.filter(deal => ['submitted', 'approved', 'financed'].includes(deal.status || '')).reduce((sum, deal) => sum + (deal.financingAmount || 0), 0)
   const presentedMenus = menus.filter(menu => menu.status === 'presented').length
   const fundingExceptions = fundingCases.filter(item => item.status === 'exception').length
@@ -686,10 +789,10 @@ export function FinanceDeskPageClient({
       title="Finance"
       tone={error ? 'bad' : stageCounts.submitted > 0 ? 'warn' : 'ok'}
       status={error ? 'Unavailable' : stageCounts.submitted > 0 ? 'Approvals waiting' : 'Up to date'}
-      meta={error ? 'Unavailable' : `${stageCounts.active} in finance · ${openFinanceRequests.length} applications · ${products.length} products`}
+      meta={error ? 'Unavailable' : `${queue.length} waiting · ${stageCounts.active} in finance · ${openFinanceRequests.length} applications · ${products.length} products`}
       actions={
-        <Track>
-          <Pill onClick={loadDeals} disabled={loading} aria-label="Refresh">
+        <>
+          <Pill variant="plain" onClick={loadDeals} disabled={loading} aria-label="Refresh">
             <RefreshCw className={loading ? 'animate-spin' : undefined} />
             Refresh
           </Pill>
@@ -705,7 +808,7 @@ export function FinanceDeskPageClient({
               New deal
             </Link>
           </Pill>
-        </Track>
+        </>
       }
     />
   )
@@ -768,7 +871,7 @@ export function FinanceDeskPageClient({
               </p>
             </div>
             <Track className="shrink-0">
-              <Pill size="sm" asChild>
+              <Pill size="sm" className="max-md:h-10" asChild>
                 <Link href={dealHref}>Open</Link>
               </Pill>
             </Track>
@@ -778,30 +881,30 @@ export function FinanceDeskPageClient({
           {(primaryNext || canRecordDeposit || deal.status === 'submitted' || deal.status === 'financed' || (!cash && fundingStatusOpen) || hasAcceptedMenu) && (
           <Track aria-label="Deal actions">
             {primaryNext && (
-              <Pill size="sm" variant="primary" onClick={() => runStep(deal, primaryNext.code)} disabled={busy}>
+              <Pill size="sm" className="max-md:h-10" variant="primary" onClick={() => runStep(deal, primaryNext.code)} disabled={busy}>
                 {primaryNext.label}
               </Pill>
             )}
             {canRecordDeposit && (
-              <Pill size="sm" variant={primaryNext ? 'raised' : 'primary'} onClick={() => recordDeposit(deal)} disabled={busy}>
+              <Pill size="sm" className="max-md:h-10" variant={primaryNext ? 'raised' : 'primary'} onClick={() => recordDeposit(deal)} disabled={busy}>
                 Record deposit
               </Pill>
             )}
             {deal.status === 'submitted' && (
-              <Pill size="sm" variant="danger" onClick={() => recordApprovalAndStatus(deal, 'rejected', 'cancelled')} disabled={busy}>
+              <Pill size="sm" className="max-md:h-10" variant="danger" onClick={() => recordApprovalAndStatus(deal, 'rejected', 'cancelled')} disabled={busy}>
                 Reject
               </Pill>
             )}
             {deal.status === 'financed' && (
-              <Pill size="sm" variant={next?.code === 'delivery' ? 'primary' : 'raised'} asChild>
+              <Pill size="sm" className="max-md:h-10" variant={next?.code === 'delivery' ? 'primary' : 'raised'} asChild>
                 <Link href={`${basePath}/platform/delivery`}>Open delivery</Link>
               </Pill>
             )}
             {!cash && fundingStatusOpen && (
-              <Pill size="sm" onClick={() => updateFunding(deal, 'pending')} disabled={busy}>Update funding</Pill>
+              <Pill size="sm" className="max-md:h-10" onClick={() => updateFunding(deal, 'pending')} disabled={busy}>Update funding</Pill>
             )}
             {hasAcceptedMenu && (
-              <Pill size="sm" asChild>
+              <Pill size="sm" className="max-md:h-10" asChild>
                 <Link href={`${basePath}/platform/finance/cancellations?deal=${deal.id}`}>Product cancellation</Link>
               </Pill>
             )}
@@ -814,6 +917,8 @@ export function FinanceDeskPageClient({
           {warnings.length > 0 && <Notice tone="warn">{warnings.join(' · ')}</Notice>}
         </div>
 
+        <div className="grid min-w-0 grid-cols-1 gap-8 xl:grid-cols-2">
+        <div className="min-w-0 space-y-6">
         {steps.length > 0 && (
           <DeskSection title={cash ? 'Cash sale steps' : 'Finance steps'}>
             <ol className="divide-y text-sm">
@@ -840,7 +945,7 @@ export function FinanceDeskPageClient({
                     </div>
                     {showAction && (
                       <Track className="shrink-0 self-start pl-4 sm:self-auto sm:pl-0">
-                        <Pill size="sm" disabled={busy || !step.available} aria-describedby={reasonId} onClick={() => runStep(deal, step.code)}>
+                        <Pill size="sm" className="max-md:h-10" disabled={busy || !step.available} aria-describedby={reasonId} onClick={() => runStep(deal, step.code)}>
                           {step.label}
                         </Pill>
                       </Track>
@@ -857,25 +962,27 @@ export function FinanceDeskPageClient({
             items={[
               { label: 'Contact', value: contactLine(deal) },
               { label: 'Structure', value: cash ? 'Cash' : deal.structureType === 'lease' ? 'Lease' : 'Finance' },
-              { label: 'Vehicle price', value: formatCurrency(deal.vehiclePrice), mono: true },
-              { label: 'Trade-in', value: formatCurrency(deal.tradeInValue), mono: true },
-              cash ? null : { label: 'Down payment', value: formatCurrency(deal.downPayment), mono: true },
-              { label: 'Tax', value: formatCurrency(deal.taxAmount), mono: true },
-              { label: 'Total', value: formatCurrency(deal.totalPrice), mono: true },
+              { label: 'Vehicle price', value: formatCurrency(deal.vehiclePrice) },
+              { label: 'Trade-in', value: formatCurrency(deal.tradeInValue) },
+              cash ? null : { label: 'Down payment', value: formatCurrency(deal.downPayment) },
+              { label: 'Tax', value: formatCurrency(deal.taxAmount) },
+              { label: 'Total', value: formatCurrency(deal.totalPrice) },
               ...(cash ? [
-                payment ? { label: 'Amount due', value: formatCurrencyCents(payment.amountDueCents), mono: true } : null,
-                payment ? { label: 'Balance', value: formatCurrencyCents(Math.max(0, payment.remainingCents)), mono: true } : null,
+                payment ? { label: 'Amount due', value: formatCurrencyCents(payment.amountDueCents) } : null,
+                payment ? { label: 'Balance', value: formatCurrencyCents(Math.max(0, payment.remainingCents)) } : null,
               ] : [
-                { label: 'Amount financed', value: formatCurrency(deal.financingAmount), mono: true },
-                { label: 'APR · term', value: `${deal.apr || 0}% · ${deal.loanTerm || 0} mo`, mono: true },
-                { label: 'Payment', value: formatCurrency(deal.monthlyPayment), mono: true },
+                { label: 'Amount financed', value: formatCurrency(deal.financingAmount) },
+                { label: 'APR · term', value: `${deal.apr || 0}% · ${deal.loanTerm || 0} mo` },
+                { label: 'Payment', value: formatCurrency(deal.monthlyPayment) },
               ]),
-              { label: 'Gross', value: formatCurrency(deal.profit), mono: true },
+              { label: 'Gross', value: formatCurrency(deal.profit) },
               { label: 'Flags', value: warnings.length > 0 ? `${warnings.length}` : 'No flags' },
             ]}
           />
         </DeskSection>
 
+        </div>
+        <div className="min-w-0 space-y-6">
         <DeskSection title="Lender" count={lenderApplications.length}>
           <Ledger empty="No applications">
             {lenderApplications.flatMap(application => [
@@ -889,7 +996,7 @@ export function FinanceDeskPageClient({
                       {label({}, submission.status)}{submission.externalReference ? ` · ${submission.externalReference}` : ''}
                     </p>
                   </div>
-                  <p className="shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">{formatDate(submission.queuedAt, timeZone)}</p>
+                  <p className="shrink-0 text-right text-xs tabular-nums text-muted-foreground">{formatDate(submission.queuedAt, timeZone)}</p>
                 </li>
               )),
               ...application.decisions.map(decision => (
@@ -904,7 +1011,7 @@ export function FinanceDeskPageClient({
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="font-medium tabular-nums">{decision.approvedAmountCents != null ? formatCurrency(decision.approvedAmountCents / 100) : '-'}</p>
-                    <p className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                    <p className="text-[11px] tabular-nums text-muted-foreground">
                       {decision.aprBasisPoints != null ? `${(decision.aprBasisPoints / 100).toFixed(2)}%` : '-'} · {decision.termMonths ?? '-'} mo
                       {decision.monthlyPaymentCents != null ? ` · ${formatCurrency(decision.monthlyPaymentCents / 100)}` : ''}
                     </p>
@@ -927,7 +1034,7 @@ export function FinanceDeskPageClient({
                     </TitleLine>
                     {note && <p className="pl-4 text-xs text-muted-foreground">{note}</p>}
                   </div>
-                  <p className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{formatDate(approval.approvalDate, timeZone)}</p>
+                  <p className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatDate(approval.approvalDate, timeZone)}</p>
                 </li>
               )
             })}
@@ -1003,14 +1110,14 @@ export function FinanceDeskPageClient({
                 { label: cash ? 'Payment' : 'Funding', value: <TitleLine as="span" tone={evidence?.fundingCurrent ? 'ok' : stateTone(evidence?.fundingStatus)}>{evidence?.fundingCurrent ? (cash ? 'Paid in full' : 'Funded') : evidence?.fundingStatus ? label(fundingLabels, evidence.fundingStatus) : cash && payment && payment.receivedCents > 0 ? 'Partly paid' : 'Not started'}</TitleLine> },
                 evidence?.fundingStatus ? { label: 'Worksheet', value: evidence.fundingCurrent ? 'current' : 'earlier version' } : null,
                 evidence?.fundingReference ? { label: cash ? 'Receipt' : 'Reference', value: evidence.fundingReference, mono: true } : null,
-                payment ? { label: 'Amount due', value: formatCurrencyCents(payment.amountDueCents), mono: true } : null,
-                payment ? { label: 'Received', value: formatCurrencyCents(payment.receivedCents), mono: true } : null,
-                payment ? { label: 'Balance', value: formatCurrencyCents(Math.max(0, payment.remainingCents)), mono: true } : null,
-                payment && payment.cashReceivedCents > 0 ? { label: 'Cash received', value: formatCurrencyCents(payment.cashReceivedCents), mono: true } : null,
+                payment ? { label: 'Amount due', value: formatCurrencyCents(payment.amountDueCents) } : null,
+                payment ? { label: 'Received', value: formatCurrencyCents(payment.receivedCents) } : null,
+                payment ? { label: 'Balance', value: formatCurrencyCents(Math.max(0, payment.remainingCents)) } : null,
+                payment && payment.cashReceivedCents > 0 ? { label: 'Cash received', value: formatCurrencyCents(payment.cashReceivedCents) } : null,
                 payment?.form8300Required ? { label: 'Compliance', value: <TitleLine as="span" tone="warn">{FORM_8300_STATE}</TitleLine> } : null,
                 { label: 'Prerequisites', value: evidence?.prerequisites?.current ? (cash ? 'Confirmed with payment' : 'Reviewed') : 'Not yet' },
                 fundingCase ? { label: 'Funding case', value: label(fundingLabels, fundingCase.status) } : null,
-                fundingCase ? { label: 'Open exceptions', value: openFundingExceptions, mono: true } : null,
+                fundingCase ? { label: 'Open exceptions', value: openFundingExceptions } : null,
               ]}
             />
             {payment && (
@@ -1029,7 +1136,7 @@ export function FinanceDeskPageClient({
                           {record.refundedCents > 0 ? ` · Refunded ${formatCurrencyCents(record.refundedCents)}` : ''}
                         </p>
                       </div>
-                      <p className="shrink-0 font-mono text-sm tabular-nums">{formatCurrencyCents(record.netCents)}</p>
+                      <p className="shrink-0 text-sm font-medium tabular-nums">{formatCurrencyCents(record.netCents)}</p>
                     </li>
                   ))}
                 </Ledger>
@@ -1039,7 +1146,7 @@ export function FinanceDeskPageClient({
               {evidence?.prerequisites?.snapshot && (
                 <details>
                   <summary>Prerequisite details</summary>
-                  <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-muted/50 p-2 font-mono text-xs">
+                  <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/50 p-2 font-mono text-xs">
                     {JSON.stringify(evidence.prerequisites.snapshot, null, 2)}
                   </pre>
                 </details>
@@ -1048,7 +1155,7 @@ export function FinanceDeskPageClient({
               {fundingCase?.immutableEvidence != null && (
                 <details className="mt-2">
                   <summary>Funding details</summary>
-                  <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-muted/50 p-2 font-mono text-xs">
+                  <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/50 p-2 font-mono text-xs">
                     {JSON.stringify(fundingCase.immutableEvidence, null, 2)}
                   </pre>
                 </details>
@@ -1056,6 +1163,8 @@ export function FinanceDeskPageClient({
             </div>
           </div>
         </DeskSection>
+        </div>
+        </div>
       </div>
     )
   }
@@ -1074,194 +1183,270 @@ export function FinanceDeskPageClient({
           </Notice>
         )}
 
-        <ReadoutStrip>
-          <Readout label="In finance" value={stageCounts.active} tone={stageCounts.active > 0 ? 'info' : 'idle'} sub={`${stageCounts.submitted} submitted`} />
-          <Readout label="Amount financed" value={formatCurrency(activeFinanced)} />
-          <Readout label="Applications" value={openFinanceRequests.length} tone={openFinanceRequests.length > 0 ? 'warn' : 'idle'} />
-          <Readout label="Menus presented" value={presentedMenus} />
-          <Readout label="Funding exceptions" value={fundingExceptions} tone={fundingExceptions > 0 ? 'bad' : 'ok'} />
-        </ReadoutStrip>
-
-        <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center">
-          <Segmented
-            label="Filter deals"
-            value={filter}
-            onChange={setFilter}
-            options={filterOptions.map(option => ({
-              value: option.value,
-              label: option.label,
-              count: stageCounts[option.value],
-              tone: option.value === 'all' || option.value === 'active' ? undefined : statusTones[option.value],
-            }))}
-          />
-          <div className="relative min-w-0 flex-1 lg:max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="rounded-full pl-9"
-              value={search}
-              onChange={event => setSearch(event.target.value)}
-              placeholder="Search applicant, vehicle, stock, or reference"
-              aria-label="Search finance"
-            />
-          </div>
-          <Select value={sortOrder} onValueChange={setSortOrder}>
-            <SelectTrigger className="w-full rounded-full lg:w-[180px]" aria-label="Sort deals">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="recent">Recently active</SelectItem>
-              <SelectItem value="oldest">Oldest first</SelectItem>
-              <SelectItem value="amount-desc">Highest balance</SelectItem>
-            </SelectContent>
-          </Select>
-          {loading && (
-            <span className="text-sm text-muted-foreground" role="status">
-              Refreshing…
-            </span>
+        <DeskSection title="Needs you" count={queue.length} id="finance-queue">
+          {queue.length === 0 ? (
+            <p className="py-3 text-sm text-muted-foreground">Nothing waiting in F&I</p>
+          ) : (
+            <DeskTable aria-labelledby="finance-queue">
+              <thead>
+                <tr>
+                  <Th>Customer · vehicle</Th>
+                  <Th>Stage</Th>
+                  <Th priority={2}>Waiting on</Th>
+                  <Th align="right">Age</Th>
+                  <Th priority={2} align="right">Amount</Th>
+                  <Th align="right"><span className="sr-only">Actions</span></Th>
+                </tr>
+              </thead>
+              <tbody>
+                {queue.map(item => (
+                  <Tr key={item.key} className={cn(item.deal && selectedDeal?.id === item.deal.id && 'bg-muted/60')}>
+                    <Td>
+                      <p className="font-medium text-foreground">{item.who}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.vehicle}
+                        {item.stock && <> · <Code>#{item.stock}</Code></>}
+                      </p>
+                    </Td>
+                    <Td><Status tone={item.tone}>{item.stage}</Status></Td>
+                    <Td priority={2} className="text-muted-foreground">
+                      <span className="flex min-w-0 flex-wrap items-baseline gap-1.5">
+                        {item.attentionWord && <Attention>{item.attentionWord}</Attention>}
+                        <span className="min-w-0 break-words">{item.waitingOn}</span>
+                      </span>
+                    </Td>
+                    <Td align="right"><Figure size="sm" attention={item.attention}>{formatAge(item.ageDays)}</Figure></Td>
+                    <Td priority={2} align="right">{item.amount}</Td>
+                    <Td align="right">
+                      <span className="inline-flex flex-wrap justify-end gap-2">
+                        {item.deal ? (
+                          <Pill size="sm" className="max-md:h-10" variant={selectedDeal?.id === item.deal.id ? 'primary' : 'raised'} aria-pressed={selectedDeal?.id === item.deal.id} onClick={() => selectDeal(item.deal!.id)}>
+                            Work deal
+                          </Pill>
+                        ) : item.application ? (
+                          <>
+                            {item.application.submissions[0] && ['under-review', 'submitted'].includes(item.application.status) ? (
+                              <Pill size="sm" className="max-md:h-10" onClick={() => recordApplicationDecision(item.application!)} disabled={updatingId === item.application.id}>Record decision</Pill>
+                            ) : !item.application.submissions[0] ? (
+                              <Pill size="sm" className="max-md:h-10" onClick={() => queueApplication(item.application!)} disabled={updatingId === item.application.id}>Queue for lender review</Pill>
+                            ) : null}
+                            <Pill size="sm" variant="plain" className="max-md:h-10" asChild>
+                              <Link href={`${basePath}/platform/finance/applications/${item.application.id}`}>Open</Link>
+                            </Pill>
+                          </>
+                        ) : null}
+                      </span>
+                    </Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </DeskTable>
           )}
-        </div>
+        </DeskSection>
 
-        <div className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
-          <DeskSection title="Queue" count={filteredDeals.length}>
-            {filteredDeals.length === 0 ? (
-              searchTerm || filter !== 'active' ? <Empty label="No matching deals" onReset={resetFilters} /> : <Empty label="No deals in finance" />
-            ) : (
-              <Panel className="divide-y overflow-hidden">
+        {selectedDeal ? (
+          <div ref={detailRef} tabIndex={-1} aria-label="Selected deal" role="region" className="min-w-0 scroll-mt-4 rounded-md border bg-card p-4 focus:outline-none md:p-5">
+            <div className="mb-3 flex justify-end">
+              <Pill size="sm" variant="plain" className="max-md:h-10" onClick={() => setSelectedId(null)}><X />Close</Pill>
+            </div>
+            {renderDealDetail(selectedDeal)}
+          </div>
+        ) : deals.length > 0 ? (
+          <p className="text-[13px] text-muted-foreground">Choose a deal to work its finance steps.</p>
+        ) : null}
+
+        <DeskSection title="Deals" count={filteredDeals.length}>
+          <div className="mb-3 flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center">
+            <Segmented
+              label="Filter deals"
+              value={filter}
+              onChange={setFilter}
+              options={filterOptions.map(option => ({
+                value: option.value,
+                label: option.label,
+                count: stageCounts[option.value],
+                tone: option.value === 'all' || option.value === 'active' ? undefined : statusTones[option.value],
+              }))}
+            />
+            <div className="relative min-w-0 flex-1 lg:max-w-sm">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="h-10 rounded-[4px] pl-9"
+                value={search}
+                onChange={event => setSearch(event.target.value)}
+                placeholder="Search applicant, vehicle, stock, or reference"
+                aria-label="Search finance"
+              />
+            </div>
+            <Select value={sortOrder} onValueChange={setSortOrder}>
+              <SelectTrigger className="h-10 w-full rounded-[4px] lg:w-[180px]" aria-label="Sort deals">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="recent">Recently active</SelectItem>
+                <SelectItem value="oldest">Oldest first</SelectItem>
+                <SelectItem value="amount-desc">Highest balance</SelectItem>
+              </SelectContent>
+            </Select>
+            {loading && (
+              <span className="text-sm text-muted-foreground" role="status">
+                Refreshing…
+              </span>
+            )}
+          </div>
+          {filteredDeals.length === 0 ? (
+            searchTerm || filter !== 'active' ? <Empty label="No matching deals" onReset={resetFilters} /> : <Empty label="No deals in finance" />
+          ) : (
+            <DeskTable>
+              <thead>
+                <tr>
+                  <Th>Customer · vehicle</Th>
+                  <Th>Status</Th>
+                  <Th priority={2}>Next step</Th>
+                  <Th priority={3}>Flags</Th>
+                  <Th priority={3}>Updated</Th>
+                  <Th align="right">Amount</Th>
+                  <Th priority={2} align="right">Terms</Th>
+                </tr>
+              </thead>
+              <tbody>
                 {filteredDeals.map(deal => {
                   const warnings = getDealWarnings(deal)
                   const status = deal.status || 'pencil'
                   const selected = selectedDeal?.id === deal.id
+                  const cash = isCashDeal(deal)
+                  const payment = deal.financeEvidence?.payment
+                  const flags = [...warnings, ...(payment?.form8300Required ? ['Form 8300 required'] : [])]
                   return (
-                    <button
-                      key={deal.id}
-                      type="button"
-                      onClick={() => setSelectedId(deal.id)}
-                      aria-pressed={selected}
-                      className={cn(
-                        'flex w-full min-w-0 items-start justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                        selected && 'bg-muted/60',
-                      )}
-                    >
-                      <div className="min-w-0">
-                        <TitleLine as="p" tone={statusTones[status] || 'idle'} status={statusLabels[status] || status} className="text-sm font-medium">
-                          {getCustomerName(deal)} · {getVehicleName(deal)}
-                        </TitleLine>
-                        <p className="truncate pl-4 text-xs text-muted-foreground">
-                          <Code>#{deal.vehicle?.stockNumber || '-'}</Code> · {statusLabels[status] || status}
-                          {deal.financeEvidence?.nextStep ? ` · Next: ${nextStepFor(deal)?.label}` : ''}
-                          {deal.financeEvidence?.payment?.form8300Required ? ' · Form 8300 required' : ''}
-                          {warnings.length > 0 ? ` · ${warnings.join(', ')}` : ''}
-                        </p>
-                      </div>
-                      {isCashDeal(deal) ? (
-                        <div className="shrink-0 text-right">
-                          {deal.financeEvidence?.payment && deal.financeEvidence.payment.remainingCents > 0 ? (
-                            <>
-                              <p className="text-sm font-medium tabular-nums">{formatCurrencyCents(deal.financeEvidence.payment.remainingCents)}</p>
-                              <p className="font-mono text-[11px] tabular-nums text-muted-foreground">Cash · due</p>
-                            </>
-                          ) : (
-                            <>
-                              <p className="text-sm font-medium tabular-nums">{deal.financeEvidence?.payment ? formatCurrencyCents(deal.financeEvidence.payment.amountDueCents) : formatCurrency(deal.totalPrice)}</p>
-                              <p className="font-mono text-[11px] tabular-nums text-muted-foreground">{deal.financeEvidence?.payment ? 'Cash · paid' : 'Cash · total'}</p>
-                            </>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="shrink-0 text-right">
-                          <p className="text-sm font-medium tabular-nums">{formatCurrency(deal.financingAmount)}</p>
-                          <p className="font-mono text-[11px] tabular-nums text-muted-foreground">
-                            {deal.apr || 0}% · {deal.loanTerm || 0} mo
-                          </p>
-                          <p className="font-mono text-[11px] tabular-nums text-muted-foreground">{formatCurrency(deal.monthlyPayment)}/mo</p>
-                        </div>
-                      )}
-                    </button>
+                    <Tr key={deal.id} className={cn('cursor-pointer', selected && 'bg-muted/60')} onClick={() => selectDeal(deal.id)}>
+                      <Td>
+                        <button
+                          type="button"
+                          onClick={event => { event.stopPropagation(); selectDeal(deal.id) }}
+                          aria-pressed={selected}
+                          className="flex min-h-10 min-w-0 flex-col items-start justify-center text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <span className="font-medium text-foreground hover:underline">{getCustomerName(deal)}</span>
+                          <span className="text-xs text-muted-foreground">{getVehicleName(deal)} · <Code>#{deal.vehicle?.stockNumber || '-'}</Code></span>
+                        </button>
+                      </Td>
+                      <Td><Status tone={statusTones[status] || 'idle'}>{statusLabels[status] || status}</Status></Td>
+                      <Td priority={2} className="text-muted-foreground">{nextStepFor(deal)?.label || '-'}</Td>
+                      <Td priority={3} className="text-muted-foreground">{flags.length ? flags.join(', ') : '-'}</Td>
+                      <Td priority={3} className="whitespace-nowrap text-muted-foreground">{formatDate(deal.updatedAt || deal.createdAt, timeZone)}</Td>
+                      <Td align="right">
+                        <Figure size="sm">
+                          {cash
+                            ? payment && payment.remainingCents > 0 ? formatCurrencyCents(payment.remainingCents) : payment ? formatCurrencyCents(payment.amountDueCents) : formatCurrency(deal.totalPrice)
+                            : formatCurrency(deal.financingAmount)}
+                        </Figure>
+                        {cash && <p className="text-[11px] text-muted-foreground">{payment && payment.remainingCents > 0 ? 'Cash · due' : payment ? 'Cash · paid' : 'Cash · total'}</p>}
+                      </Td>
+                      <Td priority={2} align="right" className="whitespace-nowrap text-muted-foreground">
+                        {cash ? 'Cash' : <>{deal.apr || 0}% · {deal.loanTerm || 0} mo · {formatCurrency(deal.monthlyPayment)}/mo</>}
+                      </Td>
+                    </Tr>
                   )
                 })}
-              </Panel>
-            )}
-          </DeskSection>
-
-          <div className="min-w-0">{selectedDeal ? renderDealDetail(selectedDeal) : <Empty label="No deal selected" />}</div>
-        </div>
+              </tbody>
+            </DeskTable>
+          )}
+        </DeskSection>
 
         <DeskSection title="Applications" count={openFinanceRequests.length}>
           {openFinanceRequests.length === 0 ? (
             searchTerm ? <Empty label="No matching applications" onReset={resetFilters} /> : <Empty label="No finance applications" />
           ) : (
-            <Panel className="divide-y">
-              {openFinanceRequests.map(application => {
-                const lead = application.lead
-                const openTask = lead?.tasks?.find(task => !task.completed)
-                const applicantName = application.applicantName || [lead?.firstName, lead?.lastName].filter(Boolean).join(' ') || 'Finance applicant'
-                const vehicle = application.vehicle || lead?.interestedVehicle
-                const vehicleName = vehicle ? `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.trim() : 'No vehicle selected'
-                const submission = application.submissions[0]
-                const decision = application.decisions[0]
-                const busy = updatingId === application.id
-                const lenderState = submission ? submission.status : openTask ? `${openTask.title || 'Open task'} · ${formatDate(openTask.dueDate, timeZone)}` : 'Not queued'
-                return (
-                  <div key={application.id} className="flex min-w-0 flex-col gap-3 px-4 py-3 md:flex-row md:items-start md:justify-between">
-                    <div className="flex min-w-0 flex-1 items-start justify-between gap-4">
-                      <div className="min-w-0">
-                        <TitleLine as="p" tone={stateTone(application.status)} status={label({}, application.status)} className="text-sm font-medium">
-                          <Link href={`${basePath}/platform/finance/applications/${application.id}`} className="hover:underline">
-                            {applicantName}
-                          </Link>
-                          {' · '}
-                          {vehicleName}
-                        </TitleLine>
-                        <p className="pl-4 text-xs text-muted-foreground">
-                          <Code>{application.reference || application.id}</Code> · {label({}, application.status)} · Stock <Code>#{vehicle?.stockNumber || '-'}</Code> · {formatCurrency((vehicle?.priceCents || 0) / 100)}
+            <DeskTable>
+              <thead>
+                <tr>
+                  <Th>Applicant · vehicle</Th>
+                  <Th>Status</Th>
+                  <Th priority={2}>Lender</Th>
+                  <Th priority={3}>Submitted</Th>
+                  <Th align="right">Requested</Th>
+                  <Th priority={3} align="right">Decision terms</Th>
+                  <Th align="right"><span className="sr-only">Actions</span></Th>
+                </tr>
+              </thead>
+              <tbody>
+                {openFinanceRequests.map(application => {
+                  const lead = application.lead
+                  const openTask = lead?.tasks?.find(task => !task.completed)
+                  const applicantName = application.applicantName || [lead?.firstName, lead?.lastName].filter(Boolean).join(' ') || 'Finance applicant'
+                  const vehicle = application.vehicle || lead?.interestedVehicle
+                  const vehicleName = vehicle ? `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.trim() : 'No vehicle selected'
+                  const submission = application.submissions[0]
+                  const decision = application.decisions[0]
+                  const busy = updatingId === application.id
+                  const lenderState = submission ? submission.status : openTask ? `${openTask.title || 'Open task'} · ${formatDate(openTask.dueDate, timeZone)}` : 'Not queued'
+                  return (
+                    <Tr key={application.id}>
+                      <Td>
+                        <Link href={`${basePath}/platform/finance/applications/${application.id}`} className="font-medium text-foreground hover:underline">
+                          {applicantName}
+                        </Link>
+                        <p className="text-xs text-muted-foreground">
+                          {vehicleName} · <Code>#{vehicle?.stockNumber || '-'}</Code> · <Code>{application.reference || application.id}</Code>
                         </p>
-                        <p className="pl-4 text-xs text-muted-foreground">
-                          Submitted {formatDate(application.submittedAt, timeZone)} · {submission ? `${label(providerLabels, submission.providerKey)} · ` : ''}{submission ? label({}, lenderState) : lenderState}
-                          {decision ? ` · Latest decision: ${label(decisionLabels, decision.decision)}` : ''}
-                        </p>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className="text-sm font-medium tabular-nums">
-                          {application.requestedAmountCents != null ? formatCurrency(application.requestedAmountCents / 100) : '-'}
-                        </p>
-                        {decision && (
-                          <p className="font-mono text-[11px] tabular-nums text-muted-foreground">
-                            {decision.aprBasisPoints != null ? `${(decision.aprBasisPoints / 100).toFixed(2)}%` : '-'} · {decision.termMonths ?? '-'} mo
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <Track className="self-start md:shrink-0">
-                      {lead && !openTask && (
-                        <Pill size="sm" onClick={() => startFinanceFollowUp(lead)} disabled={updatingId === lead.id}>
-                          Create task
-                        </Pill>
-                      )}
-                      {!submission && (
-                        <Pill size="sm" onClick={() => queueApplication(application)} disabled={busy}>
-                          Queue for lender review
-                        </Pill>
-                      )}
-                      {submission && ['under-review', 'submitted'].includes(application.status) && (
-                        <Pill size="sm" variant="primary" onClick={() => recordApplicationDecision(application)} disabled={busy}>
-                          Record decision
-                        </Pill>
-                      )}
-                      <Pill size="sm" asChild>
-                        <Link href={`${basePath}/platform/finance/applications/${application.id}`}>Open</Link>
-                      </Pill>
-                      {lead && (
-                        <Pill size="sm" variant="plain" asChild>
-                          <Link href={`${basePath}/platform/crm/${lead.id}`}>Open lead</Link>
-                        </Pill>
-                      )}
-                    </Track>
-                  </div>
-                )
-              })}
-            </Panel>
+                      </Td>
+                      <Td>
+                        <Status tone={stateTone(application.status)}>{label({}, application.status)}</Status>
+                        {decision && <p className="mt-0.5 text-xs text-muted-foreground">Latest: {label(decisionLabels, decision.decision)}</p>}
+                      </Td>
+                      <Td priority={2} className="text-muted-foreground">
+                        {submission ? `${label(providerLabels, submission.providerKey)} · ${label({}, lenderState)}` : lenderState}
+                      </Td>
+                      <Td priority={3} className="whitespace-nowrap text-muted-foreground">{formatDate(application.submittedAt, timeZone)}</Td>
+                      <Td align="right">
+                        <Figure size="sm">{application.requestedAmountCents != null ? formatCurrency(application.requestedAmountCents / 100) : '-'}</Figure>
+                        <p className="text-[11px] text-muted-foreground">Vehicle {formatCurrency((vehicle?.priceCents || 0) / 100)}</p>
+                      </Td>
+                      <Td priority={3} align="right" className="whitespace-nowrap text-muted-foreground">
+                        {decision ? `${decision.aprBasisPoints != null ? `${(decision.aprBasisPoints / 100).toFixed(2)}%` : '-'} · ${decision.termMonths ?? '-'} mo` : '-'}
+                      </Td>
+                      <Td align="right">
+                        <span className="inline-flex flex-wrap justify-end gap-2">
+                          {lead && !openTask && (
+                            <Pill size="sm" className="max-md:h-10" onClick={() => startFinanceFollowUp(lead)} disabled={updatingId === lead.id}>
+                              Create task
+                            </Pill>
+                          )}
+                          {!submission && (
+                            <Pill size="sm" className="max-md:h-10" onClick={() => queueApplication(application)} disabled={busy}>
+                              Queue for lender review
+                            </Pill>
+                          )}
+                          {submission && ['under-review', 'submitted'].includes(application.status) && (
+                            <Pill size="sm" className="max-md:h-10" variant="primary" onClick={() => recordApplicationDecision(application)} disabled={busy}>
+                              Record decision
+                            </Pill>
+                          )}
+                          <Pill size="sm" className="max-md:h-10" asChild>
+                            <Link href={`${basePath}/platform/finance/applications/${application.id}`}>Open</Link>
+                          </Pill>
+                          {lead && (
+                            <Pill size="sm" className="max-md:h-10" variant="plain" asChild>
+                              <Link href={`${basePath}/platform/crm/${lead.id}`}>Open lead</Link>
+                            </Pill>
+                          )}
+                        </span>
+                      </Td>
+                    </Tr>
+                  )
+                })}
+              </tbody>
+            </DeskTable>
           )}
         </DeskSection>
+
+        <ReadoutStrip>
+          <Readout label="In finance" value={stageCounts.active} sub={`${stageCounts.submitted} submitted`} />
+          <Readout label="Amount financed" value={formatCurrency(activeFinanced)} />
+          <Readout label="Applications" value={openFinanceRequests.length} />
+          <Readout label="Menus presented" value={presentedMenus} />
+          <Readout label="Funding exceptions" value={fundingExceptions} tone={fundingExceptions > 0 ? 'bad' : undefined} sub={fundingExceptions > 0 ? 'Open exceptions' : undefined} />
+        </ReadoutStrip>
 
         <OperatorActionDialog
           open={Boolean(task)}

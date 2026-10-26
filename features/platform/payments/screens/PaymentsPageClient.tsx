@@ -2,13 +2,13 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronRight, Pencil, Plus, Power, RefreshCw, Search } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Pencil, Plus, Power, RefreshCw, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
-import { Code, DeskHeader, Notice, Panel, Pill, Readout, ReadoutStrip, Segmented, TitleLine, Track } from '@/features/platform/components/desk'
+import { Attention, Code, DeskHeader, DeskSection, DeskTable, Figure, Notice, Panel, Pill, Readout, ReadoutStrip, Segmented, Status, Td, Th, Tr, Track, type DeskTone } from '@/features/platform/components/desk'
 import { recordReference } from '@/features/platform/lib/format'
 import { parseDollarsToCents } from '@/features/platform/deals/lib/moneyInput'
 import { CommandDialog, type CommandField, type FieldErrors } from '@/features/platform/accounting/components/CommandDialog'
@@ -22,7 +22,7 @@ import {
   getPayments,
   updatePaymentProvider,
 } from '../actions'
-import { BUILT_IN_ADAPTERS, paymentSource, providerAdapter } from '../lib/format'
+import { BUILT_IN_ADAPTERS, SETTLED_STATUSES, paymentSource, providerAdapter } from '../lib/format'
 import type { CheckoutSourceOption, PaymentCounts, PaymentListItem, PaymentProviderRecord } from '../lib/types'
 
 type View = 'transactions' | 'providers'
@@ -30,6 +30,22 @@ type ProviderForm = { provider: PaymentProviderRecord | null; values: Record<str
 
 const STATUS_TABS = ['pending', 'captured', 'partially-refunded', 'refunded', 'failed', 'canceled'] as const
 const RARE_TABS = ['creating', 'authorized'] as const
+const ALL_FILTERS = { status: 'all', provider: 'all', from: '', to: '', search: '' }
+const DAY_MS = 86_400_000
+
+type QueueReason = { rank: number; label: string; tone: DeskTone }
+
+/** Why a payment is waiting on the office, or null when it is settled and reconciled. */
+function queueReason(tx: PaymentListItem): QueueReason | null {
+  if (tx.status === 'failed') return { rank: 0, label: 'Failed', tone: 'bad' }
+  if (SETTLED_STATUSES.includes(tx.status) && !tx.reconciledAt) return { rank: 1, label: 'Not reconciled', tone: 'warn' }
+  if (['creating', 'pending', 'authorized'].includes(tx.status)) return { rank: 2, label: tx.status === 'authorized' ? 'Authorized, not captured' : 'Not captured', tone: 'warn' }
+  return null
+}
+
+function ageDays(value: string) {
+  return Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / DAY_MS))
+}
 
 export function PaymentsPageClient({
   timeZone,
@@ -60,6 +76,9 @@ export function PaymentsPageClient({
   const [to, setTo] = useState('')
   const [search, setSearch] = useState('')
   const firstLoad = useRef(true)
+  // The queue reads the unfiltered list, so tabs and search below do not hide waiting payments.
+  const [queueSource, setQueueSource] = useState(initialTransactions)
+  const [queueError, setQueueError] = useState(initialError)
 
   const dateError = from && to && from > to ? 'Start date is after end date' : null
 
@@ -71,6 +90,10 @@ export function PaymentsPageClient({
         setTransactions(result.data.transactions)
         setCounts(result.data.counts)
         setError(null)
+        if (JSON.stringify(filters) === JSON.stringify(ALL_FILTERS)) {
+          setQueueSource(result.data.transactions)
+          setQueueError(null)
+        }
       } else {
         setError(result.error)
       }
@@ -269,9 +292,28 @@ export function PaymentsPageClient({
     { name: 'amount', label: 'Amount', type: 'money' },
   ]
 
+  const loadQueue = useCallback(async () => {
+    const result = await getPayments(ALL_FILTERS, timeZone)
+    if (result.success) {
+      setQueueSource(result.data.transactions)
+      setQueueError(null)
+    } else {
+      setQueueError(result.error)
+    }
+  }, [timeZone])
+
   const refresh = async () => {
-    await Promise.all([dateError ? Promise.resolve() : loadTransactions({ status, provider, from, to, search }), loadProviders()])
+    await Promise.all([dateError ? Promise.resolve() : loadTransactions({ status, provider, from, to, search }), loadProviders(), loadQueue()])
   }
+
+  const queue = useMemo(
+    () =>
+      queueSource
+        .map(tx => ({ tx, reason: queueReason(tx) }))
+        .filter((row): row is { tx: PaymentListItem; reason: QueueReason } => row.reason !== null)
+        .sort((a, b) => a.reason.rank - b.reason.rank || new Date(a.tx.createdAt).getTime() - new Date(b.tx.createdAt).getTime()),
+    [queueSource],
+  )
 
   const filtered = Boolean(search.trim()) || status !== 'all' || provider !== 'all' || Boolean(from) || Boolean(to)
   const resetFilters = () => {
@@ -301,10 +343,19 @@ export function PaymentsPageClient({
       title="Payments"
       tone={error ? 'bad' : (counts.failed || 0) > 0 ? 'bad' : (counts.unreconciled || 0) > 0 ? 'warn' : 'ok'}
       status={error ? 'Unavailable' : (counts.failed || 0) > 0 ? `${counts.failed} failed` : (counts.unreconciled || 0) > 0 ? `${counts.unreconciled} unreconciled` : 'Clear'}
-      meta={`${counts.all || 0} transactions · ${installed.length} of ${providers.length} providers enabled`}
+      meta={
+        error
+          ? 'Unavailable'
+          : [
+              (counts.failed || 0) > 0 ? `${counts.failed} failed` : '',
+              (counts.unreconciled || 0) > 0 ? `${counts.unreconciled} not reconciled` : '',
+              `${counts.all || 0} transactions`,
+              `${installed.length} of ${providers.length} providers enabled`,
+            ].filter(Boolean).join(' · ')
+      }
       actions={
-        <Track>
-          <Pill onClick={refresh} disabled={loading} aria-label="Refresh" className="h-11 sm:h-8">
+        <>
+          <Pill variant="plain" onClick={refresh} disabled={loading} aria-label="Refresh" className="h-11 sm:h-8">
             <RefreshCw className={loading ? 'animate-spin' : undefined} />
             Refresh
           </Pill>
@@ -319,7 +370,7 @@ export function PaymentsPageClient({
               Add provider
             </Pill>
           )}
-        </Track>
+        </>
       }
     />
   )
@@ -332,11 +383,77 @@ export function PaymentsPageClient({
             <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
               <p className="min-w-0">{message}</p>
               <Track>
-                <Pill size="sm" variant="plain" onClick={() => setMessage(null)}>Dismiss</Pill>
+                <Pill size="sm" variant="plain" onClick={() => setMessage(null)} className="h-10 sm:h-7">Dismiss</Pill>
               </Track>
             </div>
           </Notice>
         )}
+
+        <DeskSection title="Needs you" count={queueError ? undefined : queue.length} id="payments-queue">
+          {queueError ? (
+            <Notice tone="bad">Queue unavailable: {queueError}</Notice>
+          ) : queue.length === 0 ? (
+            <p className="py-3 text-sm text-muted-foreground">No failed, uncaptured or unreconciled payments</p>
+          ) : (
+            <DeskTable aria-labelledby="payments-queue">
+              <thead>
+                <tr>
+                  <Th>Payment</Th>
+                  <Th>Waiting on</Th>
+                  <Th priority={3}>Provider</Th>
+                  <Th priority={2} align="right">Age</Th>
+                  <Th align="right">Amount</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {queue.map(({ tx, reason }) => {
+                  const source = paymentSource(tx)
+                  const days = ageDays(tx.createdAt)
+                  return (
+                    <Tr key={tx.id} className="cursor-pointer" onClick={() => router.push(`${basePath}/platform/payments/${tx.id}`)}>
+                      <Td className="min-w-0">
+                        <Link href={`${basePath}/platform/payments/${tx.id}`} className="block min-w-0 font-medium text-foreground hover:underline" onClick={event => event.stopPropagation()}>
+                          {source.label}
+                        </Link>
+                        <p className="mt-0.5 flex min-w-0 flex-wrap gap-x-2 text-xs text-muted-foreground">
+                          <Code>{recordReference('PAY', tx.id)}</Code>
+                          {source.detail && <span>{source.detail}</span>}
+                          <span className="md:hidden">{days}d</span>
+                        </p>
+                      </Td>
+                      <Td>
+                        {reason.tone === 'bad' ? (
+                          <span className="inline-flex flex-wrap items-center gap-1.5">
+                            <Status tone="bad">{reason.label}</Status>
+                            <Attention>Retry or cancel</Attention>
+                          </span>
+                        ) : (
+                          <Status tone={reason.tone}>{reason.label}</Status>
+                        )}
+                        {tx.failureCode && <p className="mt-0.5"><Code>{tx.failureCode}</Code></p>}
+                      </Td>
+                      <Td priority={3} className="text-muted-foreground">{providerName(tx.providerKey)}</Td>
+                      <Td priority={2} align="right">
+                        <Figure size="sm">{days}</Figure>
+                        <span className="ml-1 text-xs text-muted-foreground">{days === 1 ? 'day' : 'days'}</span>
+                      </Td>
+                      <Td align="right" className="whitespace-nowrap">
+                        <Figure size="sm">{money(tx.amountCents, tx.currency)}</Figure>
+                      </Td>
+                    </Tr>
+                  )
+                })}
+              </tbody>
+            </DeskTable>
+          )}
+        </DeskSection>
+
+        <ReadoutStrip>
+          <Readout label="Pending" value={(counts.pending || 0) + (counts.creating || 0) + (counts.authorized || 0)} tone={counts.pending ? 'warn' : 'idle'} />
+          <Readout label="Captured" value={counts.captured || 0} tone="ok" />
+          <Readout label="Unreconciled" value={counts.unreconciled || 0} tone={counts.unreconciled ? 'warn' : 'idle'} />
+          <Readout label="Failed" value={counts.failed || 0} tone={counts.failed ? 'bad' : 'idle'} />
+        </ReadoutStrip>
 
         <Segmented<View>
           label="Payments view"
@@ -350,22 +467,15 @@ export function PaymentsPageClient({
 
         {view === 'transactions' ? (
           <div className="space-y-4">
-            <ReadoutStrip>
-              <Readout label="Pending" value={(counts.pending || 0) + (counts.creating || 0) + (counts.authorized || 0)} tone={counts.pending ? 'warn' : 'idle'} />
-              <Readout label="Captured" value={counts.captured || 0} tone="ok" />
-              <Readout label="Unreconciled" value={counts.unreconciled || 0} tone={counts.unreconciled ? 'warn' : 'idle'} />
-              <Readout label="Failed" value={counts.failed || 0} tone={counts.failed ? 'bad' : 'idle'} />
-            </ReadoutStrip>
-
             <div className="flex min-w-0 flex-col gap-3">
               <Segmented label="Payment status" value={status} onChange={setStatus} options={statusOptions} />
               <div className="grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_12rem_10rem_10rem]">
                 <div className="relative min-w-0 sm:col-span-2 lg:col-span-1">
                   <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input value={search} onChange={event => setSearch(event.target.value)} placeholder="Payment ID, provider ID or reference" aria-label="Search payments" className="h-11 pl-9 sm:h-9" />
+                  <Input value={search} onChange={event => setSearch(event.target.value)} placeholder="Payment ID, provider ID or reference" aria-label="Search payments" className="h-11 rounded-[4px] pl-9 sm:h-9" />
                 </div>
                 <Select value={provider} onValueChange={setProvider}>
-                  <SelectTrigger className="h-11 w-full sm:h-9" aria-label="Provider">
+                  <SelectTrigger className="h-11 w-full rounded-[4px] sm:h-9" aria-label="Provider">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -375,8 +485,8 @@ export function PaymentsPageClient({
                     ))}
                   </SelectContent>
                 </Select>
-                <Input type="date" value={from} max={to || undefined} onChange={event => setFrom(event.target.value)} aria-label="From date" aria-invalid={Boolean(dateError)} className="h-11 sm:h-9" />
-                <Input type="date" value={to} min={from || undefined} onChange={event => setTo(event.target.value)} aria-label="To date" aria-invalid={Boolean(dateError)} className="h-11 sm:h-9" />
+                <Input type="date" value={from} max={to || undefined} onChange={event => setFrom(event.target.value)} aria-label="From date" aria-invalid={Boolean(dateError)} className="h-11 rounded-[4px] sm:h-9" />
+                <Input type="date" value={to} min={from || undefined} onChange={event => setTo(event.target.value)} aria-label="To date" aria-invalid={Boolean(dateError)} className="h-11 rounded-[4px] sm:h-9" />
               </div>
               {dateError && <p className="text-xs text-red-600 dark:text-red-400">{dateError}</p>}
             </div>
@@ -388,51 +498,70 @@ export function PaymentsPageClient({
                   <p className="mt-0.5 text-muted-foreground">{error}</p>
                 </Notice>
                 <Track>
-                  <Pill onClick={() => loadTransactions({ status, provider, from, to, search })}>Retry</Pill>
+                  <Pill onClick={() => loadTransactions({ status, provider, from, to, search })} className="h-10 sm:h-8">Retry</Pill>
                 </Track>
               </div>
+            ) : transactions.length === 0 ? (
+              <Panel aria-busy={loading}>
+                <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-muted-foreground">
+                  <p>{loading ? 'Loading…' : filtered ? 'No payments match' : 'No payments'}</p>
+                  {filtered && !loading && (
+                    <Track>
+                      <Pill size="sm" onClick={resetFilters} className="h-10 sm:h-7">Reset filters</Pill>
+                    </Track>
+                  )}
+                </div>
+              </Panel>
             ) : (
-              <Panel className={loading ? 'opacity-60 transition-opacity' : undefined} aria-busy={loading}>
-                {transactions.length === 0 ? (
-                  <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-muted-foreground">
-                    <p>{loading ? 'Loading…' : filtered ? 'No payments match' : 'No payments'}</p>
-                    {filtered && !loading && (
-                      <Track>
-                        <Pill size="sm" onClick={resetFilters}>Reset filters</Pill>
-                      </Track>
-                    )}
-                  </div>
-                ) : (
-                  <ul className="divide-y">
+              <div className={loading ? 'opacity-60 transition-opacity' : undefined} aria-busy={loading}>
+                <DeskTable>
+                  <thead>
+                    <tr>
+                      <Th>Payment</Th>
+                      <Th>Status</Th>
+                      <Th priority={2}>Provider</Th>
+                      <Th priority={3}>Reconciled</Th>
+                      <Th priority={3}>Created</Th>
+                      <Th align="right">Amount</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {transactions.map(tx => {
                       const source = paymentSource(tx)
                       return (
-                        <li key={tx.id}>
-                          <Link href={`${basePath}/platform/payments/${tx.id}`} className="flex min-h-11 min-w-0 items-center gap-3 px-4 py-3 hover:bg-muted/40">
-                            <div className="min-w-0 flex-1">
-                              <TitleLine as="p" tone={paymentTone(tx.status)} status={PAYMENT_STATUS_LABEL[tx.status] || tx.status} className="text-sm font-medium text-foreground">
-                                {source.label} <Code>{recordReference('PAY', tx.id)}</Code>
-                              </TitleLine>
-                              <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                                {[
-                                  PAYMENT_STATUS_LABEL[tx.status] || tx.status,
-                                  source.detail,
-                                  providerName(tx.providerKey),
-                                  tx.refundedCents ? `${money(tx.refundedCents, tx.currency)} refunded` : '',
-                                  tx.reconciledAt ? 'Reconciled' : '',
-                                  dateTime(tx.createdAt, timeZone),
-                                ].filter(Boolean).join(' · ')}
-                              </p>
-                            </div>
-                            <span className="shrink-0 font-mono text-[13px] tabular-nums">{money(tx.amountCents, tx.currency)}</span>
-                            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-                          </Link>
-                        </li>
+                        <Tr key={tx.id} className="cursor-pointer" onClick={() => router.push(`${basePath}/platform/payments/${tx.id}`)}>
+                          <Td className="min-w-0">
+                            <Link href={`${basePath}/platform/payments/${tx.id}`} className="block min-w-0 font-medium text-foreground hover:underline" onClick={event => event.stopPropagation()}>
+                              {source.label}
+                            </Link>
+                            <p className="mt-0.5 flex min-w-0 flex-wrap gap-x-2 text-xs text-muted-foreground">
+                              <Code>{recordReference('PAY', tx.id)}</Code>
+                              {source.detail && <span>{source.detail}</span>}
+                              <span className="lg:hidden">{dateTime(tx.createdAt, timeZone)}</span>
+                            </p>
+                          </Td>
+                          <Td>
+                            <Status tone={paymentTone(tx.status)}>{PAYMENT_STATUS_LABEL[tx.status] || tx.status}</Status>
+                            {tx.refundedCents > 0 && <p className="mt-0.5 text-xs text-muted-foreground">{money(tx.refundedCents, tx.currency)} refunded</p>}
+                          </Td>
+                          <Td priority={2} className="text-muted-foreground">{providerName(tx.providerKey)}</Td>
+                          <Td priority={3} className="text-muted-foreground">
+                            {tx.reconciledAt ? (
+                              <Status tone="ok">Reconciled</Status>
+                            ) : SETTLED_STATUSES.includes(tx.status) ? (
+                              <Status tone="warn">Not reconciled</Status>
+                            ) : (
+                              '-'
+                            )}
+                          </Td>
+                          <Td priority={3} className="whitespace-nowrap text-muted-foreground">{dateTime(tx.createdAt, timeZone)}</Td>
+                          <Td align="right" className="whitespace-nowrap font-medium">{money(tx.amountCents, tx.currency)}</Td>
+                        </Tr>
                       )
                     })}
-                  </ul>
-                )}
-              </Panel>
+                  </tbody>
+                </DeskTable>
+              </div>
             )}
           </div>
         ) : providerError ? (
@@ -442,43 +571,53 @@ export function PaymentsPageClient({
               <p className="mt-0.5 text-muted-foreground">{providerError}</p>
             </Notice>
             <Track>
-              <Pill onClick={loadProviders}>Retry</Pill>
+              <Pill onClick={loadProviders} className="h-10 sm:h-8">Retry</Pill>
             </Track>
           </div>
-        ) : (
+        ) : providers.length === 0 ? (
           <Panel>
-            {providers.length === 0 ? (
-              <p className="py-10 text-center text-sm text-muted-foreground">No payment providers</p>
-            ) : (
-              <ul className="divide-y">
-                {providers.map(record => {
-                  const adapter = providerAdapter(record)
-                  return (
-                    <li key={record.id} className="flex min-w-0 flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center">
-                      <div className="min-w-0 flex-1">
-                        <TitleLine as="p" tone={record.isInstalled ? 'ok' : 'idle'} status={record.isInstalled ? 'Enabled' : 'Disabled'} className="text-sm font-medium text-foreground">
-                          {record.name} <Code>{record.code}</Code>
-                        </TitleLine>
-                        <p className="mt-0.5 break-words text-xs text-muted-foreground">
-                          {[record.isInstalled ? 'Enabled' : 'Disabled', adapter ? `Adapter ${adapter}` : 'Per-function adapters', `${record.transactionsCount} transactions`].join(' · ')}
-                        </p>
-                      </div>
-                      <Track className="self-start sm:self-auto">
-                        <Pill size="sm" className="h-11 sm:h-7" onClick={() => openProvider(record)}>
+            <p className="py-10 text-center text-sm text-muted-foreground">No payment providers</p>
+          </Panel>
+        ) : (
+          <DeskTable>
+            <thead>
+              <tr>
+                <Th>Provider</Th>
+                <Th>Status</Th>
+                <Th priority={3}>Adapter</Th>
+                <Th priority={2} align="right">Transactions</Th>
+                <Th align="right"><span className="sr-only">Actions</span></Th>
+              </tr>
+            </thead>
+            <tbody>
+              {providers.map(record => {
+                const adapter = providerAdapter(record)
+                return (
+                  <Tr key={record.id}>
+                    <Td className="min-w-0">
+                      <p className="font-medium text-foreground">{record.name}</p>
+                      <Code>{record.code}</Code>
+                    </Td>
+                    <Td><Status tone={record.isInstalled ? 'ok' : 'idle'}>{record.isInstalled ? 'Enabled' : 'Disabled'}</Status></Td>
+                    <Td priority={3} className="max-w-[18rem] break-all text-muted-foreground">{adapter ? <Code>{adapter}</Code> : 'Per-function adapters'}</Td>
+                    <Td priority={2} align="right">{record.transactionsCount}</Td>
+                    <Td align="right">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Pill size="sm" className="h-10 sm:h-7" onClick={() => openProvider(record)}>
                           <Pencil />
                           Edit
                         </Pill>
-                        <Pill size="sm" className="h-11 sm:h-7" disabled={toggling === record.id} onClick={() => toggleProvider(record)}>
+                        <Pill size="sm" className="h-10 sm:h-7" disabled={toggling === record.id} onClick={() => toggleProvider(record)}>
                           <Power />
                           {record.isInstalled ? 'Disable' : 'Enable'}
                         </Pill>
-                      </Track>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </Panel>
+                      </div>
+                    </Td>
+                  </Tr>
+                )
+              })}
+            </tbody>
+          </DeskTable>
         )}
 
         <CommandDialog

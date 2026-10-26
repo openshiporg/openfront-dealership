@@ -10,6 +10,7 @@ import { OperatorActionDialog } from '@/features/platform/components/OperatorAct
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
 import {
+  Attention,
   Code,
   DeskHeader,
   DeskSection,
@@ -408,9 +409,9 @@ export function LeadDetailPageClient({
     return (
       <PageContainer title="CRM" breadcrumbs={breadcrumbs}>
         <div className="space-y-3 px-4 pb-24 md:px-6" role="status" aria-label="Loading lead">
-          <div className="h-7 w-56 max-w-full animate-pulse rounded bg-muted" />
-          <div className="h-4 w-72 max-w-full animate-pulse rounded bg-muted" />
-          <div className="h-48 animate-pulse rounded-xl bg-muted" />
+          <div className="h-7 w-56 max-w-full animate-pulse rounded-[2px] bg-muted" />
+          <div className="h-4 w-72 max-w-full animate-pulse rounded-[2px] bg-muted" />
+          <div className="h-48 animate-pulse rounded-md bg-muted" />
         </div>
       </PageContainer>
     )
@@ -438,24 +439,36 @@ export function LeadDetailPageClient({
   const allowedStatuses = LEAD_TRANSITIONS[lead.status || 'new'] || []
   const activeVisits = lead.salesVisits.filter(visit => VISIT_ACTIONS[visit.status || ''])
   const pastVisits = lead.salesVisits.filter(visit => !VISIT_ACTIONS[visit.status || ''])
-  const selectSm = 'h-11 sm:h-9'
+  const selectSm = 'h-11 rounded-[4px] sm:h-9'
+  const nextTask = [...openTasks].sort((a, b) =>
+    (a.dueDate ? Date.parse(a.dueDate) : Infinity) - (b.dueDate ? Date.parse(b.dueDate) : Infinity))[0] || null
+  const nextTaskOverdue = Boolean(nextTask?.dueDate && Date.parse(nextTask.dueDate) < Date.now())
+  const awaitingResponse = !isClosed && !lead.firstResponseAt
+  const responseState = lead.firstResponseAt
+    ? `Responded ${formatDateTime(lead.firstResponseAt, timeZone)}`
+    : responseOverdue
+      ? 'First response overdue'
+      : lead.firstResponseDueAt ? `Respond by ${formatDateTime(lead.firstResponseDueAt, timeZone)}` : 'No response yet'
+  const dealHref = `${basePath}/platform/deals/create?leadId=${lead.id}${lead.interestedVehicle ? `&vehicleId=${lead.interestedVehicle.id}` : ''}`
+  // While the lead waits on a first response, reaching the customer is the next action; after that, the deal.
+  const contactFirst = awaitingResponse && Boolean(lead.phone || lead.email)
 
   const header = (
     <DeskHeader
       title={leadName(lead)}
       tone={currentStatus.tone}
       status={currentStatus.label}
-      meta={<span>{currentStatus.label} · {sourceLabel(lead.source)} · Created {formatDateTime(lead.createdAt, timeZone)} · Last contact {formatDateTime(lead.lastContact, timeZone)}</span>}
+      meta={<span>{currentStatus.label} · {responseState} · {lead.assignedSalesperson?.name || 'Unassigned'} · {sourceLabel(lead.source)} · Created {formatDateTime(lead.createdAt, timeZone)}</span>}
       actions={
-        <Track>
-          {lead.phone && <Pill asChild><a href={`tel:${lead.phone}`}><Phone />Call</a></Pill>}
-          {lead.email && <Pill asChild><a href={`mailto:${lead.email}`}><Mail />Email</a></Pill>}
-          <Pill onClick={openEdit} disabled={!canManage || saving} title={manageReason}><Pencil />Edit</Pill>
-          <Pill asChild variant="primary">
-            <Link href={`${basePath}/platform/deals/create?leadId=${lead.id}${lead.interestedVehicle ? `&vehicleId=${lead.interestedVehicle.id}` : ''}`}>Start deal</Link>
+        <>
+          <Pill variant="plain" className="max-md:h-10" onClick={() => loadLead()} aria-label="Refresh"><RefreshCw /></Pill>
+          <Pill variant="plain" className="max-md:h-10" onClick={openEdit} disabled={!canManage || saving} title={manageReason}><Pencil />Edit</Pill>
+          {lead.email && <Pill asChild className="max-md:h-10" variant={contactFirst && !lead.phone ? 'primary' : 'raised'}><a href={`mailto:${lead.email}`}><Mail />Email</a></Pill>}
+          {lead.phone && <Pill asChild className="max-md:h-10" variant={contactFirst ? 'primary' : 'raised'}><a href={`tel:${lead.phone}`}><Phone />Call</a></Pill>}
+          <Pill asChild className="max-md:h-10" variant={contactFirst ? 'raised' : 'primary'}>
+            <Link href={dealHref}>Start deal</Link>
           </Pill>
-          <Pill onClick={() => loadLead()} aria-label="Refresh"><RefreshCw /></Pill>
-        </Track>
+        </>
       }
     />
   )
@@ -503,6 +516,70 @@ export function LeadDetailPageClient({
         {notice && <Notice tone={notice.tone} className="mb-4">{notice.text}</Notice>}
         {!canManage && <p className="mb-4 text-xs text-muted-foreground">Read only · requires lead management permission</p>}
 
+        <div className="mb-8 grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+          <DeskSection title="Next task" id="lead-next-task">
+            {nextTask ? (
+              <div className="flex min-w-0 items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="break-words text-sm font-medium text-foreground">{nextTask.title}</p>
+                  <p className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                    {nextTask.dueDate ? (
+                      nextTaskOverdue
+                        ? <Attention>Overdue · {formatDateTime(nextTask.dueDate, timeZone)}</Attention>
+                        : <span>Due {formatDateTime(nextTask.dueDate, timeZone)}</span>
+                    ) : <span>No due date</span>}
+                    <span className="capitalize">{nextTask.priority}</span>
+                    {nextTask.assignedTo?.name && <span>{nextTask.assignedTo.name}</span>}
+                  </p>
+                  {nextTask.description && <p className="mt-1 break-words text-xs text-muted-foreground">{nextTask.description}</p>}
+                </div>
+                <Pill
+                  variant="primary"
+                  className="h-10 shrink-0 md:h-8"
+                  onClick={() => completeTask(nextTask.id)}
+                  disabled={!canTasks || saving}
+                  title={canTasks ? undefined : 'Requires task permission'}
+                  aria-label={`Complete ${nextTask.title || 'task'}`}
+                >
+                  <Check />Done
+                </Pill>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <p className="text-[13px] text-muted-foreground">No open tasks</p>
+                {awaitingResponse && <p className="text-[13px] text-foreground">{responseOverdue ? <Attention>First response overdue</Attention> : responseState}</p>}
+              </div>
+            )}
+          </DeskSection>
+
+          <DeskSection title="Contact" id="lead-contact">
+            <div className="grid min-w-0 grid-cols-1 gap-x-8 md:grid-cols-2">
+              <Facts items={[
+                { label: 'Phone', value: lead.phone ? <a className="underline-offset-2 hover:underline" href={`tel:${lead.phone}`}>{formatPhone(lead.phone)}</a> : '-' },
+                { label: 'Email', value: lead.email ? <a className="break-all underline-offset-2 hover:underline" href={`mailto:${lead.email}`}>{lead.email}</a> : '-' },
+                { label: 'Preferred', value: <span className="capitalize">{lead.customer?.preferredChannel && lead.customer.preferredChannel !== 'none' ? lead.customer.preferredChannel : 'No preference'}</span> },
+                { label: 'First response', value: responseOverdue ? <Attention>Overdue</Attention> : lead.firstResponseAt ? `Responded ${formatDateTime(lead.firstResponseAt, timeZone)}` : lead.firstResponseDueAt ? `Due ${formatDateTime(lead.firstResponseDueAt, timeZone)}` : 'No SLA' },
+              ]} />
+              <Facts items={[
+                { label: 'Source', value: sourceLabel(lead.source) },
+                { label: 'Timeframe', value: timeframeLabel(lead.timeframe) },
+                { label: 'Last contact', value: formatDateTime(lead.lastContact, timeZone) },
+                { label: 'Customer', value: lead.customer ? (
+                  <Link className="underline underline-offset-2" href={`${basePath}/platform/customers/${lead.customer.id}`}>
+                    {[lead.customer.firstName, lead.customer.lastName].filter(Boolean).join(' ') || 'Customer'}
+                  </Link>
+                ) : 'Not linked' },
+                duplicateCount > 0 && { label: 'Duplicates', value: (
+                  <Link className="text-amber-700 underline underline-offset-2 dark:text-amber-300" href={`${basePath}/platform/customers/${lead.customer?.id}#duplicates`}>
+                    {duplicateCount} possible
+                  </Link>
+                ) },
+                lead.customer?.household && { label: 'Household', value: lead.customer.household.displayName || '-' },
+              ]} />
+            </div>
+          </DeskSection>
+        </div>
+
         <div className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="min-w-0 space-y-8">
             <DeskSection title="Activity" count={lead.interactions.length}>
@@ -537,13 +614,13 @@ export function LeadDetailPageClient({
                     value={interaction.notes}
                     onChange={event => { setInteraction(prev => ({ ...prev, notes: event.target.value })); setInteractionError(null) }}
                     placeholder="Notes"
-                    className="min-h-20"
+                    className="min-h-20 rounded-[4px]"
                   />
                   {interactionError && <p className="text-xs text-red-600 dark:text-red-400">{interactionError}</p>}
                   <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <label className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
                       Follow up
-                      <Input aria-label="Follow-up date" type="datetime-local" value={interaction.followUpDate} onChange={event => setInteraction(prev => ({ ...prev, followUpDate: event.target.value }))} className="h-11 min-w-0 flex-1 sm:h-9 sm:w-56" />
+                      <Input aria-label="Follow-up date" type="datetime-local" value={interaction.followUpDate} onChange={event => setInteraction(prev => ({ ...prev, followUpDate: event.target.value }))} className="h-11 min-w-0 flex-1 rounded-[4px] sm:h-9 sm:w-56" />
                     </label>
                     <Track className="self-end">
                       <Pill variant="primary" className="h-11 sm:h-8" onClick={logInteraction} disabled={saving}>Log activity</Pill>
@@ -558,13 +635,13 @@ export function LeadDetailPageClient({
                 <ol className="mt-4 space-y-0">
                   {lead.interactions.map(item => (
                     <li key={item.id} className="relative border-l pb-4 pl-5 last:pb-0">
-                      <span className="absolute -left-[4px] top-1.5 size-2 rounded-full bg-muted-foreground/50" aria-hidden="true" />
+                      <span className="absolute -left-[4px] top-1.5 size-2 rounded-[1px] bg-muted-foreground/50" aria-hidden="true" />
                       <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3">
                         <p className="text-sm font-medium capitalize">
                           {label(item.interactionType)}
                           <span className="font-normal text-muted-foreground"> · {label(item.outcome)}</span>
                         </p>
-                        <p className="font-mono text-[11px] tabular-nums text-muted-foreground">{formatDateTime(item.date, timeZone)}</p>
+                        <p className="text-xs tabular-nums text-muted-foreground">{formatDateTime(item.date, timeZone)}</p>
                       </div>
                       {item.performedBy?.name && <p className="text-xs text-muted-foreground">{item.performedBy.name}</p>}
                       {item.notes && <p className="mt-1 whitespace-pre-line break-words text-sm">{item.notes}</p>}
@@ -580,7 +657,7 @@ export function LeadDetailPageClient({
               count={openTasks.length}
               actions={completedTasks.length > 0 ? (
                 <Track>
-                  <Pill size="sm" active={showCompleted} onClick={() => setShowCompleted(value => !value)}>{completedTasks.length} completed</Pill>
+                  <Pill size="sm" variant="plain" className="max-md:h-10" aria-pressed={showCompleted} onClick={() => setShowCompleted(value => !value)}>{showCompleted ? 'Hide' : 'Show'} {completedTasks.length} completed</Pill>
                 </Track>
               ) : undefined}
             >
@@ -624,10 +701,10 @@ export function LeadDetailPageClient({
 
               {canTasks && (
                 <Panel className="space-y-2 p-3">
-                  <Input aria-label="Task title" aria-invalid={Boolean(taskError)} className="h-11 sm:h-9" value={task.title} onChange={event => { setTask(prev => ({ ...prev, title: event.target.value })); setTaskError(null) }} placeholder="Task title" maxLength={200} />
-                  <Textarea aria-label="Task details" value={task.description} onChange={event => setTask(prev => ({ ...prev, description: event.target.value }))} placeholder="Details" className="min-h-16" maxLength={4000} />
+                  <Input aria-label="Task title" aria-invalid={Boolean(taskError)} className="h-11 rounded-[4px] sm:h-9" value={task.title} onChange={event => { setTask(prev => ({ ...prev, title: event.target.value })); setTaskError(null) }} placeholder="Task title" maxLength={200} />
+                  <Textarea aria-label="Task details" value={task.description} onChange={event => setTask(prev => ({ ...prev, description: event.target.value }))} placeholder="Details" className="min-h-16 rounded-[4px]" maxLength={4000} />
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <Input aria-label="Task due date" type="datetime-local" value={task.dueDate} onChange={event => setTask(prev => ({ ...prev, dueDate: event.target.value }))} className="h-11 min-w-0 sm:h-9" />
+                    <Input aria-label="Task due date" type="datetime-local" value={task.dueDate} onChange={event => setTask(prev => ({ ...prev, dueDate: event.target.value }))} className="h-11 min-w-0 rounded-[4px] sm:h-9" />
                     <Select value={task.assignedToId || '__owner__'} onValueChange={value => setTask(prev => ({ ...prev, assignedToId: value === '__owner__' ? '' : value }))}>
                       <SelectTrigger className={selectSm} aria-label="Task assignee"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -722,17 +799,17 @@ export function LeadDetailPageClient({
             >
               <Facts items={[
                 { label: 'Salesperson', value: lead.assignedSalesperson?.name || 'Unassigned' },
-                { label: 'Assigned', value: formatDateTime(lead.assignedAt, timeZone), mono: true },
+                { label: 'Assigned', value: formatDateTime(lead.assignedAt, timeZone) },
                 { label: 'First response', value: lead.firstResponseAt ? `Responded ${formatDateTime(lead.firstResponseAt, timeZone)}` : lead.firstResponseDueAt ? `Due ${formatDateTime(lead.firstResponseDueAt, timeZone)}` : 'No SLA' },
               ]} />
-              <p className="mt-3 font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Assignment history</p>
+              <p className="mt-4 text-[12px] font-medium text-muted-foreground">Assignment history</p>
               {lead.assignmentEvents.length === 0 ? (
                 <p className="mt-1 text-sm text-muted-foreground">No assignments</p>
               ) : (
                 <ol className="mt-2 space-y-0">
                   {lead.assignmentEvents.map(event => (
                     <li key={event.id} className="relative border-l pb-3 pl-4 last:pb-0">
-                      <span className="absolute -left-[4px] top-1.5 size-2 rounded-full bg-muted-foreground/50" aria-hidden="true" />
+                      <span className="absolute -left-[4px] top-1.5 size-2 rounded-[1px] bg-muted-foreground/50" aria-hidden="true" />
                       <p className="text-sm">{event.fromUser?.name ? `${event.fromUser.name} to ` : ''}{event.toUser?.name || 'Unknown'}</p>
                       <p className="text-xs text-muted-foreground">
                         {[formatDateTime(event.assignedAt, timeZone), ROUTE_LABEL[event.routeKey || ''] || (event.routeKey ? 'Routing rule' : null), event.actor?.name ? `by ${event.actor.name}` : null].filter(Boolean).join(' · ')}
@@ -742,26 +819,6 @@ export function LeadDetailPageClient({
                   ))}
                 </ol>
               )}
-            </DeskSection>
-
-            <DeskSection title="Contact">
-              <Facts items={[
-                { label: 'Email', value: lead.email || '-' },
-                { label: 'Phone', value: formatPhone(lead.phone) || '-', mono: true },
-                { label: 'Source', value: sourceLabel(lead.source) },
-                { label: 'Timeframe', value: timeframeLabel(lead.timeframe) },
-                { label: 'Customer', value: lead.customer ? (
-                  <Link className="underline underline-offset-2" href={`${basePath}/platform/customers/${lead.customer.id}`}>
-                    {[lead.customer.firstName, lead.customer.lastName].filter(Boolean).join(' ') || 'Customer'}
-                  </Link>
-                ) : 'Not linked' },
-                duplicateCount > 0 && { label: 'Duplicates', value: (
-                  <Link className="text-amber-700 underline underline-offset-2 dark:text-amber-300" href={`${basePath}/platform/customers/${lead.customer?.id}#duplicates`}>
-                    {duplicateCount} possible
-                  </Link>
-                ) },
-                lead.customer?.household && { label: 'Household', value: lead.customer.household.displayName || '-' },
-              ]} />
             </DeskSection>
 
             <DeskSection title="Vehicle of interest">
@@ -820,7 +877,7 @@ export function LeadDetailPageClient({
                     return (
                       <div key={testDrive.id} className="flex min-w-0 items-baseline justify-between gap-3 px-3 py-2.5">
                         <TitleLine as="p" tone={testDrive.completed ? 'ok' : testDrive.noShow ? 'bad' : 'info'} status={state} className="text-sm">{vehicleName(testDrive.vehicle)}</TitleLine>
-                        <span className="shrink-0 text-right text-xs text-muted-foreground"><span className="font-mono tabular-nums">{formatDateTime(testDrive.scheduledTime, timeZone)}</span> · {state}</span>
+                        <span className="shrink-0 text-right text-xs text-muted-foreground"><span className="tabular-nums">{formatDateTime(testDrive.scheduledTime, timeZone)}</span> · {state}</span>
                       </div>
                     )
                   })}
@@ -856,10 +913,10 @@ export function LeadDetailPageClient({
                 <Facts items={[
                   { label: 'Status', value: <span className="capitalize">{lead.cadenceStatus || 'none'}</span> },
                   !!lead.cadenceStep && { label: 'Step', value: lead.cadenceStep },
-                  !!lead.cadenceDueAt && { label: 'Due', value: formatDateTime(lead.cadenceDueAt, timeZone), mono: true },
+                  !!lead.cadenceDueAt && { label: 'Due', value: formatDateTime(lead.cadenceDueAt, timeZone) },
                 ]} />
                 <FormField id="cadence-campaign" label="Campaign">
-                  <Input id="cadence-campaign" className="h-11 sm:h-9" value={cadence.campaignKey} onChange={event => setCadence(prev => ({ ...prev, campaignKey: event.target.value }))} disabled={!canManage} />
+                  <Input id="cadence-campaign" className="h-11 rounded-[4px] sm:h-9" value={cadence.campaignKey} onChange={event => setCadence(prev => ({ ...prev, campaignKey: event.target.value }))} disabled={!canManage} />
                 </FormField>
                 <Select value={cadence.cadenceKey} onValueChange={value => setCadence(prev => ({ ...prev, cadenceKey: value }))} disabled={!canManage}>
                   <SelectTrigger aria-label="Follow-up cadence" className={selectSm}><SelectValue /></SelectTrigger>

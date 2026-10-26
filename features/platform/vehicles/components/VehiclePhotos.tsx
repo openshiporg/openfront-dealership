@@ -10,7 +10,7 @@ import { PHOTO_ACCEPT, preparePhoto } from '../lib/preparePhoto'
 
 export type PhotoTile = { id: string; url: string | null; name: string }
 
-const fieldLabelClass = 'font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground'
+const fieldLabelClass = 'text-[12px] font-medium text-muted-foreground'
 /** Icon pills grow to a 44px target at phone width. */
 const iconPill = 'w-7 px-0 max-sm:size-11'
 
@@ -69,24 +69,24 @@ export function VehiclePhotoEditor({
     <div className="grid gap-2 sm:col-span-2">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <label htmlFor={inputId} className={fieldLabelClass}>{label}</label>
-        <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{tiles.length ? `${tiles.length} ${tiles.length === 1 ? 'photo' : 'photos'}` : 'No photos'}</span>
+        <span className="text-[12px] tabular-nums text-muted-foreground">{tiles.length ? `${tiles.length} ${tiles.length === 1 ? 'photo' : 'photos'}` : 'No photos'}</span>
       </div>
       <div
         onDragOver={event => { event.preventDefault(); if (!busy) setDragging(true) }}
         onDragLeave={() => setDragging(false)}
         onDrop={drop}
-        className={`grid gap-3 rounded-lg border border-dashed p-2 ${dragging ? 'border-foreground bg-muted' : ''}`}
+        className={`grid gap-3 rounded-md border border-dashed p-2 ${dragging ? 'border-foreground bg-muted' : ''}`}
       >
         {tiles.length > 0 && (
           <ul className="grid gap-2 sm:grid-cols-3">
             {tiles.map((tile, index) => (
-              <li key={tile.id} className="flex min-w-0 items-center overflow-hidden rounded-[14px] border bg-card sm:block">
+              <li key={tile.id} className="flex min-w-0 items-center overflow-hidden rounded-[4px] border bg-card sm:block">
                 <div className="relative aspect-[4/3] w-24 shrink-0 bg-muted sm:w-auto">
                   {tile.url
                     ? <Image src={tile.url} alt={tile.name} fill unoptimized sizes="200px" className="object-contain" />
                     : <span className="absolute inset-0 grid place-items-center text-xs text-muted-foreground">No preview</span>}
                   {index === 0 && (
-                    <span className="absolute left-1.5 top-1.5 rounded-full bg-foreground px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em] text-background">Primary</span>
+                    <span className="absolute left-1.5 top-1.5 rounded-[2px] bg-foreground px-1.5 py-px text-[11px] font-medium text-background">Primary</span>
                   )}
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col items-center gap-1 p-1.5">

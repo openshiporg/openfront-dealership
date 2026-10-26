@@ -24,7 +24,7 @@ export function MoneyInput({ cents, onCentsChange, className = '', ...props }: O
       type="text"
       inputMode="decimal"
       autoComplete="off"
-      className={`text-right tabular-nums ${className}`}
+      className={`rounded-[4px] text-right tabular-nums shadow-none ${className}`}
       value={draft}
       aria-invalid={parsed === null || props['aria-invalid'] || undefined}
       onChange={(event) => {

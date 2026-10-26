@@ -182,3 +182,13 @@ export function previewMovement(part: Pick<Part, 'quantity' | 'committedQuantity
   else if (committed > onHand) error = 'Committed quantity would exceed stock on hand'
   return { onHand, committed, onOrder, error }
 }
+
+/** Elapsed time since a timestamp as a short figure: "6h", "3d". */
+export function formatAge(value: string | null | undefined, now = Date.now()) {
+  if (!value) return '-'
+  const hours = Math.max(0, Math.floor((now - new Date(value).getTime()) / 3_600_000))
+  return hours < 24 ? `${hours}h` : `${Math.floor(hours / 24)}d`
+}
+
+/** Purchase orders waiting at the counter to be received. */
+export const PO_RECEIVABLE = ['ordered', 'partially-received']

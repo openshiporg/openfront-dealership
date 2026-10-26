@@ -198,7 +198,7 @@ export function DealMenuPanel({
           <TitleLine as="p" tone={chosen ? 'ok' : declined ? 'idle' : 'warn'} status={state}>{option.name || option.code}</TitleLine>
           <p className="pl-4 text-xs text-muted-foreground"><Code>{option.code}</Code> · {state}{option.termMonths ? ` · ${option.termMonths} mo` : ''}</p>
         </div>
-        <p className="shrink-0 font-mono text-xs tabular-nums">{formatCents(option.retailPriceCents ?? null)}</p>
+        <p className="shrink-0 text-xs tabular-nums">{formatCents(option.retailPriceCents ?? null)}</p>
       </li>
     )
   }
@@ -261,7 +261,7 @@ export function DealMenuPanel({
                         {quote?.evidenceReference ? ` · ${quote.evidenceReference}` : ''}
                         {quote ? ` · ${formatDay(quote.completedAt || quote.requestedAt, timeZone)}` : ''}
                       </p>
-                      <p className="pl-4 font-mono text-[11px] tabular-nums text-muted-foreground">
+                      <p className="pl-4 text-[11px] tabular-nums text-muted-foreground">
                         Price {formatCents(quote?.retailPriceCents ?? product.retailPriceCents)} · Cost {formatCents(quote ? quote.costCents : product.costCents, 'hidden')} · {term ? `${term} mo` : 'No term'}
                       </p>
                     </div>
@@ -278,12 +278,12 @@ export function DealMenuPanel({
         )}
 
         {data && currentMenu && (
-          <div className="space-y-1 rounded-lg border px-3 py-2">
+          <div className="space-y-1 rounded-md border px-3 py-2">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <TitleLine as="p" tone={stateTone(currentMenu.status)} status={currentMenu.status} className="text-sm font-medium">
                 Menu v{currentMenu.version} · {currentMenu.status}
               </TitleLine>
-              <p className="font-mono text-xs tabular-nums text-muted-foreground">
+              <p className="text-xs tabular-nums text-muted-foreground">
                 {formatDay(currentMenu.decidedAt || currentMenu.presentedAt, timeZone)}{currentMenu.status === 'accepted' ? ` · ${formatCents(chosenTotal)}` : ''}
               </p>
             </div>
@@ -312,18 +312,18 @@ export function DealMenuPanel({
       >
         {dialog?.kind === 'present' && (
           <fieldset className="space-y-2">
-            <legend className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Quoted products</legend>
+            <legend className="text-[12px] font-medium text-muted-foreground">Quoted products</legend>
             {quotedProducts.length === 0 && <p className="text-sm text-muted-foreground">No quoted products; the menu is presented empty</p>}
             {quotedProducts.map(product => {
               const quote = latestQuote.get(product.id)
               const checked = dialog.picked.includes(product.code)
               return (
-                <label key={product.id} className="flex min-h-11 items-center justify-between gap-3 rounded-lg bg-muted/50 px-3 py-2 text-sm">
+                <label key={product.id} className="flex min-h-11 items-center justify-between gap-3 rounded-md bg-muted/50 px-3 py-2 text-sm">
                   <span className="flex min-w-0 items-center gap-2">
                     <input type="checkbox" className="size-4" checked={checked} onChange={event => setDialog(current => current?.kind === 'present' ? { ...current, picked: event.target.checked ? [...current.picked, product.code] : current.picked.filter(code => code !== product.code) } : current)} />
                     <span className="min-w-0 truncate">{product.name} <Code>{product.code}</Code></span>
                   </span>
-                  <span className="shrink-0 font-mono text-xs tabular-nums">{formatCents(quote?.retailPriceCents ?? null)}{termOf(quote) ? ` · ${termOf(quote)} mo` : ''}</span>
+                  <span className="shrink-0 text-xs tabular-nums">{formatCents(quote?.retailPriceCents ?? null)}{termOf(quote) ? ` · ${termOf(quote)} mo` : ''}</span>
                 </label>
               )
             })}
@@ -332,13 +332,13 @@ export function DealMenuPanel({
         )}
         {dialog?.kind === 'decide' && (
           <fieldset className="space-y-2">
-            <legend className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Customer choice</legend>
+            <legend className="text-[12px] font-medium text-muted-foreground">Customer choice</legend>
             {(dialog.menu.optionsSnapshot || []).length === 0 && <p className="text-sm text-muted-foreground">No products on this menu; the decision records a decline</p>}
             {(dialog.menu.optionsSnapshot || []).map(option => (
-              <div key={option.code} className="flex min-w-0 flex-col gap-2 rounded-lg bg-muted/50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+              <div key={option.code} className="flex min-w-0 flex-col gap-2 rounded-md bg-muted/50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 text-sm">
                   <p className="truncate">{option.name || option.code} <Code>{option.code}</Code></p>
-                  <p className="font-mono text-xs tabular-nums text-muted-foreground">{formatCents(option.retailPriceCents ?? null)}{option.termMonths ? ` · ${option.termMonths} mo` : ''}</p>
+                  <p className="text-xs tabular-nums text-muted-foreground">{formatCents(option.retailPriceCents ?? null)}{option.termMonths ? ` · ${option.termMonths} mo` : ''}</p>
                   {fieldErrors[`choice:${option.code}`] && <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors[`choice:${option.code}`]}</p>}
                 </div>
                 <Segmented

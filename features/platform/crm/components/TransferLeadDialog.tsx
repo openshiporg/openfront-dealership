@@ -64,14 +64,14 @@ export function TransferLeadDialog({
         <form onSubmit={submit} className="space-y-4" noValidate>
           <FormField id="transfer-owner" label="New salesperson" error={errors.assignedToId}>
             <Select value={assignedToId || undefined} onValueChange={value => { setAssignedToId(value); setErrors(prev => ({ ...prev, assignedToId: undefined })) }}>
-              <SelectTrigger id="transfer-owner" className="h-11 sm:h-9" aria-invalid={Boolean(errors.assignedToId)}>
+              <SelectTrigger id="transfer-owner" className="h-11 rounded-[4px] sm:h-9" aria-invalid={Boolean(errors.assignedToId)}>
                 <SelectValue placeholder={candidates.length ? 'Select salesperson' : 'No eligible staff'} />
               </SelectTrigger>
               <SelectContent>{candidates.map(person => <SelectItem key={person.id} value={person.id}>{person.name || 'Unnamed'}</SelectItem>)}</SelectContent>
             </Select>
           </FormField>
           <FormField id="transfer-reason" label="Reason" error={errors.reason}>
-            <Textarea id="transfer-reason" rows={3} maxLength={500} value={reason} aria-invalid={Boolean(errors.reason)} onChange={event => { setReason(event.target.value); setErrors(prev => ({ ...prev, reason: undefined })) }} />
+            <Textarea className="rounded-[4px]" id="transfer-reason" rows={3} maxLength={500} value={reason} aria-invalid={Boolean(errors.reason)} onChange={event => { setReason(event.target.value); setErrors(prev => ({ ...prev, reason: undefined })) }} />
           </FormField>
           {formError && <Notice tone="bad">{formError}</Notice>}
           <DialogFooter className="sm:justify-end">

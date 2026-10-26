@@ -6,7 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { DeskSection, Notice, Panel, Pill, Segmented, TitleLine, Track, type DeskTone } from '@/features/platform/components/desk'
+import { DeskSection, DeskTable, Notice, Panel, Pill, Segmented, Status, Td, Th, Tr, Track, type DeskTone } from '@/features/platform/components/desk'
 import { changeMembership, createStaffUser, type MembershipChangeInput } from '../actions'
 import { roleIsTenantAssignable } from '../lib/permissions'
 import type { DealerGroup, Membership, MembershipAuditEvent, MembershipStatus, Role, Rooftop, ScopeType, StaffOption, Viewer } from '../lib/types'
@@ -75,7 +75,9 @@ export function AccessSection({
   timeZone,
   errors,
   onChanged,
+  initialStatusFilter = 'active',
 }: {
+  initialStatusFilter?: StatusFilter
   memberships: Membership[]
   auditEvents: MembershipAuditEvent[]
   groups: DealerGroup[]
@@ -87,7 +89,7 @@ export function AccessSection({
   errors: { access?: string; audit?: string; staff?: string }
   onChanged: (message: string) => void
 }) {
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatusFilter)
   const [scopeFilter, setScopeFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [change, setChange] = useState<ChangeState | null>(null)
@@ -305,50 +307,66 @@ export function AccessSection({
             )}
           </Panel>
         ) : (
-          <Panel className="divide-y">
-            {visible.map(membership => {
-              const state = MEMBERSHIP_STATUS[membership.status] || MEMBERSHIP_STATUS.invited
-              const blocked = lockedReason || ownReason(membership)
-              const actions: Array<{ kind: ChangeKind; label: string }> =
-                membership.status === 'invited'
-                  ? [{ kind: 'activate', label: 'Activate' }, { kind: 'remove', label: 'Remove' }]
-                  : membership.status === 'active'
-                    ? [{ kind: 'suspend', label: 'Suspend' }, { kind: 'remove', label: 'Remove' }]
-                    : membership.status === 'suspended'
-                      ? [{ kind: 'reactivate', label: 'Reactivate' }, { kind: 'remove', label: 'Remove' }]
-                      : [{ kind: 'reactivate', label: 'Reactivate' }]
-              return (
-                <div key={`${membership.scopeType}:${membership.id}`} className="flex min-w-0 flex-col gap-3 px-4 py-3 md:flex-row md:items-start md:justify-between">
-                  <div className="min-w-0">
-                    <TitleLine as="p" tone={state.tone} status={state.label} className="text-sm font-medium">
-                      {personName(membership.user)}
-                    </TitleLine>
-                    <p className="break-words pl-4 text-xs text-muted-foreground">
-                      {membership.user?.email ? `${membership.user.email} · ` : ''}
+          <DeskTable aria-label="Members">
+            <thead>
+              <tr>
+                <Th>Member</Th>
+                <Th priority={2}>Scope</Th>
+                <Th priority={2}>Role</Th>
+                <Th>Status</Th>
+                <Th priority={3}>Joined</Th>
+                <Th align="right"><span className="sr-only">Actions</span></Th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map(membership => {
+                const state = MEMBERSHIP_STATUS[membership.status] || MEMBERSHIP_STATUS.invited
+                const blocked = lockedReason || ownReason(membership)
+                const actions: Array<{ kind: ChangeKind; label: string }> =
+                  membership.status === 'invited'
+                    ? [{ kind: 'activate', label: 'Activate' }, { kind: 'remove', label: 'Remove' }]
+                    : membership.status === 'active'
+                      ? [{ kind: 'suspend', label: 'Suspend' }, { kind: 'remove', label: 'Remove' }]
+                      : membership.status === 'suspended'
+                        ? [{ kind: 'reactivate', label: 'Reactivate' }, { kind: 'remove', label: 'Remove' }]
+                        : [{ kind: 'reactivate', label: 'Reactivate' }]
+                return (
+                  <Tr key={`${membership.scopeType}:${membership.id}`}>
+                    <Td className="max-w-0 min-w-[9rem]">
+                      <span className="block truncate font-medium text-foreground">{personName(membership.user)}</span>
+                      {membership.user?.email && <span className="block truncate text-xs text-muted-foreground">{membership.user.email}</span>}
+                      <span className="block truncate text-xs text-muted-foreground md:hidden">
+                        {membership.scopeName} · {membership.role?.name || 'No role'}
+                      </span>
+                      {blocked && <span className="block text-xs text-muted-foreground">{blocked}</span>}
+                    </Td>
+                    <Td priority={2} className="text-muted-foreground">
                       {membership.scopeType === 'dealer-group' ? 'Group' : 'Rooftop'}: {membership.scopeName}
                       {membership.scopeType === 'dealer-group' && membership.accessAllRooftops ? ' · All rooftops' : ''}
-                    </p>
-                    <p className="break-words pl-4 text-xs text-muted-foreground">
-                      {state.label} · {membership.role?.name || 'No role'}
-                      {membership.joinedAt ? ` · Joined ${formatDate(membership.joinedAt, timeZone)}` : ''}
-                      {membership.invitedBy?.name ? ` · Added by ${membership.invitedBy.name}` : ''}
-                    </p>
-                    {blocked && <p className="pl-4 text-xs text-muted-foreground">{blocked}</p>}
-                  </div>
-                  <Track className="self-end md:self-auto">
-                    {actions.map(action => (
-                      <Pill key={action.kind} size="sm" className="h-11 sm:h-7" disabled={Boolean(blocked)} title={blocked} onClick={() => openChange(action.kind, membership)}>
-                        {action.label}
-                      </Pill>
-                    ))}
-                    <Pill size="sm" className="h-11 sm:h-7" disabled={Boolean(blocked)} title={blocked} onClick={() => openChange('role', membership)}>
-                      Role
-                    </Pill>
-                  </Track>
-                </div>
-              )
-            })}
-          </Panel>
+                    </Td>
+                    <Td priority={2}>{membership.role?.name || <span className="text-muted-foreground">No role</span>}</Td>
+                    <Td><Status tone={state.tone}>{state.label}</Status></Td>
+                    <Td priority={3} className="whitespace-nowrap text-muted-foreground">
+                      {membership.joinedAt ? formatDate(membership.joinedAt, timeZone) : 'Not yet'}
+                      {membership.invitedBy?.name ? <span className="block text-xs">Added by {membership.invitedBy.name}</span> : null}
+                    </Td>
+                    <Td align="right" className="w-px whitespace-nowrap">
+                      <div className="inline-flex flex-wrap justify-end gap-1">
+                        {actions.map(action => (
+                          <Pill key={action.kind} size="sm" className="h-11 sm:h-7" disabled={Boolean(blocked)} title={blocked} onClick={() => openChange(action.kind, membership)}>
+                            {action.label}
+                          </Pill>
+                        ))}
+                        <Pill size="sm" className="h-11 sm:h-7" disabled={Boolean(blocked)} title={blocked} onClick={() => openChange('role', membership)}>
+                          Role
+                        </Pill>
+                      </div>
+                    </Td>
+                  </Tr>
+                )
+              })}
+            </tbody>
+          </DeskTable>
         )}
       </DeskSection>
 
@@ -360,31 +378,40 @@ export function AccessSection({
         ) : history.length === 0 ? (
           <Panel className="px-4 py-10 text-center"><p className="text-sm text-muted-foreground">No access changes</p></Panel>
         ) : (
-          <Panel className="divide-y">
-            {history.map(event => (
-              <div key={event.id} className="grid min-w-0 gap-1 px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:gap-4">
-                <div className="min-w-0">
-                  <TitleLine as="p" tone={event.action === 'created' ? 'info' : event.action === 'onboarding-bootstrap' ? 'accent' : 'idle'} className="text-sm font-medium">
-                    {personName(event.targetUser)}
-                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+          <DeskTable aria-label="Access history">
+            <thead>
+              <tr>
+                <Th>Member</Th>
+                <Th>Change</Th>
+                <Th priority={2}>Reason</Th>
+                <Th priority={3}>By</Th>
+                <Th align="right">When</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.map(event => (
+                <Tr key={event.id}>
+                  <Td className="max-w-0 min-w-[8rem]">
+                    <span className="block truncate font-medium text-foreground">{personName(event.targetUser)}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {event.rooftop ? `Rooftop: ${event.rooftop.name}` : event.dealerGroup ? `Group: ${event.dealerGroup.name}` : ''}
+                    </span>
+                  </Td>
+                  <Td>
+                    <span className="block font-medium text-foreground">
                       {event.action === 'created' ? 'Granted' : event.action === 'onboarding-bootstrap' ? 'Setup' : 'Changed'}
                     </span>
-                  </TitleLine>
-                  <p className="flex flex-wrap items-center gap-x-2 break-words pl-4 text-xs text-muted-foreground">
-                    <span>{event.rooftop ? `Rooftop: ${event.rooftop.name}` : event.dealerGroup ? `Group: ${event.dealerGroup.name}` : ''}</span>
-                    {describeSnapshot(event).map((part, index) => <span key={index}>· {part}</span>)}
-                  </p>
-                  <p className="break-words pl-4 text-xs text-foreground">{event.reason}</p>
-                </div>
-                <p className="pl-4 text-xs text-muted-foreground md:pl-0 md:text-right">
-                  {formatWhen(event.occurredAt, timeZone)}
-                  <br className="hidden md:block" />
-                  <span className="md:hidden"> · </span>
-                  {event.actor?.name || 'System'}
-                </p>
-              </div>
-            ))}
-          </Panel>
+                    <span className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                      {describeSnapshot(event).map((part, index) => <span key={index}>{part}</span>)}
+                    </span>
+                  </Td>
+                  <Td priority={2} className="max-w-[20rem] break-words text-foreground">{event.reason}</Td>
+                  <Td priority={3} className="text-muted-foreground">{event.actor?.name || 'System'}</Td>
+                  <Td align="right" className="whitespace-nowrap text-xs text-muted-foreground">{formatWhen(event.occurredAt, timeZone)}</Td>
+                </Tr>
+              ))}
+            </tbody>
+          </DeskTable>
         )}
       </DeskSection>
 

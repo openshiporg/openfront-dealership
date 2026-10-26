@@ -56,13 +56,13 @@ export function OperatorActionDialog({
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
           {fields.map(field => <label key={field.name} htmlFor={`operator-${field.name}`} className={`grid gap-1.5 text-sm ${field.type === 'textarea' ? 'sm:col-span-2' : ''}`}>
-            <span className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">{field.label}</span>
+            <span className="text-[12px] font-medium text-muted-foreground">{field.label}</span>
             {field.type === 'textarea' ? <Textarea id={`operator-${field.name}`} required={field.required ?? true} maxLength={field.maxLength} placeholder={field.placeholder} value={values[field.name] || ''} onChange={event => change(field.name, event.target.value)} rows={3} /> :
               field.type === 'select' ? <Select required={field.required ?? true} value={values[field.name] || ''} onValueChange={value => change(field.name, value)}>
                 <SelectTrigger id={`operator-${field.name}`} aria-label={field.label}><SelectValue placeholder={field.placeholder || `Select ${field.label.toLowerCase()}`} /></SelectTrigger>
                 <SelectContent>{(field.options || []).map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
               </Select> :
-                field.type === 'checkbox' ? <span className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 shadow-[inset_0_1px_2px_rgb(0_0_0/0.06)]"><input id={`operator-${field.name}`} type="checkbox" required={field.required ?? true} checked={values[field.name] === 'yes'} onChange={event => change(field.name, event.target.checked ? 'yes' : '')} /><span>{field.description || field.label}</span></span> :
+                field.type === 'checkbox' ? <span className="flex items-start gap-2 min-h-10 rounded-[4px] border bg-muted/40 p-3"><input id={`operator-${field.name}`} type="checkbox" required={field.required ?? true} checked={values[field.name] === 'yes'} onChange={event => change(field.name, event.target.checked ? 'yes' : '')} /><span>{field.description || field.label}</span></span> :
                   <Input id={`operator-${field.name}`} type={field.type || 'text'} required={field.required ?? true} min={field.min} max={field.max} step={field.step} maxLength={field.maxLength} placeholder={field.placeholder} value={values[field.name] || ''} onChange={event => change(field.name, event.target.value)} />}
             {field.description && field.type !== 'checkbox' && <span className="text-xs text-muted-foreground">{field.description}</span>}
           </label>)}

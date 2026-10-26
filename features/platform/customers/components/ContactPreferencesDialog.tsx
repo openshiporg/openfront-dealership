@@ -90,8 +90,8 @@ export function ContactPreferencesDialog({
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader><DialogTitle>Contact preferences</DialogTitle></DialogHeader>
         <form onSubmit={submit} className="space-y-4" noValidate>
-          <div className="overflow-hidden rounded-lg border">
-            <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 border-b bg-muted/40 px-3 py-2 font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+          <div className="overflow-hidden rounded-md border">
+            <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 border-b bg-muted/40 px-3 py-2 text-[12px] font-medium text-muted-foreground">
               <span>Channel</span><span>Consent</span><span>Suppressed</span>
             </div>
             {CHANNELS.map(channel => (
@@ -119,7 +119,7 @@ export function ContactPreferencesDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField id="pref-channel" label="Preferred channel" error={errors.preferredChannel}>
               <Select value={values.preferredChannel} onValueChange={value => { setValues(prev => ({ ...prev, preferredChannel: value })); setErrors(prev => ({ ...prev, preferredChannel: undefined })) }}>
-                <SelectTrigger id="pref-channel" className="h-11 sm:h-9" aria-invalid={Boolean(errors.preferredChannel)}><SelectValue /></SelectTrigger>
+                <SelectTrigger id="pref-channel" className="rounded-[4px] h-11 sm:h-9" aria-invalid={Boolean(errors.preferredChannel)}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No outbound contact</SelectItem>
                   <SelectItem value="email">Email</SelectItem>
@@ -130,12 +130,12 @@ export function ContactPreferencesDialog({
             </FormField>
             <FormField id="pref-source" label="Source">
               <Select value={values.source} onValueChange={value => setValues(prev => ({ ...prev, source: value }))}>
-                <SelectTrigger id="pref-source" className="h-11 sm:h-9"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="pref-source" className="rounded-[4px] h-11 sm:h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>{PREFERENCE_SOURCES.map(source => <SelectItem key={source.value} value={source.value}>{source.label}</SelectItem>)}</SelectContent>
               </Select>
             </FormField>
             <FormField id="pref-reason" label="Reason" error={errors.reason} className="sm:col-span-2">
-              <Textarea id="pref-reason" rows={3} maxLength={1000} value={values.reason} aria-invalid={Boolean(errors.reason)} onChange={event => { setValues(prev => ({ ...prev, reason: event.target.value })); setErrors(prev => ({ ...prev, reason: undefined })) }} />
+              <Textarea className="rounded-[4px]" id="pref-reason" rows={3} maxLength={1000} value={values.reason} aria-invalid={Boolean(errors.reason)} onChange={event => { setValues(prev => ({ ...prev, reason: event.target.value })); setErrors(prev => ({ ...prev, reason: undefined })) }} />
             </FormField>
           </div>
           {formError && <Notice tone="bad">{formError}</Notice>}

@@ -12,7 +12,13 @@ export async function LeadListPage() {
     sort: 'newest',
     page: 0,
   }
-  const [response, staff] = await Promise.all([getLeadList(initialFilters), getStaffForRooftops(rooftops.map(rooftop => rooftop.id))])
+  // The "waiting on you" queue: open leads in the viewer's scope, earliest response due first.
+  const queueFilters: LeadListFilters = { ...initialFilters, sort: 'sla' }
+  const [response, queueResponse, staff] = await Promise.all([
+    getLeadList(initialFilters),
+    getLeadList(queueFilters),
+    getStaffForRooftops(rooftops.map(rooftop => rooftop.id)),
+  ])
 
   return (
     <LeadListPageClient
@@ -21,6 +27,7 @@ export async function LeadListPage() {
       staff={staff}
       initialFilters={initialFilters}
       initialData={response.success ? response.data : null}
+      initialQueue={queueResponse.success ? queueResponse.data.leads : []}
       initialError={response.success ? null : response.error}
       timeZone={timeZone}
     />

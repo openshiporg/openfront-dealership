@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
-import { Code, DeskHeader, DeskSection, Notice, Panel, Pill, Readout, ReadoutStrip, Segmented, TitleLine, Track } from '@/features/platform/components/desk'
+import { Code, DeskHeader, DeskSection, DeskTable, Figure, Notice, Pill, Readout, ReadoutStrip, Segmented, Status, Td, Th, Tr, Track } from '@/features/platform/components/desk'
 import { formatCentsForInput, parseDollarsToCents } from '@/features/platform/deals/lib/moneyInput'
 import { getFinanceProductCatalog, saveFinanceProduct } from '../actions/catalog'
 import { FinanceFormDialog, type FieldErrors, type FinanceFormField } from '../components/FinanceFormDialog'
@@ -161,11 +161,11 @@ export function FinanceProductsPageClient({ initial, initialError }: { initial: 
       status={error ? 'Unavailable' : `${counts.active} active`}
       meta={error ? 'Unavailable' : `${rooftopId ? rooftopName(rooftopId) : 'All rooftops'} · ${counts.active} active · ${counts.inactive} inactive`}
       actions={
-        <Track>
+        <>
           <Pill asChild variant="plain">
             <Link href={`${basePath}/platform/finance`}><ArrowLeft />Finance</Link>
           </Pill>
-          <Pill onClick={reload} disabled={loading} aria-label="Refresh">
+          <Pill variant="plain" onClick={reload} disabled={loading} aria-label="Refresh">
             <RefreshCw className={loading ? 'animate-spin' : undefined} />
             Refresh
           </Pill>
@@ -173,7 +173,7 @@ export function FinanceProductsPageClient({ initial, initialError }: { initial: 
             <Plus />
             New product
           </Pill>
-        </Track>
+        </>
       }
     />
   )
@@ -205,16 +205,10 @@ export function FinanceProductsPageClient({ initial, initialError }: { initial: 
         )}
         {error && <Notice tone="bad">{error}</Notice>}
 
-        <ReadoutStrip>
-          <Readout label="Active" value={counts.active} tone={counts.active > 0 ? 'ok' : 'warn'} />
-          <Readout label="Inactive" value={counts.inactive} />
-          <Readout label="Avg margin" value={averageMargin == null ? '-' : formatCents(Math.round(averageMargin))} sub={averageMargin == null ? 'Cost hidden or no products' : 'Active products'} />
-        </ReadoutStrip>
-
         <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
           {rooftops.length > 1 && (
             <Select value={rooftopId || 'all'} onValueChange={value => setRooftopId(value === 'all' ? '' : value)}>
-              <SelectTrigger className="h-11 w-full rounded-full lg:w-[220px]" aria-label="Rooftop"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-10 w-full rounded-[4px] lg:w-[220px]" aria-label="Rooftop"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All rooftops</SelectItem>
                 {rooftops.map(rooftop => <SelectItem key={rooftop.id} value={rooftop.id}>{rooftop.name}</SelectItem>)}
@@ -232,7 +226,7 @@ export function FinanceProductsPageClient({ initial, initialError }: { initial: 
             ]}
           />
           <Select value={category} onValueChange={setCategory}>
-            <SelectTrigger className="h-11 w-full rounded-full lg:w-[190px]" aria-label="Category"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-10 w-full rounded-[4px] lg:w-[190px]" aria-label="Category"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All categories</SelectItem>
               {PRODUCT_CATEGORIES.map(value => <SelectItem key={value} value={value}>{categoryLabels[value]}</SelectItem>)}
@@ -240,7 +234,7 @@ export function FinanceProductsPageClient({ initial, initialError }: { initial: 
           </Select>
           <div className="relative min-w-0 flex-1 lg:max-w-sm">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input className="h-11 rounded-full pl-9" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search code or name" aria-label="Search products" />
+            <Input className="h-10 rounded-[4px] pl-9" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search code or name" aria-label="Search products" />
           </div>
           {loading && <span className="text-sm text-muted-foreground" role="status">Refreshing…</span>}
         </div>
@@ -256,42 +250,58 @@ export function FinanceProductsPageClient({ initial, initialError }: { initial: 
               </Track>
             </div>
           ) : (
-            <Panel className="divide-y">
-              {visible.map(product => {
-                const margin = product.costCents == null ? null : product.retailPriceCents - product.costCents
-                const busy = busyId === product.id
-                return (
-                  <div key={product.id} className="flex min-w-0 flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between">
-                    <div className="flex min-w-0 flex-1 items-start justify-between gap-4">
-                      <div className="min-w-0">
-                        <TitleLine as="p" tone={product.active ? 'ok' : 'idle'} status={product.active ? 'Active' : 'Inactive'} className="text-sm font-medium">
-                          {product.name}
-                        </TitleLine>
-                        <p className="pl-4 text-xs text-muted-foreground">
-                          <Code>{product.code}</Code> · {categoryLabels[product.category] || product.category} · {product.active ? 'Active' : 'Inactive'}
-                          {!rooftopId && product.rooftop ? ` · ${product.rooftop.name}` : ''}
-                          {product.quotesCount ? ` · ${product.quotesCount} quotes` : ''}
-                        </p>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className="text-sm font-medium tabular-nums">{formatCents(product.retailPriceCents)}</p>
-                        <p className="font-mono text-[11px] tabular-nums text-muted-foreground">
-                          Cost {formatCents(product.costCents, 'hidden')}{margin != null ? ` · ${formatCents(margin)}` : ''}
-                        </p>
-                      </div>
-                    </div>
-                    <Track className="self-start md:shrink-0">
-                      <Pill size="sm" onClick={() => openEdit(product)} disabled={busy}>Edit</Pill>
-                      <Pill size="sm" variant={product.active ? 'plain' : 'raised'} onClick={() => toggleActive(product)} disabled={busy}>
-                        {busy ? 'Saving…' : product.active ? 'Deactivate' : 'Activate'}
-                      </Pill>
-                    </Track>
-                  </div>
-                )
-              })}
-            </Panel>
+            <DeskTable>
+              <thead>
+                <tr>
+                  <Th>Product</Th>
+                  <Th>Status</Th>
+                  <Th priority={2}>Category</Th>
+                  {!rooftopId && <Th priority={3}>Rooftop</Th>}
+                  <Th priority={3} align="right">Quotes</Th>
+                  <Th align="right">Retail</Th>
+                  <Th priority={2} align="right">Cost</Th>
+                  <Th priority={2} align="right">Margin</Th>
+                  <Th align="right"><span className="sr-only">Actions</span></Th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map(product => {
+                  const margin = product.costCents == null ? null : product.retailPriceCents - product.costCents
+                  const busy = busyId === product.id
+                  return (
+                    <Tr key={product.id}>
+                      <Td>
+                        <p className="font-medium text-foreground">{product.name}</p>
+                        <Code>{product.code}</Code>
+                      </Td>
+                      <Td><Status tone={product.active ? 'ok' : 'idle'}>{product.active ? 'Active' : 'Inactive'}</Status></Td>
+                      <Td priority={2} className="text-muted-foreground">{categoryLabels[product.category] || product.category}</Td>
+                      {!rooftopId && <Td priority={3} className="text-muted-foreground">{product.rooftop?.name || '-'}</Td>}
+                      <Td priority={3} align="right">{product.quotesCount || 0}</Td>
+                      <Td align="right"><Figure size="sm">{formatCents(product.retailPriceCents)}</Figure></Td>
+                      <Td priority={2} align="right" className="text-muted-foreground">{formatCents(product.costCents, 'Hidden')}</Td>
+                      <Td priority={2} align="right">{margin != null ? formatCents(margin) : '-'}</Td>
+                      <Td align="right">
+                        <span className="inline-flex flex-wrap justify-end gap-2">
+                          <Pill size="sm" className="max-md:h-10" onClick={() => openEdit(product)} disabled={busy}>Edit</Pill>
+                          <Pill size="sm" className="max-md:h-10" variant={product.active ? 'plain' : 'raised'} onClick={() => toggleActive(product)} disabled={busy}>
+                            {busy ? 'Saving…' : product.active ? 'Deactivate' : 'Activate'}
+                          </Pill>
+                        </span>
+                      </Td>
+                    </Tr>
+                  )
+                })}
+              </tbody>
+            </DeskTable>
           )}
         </DeskSection>
+
+        <ReadoutStrip>
+          <Readout label="Active" value={counts.active} tone={counts.active > 0 ? 'ok' : 'warn'} />
+          <Readout label="Inactive" value={counts.inactive} />
+          <Readout label="Avg margin" value={averageMargin == null ? '-' : formatCents(Math.round(averageMargin))} sub={averageMargin == null ? 'Cost hidden or no products' : 'Active products'} />
+        </ReadoutStrip>
 
         <FinanceFormDialog
           open={Boolean(editor)}

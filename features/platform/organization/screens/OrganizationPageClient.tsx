@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation'
 import { RefreshCw } from 'lucide-react'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
-import { DeskHeader, Notice, Pill, Segmented, Track } from '@/features/platform/components/desk'
-import { AccessSection } from '../components/AccessSection'
-import { DealerGroupSection } from '../components/DealerGroupSection'
+import { Code, DeskHeader, DeskSection, DeskTable, Notice, Pill, Segmented, Status, Td, Th, Tr, Track } from '@/features/platform/components/desk'
+import { AccessSection, MEMBERSHIP_STATUS } from '../components/AccessSection'
+import { DealerGroupSection, RECORD_STATUS } from '../components/DealerGroupSection'
+import { formatDate } from '../components/FormDialog'
 import { RetentionSection } from '../components/RetentionSection'
 import { RolesSection } from '../components/RolesSection'
 import { RooftopsSection } from '../components/RooftopsSection'
@@ -26,6 +27,7 @@ export function OrganizationPageClient({
   const [tab, setTab] = useState<OrganizationTab>(initialTab)
   const [notice, setNotice] = useState<string | null>(null)
   const [refreshing, startRefresh] = useTransition()
+  const [accessFilter, setAccessFilter] = useState<'active' | 'invited'>('active')
 
   const changeTab = (next: OrganizationTab) => {
     setTab(next)
@@ -46,26 +48,36 @@ export function OrganizationPageClient({
   const activeMembers = data.memberships.filter(membership => membership.status === 'active').length
   const pendingInvites = data.memberships.filter(membership => membership.status === 'invited').length
 
+  // Needs you: invites waiting to be activated (oldest first), then rooftops that are suspended.
+  const waitingInvites = data.memberships
+    .filter(membership => membership.status === 'invited')
+    .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt))
+  const suspendedRooftops = data.rooftops.filter(rooftop => rooftop.status === 'suspended')
+  const queueCount = waitingInvites.length + suspendedRooftops.length
+
+  const openInvites = () => {
+    setAccessFilter('invited')
+    changeTab('access')
+  }
+
   const breadcrumbs = [
     { type: 'link' as const, label: 'Dashboard', href: basePath },
     { type: 'page' as const, label: 'Platform' },
     { type: 'page' as const, label: 'Organization' },
   ]
 
+  const groupState = data.errors.organization ? 'Unavailable' : group ? (RECORD_STATUS[group.status]?.label ?? group.status) : 'Not set up'
+
   const header = (
     <DeskHeader
       title={group?.name || 'Organization'}
-      eyebrow="Organization"
-      tone={data.errors.organization ? 'bad' : group ? (group.status === 'active' ? 'ok' : 'warn') : 'idle'}
-      status={data.errors.organization ? 'Unavailable' : group ? group.status : 'Not set up'}
-      meta={`${activeRooftops} active rooftops · ${activeMembers} active members${pendingInvites ? ` · ${pendingInvites} invited` : ''} · ${data.roles.length} roles`}
+      status={groupState}
+      meta={`${groupState} · ${activeRooftops} active rooftops · ${activeMembers} active members${pendingInvites ? ` · ${pendingInvites} invited` : ''} · ${data.roles.length} roles`}
       actions={
-        <Track>
-          <Pill className="h-11 sm:h-8" onClick={refresh} disabled={refreshing}>
-            <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
-            Refresh
-          </Pill>
-        </Track>
+        <Pill variant="plain" className="h-11 sm:h-8" onClick={refresh} disabled={refreshing}>
+          <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
+          Refresh
+        </Pill>
       }
     />
   )
@@ -73,6 +85,47 @@ export function OrganizationPageClient({
   return (
     <PageContainer title="Organization" header={header} breadcrumbs={breadcrumbs}>
       <div className="min-w-0 max-w-full space-y-4 px-4 pb-24 md:px-6">
+        {queueCount > 0 && (
+          <DeskSection title="Needs you" count={queueCount} id="organization-needs-you" className="pb-4">
+            <DeskTable aria-labelledby="organization-needs-you">
+              <thead>
+                <tr>
+                  <Th>Waiting</Th>
+                  <Th priority={2}>Where</Th>
+                  <Th>Status</Th>
+                  <Th align="right"><span className="sr-only">Action</span></Th>
+                </tr>
+              </thead>
+              <tbody>
+                {waitingInvites.map(membership => (
+                  <Tr key={`invite:${membership.scopeType}:${membership.id}`}>
+                    <Td className="max-w-0 min-w-[9rem]">
+                      <span className="block truncate font-medium text-foreground">{membership.user?.name || membership.user?.email || 'Unknown user'}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {membership.role?.name || 'No role'}{membership.invitedBy?.name ? ` · Added by ${membership.invitedBy.name}` : ''} · {formatDate(membership.updatedAt, timeZone)}
+                      </span>
+                    </Td>
+                    <Td priority={2} className="text-muted-foreground">{membership.scopeType === 'dealer-group' ? 'Group' : 'Rooftop'}: {membership.scopeName}</Td>
+                    <Td><Status tone={MEMBERSHIP_STATUS.invited.tone}>{MEMBERSHIP_STATUS.invited.label}</Status></Td>
+                    <Td align="right" className="w-px"><Pill size="sm" className="h-11 sm:h-7" onClick={openInvites}>Review</Pill></Td>
+                  </Tr>
+                ))}
+                {suspendedRooftops.map(rooftop => (
+                  <Tr key={`rooftop:${rooftop.id}`}>
+                    <Td className="max-w-0 min-w-[9rem]">
+                      <span className="block truncate font-medium text-foreground">{rooftop.name} <Code>{rooftop.code}</Code></span>
+                      <span className="block truncate text-xs text-muted-foreground">Rooftop · operating changes stopped</span>
+                    </Td>
+                    <Td priority={2} className="text-muted-foreground">{rooftop.dealerGroup?.name || 'No group'}</Td>
+                    <Td><Status tone={RECORD_STATUS.suspended.tone}>{RECORD_STATUS.suspended.label}</Status></Td>
+                    <Td align="right" className="w-px"><Pill size="sm" className="h-11 sm:h-7" onClick={() => changeTab('rooftops')}>Review</Pill></Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </DeskTable>
+          </DeskSection>
+        )}
+
         <Segmented<OrganizationTab>
           label="Organization section"
           value={tab}
@@ -107,6 +160,8 @@ export function OrganizationPageClient({
           <RooftopsSection rooftops={data.rooftops} groups={data.dealerGroups} viewer={data.viewer} onChanged={onChanged} />
         ) : tab === 'access' ? (
           <AccessSection
+            key={accessFilter}
+            initialStatusFilter={accessFilter}
             memberships={data.memberships}
             auditEvents={data.auditEvents}
             groups={data.dealerGroups}

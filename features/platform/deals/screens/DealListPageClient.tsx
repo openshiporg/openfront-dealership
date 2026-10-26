@@ -1,23 +1,29 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Plus, RefreshCw, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
 import {
+  Attention,
   Code,
   DeskHeader,
   DeskSection,
+  DeskTable,
+  Figure,
   Notice,
-  Panel,
   Pill,
   Readout,
   ReadoutStrip,
   Segmented,
-  TitleLine,
+  Status,
+  Td,
+  Th,
+  Tr,
   Track,
 } from '@/features/platform/components/desk'
 import { getDealDeskWorkspace, type DealDeskDeal } from '../actions'
@@ -37,6 +43,12 @@ interface Deal {
 }
 
 type StatusCounts = Partial<Record<string, number>>
+
+/** Deals the desk has to work: still being penciled or submitted for a decision. */
+const DESK_STATUSES = new Set(['pencil', 'submitted'])
+/** A desk deal open this many days or longer is marked stale. */
+const DESK_STALE_DAYS = 2
+const DAY_MS = 24 * 60 * 60 * 1000
 
 function toListDeals(deals: DealDeskDeal[]): Deal[] {
   return deals.map(deal => ({
@@ -60,6 +72,20 @@ const formatDate = (date: string | null) => {
   return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+function ageDays(createdAt: string, now: number) {
+  const created = new Date(createdAt).getTime()
+  if (!Number.isFinite(created)) return 0
+  return Math.max(0, Math.floor((now - created) / DAY_MS))
+}
+
+function formatAge(days: number) {
+  if (days === 0) return 'Today'
+  return days === 1 ? '1 day' : `${days} days`
+}
+
+const vehicleLabel = (deal: Deal) => (deal.vehicle ? `${deal.vehicle.year} ${deal.vehicle.make} ${deal.vehicle.model}` : 'No vehicle')
+const customerLabel = (deal: Deal) => (deal.lead ? `${deal.lead.firstName} ${deal.lead.lastName}` : 'No customer')
+
 export function DealListPageClient({
   initialDeals,
   initialError,
@@ -67,13 +93,17 @@ export function DealListPageClient({
   initialDeals: DealDeskDeal[] | null
   initialError: string | null
 }) {
+  const router = useRouter()
   const [deals, setDeals] = useState<Deal[]>(initialDeals ? toListDeals(initialDeals) : [])
+  // The desk queue always reads from the unfiltered board so status tabs never empty it.
+  const [boardDeals, setBoardDeals] = useState<Deal[]>(initialDeals ? toListDeals(initialDeals) : [])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(initialError)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [sortOrder, setSortOrder] = useState<string>('recent')
   const [searchQuery, setSearchQuery] = useState('')
   const [statusCounts, setStatusCounts] = useState<StatusCounts>(() => (initialDeals ? countByStatus(initialDeals) : {}))
+  const [now] = useState(() => Date.now())
   const requestRef = useRef(0)
 
   const loadDeals = useCallback(async (status: string) => {
@@ -85,6 +115,7 @@ export function DealListPageClient({
     if (response.success && response.data) {
       const loaded = response.data.dealDeskWorkspace.deals || []
       setDeals(toListDeals(loaded))
+      if (status === 'all') setBoardDeals(toListDeals(loaded))
       setStatusCounts(current => (status === 'all' ? countByStatus(loaded) : { ...current, [status]: loaded.length }))
     } else {
       setError(response.error || 'Unable to load deals.')
@@ -103,6 +134,16 @@ export function DealListPageClient({
     if (statusFilter !== 'all') changeStatus('all')
   }
 
+  const deskQueue = useMemo(
+    () =>
+      boardDeals
+        .filter(deal => DESK_STATUSES.has(deal.status))
+        .map(deal => ({ deal, days: ageDays(deal.createdAt, now) }))
+        .sort((a, b) => new Date(a.deal.createdAt).getTime() - new Date(b.deal.createdAt).getTime()),
+    [boardDeals, now],
+  )
+  const staleCount = deskQueue.filter(item => item.days >= DESK_STALE_DAYS).length
+
   const filteredDeals = deals
     .filter(deal => {
       if (!searchQuery) return true
@@ -118,13 +159,12 @@ export function DealListPageClient({
       return new Date(b.saleDate || b.createdAt).getTime() - new Date(a.saleDate || a.createdAt).getTime()
     })
 
-  const totalRevenue = filteredDeals
+  const totalRevenue = boardDeals
     .filter(d => d.status === 'delivered' && Boolean(d.saleDate))
     .reduce((sum, d) => sum + (d.vehiclePrice || 0), 0)
-
-  const pendingCount = filteredDeals.filter(d => ['pencil', 'submitted'].includes(d.status)).length
-  const deliveredCount = filteredDeals.filter(d => d.status === 'delivered').length
+  const deliveredCount = boardDeals.filter(d => d.status === 'delivered').length
   const isFiltered = Boolean(searchQuery) || statusFilter !== 'all'
+  const dealHref = (deal: Deal) => `${basePath}/platform/deals/${deal.id}`
 
   const breadcrumbs = [
     { type: 'link' as const, label: 'Dashboard', href: basePath },
@@ -132,13 +172,19 @@ export function DealListPageClient({
     { type: 'page' as const, label: 'Deals' },
   ]
 
+  const metaParts = [
+    deskQueue.length ? `${deskQueue.length} on the desk` : 'Desk clear',
+    staleCount ? `${staleCount} stale` : null,
+    `${statusCounts.all ?? boardDeals.length} ${(statusCounts.all ?? boardDeals.length) === 1 ? 'deal' : 'deals'}`,
+  ].filter(Boolean)
+
   const header = (
     <DeskHeader
       title="Deals"
-      meta={`${filteredDeals.length} ${filteredDeals.length === 1 ? 'deal' : 'deals'}${statusFilter !== 'all' ? ` · ${labelForDeal(statusFilter)}` : ''}`}
+      meta={metaParts.join(' · ')}
       actions={
-        <Track>
-          <Pill onClick={() => loadDeals(statusFilter)} disabled={loading} aria-label="Refresh deals">
+        <>
+          <Pill variant="plain" onClick={() => loadDeals(statusFilter)} disabled={loading} aria-label="Refresh deals">
             <RefreshCw className={loading ? 'animate-spin' : undefined} />
             Refresh
           </Pill>
@@ -148,7 +194,7 @@ export function DealListPageClient({
               New deal
             </Link>
           </Pill>
-        </Track>
+        </>
       }
     />
   )
@@ -161,20 +207,61 @@ export function DealListPageClient({
   return (
     <PageContainer title="Deals" header={header} breadcrumbs={breadcrumbs}>
       <div className="min-w-0 max-w-full space-y-8 px-4 pb-24 md:px-6">
-        <ReadoutStrip>
-          <Readout label="Delivered revenue" value={formatCurrency(totalRevenue)} />
-          <Readout label="Pending" value={pendingCount} tone={pendingCount > 0 ? 'warn' : 'idle'} />
-          <Readout label="Delivered" value={deliveredCount} tone={deliveredCount > 0 ? 'ok' : 'idle'} />
-          <Readout label="Deals" value={filteredDeals.length} />
-        </ReadoutStrip>
+        <DeskSection
+          id="deal-desk-queue"
+          title="On the desk"
+          count={deskQueue.length}
+          actions={staleCount ? <Attention>{staleCount} waiting {DESK_STALE_DAYS}+ days</Attention> : undefined}
+        >
+          {deskQueue.length === 0 ? (
+            <p className="py-4 text-[13px] text-muted-foreground">
+              {error ? 'Desk queue unavailable until deals load.' : 'No deals waiting on pencil or a decision.'}
+            </p>
+          ) : (
+            <ul className="divide-y rounded-md border bg-card">
+              {deskQueue.map(({ deal, days }) => {
+                const stale = days >= DESK_STALE_DAYS
+                return (
+                  <li key={deal.id}>
+                    <Link
+                      href={dealHref(deal)}
+                      className="grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-0.5 px-4 py-2.5 transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none sm:grid-cols-[6.5rem_minmax(0,1fr)_auto_5.5rem]"
+                    >
+                      <span className="max-sm:hidden">
+                        <Status tone={toneForDeal(deal.status)}>{labelForDeal(deal.status)}</Status>
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-[14px] font-medium text-foreground">{vehicleLabel(deal)}</span>
+                        <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 text-[12px] text-muted-foreground">
+                          <span className="sm:hidden">
+                            <Status tone={toneForDeal(deal.status)} className="text-[12px]">{labelForDeal(deal.status)}</Status>
+                          </span>
+                          {deal.vehicle && <Code>#{deal.vehicle.stockNumber}</Code>}
+                          <span className="truncate">{customerLabel(deal)} · {deal.salesperson?.name || 'Unassigned'}</span>
+                        </span>
+                      </span>
+                      <span className="text-right max-sm:col-start-2 max-sm:row-start-1">
+                        <Figure size="sm">{formatCurrency(deal.totalPrice)}</Figure>
+                      </span>
+                      <span className="text-right text-[12px] text-muted-foreground max-sm:col-start-2 max-sm:row-start-2">
+                        {stale ? <Attention>{formatAge(days)}</Attention> : <span className="tabular-nums">{formatAge(days)}</span>}
+                      </span>
+                    </Link>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </DeskSection>
 
         <DeskSection
-          title="Board"
+          id="deal-board"
+          title="All deals"
           count={filteredDeals.length}
           actions={loading ? <span role="status" className="text-xs text-muted-foreground">Loading deals</span> : undefined}
         >
           <div className="space-y-3">
-            <Segmented label="Filter by status" value={statusFilter} onChange={changeStatus} options={boardOptions} size="sm" className="w-full sm:w-auto" />
+            <Segmented label="Filter by status" value={statusFilter} onChange={changeStatus} options={boardOptions} size="sm" className="w-full" />
             <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
               <div className="relative min-w-0 flex-1 sm:max-w-sm">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -183,11 +270,11 @@ export function DealListPageClient({
                   aria-label="Search deals"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="pl-9"
+                  className="h-10 rounded-[4px] pl-9 text-[13px] shadow-none"
                 />
               </div>
               <Select value={sortOrder} onValueChange={setSortOrder}>
-                <SelectTrigger className="w-full sm:w-[180px]" aria-label="Sort deals">
+                <SelectTrigger className="h-10 w-full rounded-[4px] text-[13px] sm:w-[180px]" aria-label="Sort deals">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -219,46 +306,60 @@ export function DealListPageClient({
                 )}
               </div>
             ) : (
-              <Panel className={`divide-y ${loading ? 'opacity-60' : ''}`} aria-busy={loading}>
-                <div className="hidden items-center gap-4 px-4 py-2 font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground sm:flex">
-                  <span className="min-w-0 flex-1">Vehicle</span>
-                  <span className="w-28 text-right">Total</span>
-                  <span className="w-28 text-right">Price</span>
-                </div>
-                {filteredDeals.map(deal => {
-                  const customer = deal.lead ? `${deal.lead.firstName} ${deal.lead.lastName}` : 'No customer'
-                  return (
-                    <Link
-                      key={deal.id}
-                      href={`${basePath}/platform/deals/${deal.id}`}
-                      className="flex min-w-0 items-start gap-4 px-4 py-3 transition-colors hover:bg-muted/40"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <TitleLine as="p" tone={toneForDeal(deal.status)} status={labelForDeal(deal.status)} className="text-sm font-medium text-foreground">
-                          {deal.vehicle ? `${deal.vehicle.year} ${deal.vehicle.make} ${deal.vehicle.model}` : 'No vehicle'}
-                        </TitleLine>
-                        <p className="truncate pl-4 text-xs text-muted-foreground">
-                          {labelForDeal(deal.status)} · {customer} · {deal.salesperson?.name || 'Unassigned'}
-                        </p>
-                        {deal.vehicle && (
-                          <p className="pl-4">
-                            <Code>#{deal.vehicle.stockNumber}</Code>
-                          </p>
-                        )}
-                      </div>
-                      <p className="hidden w-28 shrink-0 text-right text-sm tabular-nums text-muted-foreground sm:block">{formatCurrency(deal.totalPrice)}</p>
-                      <div className="w-24 shrink-0 text-right sm:w-28">
-                        <p className="text-sm font-semibold tabular-nums">{formatCurrency(deal.vehiclePrice)}</p>
-                        <p className="text-xs tabular-nums text-muted-foreground sm:hidden">{formatCurrency(deal.totalPrice)}</p>
-                        <p className="text-xs tabular-nums text-muted-foreground">{formatDate(deal.saleDate || deal.createdAt)}</p>
-                      </div>
-                    </Link>
-                  )
-                })}
-              </Panel>
+              <div className={loading ? 'opacity-60' : undefined} aria-busy={loading}>
+                <DeskTable>
+                  <thead>
+                    <tr>
+                      <Th>Status</Th>
+                      <Th>Vehicle</Th>
+                      <Th priority={2}>Stock #</Th>
+                      <Th priority={2}>Customer</Th>
+                      <Th priority={3}>Salesperson</Th>
+                      <Th align="right">Total</Th>
+                      <Th align="right" priority={3}>Price</Th>
+                      <Th align="right" priority={2}>Date</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredDeals.map(deal => (
+                      <Tr key={deal.id} className="cursor-pointer" onClick={() => router.push(dealHref(deal))}>
+                        <Td className="w-[1%]">
+                          <Status tone={toneForDeal(deal.status)}>{labelForDeal(deal.status)}</Status>
+                        </Td>
+                        <Td className="min-w-0 max-w-[16rem]">
+                          <Link
+                            href={dealHref(deal)}
+                            onClick={event => event.stopPropagation()}
+                            className="block truncate font-medium text-foreground hover:underline focus-visible:underline focus-visible:outline-none"
+                          >
+                            {vehicleLabel(deal)}
+                          </Link>
+                          <span className="block truncate text-[12px] text-muted-foreground md:hidden">{customerLabel(deal)}</span>
+                        </Td>
+                        <Td priority={2} className="whitespace-nowrap">{deal.vehicle ? <Code>#{deal.vehicle.stockNumber}</Code> : <span className="text-muted-foreground">-</span>}</Td>
+                        <Td priority={2} className="max-w-[12rem] truncate">{customerLabel(deal)}</Td>
+                        <Td priority={3} className="max-w-[10rem] truncate text-muted-foreground">{deal.salesperson?.name || 'Unassigned'}</Td>
+                        <Td align="right" className="whitespace-nowrap">
+                          <Figure size="sm">{formatCurrency(deal.totalPrice)}</Figure>
+                        </Td>
+                        <Td align="right" priority={3} className="whitespace-nowrap text-muted-foreground">{formatCurrency(deal.vehiclePrice)}</Td>
+                        <Td align="right" priority={2} className="whitespace-nowrap text-muted-foreground">{formatDate(deal.saleDate || deal.createdAt)}</Td>
+                      </Tr>
+                    ))}
+                  </tbody>
+                </DeskTable>
+              </div>
             )}
           </div>
         </DeskSection>
+
+        {boardDeals.length > 0 && (
+          <ReadoutStrip>
+            <Readout label="On the desk" value={deskQueue.length} />
+            <Readout label="Delivered" value={deliveredCount} />
+            <Readout label="Delivered revenue" value={formatCurrency(totalRevenue)} />
+          </ReadoutStrip>
+        )}
       </div>
     </PageContainer>
   )

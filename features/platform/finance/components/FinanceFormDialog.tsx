@@ -73,13 +73,13 @@ export function FinanceFormDialog({
               return (
                 <div key={field.name} className={cn('grid min-w-0 gap-1.5 text-sm', wide && 'sm:col-span-2')}>
                   {field.type !== 'checkbox' && (
-                    <label htmlFor={id} className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">{field.label}</label>
+                    <label htmlFor={id} className="text-[12px] font-medium text-muted-foreground">{field.label}</label>
                   )}
                   {field.type === 'textarea' ? (
                     <Textarea id={id} rows={3} maxLength={field.maxLength} placeholder={field.placeholder} value={values[field.name] || ''} aria-invalid={Boolean(fieldError)} aria-describedby={describedBy} onChange={event => change(field.name, event.target.value)} />
                   ) : field.type === 'select' ? (
                     <Select value={values[field.name] || ''} onValueChange={value => change(field.name, value)}>
-                      <SelectTrigger id={id} className="h-11 w-full" aria-label={field.label} aria-invalid={Boolean(fieldError)} aria-describedby={describedBy}>
+                      <SelectTrigger id={id} className="h-10 w-full rounded-[4px]" aria-label={field.label} aria-invalid={Boolean(fieldError)} aria-describedby={describedBy}>
                         <SelectValue placeholder={field.placeholder || 'Select'} />
                       </SelectTrigger>
                       <SelectContent>
@@ -87,16 +87,16 @@ export function FinanceFormDialog({
                       </SelectContent>
                     </Select>
                   ) : field.type === 'checkbox' ? (
-                    <label htmlFor={id} className="flex min-h-11 items-start gap-2 rounded-lg bg-muted/50 p-3 shadow-[inset_0_1px_2px_rgb(0_0_0/0.06)]">
+                    <label htmlFor={id} className="flex min-h-11 items-start gap-2 rounded-md border bg-muted/40 p-3">
                       <input id={id} type="checkbox" className="mt-0.5 size-4" checked={values[field.name] === 'yes'} aria-invalid={Boolean(fieldError)} aria-describedby={describedBy} onChange={event => change(field.name, event.target.checked ? 'yes' : '')} />
                       <span>{field.label}</span>
                     </label>
                   ) : field.type === 'readonly' ? (
-                    <p id={id} className="flex h-11 items-center rounded-md border bg-muted/40 px-3 font-mono text-[13px]">{values[field.name] || '-'}</p>
+                    <p id={id} className="flex h-10 items-center rounded-[4px] border bg-muted/40 px-3 text-[13px]">{values[field.name] || '-'}</p>
                   ) : (
                     <Input
                       id={id}
-                      className="h-11"
+                      className="h-10 rounded-[4px]"
                       inputMode={field.type === 'money' ? 'decimal' : field.type === 'number' ? 'numeric' : undefined}
                       maxLength={field.maxLength ?? (field.type === 'money' ? 20 : undefined)}
                       placeholder={field.placeholder ?? (field.type === 'money' ? '$0' : undefined)}

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Pencil, RefreshCw } from 'lucide-react'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
-import { Code, DeskHeader, DeskSection, Facts, Notice, Pill, TitleLine, Track } from '@/features/platform/components/desk'
+import { Attention, Code, DeskHeader, DeskSection, Facts, Figure, Notice, Pill, Status, Track } from '@/features/platform/components/desk'
 import { fromZonedInput, zonedInputValue } from '@/features/platform/delivery/lib/zonedTime'
 import { formatPhone } from '@/features/platform/lib/format'
 import {
@@ -55,6 +55,8 @@ export function ServiceAppointmentDetailPageClient({
   const [notice, setNotice] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
   const [form, setForm] = useState<FormState | null>(null)
   const [staff, setStaff] = useState<Array<{ value: string; label: string }>>([])
+  // Clock for ages and lateness; advances on each refresh.
+  const [now, setNow] = useState(() => Date.now())
   const attemptKeys = useRef(createAttemptKeys('service-appointment')).current
 
   const reload = async () => {
@@ -66,6 +68,7 @@ export function ServiceAppointmentDetailPageClient({
     } else {
       setLoadError(response.error)
     }
+    setNow(new Date().getTime())
     setLoading(false)
   }
 
@@ -236,21 +239,20 @@ export function ServiceAppointmentDetailPageClient({
 
   const header = (
     <DeskHeader
-      eyebrow="Service appointment"
       title={name ? `${name} · ${vehicle}` : vehicle}
       tone={STATUS_TONES[status] || 'idle'}
       status={APPOINTMENT_STATUS_LABELS[status] || status}
       meta={
-        <span className="flex flex-wrap gap-x-2">
-          <span className="text-foreground">{APPOINTMENT_STATUS_LABELS[status] || status}</span>
+        <span className="flex flex-wrap items-baseline gap-x-2">
+          <Status tone={STATUS_TONES[status] || 'idle'}>{APPOINTMENT_STATUS_LABELS[status] || status}</Status>
           <span>· {formatDateTime(appointment.appointmentDate, timeZone)}</span>
           {appointment.rooftop?.name && <span>· {appointment.rooftop.name}</span>}
           <span>· {appointment.assignedTech?.name || 'Unassigned'}</span>
         </span>
       }
       actions={
-        <Track>
-          <Pill className="max-sm:h-11" onClick={reload} disabled={loading} aria-label="Refresh">
+        <>
+          <Pill variant="plain" className="max-sm:h-11" onClick={reload} disabled={loading} aria-label="Refresh">
             <RefreshCw className={loading ? 'animate-spin' : undefined} />
             Refresh
           </Pill>
@@ -267,10 +269,11 @@ export function ServiceAppointmentDetailPageClient({
               {busy === 'open-ro' ? 'Opening…' : 'Open RO'}
             </Pill>
           )}
-        </Track>
+        </>
       }
     />
   )
+  const late = status === 'scheduled' && Boolean(appointment.appointmentDate) && new Date(appointment.appointmentDate || 0).getTime() < now
 
   return (
     <PageContainer title={name ? `${name} · ${vehicle}` : vehicle} header={header} breadcrumbs={breadcrumbs('Appointment')}>
@@ -281,7 +284,7 @@ export function ServiceAppointmentDetailPageClient({
               <Notice tone={notice.tone}>
                 <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
                   <p className="min-w-0">{notice.text}</p>
-                  <Track><Pill size="sm" variant="plain" className="max-sm:h-11" onClick={() => setNotice(null)}>Dismiss</Pill></Track>
+                  <Pill size="sm" variant="plain" className="max-sm:h-11" onClick={() => setNotice(null)}>Dismiss</Pill>
                 </div>
               </Notice>
             )}
@@ -290,11 +293,16 @@ export function ServiceAppointmentDetailPageClient({
           </div>
         )}
 
-        <DeskSection title="Status">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-md border bg-card px-4 py-3">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+            <Figure size="md" attention={late}>{formatDateTime(appointment.appointmentDate, timeZone)}</Figure>
+            <Status tone={STATUS_TONES[status] || 'idle'}>{APPOINTMENT_STATUS_LABELS[status] || status}</Status>
+            {late && <Attention>Late</Attention>}
+          </div>
           {transitions.length === 0 ? (
-            <p className="py-1 text-sm text-muted-foreground">{APPOINTMENT_STATUS_LABELS[status] || status}</p>
+            <p className="text-[13px] text-muted-foreground">No status changes available</p>
           ) : (
-            <Track>
+            <Track className="flex-wrap">
               {transitions.map(next => (
                 <Pill
                   key={next}
@@ -308,7 +316,7 @@ export function ServiceAppointmentDetailPageClient({
               ))}
             </Track>
           )}
-        </DeskSection>
+        </div>
 
         <div className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-2">
           <DeskSection title="Appointment">
@@ -341,14 +349,16 @@ export function ServiceAppointmentDetailPageClient({
 
             <DeskSection title="Repair order">
               {order ? (
-                <Link href={`${basePath}/platform/service/orders/${order.id}`} className="flex min-w-0 items-start justify-between gap-4 rounded-lg py-2 hover:bg-muted/40">
-                  <TitleLine as="p" tone={STATUS_TONES[order.status || ''] || 'idle'} status={ORDER_STATUS_LABELS[order.status || ''] || order.status || ''} className="text-sm font-medium">
-                    <Code className="text-foreground">{roReference(order.id)}</Code> {ORDER_STATUS_LABELS[order.status || ''] || order.status} · <span className="capitalize">{order.authorizationStatus || 'pending'}</span>
-                  </TitleLine>
-                  <span className="shrink-0 font-mono text-sm tabular-nums">{formatCents(order.grandTotalCents)}</span>
+                <Link href={`${basePath}/platform/service/orders/${order.id}`} className="flex min-h-11 min-w-0 items-center justify-between gap-4 rounded-md border bg-card px-4 py-2.5 transition-colors hover:bg-muted/40">
+                  <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <Code className="text-foreground">{roReference(order.id)}</Code>
+                    <Status tone={STATUS_TONES[order.status || ''] || 'idle'}>{ORDER_STATUS_LABELS[order.status || ''] || order.status}</Status>
+                    <span className="text-[13px] capitalize text-muted-foreground">{order.authorizationStatus || 'pending'}</span>
+                  </span>
+                  <Figure size="sm" className="shrink-0">{formatCents(order.grandTotalCents)}</Figure>
                 </Link>
               ) : (
-                <p className="py-3 text-sm text-muted-foreground">No repair order</p>
+                <p className="py-3 text-[13px] text-muted-foreground">No repair order</p>
               )}
             </DeskSection>
           </div>
@@ -364,7 +374,7 @@ export function ServiceAppointmentDetailPageClient({
           busy={busy === 'form'}
           submitLabel={form?.kind === 'cancel' ? 'Cancel appointment' : 'Save'}
           submitVariant={form?.kind === 'cancel' ? 'danger' : 'primary'}
-          extra={form?.kind === 'cancel' ? <p className="text-sm">{name ? `${name} · ` : ''}{vehicle} · {formatDateTime(appointment.appointmentDate, timeZone)}</p> : null}
+          extra={form?.kind === 'cancel' ? <p className="text-[13px]">{name ? `${name} · ` : ''}{vehicle} · {formatDateTime(appointment.appointmentDate, timeZone)}</p> : null}
           onValuesChange={values => setForm(current => (current ? { ...current, values } : current))}
           onSubmit={submit}
           onOpenChange={open => { if (!open) setForm(null) }}

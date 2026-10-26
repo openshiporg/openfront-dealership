@@ -107,7 +107,7 @@ export function PlatformFilterBar({
           >
             <Input
               type="search"
-              className="pl-9 w-full h-10 rounded-lg placeholder:text-muted-foreground/80"
+              className="pl-9 w-full h-10 rounded-[4px] placeholder:text-muted-foreground/80"
               value={searchString}
               onChange={(e) => setSearchString(e.target.value)}
               placeholder={`Search by ${
@@ -125,7 +125,7 @@ export function PlatformFilterBar({
             <Button
               variant="outline"
               size="icon"
-              className="lg:px-4 lg:py-2 lg:w-auto rounded-lg"
+              className="h-10 w-10 lg:px-4 lg:py-2 lg:w-auto rounded-[4px]"
             >
               <SlidersHorizontal className="stroke-muted-foreground" />
               <span className="hidden lg:inline">Filter</span>
@@ -136,7 +136,7 @@ export function PlatformFilterBar({
             <Button
               variant="outline"
               size="icon"
-              className="lg:px-4 lg:py-2 lg:w-auto rounded-lg"
+              className="h-10 w-10 lg:px-4 lg:py-2 lg:w-auto rounded-[4px]"
             >
               <ArrowUpDown className="stroke-muted-foreground" />
               <span className="hidden lg:inline">Sort</span>
@@ -148,7 +148,7 @@ export function PlatformFilterBar({
               <Button
                 variant="outline"
                 size="icon"
-                className="lg:px-4 lg:py-2 lg:w-auto rounded-lg"
+                className="h-10 w-10 lg:px-4 lg:py-2 lg:w-auto rounded-[4px]"
               >
                 <Columns3 className="stroke-muted-foreground" />
                 <span className="hidden lg:inline">Display</span>
@@ -161,7 +161,7 @@ export function PlatformFilterBar({
               (createMode === 'dropdown' && onCreateClick) ? (
                 <Button
                   onClick={() => onCreateClick?.()}
-                  className="lg:px-4 lg:py-2 lg:w-auto rounded-lg"
+                  className="h-10 w-10 lg:px-4 lg:py-2 lg:w-auto rounded-[4px]"
                 >
                   <CirclePlus />
                   <span className="hidden lg:inline">{createLabel || `Create ${list.singular}`}</span>
@@ -171,7 +171,7 @@ export function PlatformFilterBar({
                   href={`${basePath}/platform/${list.path}/create`}
                   className={cn(
                     buttonVariants({ size: "icon" }),
-                    "lg:px-4 lg:py-2 lg:w-auto rounded-lg"
+                    "h-10 w-10 lg:px-4 lg:py-2 lg:w-auto rounded-[4px]"
                   )}
                 >
                   <CirclePlus />

@@ -24,7 +24,7 @@ export type InventoryFormField = {
 
 export type FieldErrors = Record<string, string>
 
-const labelClass = 'font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground'
+const labelClass = 'text-[12px] font-medium text-muted-foreground'
 /** Radix Select cannot hold an empty value; optional selects use this sentinel for "none". */
 export const NONE_VALUE = '__none'
 
@@ -63,7 +63,7 @@ export function InventoryFormDialog({
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          {description && <DialogDescription className="font-mono text-xs">{description}</DialogDescription>}
+          {description && <DialogDescription className="text-[13px]">{description}</DialogDescription>}
         </DialogHeader>
         <form onSubmit={onSubmit} noValidate className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -88,7 +88,7 @@ export function InventoryFormDialog({
                       </SelectContent>
                     </Select>
                   ) : field.type === 'checkbox' ? (
-                    <label htmlFor={id} className="flex min-h-11 items-center gap-2 rounded-lg bg-muted/50 px-3 py-2">
+                    <label htmlFor={id} className="flex min-h-11 items-center gap-2 rounded-[4px] border px-3 py-2">
                       <input id={id} type="checkbox" className="size-4" disabled={field.disabled || busy} checked={value === 'yes'} onChange={event => change(field.name, event.target.checked ? 'yes' : '')} />
                       <span>{field.label}</span>
                     </label>

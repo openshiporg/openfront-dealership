@@ -52,3 +52,16 @@ export function vehicleName(vehicle: { year?: number | null; make?: string | nul
 export function newIdempotencyKey(prefix: string) {
   return `${prefix}:${crypto.randomUUID()}`
 }
+
+/** Whole days since a timestamp; null when unknown. */
+export function daysSince(value: string | null | undefined, now = Date.now()) {
+  if (!value) return null
+  const time = new Date(value).getTime()
+  if (!Number.isFinite(time)) return null
+  return Math.max(0, Math.floor((now - time) / 86_400_000))
+}
+
+export function formatAge(days: number | null) {
+  if (days == null) return '-'
+  return days === 0 ? 'Today' : `${days}d`
+}

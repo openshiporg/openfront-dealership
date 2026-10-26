@@ -117,7 +117,7 @@ export function PartFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={value => { if (!busy) onOpenChange(value) }}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto rounded-md sm:rounded-md sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{part ? `Edit ${part.partNumber}` : 'New part'}</DialogTitle>
         </DialogHeader>
@@ -126,7 +126,7 @@ export function PartFormDialog({
             {!part && rooftops.length > 1 && (
               <FormField id="part-rooftop" label="Rooftop" error={errors.rooftopId} className="sm:col-span-2">
                 <Select value={values.rooftopId} onValueChange={value => set('rooftopId', value)}>
-                  <SelectTrigger id="part-rooftop" className="h-11 sm:h-9" aria-invalid={Boolean(errors.rooftopId)}>
+                  <SelectTrigger id="part-rooftop" className="h-11 rounded-[4px] px-3 text-[13px] sm:h-9" aria-invalid={Boolean(errors.rooftopId)}>
                     <SelectValue placeholder="Select rooftop" />
                   </SelectTrigger>
                   <SelectContent>
@@ -136,28 +136,28 @@ export function PartFormDialog({
               </FormField>
             )}
             <FormField id="part-number" label="Part number" error={errors.partNumber}>
-              <Input id="part-number" className="h-11 font-mono uppercase sm:h-9" value={values.partNumber} maxLength={100} aria-invalid={Boolean(errors.partNumber)} onChange={event => set('partNumber', event.target.value)} />
+              <Input id="part-number" className="h-11 rounded-[4px] text-[13px] font-mono uppercase sm:h-9" value={values.partNumber} maxLength={100} aria-invalid={Boolean(errors.partNumber)} onChange={event => set('partNumber', event.target.value)} />
             </FormField>
             <FormField id="part-bin" label="Bin location" error={errors.binLocation}>
-              <Input id="part-bin" className="h-11 sm:h-9" value={values.binLocation} maxLength={100} onChange={event => set('binLocation', event.target.value)} />
+              <Input id="part-bin" className="h-11 rounded-[4px] text-[13px] sm:h-9" value={values.binLocation} maxLength={100} onChange={event => set('binLocation', event.target.value)} />
             </FormField>
             <FormField id="part-description" label="Description" error={errors.description} className="sm:col-span-2">
-              <Input id="part-description" className="h-11 sm:h-9" value={values.description} maxLength={1000} aria-invalid={Boolean(errors.description)} onChange={event => set('description', event.target.value)} />
+              <Input id="part-description" className="h-11 rounded-[4px] text-[13px] sm:h-9" value={values.description} maxLength={1000} aria-invalid={Boolean(errors.description)} onChange={event => set('description', event.target.value)} />
             </FormField>
             <FormField id="part-cost" label="Cost" error={errors.cost}>
-              <Input id="part-cost" className="h-11 sm:h-9" inputMode="decimal" placeholder="$0.00" value={values.cost} aria-invalid={Boolean(errors.cost)} onChange={event => set('cost', event.target.value)} />
+              <Input id="part-cost" className="h-11 rounded-[4px] text-[13px] sm:h-9" inputMode="decimal" placeholder="$0.00" value={values.cost} aria-invalid={Boolean(errors.cost)} onChange={event => set('cost', event.target.value)} />
             </FormField>
             <FormField id="part-price" label="Retail price" error={errors.price}>
-              <Input id="part-price" className="h-11 sm:h-9" inputMode="decimal" placeholder="$0.00" value={values.price} aria-invalid={Boolean(errors.price)} onChange={event => set('price', event.target.value)} />
+              <Input id="part-price" className="h-11 rounded-[4px] text-[13px] sm:h-9" inputMode="decimal" placeholder="$0.00" value={values.price} aria-invalid={Boolean(errors.price)} onChange={event => set('price', event.target.value)} />
             </FormField>
             <FormField id="part-reorder" label="Reorder point" error={errors.minimumQuantity}>
-              <Input id="part-reorder" className="h-11 sm:h-9" inputMode="numeric" value={values.minimumQuantity} aria-invalid={Boolean(errors.minimumQuantity)} onChange={event => set('minimumQuantity', event.target.value)} />
+              <Input id="part-reorder" className="h-11 rounded-[4px] text-[13px] sm:h-9" inputMode="numeric" value={values.minimumQuantity} aria-invalid={Boolean(errors.minimumQuantity)} onChange={event => set('minimumQuantity', event.target.value)} />
             </FormField>
             <FormField id="part-supplier" label="Supplier">
-              <Input id="part-supplier" className="h-11 sm:h-9" value={values.supplier} maxLength={200} onChange={event => set('supplier', event.target.value)} />
+              <Input id="part-supplier" className="h-11 rounded-[4px] text-[13px] sm:h-9" value={values.supplier} maxLength={200} onChange={event => set('supplier', event.target.value)} />
             </FormField>
             <FormField id="part-supplier-number" label="Supplier part number" className="sm:col-span-2">
-              <Input id="part-supplier-number" className="h-11 font-mono sm:h-9" value={values.supplierPartNumber} maxLength={100} onChange={event => set('supplierPartNumber', event.target.value)} />
+              <Input id="part-supplier-number" className="h-11 rounded-[4px] text-[13px] font-mono sm:h-9" value={values.supplierPartNumber} maxLength={100} onChange={event => set('supplierPartNumber', event.target.value)} />
             </FormField>
           </div>
           {formError && <Notice tone="bad">{formError}</Notice>}

@@ -40,12 +40,6 @@ export function OutboxPanel({ timeZone }: { timeZone: string }) {
   return (
     <div className="space-y-4">
       {error && <Notice tone="bad">{error}</Notice>}
-      <ReadoutStrip>
-        <Readout label="Pending" value={counts?.pending ?? '-'} tone={counts?.pending ? 'warn' : undefined} sub={oldestAge ? `Oldest ${oldestAge}` : undefined} />
-        <Readout label="Processing" value={counts?.processing ?? '-'} />
-        <Readout label="Failed" value={counts?.failed ?? '-'} tone={counts?.failed ? 'bad' : undefined} />
-        <Readout label="Delivered" value={counts?.delivered ?? '-'} tone={counts?.delivered ? 'ok' : undefined} />
-      </ReadoutStrip>
       {counts && (
         <Notice tone={tone}>
           {counts.pending > 0 && counts.delivered === 0 && counts.processing === 0
@@ -112,6 +106,12 @@ export function OutboxPanel({ timeZone }: { timeZone: string }) {
           </ul>
         )}
       </Panel>
+      <ReadoutStrip>
+        <Readout label="Pending" value={counts?.pending ?? '-'} tone={counts?.pending ? 'warn' : undefined} sub={oldestAge ? `Oldest ${oldestAge}` : undefined} />
+        <Readout label="Processing" value={counts?.processing ?? '-'} />
+        <Readout label="Failed" value={counts?.failed ?? '-'} tone={counts?.failed ? 'bad' : undefined} />
+        <Readout label="Delivered" value={counts?.delivered ?? '-'} tone={counts?.delivered ? 'ok' : undefined} />
+      </ReadoutStrip>
     </div>
   )
 }

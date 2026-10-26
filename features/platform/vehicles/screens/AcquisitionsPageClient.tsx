@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
-import { Code, DeskHeader, DeskSection, Facts, Notice, Panel, Pill, Segmented, TitleLine, Track, type DeskTone } from '@/features/platform/components/desk'
+import { Code, DeskHeader, DeskSection, DeskTable, Facts, Figure, Notice, Pill, Segmented, Status, Td, Th, TitleLine, Tr, Track, type DeskTone } from '@/features/platform/components/desk'
 import { formatCentsForInput, parseDollarsToCents } from '@/features/platform/deals/lib/moneyInput'
 import { transitionInventoryAcquisition } from '../actions'
 import { getAcquisitions, receiveAcquisitionIntoStock, startInventoryAcquisition, type AcquisitionRow } from '../actions/acquisitions'
@@ -108,6 +108,10 @@ export function AcquisitionsPageClient({
   const selected = rows.find(row => row.id === selectedId) ?? null
   const activeCount = counts ? ACTIVE.reduce((sum, status) => sum + (counts[status] || 0), 0) : undefined
   const allCount = counts ? Object.values(counts).reduce((sum, count) => sum + count, 0) : undefined
+  // Rows waiting on a desk step (not just "open vehicle"), oldest update first.
+  const waiting = rows
+    .filter(row => ACTIVE.includes(row.status) && nextAction(row) && nextAction(row)!.kind !== 'open')
+    .sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime())
   const filterOptions = [
     { value: 'active' as Filter, label: 'Active', count: activeCount },
     ...ACQUISITION_STATUSES.map(status => ({ value: status as Filter, label: acquisitionStatusLabels[status], count: counts ? counts[status] || 0 : undefined, tone: acquisitionStatusTones[status] })),
@@ -275,10 +279,10 @@ export function AcquisitionsPageClient({
       title="Acquisitions"
       tone={error ? 'bad' : activeCount ? 'info' : 'idle'}
       status={error ? 'Unavailable' : `${activeCount ?? 0} active`}
-      meta={activeCount !== undefined ? `${activeCount} active · ${counts?.frontline || 0} frontline` : undefined}
+      meta={activeCount !== undefined ? `${activeCount} active · ${waiting.length} waiting on a step · ${counts?.frontline || 0} frontline` : undefined}
       actions={
         <Track>
-          <Pill onClick={() => void load()} disabled={loading} aria-label="Refresh"><RefreshCw className={loading ? 'animate-spin' : undefined} /><span className="max-sm:sr-only">Refresh</span></Pill>
+          <Pill variant="plain" onClick={() => void load()} disabled={loading} aria-label="Refresh"><RefreshCw className={loading ? 'animate-spin' : undefined} /><span className="max-sm:sr-only">Refresh</span></Pill>
           <Pill variant="primary" disabled={!rooftops.length || Boolean(busy)} title={rooftops.length ? undefined : 'No active rooftop'} onClick={() => openDialog('start', null, { rooftopId: rooftops[0]?.id || '', acquisitionSource: 'trade-in', sourceReference: '', vin: '', year: String(new Date().getFullYear() - 3), odometer: '', make: '', model: '', appraisal: '', reconEstimate: '' })}>
             <Plus /> Appraise
           </Pill>
@@ -293,10 +297,10 @@ export function AcquisitionsPageClient({
     return (
       <Track>
         {action && (action.kind === 'open' && row.vehicle
-          ? <Pill size={inSheet ? 'md' : 'sm'} variant="primary" asChild><Link href={`${VEHICLES_HREF}/${row.vehicle.id}`}>{action.label}</Link></Pill>
-          : <Pill size={inSheet ? 'md' : 'sm'} variant="primary" disabled={Boolean(busy)} onClick={() => runNext(row)}>{action.label}</Pill>)}
-        {row.vehicle && action?.kind !== 'open' && <Pill size={inSheet ? 'md' : 'sm'} asChild><Link href={`${VEHICLES_HREF}/${row.vehicle.id}`}>Vehicle</Link></Pill>}
-        {!inSheet && <Pill size="sm" variant="plain" onClick={() => setSelectedId(row.id)}>Details</Pill>}
+          ? <Pill size={inSheet ? 'md' : 'sm'} variant={inSheet ? 'primary' : undefined} className="max-md:h-10" asChild><Link href={`${VEHICLES_HREF}/${row.vehicle.id}`}>{action.label}</Link></Pill>
+          : <Pill size={inSheet ? 'md' : 'sm'} variant={inSheet ? 'primary' : undefined} className="max-md:h-10" disabled={Boolean(busy)} onClick={() => runNext(row)}>{action.label}</Pill>)}
+        {row.vehicle && action?.kind !== 'open' && <Pill size={inSheet ? 'md' : 'sm'} variant={inSheet ? undefined : 'plain'} className="max-md:h-10" asChild><Link href={`${VEHICLES_HREF}/${row.vehicle.id}`}>Vehicle</Link></Pill>}
+        {!inSheet && <Pill size="sm" variant="plain" className="max-md:h-10" onClick={() => setSelectedId(row.id)}>Details</Pill>}
         {inSheet && !terminal && <Pill variant="danger" disabled={Boolean(busy)} onClick={() => openDialog('cancel', row, { reason: '' })}>Cancel</Pill>}
       </Track>
     )
@@ -307,15 +311,51 @@ export function AcquisitionsPageClient({
       <div className="min-w-0 max-w-full space-y-6 px-4 pb-24 md:px-6">
         {message && <Notice tone={message.tone}>{message.text}</Notice>}
 
-        <div className="flex min-w-0 flex-col gap-3">
-          <Segmented label="Filter by status" value={filter} onChange={setFilter} options={filterOptions} className="self-start" />
-          <div className="relative w-full sm:max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Reference, VIN, make, model" value={search} onChange={event => setSearch(event.target.value)} className="rounded-full pl-9 max-sm:h-11" aria-label="Search acquisitions" />
-          </div>
-        </div>
+        {!error && !(loading && rows.length === 0) && (
+          <DeskSection title="Needs you" count={waiting.length} id="acquisitions-needs-you">
+            {waiting.length === 0 ? (
+              <p className="py-3 text-[13px] text-muted-foreground">No acquisitions waiting on a step.</p>
+            ) : (
+              <DeskTable aria-label="Acquisitions waiting on you">
+                <thead>
+                  <tr>
+                    <Th>Vehicle</Th>
+                    <Th priority={2}>Status</Th>
+                    <Th priority={2}>Waiting since</Th>
+                    <Th align="right"><span className="sr-only">Next step</span></Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {waiting.map(row => (
+                    <Tr key={row.id}>
+                      <Td className="min-w-0">
+                        <p className="break-words font-medium text-foreground">{row.year} {row.make} {row.model}</p>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <Code>{row.reference}</Code>
+                          <span className="md:hidden"><Status tone={acquisitionStatusTones[row.status]}>{acquisitionStatusLabels[row.status] || row.status}</Status></span>
+                        </div>
+                      </Td>
+                      <Td priority={2}><Status tone={acquisitionStatusTones[row.status]}>{acquisitionStatusLabels[row.status] || row.status}</Status></Td>
+                      <Td priority={2} className="whitespace-nowrap text-muted-foreground">{formatDate(row.updatedAt, timeZone)}</Td>
+                      <Td align="right" className="whitespace-nowrap">
+                        <Pill size="sm" className="max-md:h-10" disabled={Boolean(busy)} onClick={() => runNext(row)}>{nextAction(row)?.label}</Pill>
+                      </Td>
+                    </Tr>
+                  ))}
+                </tbody>
+              </DeskTable>
+            )}
+          </DeskSection>
+        )}
 
         <DeskSection title={filter === 'active' ? 'Pipeline' : filter === 'all' ? 'All acquisitions' : acquisitionStatusLabels[filter]} count={loading || error ? undefined : rows.length}>
+          <div className="mb-3 flex min-w-0 flex-col gap-3">
+            <Segmented label="Filter by status" value={filter} onChange={setFilter} options={filterOptions} className="self-stretch" />
+            <div className="relative w-full sm:max-w-sm">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="Reference, VIN, make, model" value={search} onChange={event => setSearch(event.target.value)} className="rounded-[4px] pl-9 max-md:h-10" aria-label="Search acquisitions" />
+            </div>
+          </div>
           {loading && rows.length === 0 ? (
             <div className="flex justify-center py-12" role="status"><RefreshCw className="size-5 animate-spin text-muted-foreground" aria-hidden="true" /><span className="sr-only">Loading acquisitions</span></div>
           ) : error ? (
@@ -330,34 +370,42 @@ export function AcquisitionsPageClient({
               {(search || filter !== 'active') && <Track><Pill size="sm" onClick={() => { setSearch(''); setFilter('active') }}>Reset filters</Pill></Track>}
             </div>
           ) : (
-            <Panel className="divide-y">
-              {rows.map(row => (
-                <div key={row.id} className="min-w-0 px-4 py-3">
-                  <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-start md:justify-between md:gap-6">
-                    <div className="min-w-0 flex-1">
-                      <TitleLine tone={acquisitionStatusTones[row.status]} status={acquisitionStatusLabels[row.status]} className="text-sm font-medium">
-                        {row.year} {row.make} {row.model}
-                      </TitleLine>
-                      <p className="mt-0.5 flex min-w-0 flex-wrap gap-x-2 gap-y-0.5 pl-4 text-xs text-muted-foreground">
+            <DeskTable aria-label="Acquisitions">
+              <thead>
+                <tr>
+                  <Th>Vehicle</Th>
+                  <Th priority={3}>Source</Th>
+                  <Th priority={2}>Status</Th>
+                  <Th align="right" priority={2}>Appraisal</Th>
+                  <Th align="right">Purchase</Th>
+                  <Th priority={3}>Updated</Th>
+                  <Th align="right" priority={2}><span className="sr-only">Actions</span></Th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(row => (
+                  <Tr key={row.id}>
+                    <Td className="min-w-0">
+                      <p className="break-words font-medium text-foreground">{row.year} {row.make} {row.model}</p>
+                      <p className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                         <Code className="text-foreground">{row.reference}</Code>
                         <Code><span title={row.vin}>…{row.vin.slice(-8)}</span></Code>
-                        <span>{acquisitionSourceLabels[row.acquisitionSource] || row.acquisitionSource}</span>
-                        {row.vehicle?.stockNumber && <span>· Stock {row.vehicle.stockNumber}</span>}
-                        {rooftops.length > 1 && row.rooftop?.name && <span>· {row.rooftop.name}</span>}
+                        {row.vehicle?.stockNumber && <span>Stock <Code>{row.vehicle.stockNumber}</Code></span>}
+                        {rooftops.length > 1 && row.rooftop?.name && <span>{row.rooftop.name}</span>}
                       </p>
-                      <p className="mt-0.5 pl-4 font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
-                        {acquisitionStatusLabels[row.status] || row.status} · Updated {formatDate(row.updatedAt, timeZone)}
-                      </p>
-                    </div>
-                    <dl className="grid shrink-0 grid-cols-2 gap-4 pl-4 text-xs md:pl-0 md:text-right">
-                      <div><dt className="text-muted-foreground">Appraisal</dt><dd className="font-mono tabular-nums">{money(row.appraisalCents)}</dd></div>
-                      <div><dt className="text-muted-foreground">Purchase</dt><dd className="font-mono tabular-nums">{money(row.purchaseCents)}</dd></div>
-                    </dl>
-                  </div>
-                  <div className="mt-2 pl-4">{renderActions(row)}</div>
-                </div>
-              ))}
-            </Panel>
+                      <div className="mt-1 md:hidden"><Status tone={acquisitionStatusTones[row.status]}>{acquisitionStatusLabels[row.status] || row.status}</Status></div>
+                      <div className="mt-2 md:hidden">{renderActions(row)}</div>
+                    </Td>
+                    <Td priority={3} className="whitespace-nowrap text-muted-foreground">{acquisitionSourceLabels[row.acquisitionSource] || row.acquisitionSource}</Td>
+                    <Td priority={2}><Status tone={acquisitionStatusTones[row.status]}>{acquisitionStatusLabels[row.status] || row.status}</Status></Td>
+                    <Td align="right" priority={2} className="whitespace-nowrap text-muted-foreground">{money(row.appraisalCents)}</Td>
+                    <Td align="right" className="align-top md:align-middle"><span className="sr-only">Purchase </span><Figure size="sm">{money(row.purchaseCents)}</Figure></Td>
+                    <Td priority={3} className="whitespace-nowrap text-muted-foreground">{formatDate(row.updatedAt, timeZone)}</Td>
+                    <Td align="right" priority={2} className="whitespace-nowrap"><div className="flex justify-end">{renderActions(row)}</div></Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </DeskTable>
           )}
         </DeskSection>
 
@@ -369,7 +417,7 @@ export function AcquisitionsPageClient({
                   <SheetTitle>
                     <TitleLine as="span" tone={acquisitionStatusTones[selected.status]} status={acquisitionStatusLabels[selected.status]}>{selected.year} {selected.make} {selected.model}</TitleLine>
                   </SheetTitle>
-                  <SheetDescription className="font-mono text-xs">{selected.reference} · {acquisitionStatusLabels[selected.status] || selected.status}</SheetDescription>
+                  <SheetDescription className="text-[13px]"><Code>{selected.reference}</Code> · {acquisitionStatusLabels[selected.status] || selected.status}</SheetDescription>
                 </SheetHeader>
                 <div className="space-y-6 px-4 pb-24">
                   {renderActions(selected, true)}
@@ -393,7 +441,7 @@ export function AcquisitionsPageClient({
                     <ol className="space-y-3 border-l pl-4">
                       {selected.events.map(event => (
                         <li key={event.id} className="relative text-sm">
-                          <span aria-hidden="true" className="absolute -left-[21px] top-1.5 size-2 rounded-full bg-muted-foreground/40" />
+                          <span aria-hidden="true" className="absolute -left-[21px] top-1.5 size-2 rounded-[1px] bg-muted-foreground/40" />
                           <p className="font-medium">{event.fromStatus ? `${acquisitionStatusLabels[event.fromStatus] || event.fromStatus} to ${acquisitionStatusLabels[event.toStatus] || event.toStatus}` : acquisitionStatusLabels[event.toStatus] || event.toStatus}</p>
                           <p className="text-xs text-muted-foreground">{formatDateTime(event.occurredAt, timeZone)} · {personName(event.actor)}</p>
                           <p className="break-words text-xs text-muted-foreground">{event.reason}</p>

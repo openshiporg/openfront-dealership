@@ -55,26 +55,26 @@ export function ServiceFormDialog({
   }
   return (
     <Dialog open={open} onOpenChange={value => { if (!busy) onOpenChange(value) }}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto rounded-md sm:max-w-xl sm:rounded-md">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <form onSubmit={submit} noValidate className="space-y-4">
           {fields.length > 0 && (
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               {fields.map(field => {
                 const id = `service-${field.name}`
                 const error = errors[field.name]
                 const describedBy = error ? `${id}-error` : field.hint ? `${id}-hint` : undefined
                 const wide = field.wide || field.type === 'textarea'
                 return (
-                  <div key={field.name} className={`grid gap-1.5 text-sm ${wide ? 'sm:col-span-2' : ''}`}>
-                    <label htmlFor={id} className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">{field.label}</label>
+                  <div key={field.name} className={`grid gap-1.5 text-[13px] ${wide ? 'sm:col-span-2' : ''}`}>
+                    <label htmlFor={id} className="text-[12px] font-medium text-muted-foreground">{field.label}</label>
                     {field.type === 'textarea' ? (
-                      <Textarea id={id} rows={3} value={values[field.name] || ''} placeholder={field.placeholder} aria-invalid={Boolean(error) || undefined} aria-describedby={describedBy} onChange={event => change(field.name, event.target.value)} />
+                      <Textarea id={id} rows={3} className="rounded-[4px] text-[13px]" value={values[field.name] || ''} placeholder={field.placeholder} aria-invalid={Boolean(error) || undefined} aria-describedby={describedBy} onChange={event => change(field.name, event.target.value)} />
                     ) : field.type === 'select' ? (
                       <Select value={values[field.name] || ''} onValueChange={value => change(field.name, value)}>
-                        <SelectTrigger id={id} className="h-11 sm:h-9" aria-label={field.label} aria-invalid={Boolean(error) || undefined} aria-describedby={describedBy}>
+                        <SelectTrigger id={id} className="h-11 rounded-[4px] px-3 text-[13px] sm:h-9" aria-label={field.label} aria-invalid={Boolean(error) || undefined} aria-describedby={describedBy}>
                           <SelectValue placeholder={field.placeholder || 'Select'} />
                         </SelectTrigger>
                         <SelectContent>
@@ -84,7 +84,7 @@ export function ServiceFormDialog({
                     ) : (
                       <Input
                         id={id}
-                        className={`h-11 sm:h-9 ${field.type === 'money' || field.type === 'number' ? 'tabular-nums' : ''} ${field.type === 'money' ? 'text-right' : ''}`}
+                        className={`h-11 rounded-[4px] text-[13px] sm:h-9 ${field.type === 'money' || field.type === 'number' ? 'tabular-nums' : ''} ${field.type === 'money' ? 'text-right' : ''}`}
                         type={field.type === 'datetime-local' ? 'datetime-local' : 'text'}
                         inputMode={field.type === 'money' ? 'decimal' : field.inputMode}
                         autoComplete="off"

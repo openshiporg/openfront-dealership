@@ -5,7 +5,7 @@ import { useCallback, useState } from 'react'
 import { ArrowLeft, ExternalLink, RefreshCw, Scale, Undo2 } from 'lucide-react'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
-import { Code, DeskHeader, DeskSection, Facts, Notice, Panel, Pill, Readout, ReadoutStrip, TitleLine, Track } from '@/features/platform/components/desk'
+import { Attention, Code, DeskHeader, DeskSection, DeskTable, Facts, Figure, Notice, Panel, Pill, Status, Td, Th, Tr, Track } from '@/features/platform/components/desk'
 import { recordReference } from '@/features/platform/lib/format'
 import { formatCentsForInput, parseDollarsToCents } from '@/features/platform/deals/lib/moneyInput'
 import { CommandDialog, type FieldErrors } from '@/features/platform/accounting/components/CommandDialog'
@@ -75,6 +75,7 @@ export function PaymentDetailPageClient({
             title="Payment"
             tone="bad"
             status="Unavailable"
+            meta={error ? 'Unavailable' : 'Not found'}
             actions={
               <Track>
                 <Pill asChild className="h-11 sm:h-8">
@@ -94,7 +95,7 @@ export function PaymentDetailPageClient({
             {error && <p className="mt-0.5 text-muted-foreground">{error}</p>}
           </Notice>
           <Track>
-            <Pill onClick={load} disabled={loading}>Retry</Pill>
+            <Pill onClick={load} disabled={loading} className="h-10 sm:h-8">Retry</Pill>
           </Track>
         </div>
       </PageContainer>
@@ -158,26 +159,69 @@ export function PaymentDetailPageClient({
     await load()
   }
 
+  const age = Math.max(0, Math.floor((Date.now() - new Date(payment.createdAt).getTime()) / 86_400_000))
+  const stateWords = [
+    statusLabel,
+    settled ? (reconciled ? 'reconciled' : 'not reconciled') : '',
+  ].filter(Boolean).join(', ')
+  // The next action is whichever the payment can take now: reconcile a settled payment first, then refund.
+  const primaryAction: 'reconcile' | 'refund' | null = !reconcileWhy ? 'reconcile' : !refundWhy ? 'refund' : null
+
   const header = (
     <DeskHeader
-      eyebrow={recordReference('PAY', payment.id)}
       title={`${money(payment.amountCents, payment.currency)} · ${source.label}`}
       tone={paymentTone(payment.status)}
       status={statusLabel}
-      meta={[statusLabel, payment.paymentProvider?.name || payment.providerKey, payment.rooftop?.name, reconciled ? 'Reconciled' : settled ? 'Unreconciled' : ''].filter(Boolean).join(' · ')}
+      meta={
+        <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+          <Code>{recordReference('PAY', payment.id)}</Code>
+          <span>{stateWords}</span>
+          {[payment.paymentProvider?.name || payment.providerKey, payment.rooftop?.name].filter(Boolean).map(part => (
+            <span key={part as string}>· {part}</span>
+          ))}
+        </span>
+      }
       actions={
-        <Track>
-          <Pill asChild className="h-11 sm:h-8">
+        <>
+          <Pill asChild variant="plain" className="h-11 sm:h-8">
             <Link href={`${basePath}/platform/payments`}>
               <ArrowLeft />
               Payments
             </Link>
           </Pill>
-          <Pill onClick={load} disabled={loading} aria-label="Refresh" className="h-11 sm:h-8">
+          <Pill variant="plain" onClick={load} disabled={loading} aria-label="Refresh" className="h-11 sm:h-8">
             <RefreshCw className={loading ? 'animate-spin' : undefined} />
             Refresh
           </Pill>
-        </Track>
+          {payment.checkoutUrl && ['creating', 'pending'].includes(payment.status) && (
+            <Pill asChild className="h-11 sm:h-8">
+              <a href={payment.checkoutUrl} target="_blank" rel="noreferrer noopener">
+                <ExternalLink />
+                Open checkout
+              </a>
+            </Pill>
+          )}
+          <Pill
+            variant={primaryAction === 'refund' ? 'primary' : 'raised'}
+            disabled={Boolean(refundWhy)}
+            aria-describedby={refundWhy ? 'why-refund' : undefined}
+            onClick={() => open('refund')}
+            className="h-11 sm:h-8"
+          >
+            <Undo2 />
+            Refund
+          </Pill>
+          <Pill
+            variant={primaryAction === 'reconcile' ? 'primary' : 'raised'}
+            disabled={Boolean(reconcileWhy)}
+            aria-describedby="why-reconcile"
+            onClick={() => open('reconcile')}
+            className="h-11 sm:h-8"
+          >
+            <Scale />
+            Reconcile
+          </Pill>
+        </>
       }
     />
   )
@@ -190,142 +234,133 @@ export function PaymentDetailPageClient({
             <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
               <p className="min-w-0">{message}</p>
               <Track>
-                <Pill size="sm" variant="plain" onClick={() => setMessage(null)}>Dismiss</Pill>
+                <Pill size="sm" variant="plain" onClick={() => setMessage(null)} className="h-10 sm:h-7">Dismiss</Pill>
               </Track>
             </div>
           </Notice>
         )}
         {error && <Notice tone="bad">{error}</Notice>}
-        {payment.status === 'failed' && payment.failureCode && <Notice tone="bad">Failure: {payment.failureCode}</Notice>}
+        {payment.status === 'failed' && payment.failureCode && (
+          <Notice tone="bad">
+            Failed: <Code className="text-inherit">{payment.failureCode}</Code>
+          </Notice>
+        )}
 
-        <ReadoutStrip>
-          <Readout label="Amount" value={money(payment.amountCents, payment.currency)} />
-          <Readout label="Captured" value={money(payment.capturedCents, payment.currency)} tone={payment.capturedCents ? 'ok' : 'idle'} />
-          <Readout label="Refunded" value={money(payment.refundedCents, payment.currency)} tone={payment.refundedCents ? 'info' : 'idle'} />
-          <Readout label="Refundable" value={money(refundable, payment.currency)} />
-        </ReadoutStrip>
-
-        <DeskSection title="Actions">
-          <Panel>
-            <ul className="divide-y">
-              <li className="flex min-w-0 flex-wrap items-center justify-between gap-2 px-4 py-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground">Reconcile</p>
-                  <p id="why-reconcile" className="text-xs text-muted-foreground">
-                    {reconciled ? `${payment.reconciliationReference} · ${dateTime(payment.reconciledAt, timeZone)}` : reconcileWhy || ''}
-                  </p>
-                </div>
-                <Track>
-                  <Pill variant={reconcileWhy ? 'raised' : 'primary'} disabled={Boolean(reconcileWhy)} aria-describedby="why-reconcile" onClick={() => open('reconcile')} className="h-11 sm:h-8">
-                    <Scale />
-                    Reconcile
-                  </Pill>
-                </Track>
-              </li>
-              <li className="flex min-w-0 flex-wrap items-center justify-between gap-2 px-4 py-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground">Refund</p>
-                  {refundWhy && <p id="why-refund" className="text-xs text-muted-foreground">{refundWhy}</p>}
-                </div>
-                <Track>
-                  <Pill disabled={Boolean(refundWhy)} aria-describedby={refundWhy ? 'why-refund' : undefined} onClick={() => open('refund')} className="h-11 sm:h-8">
-                    <Undo2 />
-                    Refund
-                  </Pill>
-                </Track>
-              </li>
-              {payment.checkoutUrl && ['creating', 'pending'].includes(payment.status) && (
-                <li className="flex min-w-0 flex-wrap items-center justify-between gap-2 px-4 py-3">
-                  <p className="text-sm font-medium text-foreground">Checkout link</p>
-                  <Track>
-                    <Pill asChild className="h-11 sm:h-8">
-                      <a href={payment.checkoutUrl} target="_blank" rel="noreferrer noopener">
-                        <ExternalLink />
-                        Open checkout
-                      </a>
-                    </Pill>
-                  </Track>
-                </li>
-              )}
-            </ul>
-          </Panel>
-        </DeskSection>
-
-        <div className="grid min-w-0 gap-8 lg:grid-cols-2">
-          <DeskSection title="Source">
-            <Panel className="px-4 py-1">
-              <Facts
-                items={[
-                  { label: 'Type', value: payment.sourceType === 'deal' ? 'Deal' : payment.sourceType === 'service' ? 'Service order' : payment.sourceType },
-                  { label: 'Record', value: source.href ? <Link href={`${basePath}${source.href}`} className="underline underline-offset-2">{source.label}</Link> : source.label },
-                  source.detail ? { label: 'Customer', value: source.detail } : null,
-                  payment.rooftop ? { label: 'Rooftop', value: payment.rooftop.name } : null,
-                ]}
-              />
-            </Panel>
-          </DeskSection>
-          <DeskSection title="Provider">
-            <Panel className="px-4 py-1">
-              <Facts
-                items={[
-                  { label: 'Provider', value: payment.paymentProvider?.name || payment.providerKey },
-                  payment.providerTransactionId ? { label: 'Transaction ID', value: payment.providerTransactionId, mono: true } : null,
-                  payment.providerSessionId ? { label: 'Session ID', value: payment.providerSessionId, mono: true } : null,
-                  { label: 'Created', value: dateTime(payment.createdAt, timeZone) },
-                  { label: 'Updated', value: dateTime(payment.updatedAt, timeZone) },
-                  { label: 'Version', value: payment.version, mono: true },
-                ]}
-              />
-            </Panel>
-          </DeskSection>
+        <div className="grid min-w-0 gap-x-8 gap-y-1 text-[13px] text-muted-foreground sm:grid-cols-2">
+          <p id="why-reconcile">
+            <span className="font-medium text-foreground">Reconcile: </span>
+            {reconciled ? (
+              <>
+                <Code>{payment.reconciliationReference}</Code> · {dateTime(payment.reconciledAt, timeZone)}
+              </>
+            ) : reconcileWhy || (
+              <>
+                Waiting <Attention>{age} {age === 1 ? 'day' : 'days'}</Attention>
+              </>
+            )}
+          </p>
+          <p>
+            <span className="font-medium text-foreground">Refund: </span>
+            {refundWhy ? <span id="why-refund">{refundWhy}</span> : `Up to ${money(refundable, payment.currency)}`}
+          </p>
         </div>
 
+        <Panel className="grid min-w-0 gap-x-8 px-4 py-1 lg:grid-cols-2">
+          <Facts
+            items={[
+              { label: 'Status', value: <Status tone={paymentTone(payment.status)}>{statusLabel}</Status> },
+              { label: 'Amount', value: <Figure size="sm">{money(payment.amountCents, payment.currency)}</Figure> },
+              { label: 'Captured', value: money(payment.capturedCents, payment.currency) },
+              { label: 'Refunded', value: money(payment.refundedCents, payment.currency) },
+              { label: 'Refundable', value: money(refundable, payment.currency) },
+              { label: 'Source', value: payment.sourceType === 'deal' ? 'Deal' : payment.sourceType === 'service' ? 'Service order' : payment.sourceType },
+              { label: 'Record', value: source.href ? <Link href={`${basePath}${source.href}`} className="underline underline-offset-2">{source.label}</Link> : source.label },
+              source.detail ? { label: 'Customer', value: source.detail } : null,
+            ]}
+          />
+          <Facts
+            className="max-lg:border-t"
+            items={[
+              payment.rooftop ? { label: 'Rooftop', value: payment.rooftop.name } : null,
+              { label: 'Provider', value: payment.paymentProvider?.name || payment.providerKey },
+              payment.providerTransactionId ? { label: 'Transaction ID', value: payment.providerTransactionId, mono: true } : null,
+              payment.providerSessionId ? { label: 'Session ID', value: payment.providerSessionId, mono: true } : null,
+              { label: 'Created', value: dateTime(payment.createdAt, timeZone) },
+              { label: 'Updated', value: dateTime(payment.updatedAt, timeZone) },
+              { label: 'Version', value: payment.version, mono: true },
+            ]}
+          />
+        </Panel>
+
         <DeskSection title="Refunds" count={refunds.length}>
-          <Panel>
-            {refunds.length === 0 ? (
+          {refunds.length === 0 ? (
+            <Panel>
               <p className="py-8 text-center text-sm text-muted-foreground">No refunds</p>
-            ) : (
-              <ul className="divide-y">
+            </Panel>
+          ) : (
+            <DeskTable>
+              <thead>
+                <tr>
+                  <Th>Status</Th>
+                  <Th priority={2}>Reason</Th>
+                  <Th priority={3}>Provider refund</Th>
+                  <Th priority={2}>Requested</Th>
+                  <Th align="right">Amount</Th>
+                </tr>
+              </thead>
+              <tbody>
                 {refunds.map(refund => (
-                  <li key={refund.id} className="flex min-w-0 items-start gap-3 px-4 py-3">
-                    <div className="min-w-0 flex-1">
-                      <TitleLine as="p" tone={refundTone(refund.status)} status={REFUND_LABEL[refund.status] || refund.status} className="text-sm font-medium text-foreground">
-                        {REFUND_LABEL[refund.status] || refund.status}
-                        {refund.providerRefundId ? <> <Code>{refund.providerRefundId}</Code></> : null}
-                      </TitleLine>
-                      <p className="mt-0.5 break-words text-xs text-muted-foreground">
-                        {[refund.reason, refund.failureCode, dateTime(refund.createdAt, timeZone)].filter(Boolean).join(' · ')}
-                      </p>
-                    </div>
-                    <span className="shrink-0 font-mono text-[13px] tabular-nums">{money(refund.amountCents, payment.currency)}</span>
-                  </li>
+                  <Tr key={refund.id}>
+                    <Td>
+                      <Status tone={refundTone(refund.status)}>{REFUND_LABEL[refund.status] || refund.status}</Status>
+                      {refund.failureCode && <p className="mt-0.5 text-xs text-muted-foreground"><Code>{refund.failureCode}</Code></p>}
+                      <p className="mt-0.5 break-words text-xs text-muted-foreground md:hidden">{refund.reason}</p>
+                    </Td>
+                    <Td priority={2} className="max-w-[24rem] break-words text-muted-foreground">{refund.reason}</Td>
+                    <Td priority={3}>{refund.providerRefundId ? <Code>{refund.providerRefundId}</Code> : <span className="text-muted-foreground">-</span>}</Td>
+                    <Td priority={2} className="whitespace-nowrap text-muted-foreground">{dateTime(refund.createdAt, timeZone)}</Td>
+                    <Td align="right" className="whitespace-nowrap">{money(refund.amountCents, payment.currency)}</Td>
+                  </Tr>
                 ))}
-              </ul>
-            )}
-          </Panel>
+              </tbody>
+            </DeskTable>
+          )}
         </DeskSection>
 
         <DeskSection title="Provider events" count={events.length}>
-          <Panel>
-            {events.length === 0 ? (
+          {events.length === 0 ? (
+            <Panel>
               <p className="py-8 text-center text-sm text-muted-foreground">No provider events</p>
-            ) : (
-              <ul className="divide-y">
+            </Panel>
+          ) : (
+            <DeskTable className="table-fixed">
+              <thead>
+                <tr>
+                  <Th>Event</Th>
+                  <Th priority={2}>Received</Th>
+                  <Th priority={3}>Event ID</Th>
+                  <Th priority={3}>Digest</Th>
+                </tr>
+              </thead>
+              <tbody>
                 {events.map(event => (
-                  <li key={event.id} className="min-w-0 px-4 py-3">
-                    <p className="text-sm font-medium text-foreground">
-                      <Code className="text-foreground">{event.eventType}</Code>
-                    </p>
-                    <p className="mt-0.5 break-words text-xs text-muted-foreground">
-                      {[`Received ${dateTime(event.receivedAt, timeZone)}`, `Signed ${dateTime(event.signatureTimestamp, timeZone)}`, event.refund ? 'Refund event' : ''].filter(Boolean).join(' · ')}
-                    </p>
-                    <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground" title={event.providerEventId}>{event.providerEventId}</p>
-                    <p className="truncate font-mono text-[11px] text-muted-foreground" title={event.payloadDigest}>{event.payloadDigest}</p>
-                  </li>
+                  <Tr key={event.id}>
+                    <Td className="min-w-0">
+                      <Code className="break-all text-foreground">{event.eventType}</Code>
+                      {event.refund && <p className="text-xs text-muted-foreground">Refund event</p>}
+                      <p className="mt-0.5 text-xs text-muted-foreground md:hidden">{dateTime(event.receivedAt, timeZone)}</p>
+                    </Td>
+                    <Td priority={2} className="text-muted-foreground">
+                      {dateTime(event.receivedAt, timeZone)}
+                      <p className="text-xs">Signed {dateTime(event.signatureTimestamp, timeZone)}</p>
+                    </Td>
+                    <Td priority={3}><p className="truncate font-mono text-[12px] text-muted-foreground" title={event.providerEventId}>{event.providerEventId}</p></Td>
+                    <Td priority={3}><p className="truncate font-mono text-[12px] text-muted-foreground" title={event.payloadDigest}>{event.payloadDigest}</p></Td>
+                  </Tr>
                 ))}
-              </ul>
-            )}
-          </Panel>
+              </tbody>
+            </DeskTable>
+          )}
         </DeskSection>
 
         <CommandDialog

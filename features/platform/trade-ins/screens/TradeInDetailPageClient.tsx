@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
-import { Code, DeskHeader, DeskSection, Facts, Notice, Panel, Pill, Readout, ReadoutStrip, TitleLine, Track } from '@/features/platform/components/desk'
+import { Attention, Code, DeskHeader, DeskSection, Facts, Figure, Notice, Panel, Pill, Status, TitleLine, Track } from '@/features/platform/components/desk'
 import { formatPhone, recordReference } from '@/features/platform/lib/format'
 import { MoneyInput } from '@/features/platform/deals/components/MoneyInput'
 import { labelForDeal, toneForDeal } from '@/features/platform/deals/lib/dealStatus'
@@ -42,7 +42,7 @@ import {
 type DetailData = { tradeIn: TradeIn | null; acquisition: TradeInAcquisition | null; canSeeAcquisitions: boolean; timeline: TradeInTimelineEntry[] }
 type DialogKind = 'edit' | 'appraise' | 'attach' | 'detach' | 'acquire' | null
 
-const fieldLabel = 'font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground'
+const fieldLabel = 'text-[12px] font-medium text-muted-foreground'
 
 const timelineLabel: Record<string, string> = {
   created: 'Created',
@@ -299,7 +299,7 @@ export function TradeInDetailPageClient({
       <PageContainer
         title="Trade-in"
         breadcrumbs={breadcrumbs('Trade-in')}
-        header={<DeskHeader eyebrow="Trade-in" title="Trade-in unavailable" tone="bad" status="Unavailable" actions={<Track><Pill asChild><Link href={`${basePath}/platform/trade-ins`}>Back to trade-ins</Link></Pill></Track>} />}
+        header={<DeskHeader title="Trade-in unavailable" tone="bad" status="Unavailable" actions={<Pill asChild className="max-md:h-10"><Link href={`${basePath}/platform/trade-ins`}>Back to trade-ins</Link></Pill>} />}
       >
         <div className="space-y-3 px-4 pb-24 md:px-6">
           <Notice tone="bad">{error || 'Trade-in not found'}</Notice>
@@ -331,7 +331,7 @@ export function TradeInDetailPageClient({
   const primary = tradeIn.offerAmount == null ? 'appraise' : !deal ? 'attach' : !acquisition && data?.canSeeAcquisitions ? 'acquire' : null
 
   const actions = (
-    <Track aria-label="Trade-in actions">
+    <div role="group" aria-label="Trade-in actions" className="flex flex-wrap items-center gap-2 max-md:[&>button]:h-10">
       <Pill variant={primary === 'appraise' ? 'primary' : 'raised'} onClick={() => openDialog('appraise')} disabled={Boolean(appraiseBlocked)} aria-describedby={appraiseBlocked ? 'trade-in-blockers' : undefined}>
         {tradeIn.offerAmount == null ? 'Appraise' : 'Re-appraise'}
       </Pill>
@@ -356,18 +356,18 @@ export function TradeInDetailPageClient({
         <Pencil />
         Edit
       </Pill>
-    </Track>
+    </div>
   )
 
   const header = (
     <DeskHeader
-      eyebrow={`Trade-in · ${recordReference('TRD', tradeIn.id)}`}
       title={title}
       tone={state.tone}
       status={state.label}
       meta={
         <span className="flex flex-wrap gap-x-2">
           <span className="text-foreground">{state.label}</span>
+          <span>· Trade-in <Code>{recordReference('TRD', tradeIn.id)}</Code></span>
           <span>· {customer || 'No customer'}</span>
           {tradeIn.rooftop?.name && <span>· {tradeIn.rooftop.name}</span>}
         </span>
@@ -405,20 +405,36 @@ export function TradeInDetailPageClient({
           </div>
         )}
 
-        <ReadoutStrip>
-          <Readout label="Offer" value={tradeIn.offerAmount != null ? formatWholeUsd(tradeIn.offerAmount) : '-'} sub={tradeIn.appraisedBy?.name ? `By ${tradeIn.appraisedBy.name}` : 'Not appraised'} tone={tradeIn.offerAmount != null ? 'info' : 'warn'} />
-          <Readout label="Reference" value={tradeIn.referenceValue != null ? formatWholeUsd(tradeIn.referenceValue) : '-'} sub={`Est ${formatWholeUsd(estimate)}`} />
-          <Readout label="Spread" value={spread != null ? formatWholeUsd(spread) : '-'} tone={spread != null && spread < 0 ? 'bad' : undefined} />
-          <Readout label="Mileage" value={tradeIn.mileage != null ? new Intl.NumberFormat('en-US').format(tradeIn.mileage) : '-'} sub={conditionLabel(tradeIn.condition)} tone={tradeIn.condition ? conditionTone[tradeIn.condition] : undefined} />
-        </ReadoutStrip>
 
         <div className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
           <div className="min-w-0 space-y-8">
+            <DeskSection title="Appraisal" id="trade-in-appraisal">
+              <div className="flex min-w-0 flex-wrap items-end gap-x-6 gap-y-2 pb-3">
+                <div>
+                  <p className="text-[12px] font-medium text-muted-foreground">Offer</p>
+                  <p className="mt-1">
+                    {tradeIn.offerAmount != null ? <Figure size="lg">{formatWholeUsd(tradeIn.offerAmount)}</Figure> : <Attention>Needs appraisal</Attention>}
+                  </p>
+                </div>
+                <p className="text-xs text-muted-foreground">{tradeIn.appraisedBy?.name ? `By ${tradeIn.appraisedBy.name}` : 'Not appraised'}</p>
+              </div>
+              <div className="grid min-w-0 grid-cols-1 gap-x-8 md:grid-cols-2">
+                <Facts items={[
+                  { label: 'Reference', value: tradeIn.referenceValue != null ? formatWholeUsd(tradeIn.referenceValue) : '-' },
+                  { label: 'Estimate', value: formatWholeUsd(estimate) },
+                ]} />
+                <Facts items={[
+                  { label: 'Spread', value: spread != null ? <span className={spread < 0 ? 'text-red-700 dark:text-red-300' : undefined}>{formatWholeUsd(spread)}{spread < 0 ? ' · offer above reference' : ''}</span> : '-' },
+                  { label: 'Condition', value: tradeIn.condition ? <Status tone={conditionTone[tradeIn.condition] ?? 'idle'}>{conditionLabel(tradeIn.condition)}</Status> : 'Not graded' },
+                ]} />
+              </div>
+            </DeskSection>
+
             <DeskSection title="Vehicle">
               <Facts items={[
                 { label: 'Vehicle', value: title },
                 { label: 'VIN', value: <Code className="break-all text-foreground">{tradeIn.vin || 'Not entered'}</Code> },
-                { label: 'Mileage', value: formatMileage(tradeIn.mileage), mono: true },
+                { label: 'Mileage', value: <span className="tabular-nums">{formatMileage(tradeIn.mileage)}</span> },
                 { label: 'Condition', value: conditionLabel(tradeIn.condition) },
                 { label: 'Created', value: formatDateTime(tradeIn.createdAt) },
               ]} />
@@ -472,7 +488,7 @@ export function TradeInDetailPageClient({
                   <Facts items={[
                     { label: 'Status', value: labelForDeal(deal.status || '') },
                     deal.vehicle?.stockNumber ? { label: 'Stock #', value: <Code className="text-foreground">{deal.vehicle.stockNumber}</Code> } : null,
-                    { label: 'Trade credit', value: formatWholeUsd((deal.tradeInValueCents || 0) / 100), mono: true },
+                    { label: 'Trade credit', value: formatWholeUsd((deal.tradeInValueCents || 0) / 100) },
                   ]} />
                 </div>
               ) : (
@@ -519,7 +535,7 @@ export function TradeInDetailPageClient({
       <ActionDialog open={dialog === 'attach'} title="Attach to deal" description={`Offer ${formatWholeUsd(tradeIn.offerAmount)} becomes the trade credit`} busy={busy} error={dialogError} submitLabel="Attach" onSubmit={submitAttach} onOpenChange={closeDialog}>
         <FieldRow label="Pencil deal" htmlFor="attach-deal" error={showErrors && !selectedDeal ? 'Select a deal' : null}>
           <Select value={dealId} onValueChange={setDealId} disabled={busy || pencilDeals === null || eligibleDeals.length === 0}>
-            <SelectTrigger id="attach-deal" aria-invalid={showErrors && !selectedDeal ? true : undefined}>
+            <SelectTrigger id="attach-deal" className="rounded-[4px]" aria-invalid={showErrors && !selectedDeal ? true : undefined}>
               <SelectValue placeholder={pencilDeals === null ? 'Loading deals' : eligibleDeals.length === 0 ? 'No pencil deals without a trade-in' : 'Select deal'} />
             </SelectTrigger>
             <SelectContent>
@@ -533,12 +549,12 @@ export function TradeInDetailPageClient({
         </FieldRow>
         {selectedDeal && (
           <Facts items={[
-            { label: 'Current trade credit', value: formatWholeUsd((selectedDeal.tradeInValueCents || 0) / 100), mono: true },
-            { label: 'New trade credit', value: formatWholeUsd(tradeIn.offerAmount), mono: true },
+            { label: 'Current trade credit', value: formatWholeUsd((selectedDeal.tradeInValueCents || 0) / 100) },
+            { label: 'New trade credit', value: formatWholeUsd(tradeIn.offerAmount) },
           ]} />
         )}
         <FieldRow label="Note (optional)" htmlFor="attach-reason">
-          <Textarea id="attach-reason" rows={2} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} disabled={busy} />
+          <Textarea className="rounded-[4px]" id="attach-reason" rows={2} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} disabled={busy} />
         </FieldRow>
         {pencilDeals !== null && (
           <Link href={`${basePath}/platform/deals/create${tradeIn.lead ? `?leadId=${tradeIn.lead.id}` : ''}`} className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground">
@@ -550,7 +566,7 @@ export function TradeInDetailPageClient({
 
       <ActionDialog open={dialog === 'detach'} title="Detach from deal" description={deal ? `${dealLabel(deal)} · trade credit returns to $0` : undefined} busy={busy} error={dialogError} submitLabel="Detach" onSubmit={submitDetach} onOpenChange={closeDialog}>
         <FieldRow label="Reason" htmlFor="detach-reason" error={showErrors && !reason.trim() ? 'Reason is required' : null}>
-          <Textarea id="detach-reason" rows={2} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} disabled={busy} aria-invalid={showErrors && !reason.trim() ? true : undefined} />
+          <Textarea className="rounded-[4px]" id="detach-reason" rows={2} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} disabled={busy} aria-invalid={showErrors && !reason.trim() ? true : undefined} />
         </FieldRow>
       </ActionDialog>
 
@@ -558,20 +574,20 @@ export function TradeInDetailPageClient({
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <FieldRow label="VIN" htmlFor="acquire-vin" error={showErrors ? acquireErrors.vin : null}>
-              <Input id="acquire-vin" maxLength={17} className="font-mono uppercase" value={acquire.vin} onChange={event => setAcquire(current => ({ ...current, vin: event.target.value }))} disabled={busy} aria-invalid={showErrors && acquireErrors.vin ? true : undefined} />
+              <Input id="acquire-vin" maxLength={17} className="rounded-[4px] font-mono uppercase" value={acquire.vin} onChange={event => setAcquire(current => ({ ...current, vin: event.target.value }))} disabled={busy} aria-invalid={showErrors && acquireErrors.vin ? true : undefined} />
             </FieldRow>
           </div>
           <FieldRow label="Year" htmlFor="acquire-year" error={showErrors ? acquireErrors.year : null}>
-            <Input id="acquire-year" inputMode="numeric" maxLength={4} value={acquire.year} onChange={event => setAcquire(current => ({ ...current, year: event.target.value }))} disabled={busy} />
+            <Input className="rounded-[4px]" id="acquire-year" inputMode="numeric" maxLength={4} value={acquire.year} onChange={event => setAcquire(current => ({ ...current, year: event.target.value }))} disabled={busy} />
           </FieldRow>
           <FieldRow label="Odometer" htmlFor="acquire-odometer" error={showErrors ? acquireErrors.odometer : null}>
-            <Input id="acquire-odometer" inputMode="numeric" value={acquire.odometer} onChange={event => setAcquire(current => ({ ...current, odometer: event.target.value }))} disabled={busy} />
+            <Input className="rounded-[4px]" id="acquire-odometer" inputMode="numeric" value={acquire.odometer} onChange={event => setAcquire(current => ({ ...current, odometer: event.target.value }))} disabled={busy} />
           </FieldRow>
           <FieldRow label="Make" htmlFor="acquire-make" error={showErrors ? acquireErrors.make : null}>
-            <Input id="acquire-make" value={acquire.make} onChange={event => setAcquire(current => ({ ...current, make: event.target.value }))} disabled={busy} />
+            <Input className="rounded-[4px]" id="acquire-make" value={acquire.make} onChange={event => setAcquire(current => ({ ...current, make: event.target.value }))} disabled={busy} />
           </FieldRow>
           <FieldRow label="Model" htmlFor="acquire-model" error={showErrors ? acquireErrors.model : null}>
-            <Input id="acquire-model" value={acquire.model} onChange={event => setAcquire(current => ({ ...current, model: event.target.value }))} disabled={busy} />
+            <Input className="rounded-[4px]" id="acquire-model" value={acquire.model} onChange={event => setAcquire(current => ({ ...current, model: event.target.value }))} disabled={busy} />
           </FieldRow>
           <FieldRow label="Appraisal" htmlFor="acquire-appraisal" error={showErrors ? acquireErrors.appraisalCents : null}>
             <MoneyInput id="acquire-appraisal" cents={acquire.appraisalCents} onCentsChange={cents => setAcquire(current => ({ ...current, appraisalCents: cents }))} disabled={busy} />
@@ -581,7 +597,7 @@ export function TradeInDetailPageClient({
           </FieldRow>
           <div className="sm:col-span-2">
             <FieldRow label="Reason" htmlFor="acquire-reason" error={showErrors ? acquireErrors.reason : null}>
-              <Textarea id="acquire-reason" rows={2} maxLength={500} value={acquire.reason} onChange={event => setAcquire(current => ({ ...current, reason: event.target.value }))} disabled={busy} />
+              <Textarea className="rounded-[4px]" id="acquire-reason" rows={2} maxLength={500} value={acquire.reason} onChange={event => setAcquire(current => ({ ...current, reason: event.target.value }))} disabled={busy} />
             </FieldRow>
           </div>
         </div>

@@ -124,7 +124,7 @@ export function MovementDialog({
 
   return (
     <Dialog open={open} onOpenChange={value => { if (!busy) onOpenChange(value) }}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto rounded-md sm:rounded-md sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{MOVEMENT_LABEL[type]} · {part.partNumber}</DialogTitle>
         </DialogHeader>
@@ -132,7 +132,7 @@ export function MovementDialog({
           {needsRo && (
             <FormField id="movement-ro" label="Repair order" error={errors.serviceOrderId}>
               <Select value={serviceOrderId} onValueChange={chooseRo}>
-                <SelectTrigger id="movement-ro" className="h-11 sm:h-9" aria-invalid={Boolean(errors.serviceOrderId)}>
+                <SelectTrigger id="movement-ro" className="h-11 rounded-[4px] px-3 text-[13px] sm:h-9" aria-invalid={Boolean(errors.serviceOrderId)}>
                   <SelectValue placeholder={repairOrders.length ? 'Select repair order' : 'No open repair orders'} />
                 </SelectTrigger>
                 <SelectContent>
@@ -153,7 +153,7 @@ export function MovementDialog({
           <FormField id="movement-quantity" label={QUANTITY_LABEL[type] || 'Quantity'} error={errors.quantity}>
             <Input
               id="movement-quantity"
-              className="h-11 sm:h-9"
+              className="h-11 rounded-[4px] text-[13px] sm:h-9"
               inputMode="numeric"
               value={quantity}
               aria-invalid={Boolean(errors.quantity)}
@@ -163,7 +163,7 @@ export function MovementDialog({
           <FormField id="movement-reference" label="Reference" error={errors.reference}>
             <Input
               id="movement-reference"
-              className="h-11 sm:h-9"
+              className="h-11 rounded-[4px] text-[13px] sm:h-9"
               value={reference}
               maxLength={200}
               placeholder={type === 'receipt' ? 'Packing slip or invoice' : undefined}
@@ -174,6 +174,7 @@ export function MovementDialog({
           <FormField id="movement-reason" label="Reason" error={errors.reason}>
             <Textarea
               id="movement-reason"
+              className="rounded-[4px] text-[13px]"
               rows={2}
               value={reason}
               maxLength={1000}

@@ -5,7 +5,7 @@ import { useCallback, useState } from 'react'
 import { ArrowLeft, CheckCircle2, FileLock2, RefreshCw, Send, XCircle, Scale } from 'lucide-react'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
-import { Code, DeskHeader, DeskSection, Facts, Notice, Panel, Pill, Readout, ReadoutStrip, TitleLine, Track } from '@/features/platform/components/desk'
+import { Attention, Code, DeskHeader, DeskSection, DeskTable, Facts, Notice, Panel, Pill, Status, Td, Th, Tr, Track } from '@/features/platform/components/desk'
 import { recordReference } from '@/features/platform/lib/format'
 
 import { getAccountingBatch, manageAccountingBatch } from '../actions'
@@ -135,14 +135,14 @@ export function AccountingBatchPageClient({
 
   if (!batch) {
     return (
-      <PageContainer title="Accounting batch" header={<DeskHeader title="Accounting batch" tone="bad" status="Unavailable" actions={back} />} breadcrumbs={breadcrumbs}>
+      <PageContainer title="Accounting batch" header={<DeskHeader title="Accounting batch" tone="bad" status="Unavailable" meta={error ? "Unavailable" : "Not found"} actions={back} />} breadcrumbs={breadcrumbs}>
         <div className="min-w-0 max-w-full space-y-3 px-4 pb-24 md:px-6">
           <Notice tone="bad">
             <p className="font-medium">{error ? 'Batch is unavailable' : 'Batch not found'}</p>
             {error && <p className="mt-0.5 text-muted-foreground">{error}</p>}
           </Notice>
           <Track>
-            <Pill onClick={load} disabled={loading}>Retry</Pill>
+            <Pill onClick={load} disabled={loading} className="h-10 sm:h-8">Retry</Pill>
           </Track>
         </div>
       </PageContainer>
@@ -153,26 +153,52 @@ export function AccountingBatchPageClient({
   const balanced = batch.totalDebitCents === batch.totalCreditCents
   const statusLabel = BATCH_STATUS_LABEL[batch.status] || batch.status
 
+  const allowedActions = ACTIONS.filter(item => item.from.includes(batch.status))
+  const blockedActions = ACTIONS.filter(item => !item.from.includes(batch.status))
+  const nextAction = allowedActions.find(item => item.primary) ?? null
+  const stateWords = [statusLabel, balanced ? 'balanced' : 'out of balance', batch.status === 'failed' && batch.attemptCount ? `${batch.attemptCount} attempts` : ''].filter(Boolean).join(', ')
+
   const header = (
     <DeskHeader
-      eyebrow={recordReference('BAT', batch.id)}
-      title={`${SOURCE_TYPE_LABEL[batch.sourceType] || batch.sourceType} batch`}
+      title={`${SOURCE_TYPE_LABEL[batch.sourceType] || batch.sourceType} batch · ${money(batch.totalDebitCents)}`}
       tone={batchTone(batch.status)}
       status={statusLabel}
-      meta={[statusLabel, batch.rooftop?.name, batch.providerKey].filter(Boolean).join(' · ')}
+      meta={
+        <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+          <Code>{recordReference('BAT', batch.id)}</Code>
+          <span>{stateWords}</span>
+          {[batch.rooftop?.name, batch.providerKey].filter(Boolean).map(part => (
+            <span key={part as string}>· {part}</span>
+          ))}
+        </span>
+      }
       actions={
-        <Track>
-          <Pill asChild className="h-11 sm:h-8">
+        <>
+          <Pill asChild variant="plain" className="h-11 sm:h-8">
             <Link href={`${basePath}/platform/accounting`}>
               <ArrowLeft />
               Accounting
             </Link>
           </Pill>
-          <Pill onClick={load} disabled={loading} aria-label="Refresh" className="h-11 sm:h-8">
+          <Pill variant="plain" onClick={load} disabled={loading} aria-label="Refresh" className="h-11 sm:h-8">
             <RefreshCw className={loading ? 'animate-spin' : undefined} />
             Refresh
           </Pill>
-        </Track>
+          {allowedActions.map(item => {
+            const Icon = item.icon
+            return (
+              <Pill
+                key={item.action}
+                variant={item === nextAction ? 'primary' : 'raised'}
+                onClick={() => openAction(item)}
+                className="h-11 sm:h-8"
+              >
+                <Icon />
+                {item.label}
+              </Pill>
+            )
+          })}
+        </>
       }
     />
   )
@@ -185,164 +211,142 @@ export function AccountingBatchPageClient({
             <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
               <p className="min-w-0">{message}</p>
               <Track>
-                <Pill size="sm" variant="plain" onClick={() => setMessage(null)}>Dismiss</Pill>
+                <Pill size="sm" variant="plain" onClick={() => setMessage(null)} className="h-10 sm:h-7">Dismiss</Pill>
               </Track>
             </div>
           </Notice>
         )}
         {error && <Notice tone="bad">{error}</Notice>}
-        {batch.status === 'failed' && batch.lastErrorCode && <Notice tone="bad">Last error: {batch.lastErrorCode}</Notice>}
+        {batch.status === 'failed' && batch.lastErrorCode && (
+          <Notice tone="bad">
+            Last error: <Code className="text-inherit">{batch.lastErrorCode}</Code>
+          </Notice>
+        )}
+        {!balanced && <Notice tone="bad">Debits and credits differ by {money(Math.abs(batch.totalDebitCents - batch.totalCreditCents))}</Notice>}
 
-        <ReadoutStrip>
-          <Readout label="Debits" value={money(batch.totalDebitCents)} />
-          <Readout label="Credits" value={money(batch.totalCreditCents)} tone={balanced ? 'ok' : 'bad'} sub={balanced ? 'Balanced' : 'Out of balance'} />
-          <Readout label="Attempts" value={batch.attemptCount} />
-          <Readout label="Lines" value={lines.length} />
-        </ReadoutStrip>
+        {blockedActions.length > 0 && (
+          <ul className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-[12px] text-muted-foreground" aria-label="Unavailable actions">
+            {blockedActions.map(item => (
+              <li key={item.action} id={`why-${item.action}`}>
+                <span className="font-medium text-foreground/80">{item.label}</span>: {item.requires.charAt(0).toLowerCase() + item.requires.slice(1)}
+              </li>
+            ))}
+          </ul>
+        )}
 
-        <DeskSection title="Actions">
-          <Panel>
-            <ul className="divide-y">
-              {ACTIONS.map(item => {
-                const allowed = item.from.includes(batch.status)
-                const Icon = item.icon
-                return (
-                  <li key={item.action} className="flex min-w-0 flex-wrap items-center justify-between gap-2 px-4 py-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground">{item.label}</p>
-                      {!allowed && <p id={`why-${item.action}`} className="text-xs text-muted-foreground">{item.requires}</p>}
-                    </div>
-                    <Track>
-                      <Pill
-                        variant={allowed && item.primary ? 'primary' : 'raised'}
-                        disabled={!allowed}
-                        aria-describedby={allowed ? undefined : `why-${item.action}`}
-                        onClick={() => openAction(item)}
-                        className="h-11 sm:h-8"
-                      >
-                        <Icon />
-                        {item.label}
-                      </Pill>
-                    </Track>
-                  </li>
-                )
-              })}
-            </ul>
-          </Panel>
-        </DeskSection>
-
-        <div className="grid min-w-0 gap-8 lg:grid-cols-2">
-          <DeskSection title="Source">
-            <Panel className="px-4 py-1">
-              <Facts
-                items={[
-                  { label: 'Type', value: SOURCE_TYPE_LABEL[batch.sourceType] || batch.sourceType },
-                  {
-                    label: 'Record',
-                    value: source ? (
-                      source.href ? (
-                        <Link href={`${basePath}${source.href}`} className="underline underline-offset-2">{source.label}</Link>
-                      ) : (
-                        source.label
-                      )
-                    ) : (
-                      <Code>{batch.sourceId}</Code>
-                    ),
-                  },
-                  source?.detail ? { label: 'Detail', value: source.detail } : null,
-                  { label: 'Source ID', value: batch.sourceId, mono: true },
-                ]}
-              />
-            </Panel>
-          </DeskSection>
-
-          <DeskSection title="History">
-            <Panel className="px-4 py-1">
-              <Facts
-                items={[
-                  { label: 'Staged', value: dateTime(batch.createdAt, timeZone) },
-                  { label: 'Posted', value: batch.postedAt ? dateTime(batch.postedAt, timeZone) : 'Not posted' },
-                  batch.externalReference ? { label: 'GL reference', value: batch.externalReference, mono: true } : null,
-                  { label: 'Reconciled', value: batch.reconciledAt ? dateTime(batch.reconciledAt, timeZone) : 'Not reconciled' },
-                  { label: 'Locked', value: batch.lockedAt ? dateTime(batch.lockedAt, timeZone) : 'Not locked' },
-                  { label: 'Updated', value: dateTime(batch.updatedAt, timeZone) },
-                ]}
-              />
-            </Panel>
-          </DeskSection>
-        </div>
+        <Panel className="grid min-w-0 gap-x-8 px-4 py-1 lg:grid-cols-2">
+          <Facts
+            items={[
+              { label: 'Status', value: <Status tone={batchTone(batch.status)}>{statusLabel}</Status> },
+              { label: 'Balance', value: balanced ? <Status tone="ok">Balanced</Status> : <Attention>Out of balance</Attention> },
+              { label: 'Type', value: SOURCE_TYPE_LABEL[batch.sourceType] || batch.sourceType },
+              {
+                label: 'Record',
+                value: source ? (
+                  source.href ? (
+                    <Link href={`${basePath}${source.href}`} className="underline underline-offset-2">{source.label}</Link>
+                  ) : (
+                    source.label
+                  )
+                ) : (
+                  <Code>{batch.sourceId}</Code>
+                ),
+              },
+              source?.detail ? { label: 'Detail', value: source.detail } : null,
+              { label: 'Source ID', value: batch.sourceId, mono: true },
+              { label: 'Attempts', value: batch.attemptCount },
+            ]}
+          />
+          <Facts
+            className="max-lg:border-t"
+            items={[
+              { label: 'Staged', value: dateTime(batch.createdAt, timeZone) },
+              { label: 'Posted', value: batch.postedAt ? dateTime(batch.postedAt, timeZone) : 'Not posted' },
+              batch.externalReference ? { label: 'GL reference', value: batch.externalReference, mono: true } : null,
+              { label: 'Reconciled', value: batch.reconciledAt ? dateTime(batch.reconciledAt, timeZone) : 'Not reconciled' },
+              { label: 'Locked', value: batch.lockedAt ? dateTime(batch.lockedAt, timeZone) : 'Not locked' },
+              { label: 'Updated', value: dateTime(batch.updatedAt, timeZone) },
+            ]}
+          />
+        </Panel>
 
         <DeskSection title="Journal lines" count={lines.length}>
-          <Panel className="overflow-hidden">
-            {lines.length === 0 ? (
+          {lines.length === 0 ? (
+            <Panel>
               <p className="py-8 text-center text-sm text-muted-foreground">No lines</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-0 text-sm">
-                  <thead className="border-b text-left">
-                    <tr>
-                      <th className="px-4 py-2 font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Account</th>
-                      <th className="px-4 py-2 text-right font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Debit</th>
-                      <th className="px-4 py-2 text-right font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Credit</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {lines.map((line, index) => (
-                      <tr key={`${line.sourceCode}-${line.direction}-${index}`}>
-                        <td className="px-4 py-2.5">
-                          <p className="break-words text-foreground">{line.account}</p>
-                          <Code>{line.sourceCode}</Code>
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-2.5 text-right font-mono text-[13px] tabular-nums">{line.direction === 'debit' ? money(line.amountCents) : ''}</td>
-                        <td className="whitespace-nowrap px-4 py-2.5 text-right font-mono text-[13px] tabular-nums">{line.direction === 'credit' ? money(line.amountCents) : ''}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="border-t font-medium">
-                    <tr>
-                      <td className="px-4 py-2.5">Total</td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-right font-mono text-[13px] tabular-nums">{money(batch.totalDebitCents)}</td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-right font-mono text-[13px] tabular-nums">{money(batch.totalCreditCents)}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            )}
-          </Panel>
+            </Panel>
+          ) : (
+            <DeskTable>
+              <thead>
+                <tr>
+                  <Th>Account</Th>
+                  <Th priority={2}>Source code</Th>
+                  <Th align="right">Debit</Th>
+                  <Th align="right">Credit</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((line, index) => (
+                  <Tr key={`${line.sourceCode}-${line.direction}-${index}`}>
+                    <Td className="min-w-0 py-2">
+                      <p className="break-words text-foreground">{line.account}</p>
+                      <Code className="md:hidden">{line.sourceCode}</Code>
+                    </Td>
+                    <Td priority={2} className="py-2"><Code>{line.sourceCode}</Code></Td>
+                    <Td align="right" className="whitespace-nowrap py-2">{line.direction === 'debit' ? money(line.amountCents) : ''}</Td>
+                    <Td align="right" className="whitespace-nowrap py-2">{line.direction === 'credit' ? money(line.amountCents) : ''}</Td>
+                  </Tr>
+                ))}
+              </tbody>
+              <tfoot className="border-t-2 border-foreground/15 font-semibold">
+                <tr>
+                  <Td>Total</Td>
+                  <Td priority={2} className="text-[12px] font-medium text-muted-foreground">{balanced ? 'Balanced' : 'Out of balance'}</Td>
+                  <Td align="right" className="whitespace-nowrap">{money(batch.totalDebitCents)}</Td>
+                  <Td align="right" className="whitespace-nowrap">{money(batch.totalCreditCents)}</Td>
+                </tr>
+              </tfoot>
+            </DeskTable>
+          )}
         </DeskSection>
 
         <DeskSection title="Provider responses" count={responses.length}>
-          <Panel>
-            {responses.length === 0 ? (
+          {responses.length === 0 ? (
+            <Panel>
               <p className="py-8 text-center text-sm text-muted-foreground">No responses recorded</p>
-            ) : (
-              <ul className="divide-y">
+            </Panel>
+          ) : (
+            <DeskTable className="table-fixed">
+              <thead>
+                <tr>
+                  <Th>Result</Th>
+                  <Th priority={2}>Received</Th>
+                  <Th priority={3}>Details</Th>
+                  <Th priority={3}>Request fingerprint</Th>
+                </tr>
+              </thead>
+              <tbody>
                 {responses.map(response => {
                   const evidence = (response.immutableResponse || {}) as Record<string, unknown>
                   const failed = response.responseCode === 'failed'
                   return (
-                    <li key={response.id} className="min-w-0 px-4 py-3">
-                      <TitleLine as="p" tone={failed ? 'bad' : 'ok'} status={response.responseCode} className="text-sm font-medium text-foreground">
-                        {failed ? 'Failed' : response.responseCode === 'posted' ? 'Posted' : response.responseCode}
-                        {response.externalReference ? <> <Code>{response.externalReference}</Code></> : null}
-                      </TitleLine>
-                      <p className="mt-0.5 break-words text-xs text-muted-foreground">
-                        {[
-                          dateTime(response.receivedAt, timeZone),
-                          evidence.lastErrorCode ? String(evidence.lastErrorCode) : '',
-                          evidence.attemptCount != null ? `Attempt ${evidence.attemptCount}` : '',
-                          response.providerKey,
-                        ].filter(Boolean).join(' · ')}
-                      </p>
-                      <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground" title={response.requestFingerprint}>
-                        {response.requestFingerprint}
-                      </p>
-                    </li>
+                    <Tr key={response.id}>
+                      <Td className="min-w-0">
+                        <Status tone={failed ? 'bad' : 'ok'}>{failed ? 'Failed' : response.responseCode === 'posted' ? 'Posted' : response.responseCode}</Status>
+                        {response.externalReference && <p className="mt-0.5 break-all"><Code>{response.externalReference}</Code></p>}
+                        <p className="mt-0.5 text-xs text-muted-foreground md:hidden">{dateTime(response.receivedAt, timeZone)}</p>
+                      </Td>
+                      <Td priority={2} className="text-muted-foreground">{dateTime(response.receivedAt, timeZone)}</Td>
+                      <Td priority={3} className="break-words text-muted-foreground">
+                        {[evidence.lastErrorCode ? String(evidence.lastErrorCode) : '', evidence.attemptCount != null ? `Attempt ${evidence.attemptCount}` : '', response.providerKey].filter(Boolean).join(' · ')}
+                      </Td>
+                      <Td priority={3}><p className="truncate font-mono text-[12px] text-muted-foreground" title={response.requestFingerprint}>{response.requestFingerprint}</p></Td>
+                    </Tr>
                   )
                 })}
-              </ul>
-            )}
-          </Panel>
+              </tbody>
+            </DeskTable>
+          )}
         </DeskSection>
 
         <CommandDialog

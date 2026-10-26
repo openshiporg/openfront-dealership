@@ -4,14 +4,15 @@ import { useMemo, useState } from 'react'
 import { CalendarClock, Download, Eye, Play } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { Code, Facts, Notice, Panel, Pill, Segmented, TitleLine, Track } from '@/features/platform/components/desk'
+import { Code, DeskTable, Facts, Notice, Panel, Pill, Segmented, Status, Td, Th, Tr, Track } from '@/features/platform/components/desk'
 import { EmptyRow, TAP, TAP_INPUT, TAP_SM } from '@/features/platform/catalog/components/formKit'
 import { type ReportRun, type SavedReport, getReportRunResult, queueDueReports, runReport } from '../actions'
 import { downloadReportRun } from '../lib/downloadRun'
 import { RUN_STATE, type RunStatus, effectiveRunStatus, reportTypeLabel } from '../lib/reportOptions'
 import { formatDateTime } from '../lib/time'
 
-type StatusFilter = RunStatus | 'all'
+export type RunStatusFilter = RunStatus | 'all'
+type StatusFilter = RunStatusFilter
 const PREVIEW_LIMIT = 6000
 
 export function RunsPanel({
@@ -22,6 +23,7 @@ export function RunsPanel({
   reportFilter,
   onReportFilterChange,
   onReload,
+  initialStatusFilter = 'all',
 }: {
   runs: ReportRun[]
   reports: SavedReport[]
@@ -30,8 +32,10 @@ export function RunsPanel({
   reportFilter: string
   onReportFilterChange: (value: string) => void
   onReload: () => Promise<void>
+  /** Status tab to open on; the page's "needs you" queue opens runs on Failed or Queued. */
+  initialStatusFilter?: StatusFilter
 }) {
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatusFilter)
   const [workingId, setWorkingId] = useState<string | null>(null)
   const [bulk, setBulk] = useState<'queue' | 'process' | null>(null)
   const [notice, setNotice] = useState<{ tone: 'ok' | 'bad' | 'warn'; text: string } | null>(null)
@@ -133,47 +137,69 @@ export function RunsPanel({
         </Track>
       </div>
 
-      <Panel className="overflow-hidden">
-        {visible.length === 0 ? (
+      {visible.length === 0 ? (
+        <Panel>
           <EmptyRow>{runs.length === 0 ? 'No report runs yet' : 'No runs match'}</EmptyRow>
-        ) : (
-          <ul className="divide-y">
+        </Panel>
+      ) : (
+        <DeskTable>
+          <thead>
+            <tr>
+              <Th>Status</Th>
+              <Th>Report</Th>
+              <Th priority={3}>Type</Th>
+              <Th priority={3}>Format</Th>
+              <Th priority={2}>Queued or completed</Th>
+              <Th priority={3}>Expires</Th>
+              <Th align="right"><span className="sr-only">Actions</span></Th>
+            </tr>
+          </thead>
+          <tbody>
             {visible.map(run => {
               const status = effectiveRunStatus(run)
               return (
-                <li key={run.id} className="flex min-w-0 flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <TitleLine as="p" tone={RUN_STATE[status].tone} status={RUN_STATE[status].label} className="text-sm font-medium">
-                      {run.savedReport?.name || 'Deleted report'}
-                    </TitleLine>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {[RUN_STATE[status].label, run.savedReport ? reportTypeLabel(run.savedReport.reportType) : null, run.exportFormat.toUpperCase(), status === 'queued' ? `Queued ${formatDateTime(run.createdAt, timeZone)}` : `Completed ${formatDateTime(run.completedAt || run.createdAt, timeZone)}`, status === 'completed' && run.expiresAt ? `Expires ${formatDateTime(run.expiresAt, timeZone)}` : null].filter(Boolean).join(' · ')}
-                    </p>
-                    {run.errorCode && <p className="mt-0.5 text-xs text-red-600 dark:text-red-400">{run.errorCode}</p>}
-                  </div>
-                  <Track className="shrink-0 self-start sm:self-center">
-                    {status === 'queued' && (
-                      <Pill size="sm" variant="primary" className={TAP_SM} disabled={workingId !== null || bulk !== null} onClick={() => processOne(run)}>
-                        <Play />
-                        {workingId === run.id ? 'Processing…' : 'Process'}
+                <Tr key={run.id}>
+                  <Td className="w-[1%]">
+                    <Status tone={RUN_STATE[status].tone}>{RUN_STATE[status].label}</Status>
+                  </Td>
+                  <Td className="min-w-0 max-w-[18rem]">
+                    <span className="block truncate font-medium text-foreground">{run.savedReport?.name || 'Deleted report'}</span>
+                    <span className="block truncate text-[12px] text-muted-foreground md:hidden">
+                      {status === 'queued' ? `Queued ${formatDateTime(run.createdAt, timeZone)}` : `Completed ${formatDateTime(run.completedAt || run.createdAt, timeZone)}`}
+                    </span>
+                    {run.errorCode && <span className="block break-words text-[12px] text-red-700 dark:text-red-300">{run.errorCode}</span>}
+                  </Td>
+                  <Td priority={3} className="whitespace-nowrap text-muted-foreground">{run.savedReport ? reportTypeLabel(run.savedReport.reportType) : '-'}</Td>
+                  <Td priority={3} className="whitespace-nowrap"><Code>{run.exportFormat.toUpperCase()}</Code></Td>
+                  <Td priority={2} className="whitespace-nowrap text-muted-foreground">
+                    {status === 'queued' ? `Queued ${formatDateTime(run.createdAt, timeZone)}` : formatDateTime(run.completedAt || run.createdAt, timeZone)}
+                  </Td>
+                  <Td priority={3} className="whitespace-nowrap text-muted-foreground">{status === 'completed' && run.expiresAt ? formatDateTime(run.expiresAt, timeZone) : '-'}</Td>
+                  <Td align="right" className="w-[1%] whitespace-nowrap">
+                    <Track className="justify-end">
+                      {status === 'queued' && (
+                        <Pill size="sm" variant="primary" className={TAP_SM} disabled={workingId !== null || bulk !== null} onClick={() => processOne(run)}>
+                          <Play />
+                          {workingId === run.id ? 'Processing…' : 'Process'}
+                        </Pill>
+                      )}
+                      {status === 'completed' && (
+                        <Pill size="sm" className={TAP_SM} aria-label={`Download ${run.savedReport?.name || 'report'} run`} onClick={() => download(run)}>
+                          <Download />
+                          <span className="max-sm:sr-only">Download</span>
+                        </Pill>
+                      )}
+                      <Pill size="sm" variant="plain" className={TAP_SM} aria-label="View run" onClick={() => view(run)}>
+                        <Eye />
                       </Pill>
-                    )}
-                    {status === 'completed' && (
-                      <Pill size="sm" className={TAP_SM} onClick={() => download(run)}>
-                        <Download />
-                        Download
-                      </Pill>
-                    )}
-                    <Pill size="sm" className={TAP_SM} aria-label="View run" onClick={() => view(run)}>
-                      <Eye />
-                    </Pill>
-                  </Track>
-                </li>
+                    </Track>
+                  </Td>
+                </Tr>
               )
             })}
-          </ul>
-        )}
-      </Panel>
+          </tbody>
+        </DeskTable>
+      )}
 
       <Sheet open={viewing !== null} onOpenChange={value => { if (!value) setViewing(null) }}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
@@ -206,8 +232,8 @@ export function RunsPanel({
                 {previewError && <Notice tone="bad">{previewError}</Notice>}
                 {preview && (
                   <div className="space-y-1">
-                    <p className="font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Result{preview.truncated ? ' (first 6,000 characters)' : ''}</p>
-                    <pre className="max-h-[50dvh] overflow-auto whitespace-pre-wrap break-all rounded-lg bg-muted/50 p-3 font-mono text-[11px]">{preview.text}</pre>
+                    <p className="text-[12px] font-medium text-muted-foreground">Result{preview.truncated ? ' (first 6,000 characters)' : ''}</p>
+                    <pre className="max-h-[50dvh] overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/50 p-3 font-mono text-[11px]">{preview.text}</pre>
                   </div>
                 )}
               </div>

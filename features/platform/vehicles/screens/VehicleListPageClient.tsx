@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -23,17 +24,22 @@ import { LiveVehiclePhotos, reorderPhotoIds, uploadVehiclePhoto, VehiclePhotoEdi
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
 import {
+  Attention,
   Code,
   DeskHeader,
   DeskSection,
+  DeskTable,
   Facts,
+  Figure,
   Notice,
-  Panel,
   Pill,
   Readout,
   ReadoutStrip,
   Segmented,
-  TitleLine,
+  Status,
+  Td,
+  Th,
+  Tr,
   Track,
   type DeskTone,
 } from '@/features/platform/components/desk'
@@ -169,7 +175,7 @@ function featureList(value: string) {
   return [...new Set(value.split(/[\n,]/).map(feature => feature.trim()).filter(Boolean))].slice(0, 100)
 }
 
-const fieldLabelClass = 'font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground'
+const fieldLabelClass = 'text-[12px] font-medium text-muted-foreground'
 
 function countByStage(list: Vehicle[]) {
   return list.reduce<Record<string, number>>((counts, vehicle) => {
@@ -695,17 +701,146 @@ export function VehicleListPageClient({
   const reconOpenCount = filteredVehicles.filter(hasOpenRecon).length
   const intakeRooftopName = intakeRooftops.find(rooftop => rooftop.id === intakeRooftopId)?.name
 
+  /** Aged per the desk's 60-day threshold: available units only. */
+  const isAged = (vehicle: Vehicle) => {
+    const days = calculateDaysInStock(vehicle)
+    return days != null && days > 60 && vehicle.status === 'available'
+  }
+
+  /** One step at a time: send to recon, work the recon items, approve the listing, then frontline. */
+  const buildActions = (vehicle: Vehicle) => {
+    const active = isActiveInventory(vehicle)
+    const acquisitionStatus = vehicle.acquisition?.status
+    const activeRecon = vehicle.reconWorkItems.find(item => ['open', 'in-progress'].includes(item.status))
+    const reconDone = vehicle.reconStatus === 'completed'
+    const listingApproved = vehicle.merchandisingStatus === 'approved'
+    const needs = listingNeeds(vehicle)
+    const actions: Array<{ key: string; label: string; onClick: () => void; disabled?: boolean }> = []
+    // Pending, sold and delivered units are off the lot workflow: no recon, listing or frontline steps.
+    if (active && acquisitionStatus === 'arrived' && vehicle.acquisition) {
+      actions.push({ key: 'acquisition', label: 'Send to recon', onClick: () => advanceAcquisition(vehicle) })
+    }
+    if (active && !reconDone && acquisitionStatus !== 'arrived') {
+      actions.push({
+        key: 'recon',
+        label: !activeRecon ? 'Add work item' : activeRecon.status === 'in-progress' ? 'Finish work' : 'Start work',
+        onClick: () => advanceRecon(vehicle),
+        disabled: Boolean(pendingReconStart),
+      })
+    }
+    if (active && reconDone && (!listingApproved || vehicle.publicListing.action)) {
+      const submits = vehicle.publicListing.action !== 'reapprove' && vehicle.merchandisingStatus !== 'submitted'
+      const listingLabel = vehicle.publicListing.action === 'reapprove' ? 'Re-approve listing'
+        : vehicle.publicListing.action === 'resubmit' ? 'Resubmit listing'
+          : vehicle.merchandisingStatus === 'submitted' ? 'Approve listing' : 'Submit listing'
+      // Submitting needs photos, a description and a price: offer the missing piece as the step.
+      if (submits && needs === 'photos') actions.push({ key: 'listing', label: 'Add photos', onClick: () => managePhotos(vehicle) })
+      else if (submits && needs === 'details') actions.push({ key: 'listing', label: 'Add description', onClick: () => editMerchandisingDraft(vehicle) })
+      else actions.push({ key: 'listing', label: listingLabel, onClick: () => submitOrApproveMerchandising(vehicle), disabled: Boolean(pendingMerchandisingAttempt) })
+    }
+    if (active && acquisitionStatus === 'reconditioning' && vehicle.acquisition && reconDone && listingApproved && !vehicle.publicListing.action) {
+      actions.push({ key: 'acquisition', label: 'Mark frontline', onClick: () => advanceAcquisition(vehicle) })
+    }
+    return actions
+  }
+
+  /** Why a unit is waiting on the desk, from the statuses the workspace already returns. */
+  const waitingReasons = (vehicle: Vehicle) => {
+    const reasons: Array<{ key: string; label: string; aged?: boolean }> = []
+    if (isAged(vehicle)) reasons.push({ key: 'aged', label: `Aged ${calculateDaysInStock(vehicle)} days`, aged: true })
+    if (!isActiveInventory(vehicle)) return reasons
+    if (vehicle.acquisition?.status === 'arrived') reasons.push({ key: 'arrived', label: 'Arrived, not sent to recon' })
+    if (hasOpenRecon(vehicle)) reasons.push({ key: 'recon', label: reconLabel(vehicle) })
+    if (!vehicle.images.length) reasons.push({ key: 'photos', label: 'No photos' })
+    if (vehicle.reconStatus === 'completed' && (vehicle.merchandisingStatus !== 'approved' || vehicle.publicListing.action)) {
+      reasons.push({
+        key: 'listing',
+        label: vehicle.publicListing.action === 'reapprove' ? 'Listing needs re-approval'
+          : vehicle.publicListing.action === 'resubmit' ? 'Listing needs resubmitting'
+            : listingLabels[vehicle.merchandisingStatus] || vehicle.merchandisingStatus,
+      })
+    }
+    return reasons
+  }
+
+  // The queue reads the loaded lot, not the search box: oldest aged units first, then the rest by age.
+  const needsYou = vehicles
+    .map(vehicle => ({ vehicle, reasons: waitingReasons(vehicle), days: calculateDaysInStock(vehicle) ?? 0 }))
+    .filter(entry => entry.reasons.length > 0)
+    .sort((a, b) => Number(isAged(b.vehicle)) - Number(isAged(a.vehicle)) || b.days - a.days)
+
+  const thumbFor = (vehicle: Vehicle) => vehicle.images.find(image => image.url)?.url || vehicle.primaryImagePath
+
+  const vehicleName = (vehicle: Vehicle) => (
+    <Link href={`${basePath}/platform/vehicles/${vehicle.id}`} className="font-medium text-foreground hover:underline">
+      {vehicle.year} {vehicle.make} {vehicle.model}
+      {vehicle.trim && <span className="font-normal text-muted-foreground"> {vehicle.trim}</span>}
+    </Link>
+  )
+
+  const reconCell = (vehicle: Vehicle) => {
+    const label = reconLabel(vehicle)
+    const tone: DeskTone = label === 'Recon done' ? 'ok' : label === 'Recon in progress' ? 'info' : hasOpenRecon(vehicle) ? 'warn' : 'idle'
+    return <Status tone={tone}>{label.replace(/^Recon /, '').replace(/^\w/, c => c.toUpperCase())}</Status>
+  }
+
+  const listingCell = (vehicle: Vehicle, stage: string) => {
+    const status = vehicle.merchandisingStatus
+    const tone: DeskTone = vehicle.publicListing.action ? 'warn' : status === 'approved' ? 'ok' : status === 'submitted' ? 'warn' : status === 'rejected' ? 'bad' : 'idle'
+    const word = vehicle.publicListing.action === 'reapprove' ? 'Re-approve' : vehicle.publicListing.action === 'resubmit' ? 'Resubmit'
+      : (listingLabels[status] || status).replace(/^Listing /, '').replace(/^\w/, c => c.toUpperCase())
+    const showLive = stage === 'available' || stage === 'prep'
+    return (
+      <div className="min-w-0">
+        <Status tone={tone}>{word}</Status>
+        {showLive && (
+          <p className="mt-0.5 max-w-[14rem] truncate text-xs text-muted-foreground" title={vehicle.publicListing.live ? undefined : vehicle.publicListing.reason || undefined}>
+            {vehicle.publicListing.live ? 'Live on storefront' : `Not live: ${vehicle.publicListing.reason || 'Not available'}`}
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  const moreMenu = (vehicle: Vehicle, busy: boolean) => {
+    const active = isActiveInventory(vehicle)
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Pill size="sm" variant="plain" className="w-7 px-0 max-md:size-10" aria-label={`More actions for ${vehicle.stockNumber}`} disabled={busy}>
+            <MoreHorizontal />
+          </Pill>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem asChild><Link href={`${basePath}/platform/vehicles/${vehicle.id}`}>Open vehicle</Link></DropdownMenuItem>
+          {active && <DropdownMenuItem disabled={busy} onClick={() => moveStock(vehicle)}>Move</DropdownMenuItem>}
+          <DropdownMenuItem disabled={busy} onClick={() => addInventoryCost(vehicle)}>Cost</DropdownMenuItem>
+          {active ? <>
+            <DropdownMenuItem disabled={busy} onClick={() => editMerchandisingDraft(vehicle)}>Edit listing</DropdownMenuItem>
+            <DropdownMenuItem disabled={busy} onClick={() => managePhotos(vehicle)}>Photos</DropdownMenuItem>
+          </> : (
+            <DropdownMenuItem disabled>{inactiveReason(vehicle)}</DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  }
+
   const header = (
     <DeskHeader
       title="Inventory"
       tone={error ? 'bad' : agingCount > 0 ? 'warn' : 'ok'}
       status={error ? 'Unavailable' : agingCount > 0 ? `${agingCount} aging units` : 'No aging units'}
-      meta={[lotTotal !== undefined ? `${lotTotal} units` : null, intakeRooftopName].filter(Boolean).join(' · ') || undefined}
+      meta={[
+        lotTotal !== undefined ? `${lotTotal} units` : null,
+        error ? 'Unavailable' : needsYou.length ? `${needsYou.length} waiting on you` : lotTotal !== undefined ? 'Nothing waiting' : null,
+        intakeRooftopName,
+      ].filter(Boolean).join(' · ') || undefined}
       actions={
         <>
           {intakeRooftops.length > 1 && (
             <Select value={intakeRooftopId} onValueChange={setIntakeRooftopId}>
-              <SelectTrigger className="h-9 w-full rounded-full sm:w-[180px]" aria-label="Intake rooftop">
+              <SelectTrigger className="h-8 w-full rounded-[4px] sm:w-[180px]" aria-label="Intake rooftop">
                 <SelectValue placeholder="Intake rooftop" />
               </SelectTrigger>
               <SelectContent>
@@ -718,22 +853,22 @@ export function VehicleListPageClient({
             </Select>
           )}
           <Track>
-            <Pill onClick={loadVehicles} disabled={loading} aria-label="Refresh">
+            <Pill variant="plain" onClick={loadVehicles} disabled={loading} aria-label="Refresh">
               <RefreshCw className={loading ? 'animate-spin' : undefined} />
               <span className="max-sm:sr-only">Refresh</span>
             </Pill>
-            <Pill asChild>
+            <Pill variant="plain" asChild>
               <Link href={`${basePath}/platform/vehicles/acquisitions`}><ClipboardList /><span className="max-sm:sr-only">Acquisitions</span></Link>
             </Pill>
-            <Pill asChild>
+            <Pill variant="plain" asChild>
               <Link href={`${basePath}/platform/vehicles/feed`}><History /><span className="max-sm:sr-only">Feed</span></Link>
             </Pill>
-            <Pill onClick={intakeVehicle} disabled={actionId === 'intake' || !intakeRooftopId}>
-              <Plus /> Intake
-            </Pill>
-            <Pill variant="primary" onClick={recordPublicFeed} disabled={actionId === 'feed'}>
+            <Pill onClick={recordPublicFeed} disabled={actionId === 'feed'}>
               <Upload />
               {pendingFeedRun ? 'Retry publishing' : 'Publish feed'}
+            </Pill>
+            <Pill variant="primary" onClick={intakeVehicle} disabled={actionId === 'intake' || !intakeRooftopId}>
+              <Plus /> Intake
             </Pill>
           </Track>
         </>
@@ -742,7 +877,7 @@ export function VehicleListPageClient({
   )
 
   const renderDetails = (vehicle: Vehicle) => (
-    <div role="region" aria-label={`Vehicle details for ${vehicle.stockNumber}`} className="mt-3 grid gap-x-8 gap-y-3 rounded-lg bg-muted/40 p-3 sm:ml-4 lg:grid-cols-2">
+    <div role="region" aria-label={`Vehicle details for ${vehicle.stockNumber}`} className="grid gap-x-8 gap-y-3 lg:grid-cols-2">
       <Facts
         items={[
           { label: 'VIN', value: vehicle.vin, mono: true },
@@ -771,9 +906,9 @@ export function VehicleListPageClient({
       </div>
       <div className="lg:col-span-2">
         <Track>
-          <Pill size="sm" asChild><Link href={`${basePath}/platform/vehicles/${vehicle.id}`}>Open vehicle</Link></Pill>
-          {isActiveInventory(vehicle) && <Pill size="sm" onClick={() => managePhotos(vehicle)}>Photos</Pill>}
-          <Pill size="sm" variant="plain" onClick={() => setSelectedVehicle(null)}>Close details</Pill>
+          <Pill size="sm" className="max-md:h-10" asChild><Link href={`${basePath}/platform/vehicles/${vehicle.id}`}>Open vehicle</Link></Pill>
+          {isActiveInventory(vehicle) && <Pill size="sm" className="max-md:h-10" onClick={() => managePhotos(vehicle)}>Photos</Pill>}
+          <Pill size="sm" variant="plain" className="max-md:h-10" onClick={() => setSelectedVehicle(null)}>Close details</Pill>
         </Track>
       </div>
     </div>
@@ -805,43 +940,88 @@ export function VehicleListPageClient({
         </Notice>
       )}
 
-      <ReadoutStrip>
-        <Readout label="Units" value={filteredVehicles.length} />
-        <Readout label="Retail value" value={formatCurrency(totalValue)} sub="Available units" />
-        <Readout label="Avg days" value={avgDaysInStock} sub="Available units" />
-        <Readout label="Aging 60+" value={agingCount} tone={agingCount > 0 ? 'warn' : 'ok'} />
-        <Readout label="Recon open" value={reconOpenCount} tone={reconOpenCount > 0 ? 'info' : 'idle'} />
-      </ReadoutStrip>
+      {!loading && !error && (
+        <DeskSection title="Needs you" count={needsYou.length} id="inventory-needs-you">
+          {needsYou.length === 0 ? (
+            <p className="py-3 text-[13px] text-muted-foreground">
+              {statusFilter === 'all' ? 'No aged, recon, listing or photo work waiting.' : `Nothing waiting in ${statusLabels[statusFilter] || statusFilter}.`}
+            </p>
+          ) : (
+            <DeskTable aria-label="Units waiting on you">
+              <thead>
+                <tr>
+                  <Th>Vehicle</Th>
+                  <Th priority={2}>Waiting on</Th>
+                  <Th align="right" priority={2}>Days</Th>
+                  <Th align="right"><span className="sr-only">Next step</span></Th>
+                </tr>
+              </thead>
+              <tbody>
+                {needsYou.map(({ vehicle, reasons }) => {
+                  const next = buildActions(vehicle)[0]
+                  const busy = actionId === vehicle.inventoryStockId
+                  const reasonList = (
+                    <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                      {reasons.map(reason => reason.aged
+                        ? <Attention key={reason.key}>{reason.label}</Attention>
+                        : <span key={reason.key} className="text-[13px] text-foreground">{reason.label}</span>)}
+                    </span>
+                  )
+                  return (
+                    <Tr key={vehicle.id}>
+                      <Td className="min-w-0">
+                        <div className="min-w-0">{vehicleName(vehicle)}</div>
+                        <div className="mt-0.5"><Code>{vehicle.stockNumber}</Code></div>
+                        <div className="mt-1 md:hidden">{reasonList}</div>
+                      </Td>
+                      <Td priority={2}>{reasonList}</Td>
+                      <Td align="right" priority={2}>
+                        <Figure size="sm" attention={isAged(vehicle)}>{daysLabel(vehicle)}</Figure>
+                      </Td>
+                      <Td align="right" className="whitespace-nowrap">
+                        {next ? (
+                          <Pill size="sm" className="max-md:h-10" disabled={busy || next.disabled} onClick={next.onClick}>{next.label}</Pill>
+                        ) : (
+                          <Pill size="sm" variant="plain" className="max-md:h-10" asChild><Link href={`${basePath}/platform/vehicles/${vehicle.id}`}>Open</Link></Pill>
+                        )}
+                      </Td>
+                    </Tr>
+                  )
+                })}
+              </tbody>
+            </DeskTable>
+          )}
+        </DeskSection>
+      )}
 
-      <div className="flex min-w-0 flex-col gap-3">
-        <Segmented label="Filter by status" value={statusFilter} onChange={setStatusFilter} options={statusOptions} className="self-start" />
-        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="relative w-full sm:max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Stock #, VIN, make, model"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="rounded-full pl-9"
-              aria-label="Search inventory"
-            />
+      <DeskSection title={statusFilter === 'all' ? 'Lot' : statusLabels[statusFilter] || statusFilter} count={loading || error ? undefined : filteredVehicles.length} id="inventory-lot">
+        <div className="mb-3 flex min-w-0 flex-col gap-3">
+          <Segmented label="Filter by status" value={statusFilter} onChange={setStatusFilter} options={statusOptions} className="self-stretch" />
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative w-full sm:max-w-sm">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Stock #, VIN, make, model"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="rounded-[4px] pl-9 max-md:h-10"
+                aria-label="Search inventory"
+              />
+            </div>
+            <Select value={sortOrder} onValueChange={setSortOrder}>
+              <SelectTrigger className="w-full rounded-[4px] max-md:h-10 sm:w-[180px]" aria-label="Sort inventory">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="age-desc">Oldest first</SelectItem>
+                <SelectItem value="age-asc">Newest first</SelectItem>
+                <SelectItem value="price-desc">Price high to low</SelectItem>
+                <SelectItem value="price-asc">Price low to high</SelectItem>
+                <SelectItem value="stock">Stock number</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <Select value={sortOrder} onValueChange={setSortOrder}>
-            <SelectTrigger className="w-full rounded-full sm:w-[180px]" aria-label="Sort inventory">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="age-desc">Oldest first</SelectItem>
-              <SelectItem value="age-asc">Newest first</SelectItem>
-              <SelectItem value="price-desc">Price high to low</SelectItem>
-              <SelectItem value="price-asc">Price low to high</SelectItem>
-              <SelectItem value="stock">Stock number</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
-      </div>
-
-      <DeskSection title={statusFilter === 'all' ? 'Lot' : statusLabels[statusFilter] || statusFilter} count={loading || error ? undefined : filteredVehicles.length}>
         {loading ? (
           <div className="flex items-center justify-center py-12" role="status">
             <RefreshCw className="size-5 animate-spin text-muted-foreground" aria-hidden="true" />
@@ -865,140 +1045,105 @@ export function VehicleListPageClient({
             )}
           </div>
         ) : (
-          <Panel className="divide-y">
-            {filteredVehicles.map((vehicle) => {
-              const daysInStock = calculateDaysInStock(vehicle)
-              const isAging = daysInStock != null && daysInStock > 60 && vehicle.status === 'available'
-              const active = isActiveInventory(vehicle)
-              const busy = actionId === vehicle.inventoryStockId
-              const stage = lotStage(vehicle)
-              const isOpen = selectedVehicle?.id === vehicle.id
-              const subline = [
-                vehicle.color,
-                conditionLabels[vehicle.condition] || vehicle.condition,
-                vehicle.locationLabel || vehicle.locationCode,
-              ].filter(Boolean)
-              const acquisitionStatus = vehicle.acquisition?.status
-              const activeRecon = vehicle.reconWorkItems.find(item => ['open', 'in-progress'].includes(item.status))
-              const reconDone = vehicle.reconStatus === 'completed'
-              const listingApproved = vehicle.merchandisingStatus === 'approved'
-              const needs = listingNeeds(vehicle)
-              // One step at a time: send to recon, work the recon items, approve the listing, then frontline.
-              const actions: Array<{ key: string; label: string; onClick: () => void; disabled?: boolean }> = []
-              // Pending, sold and delivered units are off the lot workflow: no recon, listing or frontline steps.
-              if (active && acquisitionStatus === 'arrived' && vehicle.acquisition) {
-                actions.push({ key: 'acquisition', label: 'Send to recon', onClick: () => advanceAcquisition(vehicle) })
-              }
-              if (active && !reconDone && acquisitionStatus !== 'arrived') {
-                actions.push({
-                  key: 'recon',
-                  label: !activeRecon ? 'Add work item' : activeRecon.status === 'in-progress' ? 'Finish work' : 'Start work',
-                  onClick: () => advanceRecon(vehicle),
-                  disabled: Boolean(pendingReconStart),
-                })
-              }
-              if (active && reconDone && (!listingApproved || vehicle.publicListing.action)) {
-                const submits = vehicle.publicListing.action !== 'reapprove' && vehicle.merchandisingStatus !== 'submitted'
-                const listingLabel = vehicle.publicListing.action === 'reapprove' ? 'Re-approve listing'
-                  : vehicle.publicListing.action === 'resubmit' ? 'Resubmit listing'
-                    : vehicle.merchandisingStatus === 'submitted' ? 'Approve listing' : 'Submit listing'
-                // Submitting needs photos, a description and a price: offer the missing piece as the step.
-                if (submits && needs === 'photos') actions.push({ key: 'listing', label: 'Add photos', onClick: () => managePhotos(vehicle) })
-                else if (submits && needs === 'details') actions.push({ key: 'listing', label: 'Add description', onClick: () => editMerchandisingDraft(vehicle) })
-                else actions.push({ key: 'listing', label: listingLabel, onClick: () => submitOrApproveMerchandising(vehicle), disabled: Boolean(pendingMerchandisingAttempt) })
-              }
-              if (active && acquisitionStatus === 'reconditioning' && vehicle.acquisition && reconDone && listingApproved && !vehicle.publicListing.action) {
-                actions.push({ key: 'acquisition', label: 'Mark frontline', onClick: () => advanceAcquisition(vehicle) })
-              }
-              const showLive = stage === 'available' || stage === 'prep'
-              const liveFlag = vehicle.publicListing.live
-                ? <span className="text-emerald-700 dark:text-emerald-400">Live</span>
-                : <span className={vehicle.publicListing.action || stage === 'available' ? 'text-amber-700 dark:text-amber-400' : undefined}>Not live: {vehicle.publicListing.reason || 'Not available'}</span>
-              const statusParts = [
-                acquisitionStatus && acquisitionStatus !== 'frontline' ? acquisitionLabels[acquisitionStatus] || acquisitionStatus : vehicle.frontlineAt ? 'Frontline' : null,
-                reconLabel(vehicle),
-                listingLabels[vehicle.merchandisingStatus] || vehicle.merchandisingStatus,
-                active && !listingApproved && needs === 'photos' ? 'Needs photos' : active && !listingApproved && needs === 'details' ? 'Needs description' : null,
-              ].filter(Boolean) as string[]
-              return (
-                <div key={vehicle.id} className="min-w-0 px-4 py-3">
-                  <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-start md:justify-between md:gap-6">
-                    <div className="min-w-0 flex-1">
-                      <TitleLine as="h3" tone={statusTones[stage] || 'idle'} status={statusLabels[stage] || stage} className="text-sm font-medium text-foreground">
-                        <Link href={`${basePath}/platform/vehicles/${vehicle.id}`} className="hover:underline">
-                          {vehicle.year} {vehicle.make} {vehicle.model}
-                          {vehicle.trim && <span className="font-normal text-muted-foreground"> {vehicle.trim}</span>}
-                        </Link>
-                      </TitleLine>
-                      <p className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 pl-4 text-xs text-muted-foreground">
-                        <Code className="text-foreground">{vehicle.stockNumber}</Code>
-                        <Code><span title={vehicle.vin}>…{vehicle.vin.slice(-8)}</span></Code>
-                        {subline.map(part => <span key={part}>{part}</span>)}
-                      </p>
-                      <p className="mt-0.5 flex min-w-0 flex-wrap gap-x-1.5 pl-4 font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
-                        <span>{statusLabels[stage] || stage}</span>
-                        {statusParts.map(part => <span key={part}>· {part}</span>)}
-                        {showLive && <span>· {liveFlag}</span>}
-                      </p>
-                    </div>
-                    <dl className="grid shrink-0 grid-cols-3 gap-4 pl-4 text-xs md:pl-0 md:text-right">
-                      <div className="min-w-0">
-                        <dt className="sr-only">Mileage</dt>
-                        <dd className="font-mono tabular-nums text-muted-foreground">{vehicle.mileage.toLocaleString('en-US')} mi</dd>
-                      </div>
-                      <div className="min-w-0 md:w-24">
-                        <dt className="sr-only">Price</dt>
-                        <dd className="text-sm font-semibold tabular-nums text-foreground">{formatCurrency(vehicle.price)}</dd>
-                      </div>
-                      <div className="min-w-0 md:w-14">
-                        <dt className="sr-only">Days in stock</dt>
-                        <dd className={`font-mono tabular-nums ${isAging ? 'font-semibold text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>{daysLabel(vehicle)}</dd>
-                      </div>
-                    </dl>
-                  </div>
-                  <div className="mt-2 flex min-w-0 pl-4">
-                    <Track>
-                      {actions.map((action, index) => (
-                        <Pill key={action.key} size="sm" variant={index === 0 ? 'primary' : undefined} disabled={busy || action.disabled} onClick={action.onClick}>
-                          {action.label}
-                        </Pill>
-                      ))}
-                      <Pill size="sm" variant={isOpen ? undefined : 'plain'} aria-expanded={isOpen} onClick={() => setSelectedVehicle(current => current?.id === vehicle.id ? null : vehicle)}>
-                        Details
+          <DeskTable aria-label="Inventory">
+            <thead>
+              <tr>
+                <Th priority={2} className="w-14"><span className="sr-only">Photo</span></Th>
+                <Th>Vehicle</Th>
+                <Th priority={2}>Stock #</Th>
+                <Th priority={2}>Status</Th>
+                <Th priority={3}>Recon</Th>
+                <Th priority={3}>Listing</Th>
+                <Th align="right">Days</Th>
+                <Th align="right">Price</Th>
+                <Th align="right" priority={2}><span className="sr-only">Actions</span></Th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredVehicles.map((vehicle) => {
+                const busy = actionId === vehicle.inventoryStockId
+                const stage = lotStage(vehicle)
+                const isOpen = selectedVehicle?.id === vehicle.id
+                const thumb = thumbFor(vehicle)
+                const actions = buildActions(vehicle)
+                const subline = [
+                  vehicle.color,
+                  conditionLabels[vehicle.condition] || vehicle.condition,
+                  `${vehicle.mileage.toLocaleString('en-US')} mi`,
+                  vehicle.locationLabel || vehicle.locationCode,
+                ].filter(Boolean)
+                const rowButtons = (
+                  <div className="flex items-center justify-end gap-1">
+                    {actions.map(action => (
+                      <Pill key={action.key} size="sm" className="max-md:h-10" disabled={busy || action.disabled} onClick={action.onClick}>
+                        {action.label}
                       </Pill>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Pill size="sm" variant="plain" aria-label={`More actions for ${vehicle.stockNumber}`} disabled={busy}>
-                            <MoreHorizontal />
-                          </Pill>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem asChild><Link href={`${basePath}/platform/vehicles/${vehicle.id}`}>Open vehicle</Link></DropdownMenuItem>
-                          {active && <DropdownMenuItem disabled={busy} onClick={() => moveStock(vehicle)}>Move</DropdownMenuItem>}
-                          <DropdownMenuItem disabled={busy} onClick={() => addInventoryCost(vehicle)}>Cost</DropdownMenuItem>
-                          {active ? <>
-                            <DropdownMenuItem disabled={busy} onClick={() => editMerchandisingDraft(vehicle)}>Edit listing</DropdownMenuItem>
-                            <DropdownMenuItem disabled={busy} onClick={() => managePhotos(vehicle)}>Photos</DropdownMenuItem>
-                          </> : (
-                            <DropdownMenuItem disabled>{inactiveReason(vehicle)}</DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </Track>
+                    ))}
+                    <Pill size="sm" variant="plain" className="max-md:h-10" aria-expanded={isOpen} onClick={() => setSelectedVehicle(current => current?.id === vehicle.id ? null : vehicle)}>
+                      Details
+                    </Pill>
+                    {moreMenu(vehicle, busy)}
                   </div>
-                  {isOpen && renderDetails(vehicle)}
-                </div>
-              )
-            })}
-          </Panel>
+                )
+                return [
+                  <Tr key={vehicle.id} className={isOpen ? 'border-b-0 bg-muted/30' : undefined}>
+                    <Td priority={2} className="w-14 py-2">
+                      <div className="relative h-9 w-12 overflow-hidden rounded-[4px] bg-muted">
+                        {thumb
+                          ? <Image src={thumb} alt="" fill unoptimized sizes="48px" className="object-cover" />
+                          : <span className="absolute inset-0 grid place-items-center text-[10px] text-muted-foreground">No photo</span>}
+                      </div>
+                    </Td>
+                    <Td className="min-w-0 max-w-[22rem]">
+                      <div className="min-w-0 break-words">{vehicleName(vehicle)}</div>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{subline.join(' · ')}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 md:hidden">
+                        <Code>{vehicle.stockNumber}</Code>
+                        <Status tone={statusTones[stage] || 'idle'}>{statusLabels[stage] || stage}</Status>
+                      </div>
+                      <div className="mt-2 md:hidden [&>div]:justify-start [&>div]:flex-wrap">{rowButtons}</div>
+                    </Td>
+                    <Td priority={2}><Code className="text-foreground">{vehicle.stockNumber}</Code></Td>
+                    <Td priority={2}><Status tone={statusTones[stage] || 'idle'}>{statusLabels[stage] || stage}</Status></Td>
+                    <Td priority={3}>{reconCell(vehicle)}</Td>
+                    <Td priority={3}>{listingCell(vehicle, stage)}</Td>
+                    <Td align="right" className="align-top md:align-middle">
+                      <span className="sr-only">Days in stock </span>
+                      <Figure size="sm" attention={isAged(vehicle)}>{daysLabel(vehicle)}</Figure>
+                    </Td>
+                    <Td align="right" className="align-top md:align-middle">
+                      <span className="sr-only">Price </span>
+                      <Figure size="sm">{formatCurrency(vehicle.price)}</Figure>
+                    </Td>
+                    <Td align="right" priority={2} className="whitespace-nowrap">{rowButtons}</Td>
+                  </Tr>,
+                  isOpen ? (
+                    <tr key={`${vehicle.id}-details`} className="border-b bg-muted/30">
+                      <td colSpan={9} className="px-4 pb-4 pt-1">{renderDetails(vehicle)}</td>
+                    </tr>
+                  ) : null,
+                ]
+              })}
+            </tbody>
+          </DeskTable>
         )}
       </DeskSection>
+
+      {!loading && !error && (
+        <ReadoutStrip>
+          <Readout label="Units" value={filteredVehicles.length} />
+          <Readout label="Retail value" value={formatCurrency(totalValue)} sub="Available units" />
+          <Readout label="Avg days" value={avgDaysInStock} sub="Available units" />
+          <Readout label="Aging 60+" value={agingCount} tone={agingCount > 0 ? 'warn' : undefined} />
+          <Readout label="Recon open" value={reconOpenCount} tone={reconOpenCount > 0 ? 'info' : undefined} />
+        </ReadoutStrip>
+      )}
 
       <Dialog open={Boolean(task)} onOpenChange={open => { if (!open && !actionId && !task?.reconCompletionAttempt) closeTask() }}>
         <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{taskTitle}</DialogTitle>
-            <DialogDescription className="font-mono text-xs">
+            <DialogDescription className="text-[13px]">
               {task?.vehicle
                 ? `${task.vehicle.stockNumber} · ${task.vehicle.year} ${task.vehicle.make} ${task.vehicle.model}${task.reconWorkItem ? ` · ${task.reconWorkItem.title}` : ''}`
                 : intakeRooftopName || 'New unit'}

@@ -26,3 +26,19 @@ export function parseWhole(text: string, max = 2_147_483_647) {
 export function formatQuantity(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, '')
 }
+
+/** Time of day only, in dealership time: "9:30 AM". */
+export function formatTime(value: string | null | undefined, timeZone: string, empty = '—') {
+  if (!value) return empty
+  return new Date(value).toLocaleTimeString('en-US', { timeZone, hour: 'numeric', minute: '2-digit' })
+}
+
+/** Elapsed time since a timestamp as a short figure: "45m", "6h", "3d". */
+export function formatAge(value: string | null | undefined, now = Date.now()) {
+  if (!value) return '—'
+  const minutes = Math.max(0, Math.floor((now - new Date(value).getTime()) / 60_000))
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h`
+  return `${Math.floor(hours / 24)}d`
+}

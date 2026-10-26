@@ -112,7 +112,7 @@ export function SalesVisitDialog({
     if (error) setFormError(error)
   }
 
-  const fieldClass = 'h-11 sm:h-9'
+  const fieldClass = 'h-11 rounded-[4px] sm:h-9'
 
   return (
     <Dialog open={open} onOpenChange={next => { if (!busy) onOpenChange(next) }}>
@@ -165,7 +165,7 @@ export function SalesVisitDialog({
             </FormField>
           )}
           <FormField id="visit-notes" label="Notes" error={errors.notes}>
-            <Textarea id="visit-notes" rows={3} maxLength={4000} value={values.notes} onChange={event => set('notes', event.target.value)} />
+            <Textarea className="rounded-[4px]" id="visit-notes" rows={3} maxLength={4000} value={values.notes} onChange={event => set('notes', event.target.value)} />
           </FormField>
           {formError && <Notice tone="bad">{formError}</Notice>}
           <DialogFooter className="sm:justify-end">

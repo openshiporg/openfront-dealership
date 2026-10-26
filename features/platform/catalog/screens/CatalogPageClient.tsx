@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
 import { basePath } from '@/features/dashboard/lib/config'
-import { DeskHeader, Pill, Segmented, Track } from '@/features/platform/components/desk'
+import { Attention, DeskHeader, DeskSection, DeskTable, Pill, Segmented, Status, Td, Th, Tr } from '@/features/platform/components/desk'
 import { type CatalogData, getCatalogData } from '../actions'
 import { LeadRoutingPanel } from '../components/LeadRoutingPanel'
 import { MakesModelsPanel } from '../components/MakesModelsPanel'
@@ -34,19 +34,28 @@ export function CatalogPageClient({ initialData, initialTab }: { initialData: Ca
   const activeRules = data.routingRules.data.filter(rule => rule.active).length
   const anyError = data.makes.error || data.servicePackages.error || data.routingRules.error
 
+  // Needs you: stock the catalog doesn't know, routing gaps, and makes with nothing under them.
+  const catalogPairs = new Set(data.makes.data.flatMap(make => make.models.map(model => `${make.name.trim().toLowerCase()}|${model.name.trim().toLowerCase()}`)))
+  const missingPairs = data.inventoryPairs.filter(pair => !catalogPairs.has(`${pair.make.trim().toLowerCase()}|${pair.model.trim().toLowerCase()}`))
+  const unassignedRules = data.routingRules.data.filter(rule => !rule.assignee?.id)
+  const emptyMakes = data.makes.data.filter(make => make.modelsCount === 0)
+  const queue: Array<{ key: string; what: string; detail: string; status: string; tab: CatalogTab; stale?: boolean }> = [
+    ...(missingPairs.length ? [{ key: 'pairs', what: `${missingPairs.length} inventory ${missingPairs.length === 1 ? 'model' : 'models'} not in catalog`, detail: `${missingPairs.reduce((total, pair) => total + pair.units, 0)} units on the lot`, status: 'Not in catalog', tab: 'makes' as const }] : []),
+    ...(!data.routingRules.error && activeRules === 0 ? [{ key: 'routing', what: 'No active lead routing rule', detail: 'New leads are not assigned', status: 'Not routed', tab: 'routing' as const, stale: true }] : []),
+    ...(unassignedRules.length ? [{ key: 'assignee', what: `${unassignedRules.length} routing ${unassignedRules.length === 1 ? 'rule has' : 'rules have'} no assignee`, detail: unassignedRules.map(rule => rule.name).join(', '), status: 'No assignee', tab: 'routing' as const }] : []),
+    ...(emptyMakes.length ? [{ key: 'empty', what: `${emptyMakes.length} ${emptyMakes.length === 1 ? 'make has' : 'makes have'} no models`, detail: emptyMakes.map(make => make.name).join(', '), status: 'No models', tab: 'makes' as const }] : []),
+  ]
+
   const header = (
     <DeskHeader
       title="Catalog"
-      tone={anyError ? 'bad' : modelCount === 0 || activeRules === 0 ? 'warn' : 'ok'}
       status={anyError ? 'Partly unavailable' : modelCount === 0 ? 'No models' : activeRules === 0 ? 'No active routing' : 'Ready'}
-      meta={`${data.makes.data.length} makes · ${modelCount} models · ${data.servicePackages.data.length} service packages · ${activeRules} active routing rules`}
+      meta={`${anyError ? 'Partly unavailable' : modelCount === 0 ? 'No models' : activeRules === 0 ? 'No active routing' : 'Ready'} · ${data.makes.data.length} makes · ${modelCount} models · ${data.servicePackages.data.length} service packages · ${activeRules} active routing rules`}
       actions={
-        <Track>
-          <Pill className={TAP} onClick={reload} disabled={loading}>
-            <RefreshCw className={loading ? 'animate-spin' : undefined} />
-            Refresh
-          </Pill>
-        </Track>
+        <Pill variant="plain" className={TAP} onClick={reload} disabled={loading}>
+          <RefreshCw className={loading ? 'animate-spin' : undefined} />
+          Refresh
+        </Pill>
       }
     />
   )
@@ -62,6 +71,32 @@ export function CatalogPageClient({ initialData, initialTab }: { initialData: Ca
       ]}
     >
       <div className="min-w-0 max-w-full space-y-4 px-4 pb-24 md:px-6">
+        {queue.length > 0 && (
+          <DeskSection title="Needs you" count={queue.length} id="catalog-needs-you" className="pb-4">
+            <DeskTable aria-labelledby="catalog-needs-you">
+              <thead>
+                <tr>
+                  <Th>Waiting</Th>
+                  <Th>Status</Th>
+                  <Th align="right"><span className="sr-only">Action</span></Th>
+                </tr>
+              </thead>
+              <tbody>
+                {queue.map(item => (
+                  <Tr key={item.key}>
+                    <Td className="max-w-0 min-w-[10rem]">
+                      <span className="block truncate font-medium text-foreground">{item.what}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{item.detail}</span>
+                    </Td>
+                    <Td>{item.stale ? <Attention>{item.status}</Attention> : <Status tone="warn">{item.status}</Status>}</Td>
+                    <Td align="right" className="w-px"><Pill size="sm" className={TAP} onClick={() => changeTab(item.tab)}>Open</Pill></Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </DeskTable>
+          </DeskSection>
+        )}
+
         <Segmented<CatalogTab>
           label="Catalog section"
           value={tab}

@@ -146,3 +146,12 @@ export const VISIT_OUTCOMES: ReadonlyArray<{ value: string; label: string }> = [
   { value: 'not-interested', label: 'Not interested' },
   { value: 'credit-declined', label: 'Credit declined' },
 ]
+
+/** Elapsed time as a short windshield figure: "35m", "4h", "3d". */
+export function formatElapsed(fromMs: number, nowMs = Date.now()) {
+  const minutes = Math.max(0, Math.floor((nowMs - fromMs) / 60_000))
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 48) return `${hours}h`
+  return `${Math.floor(hours / 24)}d`
+}

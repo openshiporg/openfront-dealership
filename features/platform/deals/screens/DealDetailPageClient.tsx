@@ -11,13 +11,13 @@ import {
   DeskHeader,
   DeskSection,
   Facts,
+  Figure,
   Meter,
   Notice,
   Panel,
   Pill,
-  Readout,
-  ReadoutStrip,
   Segmented,
+  Status,
   TitleLine,
   Track,
   type DeskTone,
@@ -40,6 +40,7 @@ import {
 } from '../actions'
 import { applyDealDefaults, calculateDealPrice, assertValidDealPrice, normalizeMoneyLines, repriceRateTaxLines, sumMoneyLines, type MoneyLine } from '@/features/keystone/lifecycle/dealPricing'
 import { WorksheetLines } from '../components/WorksheetLines'
+import { FourSquare } from '../components/FourSquare'
 import { MoneyInput } from '../components/MoneyInput'
 import { readFinanceEvidence, type FinanceEvidence } from '../lib/financeEvidence'
 import { FinanceEvidenceHistory } from '../components/FinanceEvidenceHistory'
@@ -101,7 +102,8 @@ interface Deal {
   }[]
 }
 
-const fieldLabel = 'font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground'
+const fieldLabel = 'text-[12px] font-medium text-muted-foreground'
+const inputClass = 'h-10 rounded-[4px] text-right text-[13px] tabular-nums shadow-none'
 
 /** Rate-based tax lines follow the worksheet; the server reprices them the same way on save. */
 function withRepricedTax(deal: Deal): Deal {
@@ -168,12 +170,12 @@ function LedgerRow({ label, value, emphasis, sub, indent }: { label: ReactNode; 
     <div
       className={[
         'flex min-w-0 items-baseline justify-between gap-4 px-4',
-        emphasis === 'total' ? 'border-t-2 border-foreground/80 py-3 text-base font-semibold text-foreground' : emphasis === 'subtotal' ? 'border-t py-2.5 text-sm font-medium text-foreground' : sub ? 'py-1 text-xs text-muted-foreground' : 'py-2 text-sm text-foreground',
+        emphasis === 'total' ? 'border-t border-foreground/60 py-3 text-base font-semibold text-foreground' : emphasis === 'subtotal' ? 'border-t py-2.5 text-sm font-medium text-foreground' : sub ? 'py-1 text-xs text-muted-foreground' : 'py-2 text-sm text-foreground',
         indent ? 'pl-8' : '',
       ].join(' ')}
     >
       <dt className={`min-w-0 break-words ${emphasis || sub ? '' : 'text-muted-foreground'}`}>{label}</dt>
-      <dd className="shrink-0 text-right font-mono tabular-nums">{value}</dd>
+      <dd className="shrink-0 text-right tabular-nums">{value}</dd>
     </div>
   )
 }
@@ -596,7 +598,7 @@ export function DealDetailPageClient({ id }: { id: string }) {
 
   if (loading && !deal) {
     return (
-      <PageContainer title="Deal" header={<DeskHeader eyebrow="Deal" title="Loading deal" tone="idle" />} breadcrumbs={breadcrumbs('Deal')}>
+      <PageContainer title="Deal" header={<DeskHeader title="Loading deal" meta="Deal" />} breadcrumbs={breadcrumbs('Deal')}>
         <div className="flex min-h-[320px] items-center justify-center px-4 md:px-6" role="status">
           <span className="text-sm text-muted-foreground">Loading deal</span>
         </div>
@@ -610,10 +612,8 @@ export function DealDetailPageClient({ id }: { id: string }) {
         title="Deal"
         header={
           <DeskHeader
-            eyebrow="Deal"
             title="Deal unavailable"
-            tone="bad"
-            status="Unavailable"
+            meta="The deal could not be loaded"
             actions={
               <Track>
                 <Pill asChild>
@@ -721,18 +721,39 @@ export function DealDetailPageClient({ id }: { id: string }) {
   )
   const hasStatusActions = ['pencil', 'submitted', 'approved', 'financed'].includes(deal.status)
 
+  // The deal's stage said in words: where it is and what it is waiting on.
+  const stageLine = deal.status === 'pencil'
+    ? pencilNext === 'save'
+      ? worksheetDirty && deal.worksheetVersion > 0 ? 'worksheet has unsaved changes' : 'worksheet not saved yet'
+      : pencilNext === 'present'
+        ? 'ready to present to the customer'
+        : pencilNext === 'accept'
+          ? 'presented, waiting on customer acceptance'
+          : 'accepted, ready to submit to the desk'
+    : deal.status === 'submitted'
+      ? 'waiting on desk approval'
+      : deal.status === 'approved'
+        ? 'approved, waiting on F&I'
+        : deal.status === 'financed'
+          ? 'financed, waiting on delivery'
+          : deal.status === 'delivered'
+            ? deal.saleDate ? `delivered ${formatDate(deal.saleDate)}` : 'delivered'
+            : deal.status === 'cancelled'
+              ? 'closed as cancelled'
+              : ''
+
   const header = (
     <DeskHeader
-      eyebrow={deal.vehicle ? `Deal · Stock #${deal.vehicle.stockNumber}` : 'Deal'}
       title={dealTitle}
-      tone={toneForDeal(deal.status)}
       status={statusLabel}
       meta={
-        <span className="flex flex-wrap gap-x-2">
-          <span className="text-foreground">{statusLabel}</span>
+        <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+          <Status tone={toneForDeal(deal.status)}>{statusLabel}</Status>
+          {stageLine && <span className="text-foreground">{stageLine}</span>}
           <span>· {customerName}</span>
           <span>· {deal.salesperson?.name || 'Unassigned'}</span>
-          <span>· Created {formatDate(deal.createdAt)}</span>
+          {deal.vehicle && <Code>#{deal.vehicle.stockNumber}</Code>}
+          <span>· Opened {formatDate(deal.createdAt)}</span>
         </span>
       }
       actions={hasStatusActions ? statusActions : undefined}
@@ -750,7 +771,7 @@ export function DealDetailPageClient({ id }: { id: string }) {
   return (
     <PageContainer title={dealTitle} header={header} breadcrumbs={breadcrumbs(dealTitle)}>
       <div className="min-w-0 max-w-full space-y-8 px-4 pb-24 md:px-6">
-        {(error || worksheetDirty) && (
+        {(error || worksheetDirty || deal.form8300Required) && (
           <div className="space-y-2">
             {error && <Notice tone="bad">{error}</Notice>}
             {worksheetDirty && <Notice tone="warn" role="status">Unsaved worksheet changes</Notice>}
@@ -759,23 +780,41 @@ export function DealDetailPageClient({ id }: { id: string }) {
         )}
 
         {savedPricing && (
-          <ReadoutStrip>
-            <Readout label="Total price" value={formatCurrency(savedPricing.totalPriceCents / 100)} sub={worksheetSaved ? `Worksheet v${deal.worksheetVersion}` : 'Not saved'} />
-            <Readout label="Amount due" value={formatCurrency(savedPricing.cashPayableCents / 100)} sub={isCash && savedPricing.downPaymentCents > 0 ? `Due at signing · includes ${formatCurrency(savedPricing.downPaymentCents / 100)} down` : 'Due at signing'} tone={savedPricing.cashPayableCents > 0 ? 'warn' : 'idle'} />
-            {savedPricing.loanTerm > 0 ? (
-              <Readout label="Payment" value={`${formatCurrency(savedPricing.monthlyPaymentCents / 100)}/mo`} sub={deal.structureType === 'lease' ? `Lease · ${savedPricing.loanTerm} mo` : `${savedPricing.apr}% APR · ${savedPricing.loanTerm} mo`} />
-            ) : (
-              <Readout label="Amount financed" value={formatCurrency(savedPricing.financingAmountCents / 100)} sub={deal.structureType === 'cash' ? 'Cash' : undefined} />
-            )}
-            <Readout label="Deal jacket" value={`${checklistComplete}/${dealChecklist.length}`} sub={checklistComplete === dealChecklist.length ? 'Ready' : 'Incomplete'} tone={checklistComplete === dealChecklist.length ? 'ok' : 'warn'} />
-          </ReadoutStrip>
+          <FourSquare
+            cells={[
+              { label: 'Vehicle price', value: formatCurrency(savedPricing.vehiclePriceCents / 100), sub: deal.vehicle ? `${deal.vehicle.condition === 'new' ? 'MSRP' : 'Asking'} ${formatCurrency(deal.vehicle.price)}` : undefined },
+              { label: 'Trade-in', value: formatUsdCredit(savedPricing.tradeInValueCents / 100), sub: dealTradeIn ? tradeInName(dealTradeIn) : 'No trade' },
+              { label: isCash ? 'Down (part of amount due)' : 'Down payment', value: formatCurrency(savedPricing.downPaymentCents / 100) },
+              savedPricing.loanTerm > 0
+                ? { label: 'Payment', value: `${formatCurrency(savedPricing.monthlyPaymentCents / 100)}/mo`, sub: deal.structureType === 'lease' ? `Lease · ${savedPricing.loanTerm} mo` : `${savedPricing.apr}% APR · ${savedPricing.loanTerm} mo` }
+                : { label: 'Amount financed', value: formatCurrency(savedPricing.financingAmountCents / 100), sub: deal.structureType === 'cash' ? 'Cash' : undefined },
+            ]}
+            footer={
+              <>
+                <span className="flex items-baseline gap-2">
+                  <span className="text-muted-foreground">Total price</span>
+                  <Figure size="sm">{formatCurrency(savedPricing.totalPriceCents / 100)}</Figure>
+                  <span className="text-xs text-muted-foreground">{worksheetSaved ? `v${deal.worksheetVersion}` : 'Not saved'}</span>
+                </span>
+                <span className="flex items-baseline gap-2">
+                  <span className="text-muted-foreground">Due at signing</span>
+                  <Figure size="sm">{formatCurrency(savedPricing.cashPayableCents / 100)}</Figure>
+                </span>
+                <span className="flex items-baseline gap-2">
+                  <span className="text-muted-foreground">Deal jacket</span>
+                  <span className="tabular-nums text-foreground">{checklistComplete}/{dealChecklist.length}</span>
+                  <span className="text-xs text-muted-foreground">{checklistComplete === dealChecklist.length ? 'Ready' : 'Incomplete'}</span>
+                </span>
+              </>
+            }
+          />
         )}
 
         <div className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
           <div className="min-w-0 space-y-8">
             <DeskSection
               title="Deal jacket"
-              actions={<span className="font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground">{worksheetSaved ? `Saved v${deal.worksheetVersion}` : 'Unsaved'}</span>}
+              actions={<span className="text-[12px] text-muted-foreground">{worksheetSaved ? `Saved v${deal.worksheetVersion}` : 'Unsaved'}</span>}
             >
               {savedPricing ? (
                 <Panel className="overflow-hidden">
@@ -813,7 +852,7 @@ export function DealDetailPageClient({ id }: { id: string }) {
                       {savedPricing.loanTerm > 0 && (
                         <>
                           <span className="text-xs text-muted-foreground">{deal.structureType === 'lease' ? `Lease · residual ${formatCurrency((deal.residualValueCents || 0) / 100)} · money factor ${moneyFactorFromBps(deal.moneyFactorBasisPoints).toFixed(5)}` : `${savedPricing.apr}% APR`} · {savedPricing.loanTerm} months · estimated payment</span>
-                          <span className="font-mono text-lg font-semibold tabular-nums">{formatCurrency(savedPricing.monthlyPaymentCents / 100)}/mo</span>
+                          <Figure>{formatCurrency(savedPricing.monthlyPaymentCents / 100)}/mo</Figure>
                         </>
                       )}
                       {deal.saleDate && <span className="w-full text-xs text-muted-foreground">Sale completed {formatDate(deal.saleDate)}</span>}
@@ -851,27 +890,27 @@ export function DealDetailPageClient({ id }: { id: string }) {
                     ] as const).map(([label, field]) => (
                       <label key={field} className="grid min-w-0 gap-1.5">
                         <span className={fieldLabel}>{label}</span>
-                        <MoneyInput disabled={updating} aria-label={label} cents={Math.round(Number(deal[field] || 0) * 100)} onCentsChange={(cents) => editWorksheet({ [field]: cents / 100 })} />
+                        <MoneyInput disabled={updating} aria-label={label} className="h-10 text-[13px]" cents={Math.round(Number(deal[field] || 0) * 100)} onCentsChange={(cents) => editWorksheet({ [field]: cents / 100 })} />
                       </label>
                     ))}
                     {deal.structureType === 'finance' && (
                       <>
-                        <label className="grid min-w-0 gap-1.5"><span className={fieldLabel}>APR (%)</span><Input disabled={updating} aria-label="APR percentage" className="text-right tabular-nums" type="number" min="0" max="100" step="0.01" value={deal.apr || 0} onChange={(event) => editWorksheet({ apr: Number(event.target.value) })} /></label>
-                        <label className="grid min-w-0 gap-1.5"><span className={fieldLabel}>Term (months)</span><Input disabled={updating} aria-label="Term in months" className="text-right tabular-nums" type="number" min="1" max="120" step="1" value={deal.loanTerm || 0} onChange={(event) => editWorksheet({ loanTerm: Number(event.target.value) })} /></label>
+                        <label className="grid min-w-0 gap-1.5"><span className={fieldLabel}>APR (%)</span><Input disabled={updating} aria-label="APR percentage" className={inputClass} type="number" min="0" max="100" step="0.01" value={deal.apr || 0} onChange={(event) => editWorksheet({ apr: Number(event.target.value) })} /></label>
+                        <label className="grid min-w-0 gap-1.5"><span className={fieldLabel}>Term (months)</span><Input disabled={updating} aria-label="Term in months" className={inputClass} type="number" min="1" max="120" step="1" value={deal.loanTerm || 0} onChange={(event) => editWorksheet({ loanTerm: Number(event.target.value) })} /></label>
                       </>
                     )}
                     {deal.structureType === 'lease' && (
                       <>
-                        <label className="grid min-w-0 gap-1.5"><span className={fieldLabel}>Term (months)</span><Input disabled={updating} aria-label="Lease term in months" className="text-right tabular-nums" type="number" min="1" max="120" step="1" value={deal.loanTerm || 0} onChange={(event) => editWorksheet({ loanTerm: Number(event.target.value) })} /></label>
-                        <label className="grid min-w-0 gap-1.5"><span className={fieldLabel}>Residual value</span><MoneyInput disabled={updating} aria-label="Residual value" cents={deal.residualValueCents || 0} onCentsChange={(cents) => editWorksheet({ residualValueCents: cents })} /></label>
+                        <label className="grid min-w-0 gap-1.5"><span className={fieldLabel}>Term (months)</span><Input disabled={updating} aria-label="Lease term in months" className={inputClass} type="number" min="1" max="120" step="1" value={deal.loanTerm || 0} onChange={(event) => editWorksheet({ loanTerm: Number(event.target.value) })} /></label>
+                        <label className="grid min-w-0 gap-1.5"><span className={fieldLabel}>Residual value</span><MoneyInput disabled={updating} aria-label="Residual value" className="h-10 text-[13px]" cents={deal.residualValueCents || 0} onCentsChange={(cents) => editWorksheet({ residualValueCents: cents })} /></label>
                         <label className="grid min-w-0 gap-1.5">
                           <span className={fieldLabel}>Lease rate (APR %)</span>
-                          <Input disabled={updating} aria-label="Lease rate as APR percentage" aria-describedby="lease-money-factor" className="text-right tabular-nums" type="number" min="0" max="100" step="0.01" value={(deal.moneyFactorBasisPoints || 0) / 100} onChange={(event) => editWorksheet({ moneyFactorBasisPoints: Math.max(0, Math.round(Number(event.target.value) * 100)) })} />
+                          <Input disabled={updating} aria-label="Lease rate as APR percentage" aria-describedby="lease-money-factor" className={inputClass} type="number" min="0" max="100" step="0.01" value={(deal.moneyFactorBasisPoints || 0) / 100} onChange={(event) => editWorksheet({ moneyFactorBasisPoints: Math.max(0, Math.round(Number(event.target.value) * 100)) })} />
                           <span id="lease-money-factor" className="text-xs tabular-nums text-muted-foreground">Money factor {moneyFactorFromBps(deal.moneyFactorBasisPoints).toFixed(5)}</span>
                         </label>
                         <label className="grid min-w-0 gap-1.5">
                           <span className={fieldLabel}>Monthly payment</span>
-                          <MoneyInput disabled={updating} aria-label="Lease monthly payment" cents={Math.round(Number(deal.monthlyPayment || 0) * 100)} onCentsChange={(cents) => editWorksheet({ monthlyPayment: cents / 100 })} />
+                          <MoneyInput disabled={updating} aria-label="Lease monthly payment" className="h-10 text-[13px]" cents={Math.round(Number(deal.monthlyPayment || 0) * 100)} onCentsChange={(cents) => editWorksheet({ monthlyPayment: cents / 100 })} />
                         </label>
                         <div className="flex items-end">
                           <Track>
@@ -926,10 +965,10 @@ export function DealDetailPageClient({ id }: { id: string }) {
                             <p className="pl-4 text-xs capitalize text-muted-foreground">{offer.decision}{offer.selected ? ' · selected' : ''}</p>
                           </div>
                           <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:justify-end">
-                            <dl className="grid grid-cols-3 gap-x-4 text-right font-mono text-xs tabular-nums">
-                              <div><dt className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Amount</dt><dd>{formatCurrency((offer.approvedAmountCents || 0) / 100)}</dd></div>
-                              <div><dt className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">APR · term</dt><dd>{((offer.aprBasisPoints || 0) / 100).toFixed(2)}% · {offer.termMonths || '-'} mo</dd></div>
-                              <div><dt className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Payment</dt><dd>{formatCurrency((offer.monthlyPaymentCents || 0) / 100)}/mo</dd></div>
+                            <dl className="grid grid-cols-3 gap-x-4 text-right text-[13px] tabular-nums">
+                              <div><dt className="text-[12px] text-muted-foreground">Amount</dt><dd>{formatCurrency((offer.approvedAmountCents || 0) / 100)}</dd></div>
+                              <div><dt className="text-[12px] text-muted-foreground">APR · term</dt><dd>{((offer.aprBasisPoints || 0) / 100).toFixed(2)}% · {offer.termMonths || '-'} mo</dd></div>
+                              <div><dt className="text-[12px] text-muted-foreground">Payment</dt><dd>{formatCurrency((offer.monthlyPaymentCents || 0) / 100)}/mo</dd></div>
                             </dl>
                             <Track>
                               <Pill size="sm" variant={offer.selected ? 'primary' : 'raised'} disabled={updating || worksheetDirty || (offer.selected && Boolean(finance?.selectedOfferCurrent)) || deal.status !== 'pencil'} onClick={() => selectLenderOffer(offer.id)}>
@@ -950,7 +989,7 @@ export function DealDetailPageClient({ id }: { id: string }) {
               actions={
                 <span className="flex items-center gap-2">
                   <Meter value={checklistComplete / dealChecklist.length} segments={dealChecklist.length} tone={checklistComplete === dealChecklist.length ? 'ok' : 'warn'} label="Deal jacket checklist progress" />
-                  <span className="font-mono text-xs tabular-nums text-muted-foreground">{checklistComplete}/{dealChecklist.length} ready</span>
+                  <span className="text-xs tabular-nums text-muted-foreground">{checklistComplete}/{dealChecklist.length} ready</span>
                 </span>
               }
             >
@@ -964,48 +1003,12 @@ export function DealDetailPageClient({ id }: { id: string }) {
                         </TitleLine>
                         <p className="break-words pl-4 text-xs text-muted-foreground">{item.detail}</p>
                       </div>
-                      <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground">{item.complete ? 'Done' : 'Open'}</span>
+                      <span className="shrink-0 text-[12px] text-muted-foreground">{item.complete ? 'Done' : 'Open'}</span>
                     </div>
                   ))}
                 </Panel>
                 {deal.status !== 'delivered' && checklistComplete < dealChecklist.length && <Notice tone="warn" role="status">Incomplete deal jacket</Notice>}
               </div>
-            </DeskSection>
-
-            {deal.approvals && deal.approvals.length > 0 && (
-              <DeskSection title="Approval history" count={deal.approvals.length}>
-                <Panel className="divide-y">
-                  {deal.approvals.map(approval => (
-                    <div key={approval.id} className="min-w-0 px-4 py-3">
-                      <TitleLine as="p" tone={approval.decision === 'approved' ? 'ok' : 'bad'} className="text-sm font-medium capitalize">
-                        {approval.decision}
-                      </TitleLine>
-                      <p className="pl-4 text-xs text-muted-foreground">
-                        {approval.approver?.name || 'Unknown'} · {formatDate(approval.approvalDate)}
-                      </p>
-                      {approval.notes && <p className="mt-1 break-words pl-4 text-sm">{approval.notes}</p>}
-                    </div>
-                  ))}
-                </Panel>
-              </DeskSection>
-            )}
-
-            <DeskSection title="Worksheet versions" count={worksheetHistory.length}>
-              {worksheetHistory.length === 0 ? (
-                <p className="py-4 text-center text-sm text-muted-foreground">No worksheet history</p>
-              ) : (
-                <Panel className="divide-y">
-                  {worksheetHistory.map(entry => (
-                    <details key={entry.id} className="min-w-0 text-sm">
-                      <summary className="flex cursor-pointer list-none items-baseline justify-between gap-4 px-4 py-2.5 [&::-webkit-details-marker]:hidden">
-                        <span className="font-medium">Version {entry.snapshot?.terms?.worksheetVersion}</span>
-                        <span className="text-xs tabular-nums text-muted-foreground">{formatDate(entry.occurredAt)}</span>
-                      </summary>
-                      <pre className="mx-4 mb-3 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/50 p-2 font-mono text-[11px] text-muted-foreground">{JSON.stringify(entry.snapshot, null, 2)}</pre>
-                    </details>
-                  ))}
-                </Panel>
-              )}
             </DeskSection>
           </div>
 
@@ -1086,30 +1089,88 @@ export function DealDetailPageClient({ id }: { id: string }) {
             </DeskSection>
 
             <DeskSection
-              title="Finance evidence"
+              title="F&I"
               actions={<Link href={`${basePath}/platform/finance`} className="text-xs font-medium text-muted-foreground hover:text-foreground">Open finance</Link>}
             >
               <div className="space-y-3">
-                <div className="divide-y text-sm">
-                  <div className="py-2">
-                    <TitleLine as="p" tone={finance?.prerequisites?.current ? 'ok' : 'warn'} className="font-medium">
-                      F&I documents · {finance?.prerequisites?.current ? 'Current' : 'Review required'}
-                    </TitleLine>
-                    {finance?.prerequisites?.issue && <p className="break-words pl-4 text-xs text-muted-foreground">{finance.prerequisites.issue}</p>}
+                <div className="min-w-0 rounded-md border bg-card text-[13px]">
+                  <div className="flex items-baseline justify-between gap-3 border-b px-3 py-2">
+                    <span className="font-medium text-foreground">Menu</span>
+                    <span className="text-xs text-muted-foreground">{deal.products.length} {deal.products.length === 1 ? 'product' : 'products'}</span>
                   </div>
-                  <div className="py-2">
-                    <TitleLine as="p" tone={finance?.fundingCurrent ? 'ok' : 'warn'} className="font-medium">
-                      Funding · {finance?.fundingCurrent ? 'Current' : 'Reconfirmation required'}
-                    </TitleLine>
-                    <p className="pl-4 text-xs text-muted-foreground">Worksheet version {finance?.fundingWorksheetVersion ?? 'none'}</p>
-                  </div>
+                  {deal.products.length === 0 ? (
+                    <p className="px-3 py-2 text-xs text-muted-foreground">No F&I products on the worksheet</p>
+                  ) : (
+                    <ul className="divide-y">
+                      {deal.products.map((line, index) => (
+                        <li key={`menu-${index}`} className="flex min-w-0 items-baseline justify-between gap-3 px-3 py-1.5">
+                          <span className="min-w-0 truncate text-foreground">{line.name || line.code}</span>
+                          <span className="shrink-0 tabular-nums text-foreground">{formatCurrency(lineCents(line) / 100)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {savedPricing && (
+                    <div className="flex items-baseline justify-between gap-3 border-t bg-muted/40 px-3 py-2">
+                      <span className="text-muted-foreground">Products total{worksheetDirty ? ' (saved)' : ''}</span>
+                      <Figure size="sm">{formatCurrency(savedPricing.productsCents / 100)}</Figure>
+                    </div>
+                  )}
                 </div>
-                <div className="border-t pt-1">
-                  <FinanceEvidenceHistory dealId={deal.id} aggregateType="Deal" label="Deal history" />
-                </div>
+                <Facts items={[
+                  { label: 'F&I documents', value: <Status tone={finance?.prerequisites?.current ? 'ok' : 'warn'}>{finance?.prerequisites?.current ? 'Current' : 'Review required'}</Status> },
+                  { label: 'Funding', value: <Status tone={finance?.fundingCurrent ? 'ok' : 'warn'}>{finance?.fundingCurrent ? 'Current' : 'Reconfirmation required'}</Status> },
+                  finance?.fundingStatus ? { label: 'Funding status', value: <span className="capitalize">{finance.fundingStatus}</span> } : null,
+                  finance?.fundingReference ? { label: 'Funding reference', value: finance.fundingReference, mono: true } : null,
+                  { label: 'Funded worksheet', value: finance?.fundingWorksheetVersion ? `v${finance.fundingWorksheetVersion}` : 'None' },
+                ]} />
+                {finance?.prerequisites?.issue && <p className="break-words text-xs text-muted-foreground">{finance.prerequisites.issue}</p>}
               </div>
             </DeskSection>
           </aside>
+        </div>
+
+        <div className="grid min-w-0 grid-cols-1 gap-8 border-t pt-8 lg:grid-cols-2">
+          <div className="min-w-0 space-y-8">
+            {deal.approvals && deal.approvals.length > 0 && (
+              <DeskSection title="Approval history" count={deal.approvals.length}>
+                <Panel className="divide-y">
+                  {deal.approvals.map(approval => (
+                    <div key={approval.id} className="min-w-0 px-4 py-3">
+                      <TitleLine as="p" tone={approval.decision === 'approved' ? 'ok' : 'bad'} className="text-sm font-medium capitalize">
+                        {approval.decision}
+                      </TitleLine>
+                      <p className="pl-4 text-xs text-muted-foreground">
+                        {approval.approver?.name || 'Unknown'} · {formatDate(approval.approvalDate)}
+                      </p>
+                      {approval.notes && <p className="mt-1 break-words pl-4 text-sm">{approval.notes}</p>}
+                    </div>
+                  ))}
+                </Panel>
+              </DeskSection>
+            )}
+
+            <DeskSection title="Worksheet versions" count={worksheetHistory.length}>
+              {worksheetHistory.length === 0 ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">No worksheet history</p>
+              ) : (
+                <Panel className="divide-y">
+                  {worksheetHistory.map(entry => (
+                    <details key={entry.id} className="min-w-0 text-sm">
+                      <summary className="flex cursor-pointer list-none items-baseline justify-between gap-4 px-4 py-2.5 [&::-webkit-details-marker]:hidden">
+                        <span className="font-medium">Version {entry.snapshot?.terms?.worksheetVersion}</span>
+                        <span className="text-xs tabular-nums text-muted-foreground">{formatDate(entry.occurredAt)}</span>
+                      </summary>
+                      <pre className="mx-4 mb-3 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-[4px] bg-muted/50 p-2 font-mono text-[11px] text-muted-foreground">{JSON.stringify(entry.snapshot, null, 2)}</pre>
+                    </details>
+                  ))}
+                </Panel>
+              )}
+            </DeskSection>
+          </div>
+          <DeskSection title="Deal history">
+            <FinanceEvidenceHistory dealId={deal.id} aggregateType="Deal" label="Deal history" />
+          </DeskSection>
         </div>
 
         <OperatorActionDialog

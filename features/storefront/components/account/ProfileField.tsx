@@ -27,11 +27,9 @@ export function ProfileField({
         {state.error && <div role="alert" className="sf-notice" data-tone="bad">{state.error}</div>}
         {!state.error && state.success && !pending && <div role="status" className="sf-notice" data-tone="ok">{state.success}</div>}
       </div>
-      <div className="sf-track self-start md:mt-6">
-        <button type="submit" disabled={pending} className="sf-pill sf-pill-raised min-h-11 px-6">
-          {pending ? 'Saving…' : 'Save'}
-        </button>
-      </div>
+      <button type="submit" disabled={pending} className="sf-btn sf-btn-ghost self-start md:mt-6">
+        {pending ? 'Saving…' : 'Save'}
+      </button>
     </form>
   )
 }

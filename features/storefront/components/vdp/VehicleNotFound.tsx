@@ -12,8 +12,8 @@ export function VehicleNotFound() {
           </h1>
           <p className="sf-muted mt-2 pl-4">This vehicle is no longer available.</p>
         </div>
-        <div className="sf-track">
-          <Link href="/inventory" className="sf-pill sf-pill-primary min-h-11 sm:min-h-9">Back to inventory</Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/inventory" className="sf-btn sf-btn-primary">Back to inventory</Link>
         </div>
       </div>
     </Container>

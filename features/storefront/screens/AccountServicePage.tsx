@@ -53,7 +53,7 @@ export async function AccountServicePage() {
 
   return (
     <section className="pb-24">
-      <AccountHeader eyebrow="Account" title="Service" />
+      <AccountHeader title="Service" />
       {visits === null ? (
         <div className="mt-[var(--sf-space-lg)]">
           <AccountError title="Service history couldn't be loaded." retryHref="/account/service" />
@@ -62,7 +62,7 @@ export async function AccountServicePage() {
         <>
           <AccountSection
             title="Upcoming"
-            action={<Link href="/service" className="sf-pill sf-pill-raised min-h-11 self-start px-5">Book service</Link>}
+            action={<Link href="/service" className="sf-btn sf-btn-primary sf-btn-sm min-h-10 self-start">Book service</Link>}
           >
             {upcoming.length === 0 ? <AccountEmpty>No upcoming appointments.</AccountEmpty> : list(upcoming)}
           </AccountSection>

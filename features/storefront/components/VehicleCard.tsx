@@ -60,8 +60,7 @@ export function VehicleCard({
     <button
       type="button"
       onClick={toggleCompare}
-      className="sf-pill"
-      data-active={comparing ? 'true' : undefined}
+      className={`sf-btn sf-btn-sm ${comparing ? 'sf-btn-secondary' : 'sf-btn-ghost'}`}
       aria-pressed={comparing}
       aria-label={comparing ? `Remove ${title} from compare` : `Add ${title} to compare`}
     >
@@ -80,6 +79,7 @@ export function VehicleCard({
             <VehiclePhotoPlaceholder />
           )}
           <span className="sf-chip sf-chip-dark absolute left-3 top-3">{vehicleConditionLabel(vehicle.condition)}</span>
+          <span className="sf-stall absolute bottom-3 left-3">#{vehicle.stockNumber}</span>
         </Link>
         <div className="flex min-w-0 flex-col justify-end gap-5">
           <div className="min-w-0">
@@ -89,7 +89,7 @@ export function VehicleCard({
                 {name}
               </Link>
             </h3>
-            <p className="sf-muted mt-1 pl-4 text-[length:var(--sf-text-sm)]">
+            <p className="sf-muted mt-1 text-[length:var(--sf-text-sm)]">
               <span className="sr-only">{status.label}. </span>
               {vehicle.trim}
             </p>
@@ -101,8 +101,8 @@ export function VehicleCard({
           </dl>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <p className="sf-price text-[length:var(--sf-text-2xl)]">{formatPrice(vehicle.price, currencyCode)}</p>
-            <div className="sf-track">
-              <Link href={href} className="sf-pill sf-pill-primary">View vehicle</Link>
+            <div className="flex flex-wrap gap-2">
+              <Link href={href} className="sf-btn sf-btn-primary sf-btn-sm">View vehicle</Link>
               {compareButton}
             </div>
           </div>
@@ -129,34 +129,44 @@ export function VehicleCard({
         ) : (
           <VehiclePhotoPlaceholder />
         )}
-        <span className="sf-chip sf-chip-dark absolute left-3 top-3">{vehicleConditionLabel(vehicle.condition)}</span>
+        <span className="sf-chip sf-chip-dark absolute left-2.5 top-2.5">{vehicleConditionLabel(vehicle.condition)}</span>
+        <span className="sf-stall absolute bottom-2.5 left-2.5">#{vehicle.stockNumber}</span>
       </Link>
 
-      <div className="flex flex-1 flex-col pt-4">
-        <h3 className="sf-title-line">
-          <span className="sf-dot" data-tone={status.tone} aria-hidden="true" />
-          <Link href={href} className="sf-heading min-w-0 text-[length:var(--sf-text-lg)] hover:text-[var(--sf-accent)]">
-            {name}
-          </Link>
-        </h3>
-        <p className="sf-muted mt-0.5 min-h-[1.5em] truncate pl-4 text-[length:var(--sf-text-sm)]">
-          <span className="sr-only">{status.label}. </span>
-          {vehicle.trim}
-        </p>
-
-        <div className="mt-3 flex items-baseline justify-between gap-3 pl-4">
-          <p className="sf-price text-[length:var(--sf-text-xl)]">{formatPrice(vehicle.price, currencyCode)}</p>
-          <p className="sf-figure sf-faint truncate text-[length:var(--sf-text-xs)]">{formatMileage(vehicle.mileage)}</p>
+      <div className="flex flex-1 flex-col pt-3">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h3 className="sf-heading min-w-0 text-[length:var(--sf-text-lg)]">
+              <Link href={href} className="hover:text-[var(--sf-accent)]">{name}</Link>
+            </h3>
+            <p className="sf-muted min-h-[1.5em] truncate text-[length:var(--sf-text-sm)]">{vehicle.trim}</p>
+          </div>
+          <p className="sf-price shrink-0 pt-0.5 text-[length:var(--sf-text-xl)]">{formatPrice(vehicle.price, currencyCode)}</p>
         </div>
 
-        <div className="mt-auto flex items-center justify-between gap-3 pt-4 pl-4">
-          <p className="sf-figure sf-faint min-w-0 truncate text-[length:var(--sf-text-xs)]">
-            {vehicle.color ? `${vehicle.color} · ` : ''}#{vehicle.stockNumber}
-          </p>
-          {compareButton && <div className="sf-track shrink-0">{compareButton}</div>}
+        <dl className="mt-3 grid grid-cols-3 border-y text-[length:var(--sf-text-xs)]" style={{ borderColor: 'var(--sf-rule)' }}>
+          <div className="min-w-0 py-2 pr-2">
+            <dt className="sf-faint">Miles</dt>
+            <dd className="sf-figure truncate text-[length:var(--sf-text-sm)]">{formatMileage(vehicle.mileage)}</dd>
+          </div>
+          <div className="min-w-0 border-l py-2 pl-3 pr-2" style={{ borderColor: 'var(--sf-rule)' }}>
+            <dt className="sf-faint">Color</dt>
+            <dd className="truncate text-[length:var(--sf-text-sm)]">{vehicle.color || 'Not listed'}</dd>
+          </div>
+          <div className="min-w-0 border-l py-2 pl-3" style={{ borderColor: 'var(--sf-rule)' }}>
+            <dt className="sf-faint">Status</dt>
+            <dd className="sf-title-line text-[length:var(--sf-text-sm)]">
+              <span className="sf-dot" data-tone={status.tone} aria-hidden="true" />
+              <span className="truncate">{status.label}</span>
+            </dd>
+          </div>
+        </dl>
+
+        <div className="mt-auto flex items-center justify-between gap-3 pt-3">
+          <PhotoAttribution src={imageUrl} className="min-w-0" />
+          {compareButton && <div className="ml-auto shrink-0">{compareButton}</div>}
         </div>
-        {compareFull && <p role="status" className="sf-muted mt-2 pl-4 text-[length:var(--sf-text-xs)]">Compare holds 4 vehicles.</p>}
-        <div className="pl-4"><PhotoAttribution src={imageUrl} /></div>
+        {compareFull && <p role="status" className="sf-muted mt-2 text-[length:var(--sf-text-xs)]">Compare holds 4 vehicles.</p>}
       </div>
     </article>
   )

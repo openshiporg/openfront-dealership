@@ -383,20 +383,13 @@ export function InventoryPage() {
   return (
     <>
       <section className="border-b" style={{ borderColor: 'var(--sf-rule)' }}>
-        <Container className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 py-6 md:py-10">
-          <div className="min-w-0">
-            <p className="sf-eyebrow">Inventory</p>
-            <h1 className="sf-display mt-2 text-[length:var(--sf-text-2xl)] md:text-[2.75rem]">On the lot</h1>
-          </div>
-          <p className="sf-title-line sf-figure text-[length:var(--sf-text-sm)]" aria-live="polite">
-            <span className="sf-dot" data-tone={readoutTone} aria-hidden="true" />
-            {readout}
-          </p>
+        <Container className="py-5 md:py-8">
+          <h1 className="sf-display text-[length:var(--sf-text-2xl)] md:text-[2.75rem]">On the lot</h1>
         </Container>
       </section>
 
       <Container className="py-6 md:py-10">
-        <div className="lg:grid lg:grid-cols-[19.5rem_minmax(0,1fr)] lg:items-start lg:gap-10 xl:gap-14">
+        <div className="lg:grid lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start lg:gap-8 xl:gap-12">
           <aside
             ref={sheetRef}
             id="inventory-filters"
@@ -418,16 +411,14 @@ export function InventoryPage() {
                 )}
               </h2>
               <div className="flex items-center gap-1">
-                <div className="sf-track hidden lg:inline-flex">
-                  <button type="button" onClick={clearFilters} className="sf-pill" disabled={activeFilterCount === 0}>
-                    Reset
-                  </button>
-                </div>
+                <button type="button" onClick={clearFilters} className="sf-btn sf-btn-ghost sf-btn-sm hidden lg:inline-flex" disabled={activeFilterCount === 0}>
+                  Reset
+                </button>
                 <button
                   ref={sheetCloseRef}
                   type="button"
                   onClick={closeSheet}
-                  className="grid size-11 place-items-center rounded-full lg:hidden"
+                  className="grid size-11 place-items-center rounded-[var(--sf-radius-sm)] transition-colors hover:bg-[var(--sf-paper-2)] lg:hidden"
                   aria-label="Close filters"
                 >
                   <X className="size-5" aria-hidden="true" />
@@ -443,7 +434,7 @@ export function InventoryPage() {
                     <button
                       key={option.value || 'all'}
                       type="button"
-                      className="sf-pill flex-auto px-2.5 max-lg:min-h-11"
+                      className="sf-pill flex-auto px-2 max-lg:min-h-11"
                       aria-pressed={filters.condition === option.value}
                       onClick={() => handleFilterChange('condition', option.value)}
                     >
@@ -451,11 +442,6 @@ export function InventoryPage() {
                     </button>
                   ))}
                 </div>
-              </div>
-
-              <div className="lg:hidden">
-                <p className="sf-label">Sort</p>
-                {sortTrack('flex w-full flex-wrap rounded-[1.375rem]', 'flex-auto min-h-11')}
               </div>
 
               <div>
@@ -588,11 +574,11 @@ export function InventoryPage() {
               className="border-t px-4 pt-3 lg:hidden"
               style={{ borderColor: 'var(--sf-rule)', paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
             >
-              <div className="sf-track sf-track-block">
-                <button type="button" onClick={clearFilters} className="sf-pill min-h-11" disabled={activeFilterCount === 0}>
+              <div className="flex gap-2">
+                <button type="button" onClick={clearFilters} className="sf-btn sf-btn-ghost flex-1" disabled={activeFilterCount === 0}>
                   Reset
                 </button>
-                <button type="button" onClick={closeSheet} className="sf-pill sf-pill-primary min-h-11">
+                <button type="button" onClick={closeSheet} className="sf-btn sf-btn-primary flex-[2]">
                   {loading || loadError || invalidPage ? 'Show results' : `Show ${new Intl.NumberFormat('en-US').format(totalCount)}`}
                 </button>
               </div>
@@ -600,22 +586,40 @@ export function InventoryPage() {
           </aside>
 
           <div className="min-w-0">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div className="sf-track lg:hidden">
+            <div
+              className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b pb-3"
+              style={{ borderColor: 'var(--sf-rule-strong)' }}
+            >
+              <p className="sf-title-line sf-figure text-[length:var(--sf-text-md)] font-semibold" aria-live="polite">
+                <span className="sf-dot" data-tone={readoutTone} aria-hidden="true" />
+                {readout}
+              </p>
+              <div className="flex w-full gap-2 lg:hidden">
                 <button
                   ref={filtersButtonRef}
                   type="button"
                   onClick={() => setFiltersOpen(true)}
-                  className="sf-pill sf-pill-raised min-h-11"
+                  className="sf-btn sf-btn-ghost flex-1"
                   aria-expanded={filtersOpen}
                   aria-controls="inventory-filters"
                 >
                   <SlidersHorizontal className="size-4" aria-hidden="true" />
                   Filters
-                  {activeFilterCount > 0 && <span className="sf-count">{activeFilterCount}</span>}
+                  {activeFilterCount > 0 && <span className="sf-figure text-[length:var(--sf-text-xs)]" aria-label={`${activeFilterCount} active`}>{activeFilterCount}</span>}
                 </button>
+                <label htmlFor="inventory-sort-mobile" className="sr-only">Sort</label>
+                <select
+                  id="inventory-sort-mobile"
+                  value={sortBy}
+                  onChange={(e) => changeSort(e.target.value)}
+                  className="sf-input min-w-0 flex-1"
+                >
+                  {SORTS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
               </div>
-              {sortTrack('ml-auto hidden lg:inline-flex')}
+              {sortTrack('hidden lg:inline-flex')}
             </div>
 
             {chips.length > 0 && (
@@ -659,19 +663,17 @@ export function InventoryPage() {
                   <span className="sf-dot" data-tone="bad" aria-hidden="true" />
                   Page not found.
                 </p>
-                <div className="sf-track">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInvalidPage(false)
-                      setCurrentPage(1)
-                      setPageNotice(null)
-                    }}
-                    className="sf-pill sf-pill-raised min-h-11 sm:min-h-9"
-                  >
-                    Return to first page
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInvalidPage(false)
+                    setCurrentPage(1)
+                    setPageNotice(null)
+                  }}
+                  className="sf-btn sf-btn-ghost sf-btn-sm max-sm:min-h-11"
+                >
+                  Return to first page
+                </button>
               </div>
             ) : loadError ? (
               <div className="sf-well flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
@@ -679,11 +681,11 @@ export function InventoryPage() {
                   <span className="sf-dot" data-tone="bad" aria-hidden="true" />
                   {loadError}
                 </p>
-                <div className="sf-track shrink-0">
-                  <button type="button" onClick={() => void loadVehicles()} className="sf-pill sf-pill-raised min-h-11 sm:min-h-9">
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <button type="button" onClick={() => void loadVehicles()} className="sf-btn sf-btn-primary sf-btn-sm max-sm:min-h-11">
                     Retry
                   </button>
-                  <button type="button" onClick={clearFilters} className="sf-pill min-h-11 sm:min-h-9">
+                  <button type="button" onClick={clearFilters} className="sf-btn sf-btn-ghost sf-btn-sm max-sm:min-h-11">
                     Clear filters
                   </button>
                 </div>
@@ -697,7 +699,7 @@ export function InventoryPage() {
                 </div>
 
                 {totalPages > 1 && (
-                  <nav className="mt-14 flex flex-col items-center gap-3" aria-label="Pagination">
+                  <nav className="mt-12 flex flex-col items-center gap-3 border-t pt-6" style={{ borderColor: 'var(--sf-rule)' }} aria-label="Pagination">
                     <div className="sf-track">
                       <button
                         type="button"
@@ -709,7 +711,7 @@ export function InventoryPage() {
                         <ChevronLeft className="size-4" aria-hidden="true" />
                         <span className="hidden sm:inline">Previous</span>
                       </button>
-                      {firstVisiblePage > 1 && <span className="sf-faint hidden px-1 sm:inline" aria-hidden="true">…</span>}
+                      {firstVisiblePage > 1 && <span className="sf-pill sf-faint pointer-events-none hidden px-2 sm:inline-flex" aria-hidden="true">…</span>}
                       {pages.map((page) => (
                         <button
                           key={page}
@@ -722,7 +724,7 @@ export function InventoryPage() {
                           {page}
                         </button>
                       ))}
-                      {firstVisiblePage + visiblePageCount - 1 < totalPages && <span className="sf-faint hidden px-1 sm:inline" aria-hidden="true">…</span>}
+                      {firstVisiblePage + visiblePageCount - 1 < totalPages && <span className="sf-pill sf-faint pointer-events-none hidden px-2 sm:inline-flex" aria-hidden="true">…</span>}
                       <button
                         type="button"
                         onClick={() => goToPage(Math.min(totalPages, currentPage + 1))}
@@ -746,11 +748,9 @@ export function InventoryPage() {
                   <span className="sf-dot" aria-hidden="true" />
                   No vehicles match these filters.
                 </p>
-                <div className="sf-track">
-                  <button type="button" onClick={clearFilters} className="sf-pill sf-pill-raised min-h-11 sm:min-h-9">
-                    Clear filters
-                  </button>
-                </div>
+                <button type="button" onClick={clearFilters} className="sf-btn sf-btn-ghost sf-btn-sm max-sm:min-h-11">
+                  Clear filters
+                </button>
               </div>
             )}
           </div>

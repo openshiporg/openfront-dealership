@@ -113,8 +113,8 @@ export function ComparePage() {
   }
 
   const browseTrack = (
-    <div className="sf-track">
-      <Link href="/inventory" className="sf-pill sf-pill-primary min-h-11 sm:min-h-9">Browse inventory</Link>
+    <div className="flex flex-wrap gap-2">
+      <Link href="/inventory" className="sf-btn sf-btn-primary">Browse inventory</Link>
     </div>
   )
 
@@ -126,12 +126,10 @@ export function ComparePage() {
             <span className="sf-dot" aria-hidden="true" />
             <span className="truncate">Vehicle no longer available</span>
           </span>
-          <span className="sf-track shrink-0">
-            <button type="button" onClick={() => removeFromComparison(id)} className="sf-pill min-h-11 sm:min-h-9">
-              <X className="size-4" aria-hidden="true" />
-              Remove
-            </button>
-          </span>
+          <button type="button" onClick={() => removeFromComparison(id)} className="sf-btn sf-btn-ghost sf-btn-sm min-h-10 shrink-0">
+            <X className="size-4" aria-hidden="true" />
+            Remove
+          </button>
         </li>
       ))}
     </ul>
@@ -140,7 +138,7 @@ export function ComparePage() {
   if (loading) {
     return (
       <>
-        <PageHeader eyebrow="Compare" title="Compare vehicles" />
+        <PageHeader title="Compare vehicles" />
         <Container className="py-[var(--sf-space-xl)]">
           <div className="flex gap-4 overflow-hidden" aria-busy="true" aria-label="Loading comparison">
             <div className="hidden w-32 shrink-0 space-y-3 sm:block">
@@ -149,7 +147,7 @@ export function ComparePage() {
             </div>
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="w-60 shrink-0 space-y-3">
-                <div className="sf-skeleton aspect-[4/3] rounded-[var(--sf-radius-md)]" />
+                <div className="sf-skeleton aspect-[4/3]" />
                 <div className="sf-skeleton h-5 w-3/4" />
                 <div className="sf-skeleton h-7 w-1/2" />
                 {Array.from({ length: 6 }).map((_, j) => <div key={j} className="sf-skeleton h-6" />)}
@@ -164,18 +162,18 @@ export function ComparePage() {
   if (loadError) {
     return (
       <>
-        <PageHeader eyebrow="Compare" title="Compare vehicles" />
+        <PageHeader title="Compare vehicles" />
         <Container className="py-[var(--sf-space-xl)]">
           <div className="sf-well flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
             <p role="alert" className="sf-title-line font-semibold">
               <span className="sf-dot" data-tone="bad" aria-hidden="true" />
               These vehicles couldn&apos;t be loaded.
             </p>
-            <div className="sf-track shrink-0">
-              <button type="button" onClick={() => void loadComparisonVehicles()} className="sf-pill sf-pill-raised min-h-11 sm:min-h-9">
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <button type="button" onClick={() => void loadComparisonVehicles()} className="sf-btn sf-btn-primary">
                 Retry
               </button>
-              <Link href="/inventory" className="sf-pill min-h-11 sm:min-h-9">Browse inventory</Link>
+              <Link href="/inventory" className="sf-btn sf-btn-ghost">Browse inventory</Link>
             </div>
           </div>
         </Container>
@@ -186,7 +184,7 @@ export function ComparePage() {
   if (savedIds.length === 0) {
     return (
       <>
-        <PageHeader eyebrow="Compare" title="No vehicles to compare" />
+        <PageHeader title="No vehicles to compare" />
         <Container className="py-[var(--sf-space-xl)]">
           <div className="sf-well flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
             <p className="sf-title-line font-semibold">
@@ -203,7 +201,7 @@ export function ComparePage() {
   if (vehicles.length === 0) {
     return (
       <>
-        <PageHeader eyebrow="Compare" title="Vehicles no longer available" />
+        <PageHeader title="Vehicles no longer available" />
         <Container className="py-[var(--sf-space-xl)]">
           <div className="sf-well p-6">
             <p className="sf-title-line font-semibold">
@@ -224,17 +222,17 @@ export function ComparePage() {
   return (
     <>
       <PageHeader
-        eyebrow={`Compare · ${vehicles.length} ${vehicles.length === 1 ? 'vehicle' : 'vehicles'}`}
         title="Compare vehicles"
+        description={`${vehicles.length} of 4 ${vehicles.length === 1 ? 'vehicle' : 'vehicles'}`}
         actions={
-          <div className="sf-track">
-            <button type="button" onClick={handleClearAll} className="sf-pill min-h-11 sm:min-h-9">
-              Clear all
-            </button>
-            <Link href="/inventory" className="sf-pill sf-pill-raised min-h-11 sm:min-h-9">
+          <div className="flex flex-wrap gap-2">
+            <Link href="/inventory" className="sf-btn sf-btn-primary">
               <Plus className="size-4" aria-hidden="true" />
               Add vehicles
             </Link>
+            <button type="button" onClick={handleClearAll} className="sf-btn sf-btn-ghost">
+              Clear all
+            </button>
           </div>
         }
       />
@@ -252,7 +250,7 @@ export function ComparePage() {
         </div>
 
         <div
-          className="overflow-x-auto overscroll-x-contain rounded-[var(--sf-radius-md)] border"
+          className="sf-panel overflow-x-auto overscroll-x-contain"
           style={{ borderColor: 'var(--sf-rule)' }}
           role="region"
           aria-label="Comparison table"
@@ -275,6 +273,7 @@ export function ComparePage() {
                         ) : (
                           <VehiclePhotoPlaceholder />
                         )}
+                        {vehicle.stockNumber && <span className="sf-stall absolute bottom-2 left-2">#{vehicle.stockNumber}</span>}
                       </Link>
                       <h2 className="sf-title-line mt-3">
                         <span className="sf-dot" data-tone={status.tone} aria-hidden="true" />
@@ -288,17 +287,15 @@ export function ComparePage() {
                       </p>
                       <p className="sf-price mt-2 pl-4 text-[length:var(--sf-text-xl)]">{formatPrice(vehicle.price, currencyCode)}</p>
                       <div className="mt-3 pl-4">
-                        <span className="sf-track">
-                          <button
-                            type="button"
-                            onClick={() => removeFromComparison(vehicle.id)}
-                            className="sf-pill min-h-11 sm:min-h-9"
-                            aria-label={`Remove ${vehicleTitle(vehicle)} from compare`}
-                          >
-                            <X className="size-4" aria-hidden="true" />
-                            Remove
-                          </button>
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeFromComparison(vehicle.id)}
+                          className="sf-btn sf-btn-ghost sf-btn-sm min-h-10"
+                          aria-label={`Remove ${vehicleTitle(vehicle)} from compare`}
+                        >
+                          <X className="size-4" aria-hidden="true" />
+                          Remove
+                        </button>
                       </div>
                     </th>
                   )
@@ -343,11 +340,11 @@ export function ComparePage() {
                 </th>
                 {vehicles.map((vehicle) => (
                   <td key={vehicle.id} className="px-3 py-4 sm:px-4">
-                    <div className="sf-track">
-                      <Link href={`/inventory/${vehicle.id}`} className="sf-pill sf-pill-primary min-h-11 sm:min-h-9">
+                    <div className="flex flex-wrap gap-2">
+                      <Link href={`/inventory/${vehicle.id}`} className="sf-btn sf-btn-primary sf-btn-sm min-h-10">
                         View
                       </Link>
-                      <Link href={`/test-drive?vehicleId=${vehicle.id}`} className="sf-pill min-h-11 sm:min-h-9">
+                      <Link href={`/test-drive?vehicleId=${vehicle.id}`} className="sf-btn sf-btn-ghost sf-btn-sm min-h-10">
                         Test drive
                       </Link>
                     </div>

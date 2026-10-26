@@ -6,7 +6,7 @@ export async function AccountVerifyEmailPage({ token }: { token: string | null }
   const customer = await getCustomer()
   return (
     <section className="max-w-xl pb-24">
-      <AccountHeader eyebrow="Account" title="Verify email" meta={customer?.email ? <span className="break-all">{customer.email}</span> : undefined} />
+      <AccountHeader title="Verify email" meta={customer?.email ? <span className="break-all">{customer.email}</span> : undefined} />
       <div className="mt-[var(--sf-space-lg)]">
         {token ? <VerifyEmailConfirm token={token} /> : <AccountEmpty>Verification link is missing its token.</AccountEmpty>}
       </div>

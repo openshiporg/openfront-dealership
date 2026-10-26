@@ -15,29 +15,28 @@ export function HomeContactPanel() {
   const hasLocation = business.addressLine1 || business.addressLine2
 
   return (
-    <section className="sf-section" style={{ background: 'var(--sf-paper-2)' }} data-flush-end>
+    <section className="sf-section border-t" style={{ background: 'var(--sf-paper)', borderColor: 'var(--sf-rule)' }} data-flush-end>
       <Container className="grid gap-10 md:grid-cols-[1.2fr_1fr_1fr]">
         <div className="min-w-0">
-          <p className="sf-eyebrow">Visit</p>
-          <h2 className="sf-display mt-3 text-[length:var(--sf-text-2xl)]">
+          <h2 className="sf-display text-[length:var(--sf-text-2xl)]">
             {hasLocation ? business.addressLine1 || business.addressLine2 : business.fullName}
           </h2>
           {business.addressLine1 && business.addressLine2 && (
             <p className="sf-muted mt-2 text-[length:var(--sf-text-md)]">{business.addressLine2}</p>
           )}
-          <div className="sf-track mt-6">
+          <div className="mt-6 flex flex-wrap gap-2">
             {business.directionsHref && (
-              <a href={business.directionsHref} target="_blank" rel="noreferrer" className="sf-pill sf-pill-raised">
+              <a href={business.directionsHref} target="_blank" rel="noreferrer" className="sf-btn sf-btn-primary">
                 Directions
                 <ArrowUpRight className="size-4" aria-hidden="true" />
               </a>
             )}
-            <Link href="/contact" className="sf-pill">Message us</Link>
+            <Link href="/contact" className="sf-btn sf-btn-ghost">Message us</Link>
           </div>
         </div>
 
         <div className="min-w-0">
-          <p className="sf-eyebrow mb-3">Hours</p>
+          <h3 className="sf-heading mb-3 text-[length:var(--sf-text-lg)]">Hours</h3>
           {hours.length > 0 ? (
             <dl className="border-t" style={{ borderColor: 'var(--sf-rule)' }}>
               {hours.map((row) => (
@@ -53,7 +52,7 @@ export function HomeContactPanel() {
         </div>
 
         <div className="min-w-0">
-          <p className="sf-eyebrow mb-3">Sales</p>
+          <h3 className="sf-heading mb-3 text-[length:var(--sf-text-lg)]">Sales</h3>
           <dl className="border-t" style={{ borderColor: 'var(--sf-rule)' }}>
             {business.phoneHref && business.phoneDisplay && (
               <div className="flex items-baseline justify-between gap-4 border-b py-2.5 text-[length:var(--sf-text-sm)]" style={{ borderColor: 'var(--sf-rule)' }}>

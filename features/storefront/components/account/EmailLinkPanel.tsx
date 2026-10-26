@@ -5,7 +5,7 @@ import { MailCheck } from 'lucide-react'
 
 import { sendCustomerEmailVerification } from '../../actions/customerRecords'
 import type { CustomerEmailLink } from '../../lib/accountRecords'
-import { Notice, PILL_TARGET } from '../forms/RequestForm'
+import { Notice } from '../forms/RequestForm'
 
 export function EmailLinkPanel({ link }: { link: CustomerEmailLink | null }) {
   const [pending, startTransition] = useTransition()
@@ -35,12 +35,10 @@ export function EmailLinkPanel({ link }: { link: CustomerEmailLink | null }) {
           : `Verify ${link.email} to link requests made with it before you signed in.`}
       </p>
       {result && <Notice tone={result.tone}>{result.text}</Notice>}
-      <div className="sf-track">
-        <button type="button" onClick={send} disabled={pending} className={`sf-pill ${link.verified ? '' : 'sf-pill-raised'} ${PILL_TARGET} px-4`}>
-          <MailCheck className="size-4" aria-hidden="true" />
-          {pending ? 'Sending' : link.verified ? 'Link new requests' : 'Send verification email'}
-        </button>
-      </div>
+      <button type="button" onClick={send} disabled={pending} className={`sf-btn sf-btn-sm min-h-10 ${link.verified ? 'sf-btn-ghost' : 'sf-btn-primary'}`}>
+        <MailCheck className="size-4" aria-hidden="true" />
+        {pending ? 'Sending' : link.verified ? 'Link new requests' : 'Send verification email'}
+      </button>
     </section>
   )
 }

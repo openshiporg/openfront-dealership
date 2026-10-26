@@ -21,18 +21,20 @@ export function AccountNav({ children }: { children?: ReactNode }) {
   const pathname = usePathname()
 
   return (
-    <nav aria-label="Account" className="sf-track flex-wrap rounded-[var(--sf-radius-md)] sm:flex-nowrap sm:rounded-full">
-      {LINKS.map((link) => (
-        <Link
-          key={link.href}
-          href={link.href}
-          className="sf-pill min-h-11 px-5"
-          aria-current={isCurrent(pathname, link.href) ? 'page' : undefined}
-        >
-          {link.label}
-        </Link>
-      ))}
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <nav aria-label="Account" className="sf-track sf-track-block sm:w-auto">
+        {LINKS.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="sf-pill min-h-11 px-3 sm:px-5"
+            aria-current={isCurrent(pathname, link.href) ? 'page' : undefined}
+          >
+            {link.label}
+          </Link>
+        ))}
+      </nav>
       {children}
-    </nav>
+    </div>
   )
 }

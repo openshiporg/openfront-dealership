@@ -50,7 +50,7 @@ export async function AccountServiceOrderPage({ id }: { id: string }) {
       <AccountBack href="/account/service" label="Service" />
       <div className="mt-2">
         <AccountHeader
-          eyebrow={order.invoiceNumber ? `Invoice ${order.invoiceNumber}` : 'Repair order'}
+          reference={order.invoiceNumber ? `Invoice ${order.invoiceNumber}` : null}
           title={order.appointment?.customerVehicleDescription || 'Repair order'}
           tone={statusTone(order.status)}
           status={serviceOrderStatusLabel(order.status)}

@@ -15,13 +15,9 @@ export function ResetPasswordPage() {
 
   return (
     <section className="mx-auto w-full max-w-sm">
-      <p className="sf-eyebrow text-center">Account</p>
-      <h1 className="sf-display mt-3 text-center text-[length:var(--sf-text-2xl)]">{title}</h1>
+      <h1 className="sf-display text-center text-[length:var(--sf-text-2xl)]">{title}</h1>
 
-      <div
-        className="mt-6 rounded-[var(--sf-radius-lg)] border p-5 sm:p-6"
-        style={{ borderColor: 'var(--sf-rule)', background: 'var(--sf-paper)', boxShadow: 'var(--sf-shadow-float)' }}
-      >
+      <div className="sf-panel mt-6 p-5 sm:p-6">
         <form action={formAction} className="space-y-4">
           <div>
             <label htmlFor="reset-email" className="sf-label">Email</label>

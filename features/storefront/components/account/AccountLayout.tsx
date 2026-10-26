@@ -18,8 +18,8 @@ export function AccountLayout({ signedIn, children }: { signedIn: boolean; child
     <Container className="sf-section">
       <div className="mb-[var(--sf-space-lg)]">
         <AccountNav>
-          <form action={signOutCustomer} className="contents">
-            <button type="submit" className="sf-pill min-h-11 px-4">
+          <form action={signOutCustomer} className="self-start sm:self-auto">
+            <button type="submit" className="sf-btn sf-btn-ghost sf-btn-sm min-h-10">
               <LogOut className="size-4" aria-hidden="true" />
               Sign out
             </button>

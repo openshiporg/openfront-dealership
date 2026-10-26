@@ -10,22 +10,20 @@ import { VehiclePhotoPlaceholder } from '../VehiclePhotoPlaceholder'
 
 const SWIPE_THRESHOLD = 40
 
-function pad(value: number) {
-  return String(value).padStart(2, '0')
-}
-
 export function VehicleGallery({
   images,
   activeIndex,
   onSelect,
   title,
   conditionLabel,
+  stockNumber,
 }: {
   images: VehicleImage[]
   activeIndex: number
   onSelect: (index: number) => void
   title: string
   conditionLabel: string
+  stockNumber?: string | null
 }) {
   const stripRef = useRef<HTMLDivElement>(null)
   const pointerStart = useRef<{ x: number; y: number } | null>(null)
@@ -50,7 +48,7 @@ export function VehicleGallery({
   return (
     <div className="min-w-0">
       <div
-        className="sf-photo aspect-[4/3] touch-pan-y select-none max-sm:-mx-4 max-sm:rounded-none sm:aspect-[16/10] sm:rounded-[var(--sf-radius-lg)]"
+        className="sf-photo aspect-[4/3] touch-pan-y select-none max-sm:-mx-4 max-sm:rounded-none sm:aspect-[16/10]"
         onPointerDown={(event) => {
           pointerStart.current = { x: event.clientX, y: event.clientY }
         }}
@@ -89,18 +87,18 @@ export function VehicleGallery({
         )}
 
         <span className="sf-chip sf-chip-dark absolute left-3 top-3">{conditionLabel}</span>
+        {stockNumber && <span className="sf-stall absolute bottom-3 left-3">#{stockNumber}</span>}
 
         {hasMany && (
           <>
-            <span className="sf-chip sf-chip-dark sf-figure absolute bottom-3 left-3" aria-live="polite">
-              {pad(activeIndex + 1)} / {pad(count)}
+            <span className="sf-chip sf-chip-dark sf-figure absolute right-3 top-3" aria-live="polite">
+              {activeIndex + 1} / {count}
             </span>
-            <div className="absolute bottom-3 right-3 flex gap-2">
+            <div className="absolute bottom-3 right-3 flex gap-1.5">
               <button
                 type="button"
                 onClick={() => step(-1)}
-                className="grid size-11 place-items-center rounded-full backdrop-blur-md transition-colors hover:bg-[oklch(0.2_0.012_262/0.9)]"
-                style={{ background: 'oklch(0.2 0.012 262 / 0.7)', color: 'var(--sf-on-dark)' }}
+                className="grid size-11 place-items-center rounded-[var(--sf-radius-sm)] bg-[var(--sf-asphalt)] text-[var(--sf-on-dark)] transition-colors hover:bg-[var(--sf-ink)]"
                 aria-label="Previous photo"
               >
                 <ChevronLeft className="size-5" aria-hidden="true" />
@@ -108,8 +106,7 @@ export function VehicleGallery({
               <button
                 type="button"
                 onClick={() => step(1)}
-                className="grid size-11 place-items-center rounded-full backdrop-blur-md transition-colors hover:bg-[oklch(0.2_0.012_262/0.9)]"
-                style={{ background: 'oklch(0.2 0.012 262 / 0.7)', color: 'var(--sf-on-dark)' }}
+                className="grid size-11 place-items-center rounded-[var(--sf-radius-sm)] bg-[var(--sf-asphalt)] text-[var(--sf-on-dark)] transition-colors hover:bg-[var(--sf-ink)]"
                 aria-label="Next photo"
               >
                 <ChevronRight className="size-5" aria-hidden="true" />
@@ -135,7 +132,7 @@ export function VehicleGallery({
                 type="button"
                 data-index={index}
                 onClick={() => onSelect(index)}
-                className="relative aspect-[4/3] w-20 shrink-0 snap-start overflow-hidden rounded-[var(--sf-radius-sm)] transition-opacity sm:w-24"
+                className="relative aspect-[4/3] w-20 shrink-0 snap-start overflow-hidden rounded-[2px] transition-opacity sm:w-24"
                 style={{
                   background: 'var(--sf-paper-2)',
                   opacity: active ? 1 : 0.62,

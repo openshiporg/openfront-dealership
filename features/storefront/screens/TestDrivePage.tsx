@@ -19,7 +19,6 @@ import {
   FormSection,
   MobileSummary,
   Notice,
-  PILL_TARGET,
   RadioPills,
   RequestLayout,
   RequestReceived,
@@ -147,7 +146,7 @@ export function TestDrivePage() {
   if (submitStatus === 'success') {
     return (
       <RequestReceived
-        eyebrow="Test drive"
+        context="Test drive"
         reference={requestReference}
         summary={
           <Sticker
@@ -168,12 +167,12 @@ export function TestDrivePage() {
           <>
             <Link
               href={submittedVehicle ? `/inventory/${submittedVehicle.id}` : '/inventory'}
-              className={`sf-pill sf-pill-primary ${PILL_TARGET}`}
+              className="sf-btn sf-btn-primary"
             >
               {submittedVehicle ? 'Return to vehicle' : 'Browse inventory'}
             </Link>
-            <Link href="/financing" className={`sf-pill ${PILL_TARGET}`}>Financing</Link>
-            <Link href="/trade-in" className={`sf-pill ${PILL_TARGET}`}>Trade-in</Link>
+            <Link href="/financing" className="sf-btn sf-btn-ghost">Financing</Link>
+            <Link href="/trade-in" className="sf-btn sf-btn-ghost">Trade-in</Link>
           </>
         }
       />
@@ -203,11 +202,11 @@ export function TestDrivePage() {
 
   return (
     <>
-      <PageHeader eyebrow="Test drive" title="Book a test drive" />
+      <PageHeader title="Book a test drive" />
 
       <RequestLayout summary={summary}>
         <form onSubmit={handleSubmit} className="space-y-[var(--sf-space-xl)]">
-          <FormSection step="01" title="Date and time" first>
+          <FormSection title="Date and time" first>
             <div className="space-y-5">
               <Field label="Date" htmlFor="preferredDate" className="sm:max-w-xs">
                 <input
@@ -247,7 +246,7 @@ export function TestDrivePage() {
             </div>
           </FormSection>
 
-          <FormSection step="02" title="Vehicle">
+          <FormSection title="Vehicle">
             <Field label="Vehicle" htmlFor="vehicleId" optional>
               <select
                 id="vehicleId"
@@ -273,9 +272,9 @@ export function TestDrivePage() {
             )}
           </FormSection>
 
-          <FormSection step="03" title="Contact">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Full name" htmlFor="customerName" className="sm:col-span-2">
+          <FormSection title="Contact">
+            <div className="grid gap-4">
+              <Field label="Full name" htmlFor="customerName">
                 <input
                   id="customerName"
                   name="customerName"
@@ -311,7 +310,7 @@ export function TestDrivePage() {
                   className="sf-input"
                 />
               </Field>
-              <Field label="Notes" htmlFor="message" optional className="sm:col-span-2">
+              <Field label="Notes" htmlFor="message" optional>
                 <textarea
                   id="message"
                   name="message"

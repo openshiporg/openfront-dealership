@@ -14,8 +14,7 @@ export function LoginPage() {
 
   return (
     <section className="w-full max-w-sm">
-      <p className="sf-eyebrow text-center">Account</p>
-      <h1 className="sf-display mt-3 text-center text-[length:var(--sf-text-2xl)]">
+      <h1 className="sf-display text-center text-[length:var(--sf-text-2xl)]">
         {view === 'signin' ? 'Sign in' : 'Create account'}
       </h1>
 
@@ -28,10 +27,7 @@ export function LoginPage() {
         </button>
       </div>
 
-      <div
-        className="mt-5 rounded-[var(--sf-radius-lg)] border p-5 sm:p-6"
-        style={{ borderColor: 'var(--sf-rule)', background: 'var(--sf-paper)', boxShadow: 'var(--sf-shadow-float)' }}
-      >
+      <div className="sf-panel mt-5 p-5 sm:p-6">
         {view === 'signin' ? (
           <form action={signinAction} className="space-y-4">
             <div>

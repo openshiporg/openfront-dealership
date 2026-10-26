@@ -17,7 +17,6 @@ import {
   FormSection,
   MobileSummary,
   Notice,
-  PILL_TARGET,
   RadioPills,
   RequestLayout,
   RequestReceived,
@@ -205,14 +204,14 @@ export function ServicePage() {
   if (submitStatus === 'success') {
     return (
       <RequestReceived
-        eyebrow="Service"
+        context="Service"
         reference={requestReference}
         summary={<Sticker title="Service appointment" meta={business.shortName || business.fullName} rows={submittedRows ?? []} />}
         actions={
           <>
-            <Link href="/" className={`sf-pill sf-pill-primary ${PILL_TARGET}`}>Back to home</Link>
-            <Link href="/inventory" className={`sf-pill ${PILL_TARGET}`}>Inventory</Link>
-            <Link href="/account" className={`sf-pill ${PILL_TARGET}`}>Account</Link>
+            <Link href="/" className="sf-btn sf-btn-primary">Back to home</Link>
+            <Link href="/inventory" className="sf-btn sf-btn-ghost">Inventory</Link>
+            <Link href="/account" className="sf-btn sf-btn-ghost">Account</Link>
           </>
         }
       />
@@ -235,11 +234,11 @@ export function ServicePage() {
 
   return (
     <>
-      <PageHeader eyebrow="Service" title="Book service" />
+      <PageHeader title="Book service" />
 
       <RequestLayout summary={summary}>
         <div className="space-y-[var(--sf-space-xl)]">
-          <FormSection step="01" title="Service menu" first>
+          <FormSection title="Service menu" first>
             {serviceMenu.kind === 'loading' ? (
               <div className="space-y-2" aria-label="Loading service menu">
                 {Array.from({ length: 3 }).map((_, index) => (
@@ -260,7 +259,7 @@ export function ServicePage() {
                         className="grid w-full grid-cols-[1.75rem_minmax(0,1fr)_auto] items-start gap-x-3 px-2 py-4 text-left transition-colors hover:bg-[var(--sf-paper-2)] aria-pressed:bg-[var(--sf-accent-soft)] sm:px-3"
                       >
                         <span
-                          className="mt-0.5 grid size-6 place-items-center rounded-full border"
+                          className="mt-0.5 grid size-6 place-items-center rounded-[var(--sf-radius-sm)] border"
                           style={selected
                             ? { background: 'var(--sf-accent)', borderColor: 'var(--sf-accent)', color: 'var(--sf-accent-ink)' }
                             : { borderColor: 'var(--sf-rule)', background: 'var(--sf-paper)' }}
@@ -300,18 +299,16 @@ export function ServicePage() {
                     ) : null}
                   </span>
                 </p>
-                <div className="sf-track">
-                  <button type="button" onClick={retryServiceMenu} className={`sf-pill sf-pill-raised ${PILL_TARGET}`}>Retry service menu</button>
-                </div>
+                <button type="button" onClick={retryServiceMenu} className="sf-btn sf-btn-ghost sf-btn-sm min-h-10">Retry service menu</button>
               </div>
             )}
           </FormSection>
 
           <div ref={formRef} className="scroll-mt-28">
             <form onSubmit={handleSubmit} className="space-y-[var(--sf-space-xl)]">
-              <FormSection step="02" title="Date and time">
+              <FormSection title="Date and time">
                 <div className="space-y-5">
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-4">
                     <Field label="Date" htmlFor="appointmentDate">
                       <input
                         id="appointmentDate"
@@ -379,9 +376,9 @@ export function ServicePage() {
                 </div>
               </FormSection>
 
-              <FormSection step="03" title="Vehicle">
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-[7rem_1fr_1fr]">
-                  <Field label="Year" htmlFor="vehicleYear" className="col-span-2 sm:col-span-1">
+              <FormSection title="Vehicle">
+                <div className="grid gap-4">
+                  <Field label="Year" htmlFor="vehicleYear" className="sm:max-w-[10rem]">
                     <input
                       id="vehicleYear"
                       name="vehicleYear"
@@ -393,7 +390,7 @@ export function ServicePage() {
                       value={formData.vehicleYear}
                       onChange={handleChange}
                       className="sf-input sf-figure"
-                      placeholder="2020"
+                      placeholder="e.g. 2020"
                     />
                   </Field>
                   <Field label="Make" htmlFor="vehicleMake">
@@ -405,7 +402,7 @@ export function ServicePage() {
                       value={formData.vehicleMake}
                       onChange={handleChange}
                       className="sf-input"
-                      placeholder="Toyota"
+                      placeholder="e.g. Toyota"
                     />
                   </Field>
                   <Field label="Model" htmlFor="vehicleModel">
@@ -417,10 +414,10 @@ export function ServicePage() {
                       value={formData.vehicleModel}
                       onChange={handleChange}
                       className="sf-input"
-                      placeholder="Camry"
+                      placeholder="e.g. Camry"
                     />
                   </Field>
-                  <Field label="VIN" htmlFor="vehicleVin" optional className="col-span-2 sm:col-span-3">
+                  <Field label="VIN" htmlFor="vehicleVin" optional>
                     <input
                       id="vehicleVin"
                       name="vehicleVin"
@@ -437,9 +434,9 @@ export function ServicePage() {
                 </div>
               </FormSection>
 
-              <FormSection step="04" title="Contact">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Full name" htmlFor="customerName" className="sm:col-span-2">
+              <FormSection title="Contact">
+                <div className="grid gap-4">
+                  <Field label="Full name" htmlFor="customerName">
                     <input
                       id="customerName"
                       name="customerName"
@@ -475,7 +472,7 @@ export function ServicePage() {
                       autoComplete="tel"
                     />
                   </Field>
-                  <Field label="Service notes" htmlFor="description" optional className="sm:col-span-2">
+                  <Field label="Service notes" htmlFor="description" optional>
                     <textarea
                       id="description"
                       name="description"

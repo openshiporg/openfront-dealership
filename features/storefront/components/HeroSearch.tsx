@@ -41,12 +41,10 @@ export function HeroSearch({ makes, years }: { makes: Make[]; years: number[] })
   return (
     <form
       onSubmit={onSubmit}
-      className="rounded-[var(--sf-radius-lg)] p-4 md:p-5"
-      style={{ background: 'var(--sf-paper)', color: 'var(--sf-ink)', boxShadow: 'var(--sf-shadow-float)' }}
       role="search"
       aria-label="Search inventory"
     >
-      <div className="sf-track sf-track-block sm:inline-flex sm:w-auto" role="group" aria-label="Condition">
+      <div className="sf-track sf-track-block" role="group" aria-label="Condition">
         {CONDITIONS.map((option) => (
           <button
             key={option.value || 'all'}
@@ -60,7 +58,7 @@ export function HeroSearch({ makes, years }: { makes: Make[]; years: number[] })
         ))}
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-[1.1fr_1.1fr_0.8fr_0.9fr_auto] lg:items-end">
+      <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2.5">
         <div className="min-w-0">
           <label htmlFor="hero-make" className="sf-label">Make</label>
           <select id="hero-make" value={make} onChange={(e) => setMake(e.target.value)} className="sf-input">
@@ -109,7 +107,7 @@ export function HeroSearch({ makes, years }: { makes: Make[]; years: number[] })
           </select>
         </div>
 
-        <button type="submit" className="sf-btn sf-btn-primary col-span-2 lg:col-span-1">
+        <button type="submit" className="sf-btn sf-btn-primary col-span-2 mt-1">
           <Search className="size-4" aria-hidden="true" />
           Search
         </button>

@@ -52,9 +52,9 @@ export async function AccountPage() {
           <span className="sf-heading text-[length:var(--sf-text-2xl)]">Account unavailable</span>
         </h1>
         <p className="sf-muted mt-3">We couldn&apos;t load your account. Please try again.</p>
-        <div className="sf-track mt-6">
-          <Link href="/account" prefetch={false} className="sf-pill sf-pill-primary min-h-11 px-5">Retry</Link>
-          <Link href="/inventory" className="sf-pill min-h-11 px-5">Back to inventory</Link>
+        <div className="mt-6 flex flex-wrap gap-2">
+          <Link href="/account" prefetch={false} className="sf-btn sf-btn-primary">Retry</Link>
+          <Link href="/inventory" className="sf-btn sf-btn-ghost">Back to inventory</Link>
         </div>
       </div>
     )
@@ -70,8 +70,7 @@ export async function AccountPage() {
   return (
     <section>
       <header className="border-b pb-[var(--sf-space-md)]" style={{ borderColor: 'var(--sf-rule)' }}>
-        <p className="sf-eyebrow">Account</p>
-        <h1 className="sf-display mt-3 text-[length:var(--sf-text-display)]">{customer.name || 'Account'}</h1>
+        <h1 className="sf-display text-[length:var(--sf-text-display)]">{customer.name || 'Account'}</h1>
         {customer.email && <p className="sf-muted mt-2 break-all">{customer.email}</p>}
       </header>
 
@@ -94,12 +93,12 @@ export async function AccountPage() {
 
       <div className="mt-[var(--sf-space-xl)] flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <h2 className="sf-heading text-[length:var(--sf-text-xl)]">Request history</h2>
-        <nav className="sf-track flex-wrap rounded-[var(--sf-radius-md)] sm:flex-nowrap sm:rounded-full" aria-label="New request">
-          {NEW_REQUESTS.map((link, index) => (
+        <nav className="flex flex-wrap gap-2" aria-label="New request">
+          {NEW_REQUESTS.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className={`sf-pill min-h-11 ${index === 0 ? 'sf-pill-raised' : ''}`}
+              className="sf-btn sf-btn-ghost sf-btn-sm min-h-10"
             >
               {link.label}
             </Link>

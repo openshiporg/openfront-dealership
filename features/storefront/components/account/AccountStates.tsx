@@ -13,15 +13,16 @@ export function AccountBack({ href, label }: { href: string; label: string }) {
   )
 }
 
-export function AccountHeader({ eyebrow, title, tone, status, meta }: { eyebrow: string; title: string; tone?: Tone; status?: string; meta?: ReactNode }) {
+// `reference` is a record identifier (request reference, invoice number); it reads below the title.
+export function AccountHeader({ reference, title, tone, status, meta }: { reference?: string | null; title: string; tone?: Tone; status?: string; meta?: ReactNode }) {
   return (
     <header className="border-b pb-[var(--sf-space-md)]" style={{ borderColor: 'var(--sf-rule)' }}>
-      <p className="sf-eyebrow">{eyebrow}</p>
-      <h1 className="sf-title-line mt-3 flex-wrap">
+      <h1 className="sf-title-line flex-wrap">
         {tone && <span className="sf-dot" data-tone={tone} aria-hidden="true" />}
         <span className="sf-display text-[length:var(--sf-text-2xl)] sm:text-[length:var(--sf-text-display)]">{title}</span>
         {status && <span className="sf-muted text-[length:var(--sf-text-sm)]">{status}</span>}
       </h1>
+      {reference && <p className="sf-figure mt-2 text-[length:var(--sf-text-sm)] font-semibold">{reference}</p>}
       {meta && <div className="sf-muted mt-2 text-[length:var(--sf-text-sm)]">{meta}</div>}
     </header>
   )
@@ -34,9 +35,7 @@ export function AccountError({ title, retryHref }: { title: string; retryHref: s
         <span className="sf-dot" data-tone="bad" aria-hidden="true" />
         <span className="sf-heading text-[length:var(--sf-text-md)]">{title}</span>
       </p>
-      <div className="sf-track">
-        <Link href={retryHref} prefetch={false} className="sf-pill sf-pill-raised min-h-11 px-5">Retry</Link>
-      </div>
+      <Link href={retryHref} prefetch={false} className="sf-btn sf-btn-ghost sf-btn-sm min-h-10">Retry</Link>
     </div>
   )
 }

@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 
 import { confirmCustomerEmail } from '../../actions/customerRecords'
-import { Notice, PILL_TARGET } from '../forms/RequestForm'
+import { Notice } from '../forms/RequestForm'
 
 export function VerifyEmailConfirm({ token }: { token: string }) {
   const [pending, startTransition] = useTransition()
@@ -26,15 +26,13 @@ export function VerifyEmailConfirm({ token }: { token: string }) {
   return (
     <div className="space-y-4">
       {state && <Notice tone={state.tone}>{state.text}</Notice>}
-      <div className="sf-track">
-        {state?.tone === 'ok' ? (
-          <Link href="/account" className={`sf-pill sf-pill-primary ${PILL_TARGET} px-5`}>View requests</Link>
-        ) : (
-          <button type="button" onClick={confirm} disabled={pending} className={`sf-pill sf-pill-primary ${PILL_TARGET} px-5`}>
-            {pending ? 'Confirming' : 'Confirm email'}
-          </button>
-        )}
-      </div>
+      {state?.tone === 'ok' ? (
+        <Link href="/account" className="sf-btn sf-btn-primary">View requests</Link>
+      ) : (
+        <button type="button" onClick={confirm} disabled={pending} className="sf-btn sf-btn-primary">
+          {pending ? 'Confirming' : 'Confirm email'}
+        </button>
+      )}
     </div>
   )
 }

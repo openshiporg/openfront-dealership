@@ -1,6 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowRight, KeyRound, Landmark, Repeat2, Wrench } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { fetchGraphQL } from '@/features/storefront/lib/data/graphql-client'
 import { GET_MAKES, GET_VEHICLES, GET_VEHICLES_COUNT } from '@/features/storefront/lib/data/queries'
 import { Make, Vehicle } from '@/features/storefront/lib/types'
@@ -44,11 +44,12 @@ async function getMakes(): Promise<Make[]> {
   }
 }
 
-const LANES = [
-  { href: '/financing', label: 'Financing', action: 'Estimate a payment', icon: Landmark },
-  { href: '/trade-in', label: 'Trade-in', action: 'Value your vehicle', icon: Repeat2 },
-  { href: '/test-drive', label: 'Test drive', action: 'Pick a time', icon: KeyRound },
-  { href: '/service', label: 'Service', action: 'Book an appointment', icon: Wrench },
+// Doors on the directory sign besides Sales (which carries the live search).
+const DOORS = [
+  { href: '/test-drive', label: 'Test drive', action: 'Pick a time' },
+  { href: '/trade-in', label: 'Trade-in', action: 'Value your vehicle' },
+  { href: '/financing', label: 'Financing', action: 'Estimate a payment' },
+  { href: '/service', label: 'Service', action: 'Book an appointment' },
 ]
 
 export async function HomePage() {
@@ -72,57 +73,70 @@ export async function HomePage() {
 
   return (
     <>
-      <section className="sf-band relative overflow-hidden">
-        <Container className="relative pb-28 pt-10 md:pb-36 md:pt-16">
-          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-            <div className="min-w-0">
-              {count !== null && (
-                <p className="sf-title-line sf-eyebrow">
-                  <span className="sf-dot" data-tone={count > 0 ? 'ok' : 'idle'} aria-hidden="true" />
-                  <span className="sf-figure">{new Intl.NumberFormat('en-US').format(count)}</span> in stock
-                </p>
-              )}
-              <h1 className="sf-display mt-4 max-w-[18ch] text-[length:var(--sf-text-display)]">
-                {business.homepageTitle || business.fullName}
-              </h1>
-              {business.homepageDescription && (
-                <p className="mt-5 max-w-md text-[length:var(--sf-text-md)]" style={{ color: 'var(--sf-on-dark-2)' }}>
-                  {business.homepageDescription}
-                </p>
-              )}
+      <section className="pb-[var(--sf-space-xl)] pt-4 md:pb-[var(--sf-space-2xl)] md:pt-8">
+        <Container className="grid gap-4 md:gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+          <div className="sf-band sf-sign flex min-w-0 flex-col px-5 pb-2 pt-6 md:px-8 md:pt-8">
+            <h1 className="sf-display max-w-[16ch] text-[length:var(--sf-text-display)]">
+              {business.homepageTitle || business.fullName}
+            </h1>
+            {business.homepageDescription && (
+              <p className="mt-4 max-w-md text-[length:var(--sf-text-md)]" style={{ color: 'var(--sf-on-dark-2)' }}>
+                {business.homepageDescription}
+              </p>
+            )}
+
+            <div className="sf-sign-row mt-7 pb-5 pt-4">
+              <div className="mb-3 flex items-baseline justify-between gap-4">
+                <h2 className="sf-heading text-[length:var(--sf-text-xl)]">Sales</h2>
+                <Link href="/inventory" className="sf-link inline-flex items-center gap-1 text-[length:var(--sf-text-sm)]">
+                  {count !== null ? (
+                    <>
+                      <span className="sf-figure">{new Intl.NumberFormat('en-US').format(count)}</span> on the lot
+                    </>
+                  ) : (
+                    'All inventory'
+                  )}
+                  <ArrowRight className="size-4" aria-hidden="true" />
+                </Link>
+              </div>
+              <HeroSearch makes={makes} years={years} />
             </div>
-            <div className="sf-track self-start lg:self-end">
-              <Link href="/inventory" className="sf-pill sf-pill-primary">Shop inventory</Link>
-              <Link href="/test-drive" className="sf-pill">Book a test drive</Link>
-            </div>
+
+            <ul>
+              {DOORS.map((door) => (
+                <li key={door.href} className="sf-sign-row">
+                  <Link href={door.href} className="sf-sign-door group">
+                    <span className="sf-heading w-28 shrink-0 text-[length:var(--sf-text-lg)]">{door.label}</span>
+                    <span className="min-w-0 flex-1 text-[length:var(--sf-text-sm)]" style={{ color: 'var(--sf-on-dark-2)' }}>{door.action}</span>
+                    <ArrowRight className="sf-sign-arrow size-5 shrink-0" aria-hidden="true" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
 
-          {lead && leadImage && (
-            <Link href={`/inventory/${lead.id}`} className="sf-lead-frame group mt-10 md:mt-14">
-              <Image src={leadImage} alt={vehicleTitle(lead)} fill priority unoptimized sizes="(min-width: 1280px) 78rem, 100vw" className="object-cover transition-transform duration-700 group-hover:scale-[1.02]" />
-              <div className="sf-sticker sf-lead-sticker">
-                <div className="sf-sticker-head">
-                  <span>{vehicleConditionLabel(lead.condition)}</span>
-                  {lead.year ? <span>{lead.year}</span> : null}
-                </div>
-                <div className="flex items-end justify-between gap-4 p-4">
-                  <p className="sf-heading min-w-0 text-[length:var(--sf-text-lg)]">{vehicleTitle(lead)}</p>
-                  <p className="sf-price shrink-0 text-[length:var(--sf-text-xl)]">{formatPrice(lead.price, business.currencyCode)}</p>
-                </div>
-              </div>
+          {lead && leadImage ? (
+            <Link href={`/inventory/${lead.id}`} className="sf-lead-frame group flex min-h-[18rem] flex-col sm:min-h-[24rem]">
+              <Image src={leadImage} alt={vehicleTitle(lead)} fill priority unoptimized sizes="(min-width: 1024px) 46rem, 100vw" className="object-cover transition-transform duration-700 group-hover:scale-[1.02]" />
+              <span className="relative m-3 self-start md:m-4">
+                <span className="sf-stall">#{lead.stockNumber}</span>
+              </span>
+              <span className="relative mt-auto flex flex-wrap items-end justify-between gap-x-6 gap-y-1 border-t px-4 py-3 md:px-5" style={{ background: 'var(--sf-paper)', borderColor: 'var(--sf-rule)' }}>
+                <span className="min-w-0">
+                  <span className="sf-eyebrow block">{vehicleConditionLabel(lead.condition)}</span>
+                  <span className="sf-heading block text-[length:var(--sf-text-lg)]">{vehicleTitle(lead)}</span>
+                </span>
+                <span className="sf-price text-[length:var(--sf-text-2xl)]">{formatPrice(lead.price, business.currencyCode)}</span>
+              </span>
             </Link>
-          )}
+          ) : null}
         </Container>
       </section>
 
-      <Container className="relative z-10 -mt-20 md:-mt-24">
-        <HeroSearch makes={makes} years={years} />
-      </Container>
-
-      <section className="sf-section pt-[var(--sf-space-xl)] md:pt-[var(--sf-space-2xl)]">
+      <section className="pb-[var(--sf-space-xl)] md:pb-[var(--sf-space-2xl)]">
         <Container>
-          <div className="mb-8 flex items-end justify-between gap-4">
-            <h2 className="sf-display text-[length:var(--sf-text-2xl)]">Latest arrivals</h2>
+          <div className="mb-6 flex items-end justify-between gap-4 border-b pb-3" style={{ borderColor: 'var(--sf-rule-strong)' }}>
+            <h2 className="sf-display text-[length:var(--sf-text-2xl)]">On the lot</h2>
             <Link href="/inventory" className="sf-link inline-flex shrink-0 items-center gap-1 text-[length:var(--sf-text-sm)]">
               All inventory
               <ArrowRight className="size-4" aria-hidden="true" />
@@ -135,9 +149,7 @@ export async function HomePage() {
                 <span className="sf-dot" data-tone="bad" aria-hidden="true" />
                 Inventory couldn&apos;t be loaded.
               </p>
-              <div className="sf-track">
-                <Link href="/" prefetch={false} className="sf-pill sf-pill-raised">Retry</Link>
-              </div>
+              <Link href="/" prefetch={false} className="sf-btn sf-btn-ghost sf-btn-sm">Retry</Link>
             </div>
           ) : vehicles.length > 0 ? (
             <div className="grid min-w-0 grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
@@ -151,39 +163,9 @@ export async function HomePage() {
                 <span className="sf-dot" aria-hidden="true" />
                 No vehicles listed
               </p>
-              <div className="sf-track">
-                <Link href="/contact" className="sf-pill sf-pill-raised">Contact sales</Link>
-              </div>
+              <Link href="/contact" className="sf-btn sf-btn-ghost sf-btn-sm">Contact sales</Link>
             </div>
           )}
-        </Container>
-      </section>
-
-      <section className="border-t" style={{ borderColor: 'var(--sf-rule)' }}>
-        <Container>
-          <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-            {LANES.map((lane, index) => {
-              const Icon = lane.icon
-              return (
-                <li
-                  key={lane.href}
-                  className={`border-b sm:border-b-0 ${index > 0 ? 'lg:border-l' : ''} ${index % 2 === 1 ? 'sm:border-l' : ''} ${index < 2 ? 'sm:border-b lg:border-b-0' : ''}`}
-                  style={{ borderColor: 'var(--sf-rule)' }}
-                >
-                  <Link href={lane.href} className="group flex h-full items-center gap-4 py-6 sm:flex-col sm:items-start sm:px-6 sm:py-10 lg:first:pl-0">
-                    <span className="grid size-11 shrink-0 place-items-center rounded-full" style={{ background: 'var(--sf-paper-2)' }}>
-                      <Icon className="size-5" aria-hidden="true" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="sf-eyebrow block">{lane.label}</span>
-                      <span className="sf-heading mt-1 block text-[length:var(--sf-text-lg)] transition-colors group-hover:text-[var(--sf-accent)]">{lane.action}</span>
-                    </span>
-                    <ArrowRight className="size-5 shrink-0 transition-transform group-hover:translate-x-1 sm:hidden" aria-hidden="true" />
-                  </Link>
-                </li>
-              )
-            })}
-          </ul>
         </Container>
       </section>
 

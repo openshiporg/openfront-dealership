@@ -98,8 +98,8 @@ export function Header() {
       </div>
 
       <div
-        className="border-b backdrop-blur-md"
-        style={{ background: 'color-mix(in oklch, var(--sf-paper) 90%, transparent)', borderColor: 'var(--sf-rule)' }}
+        className="border-b"
+        style={{ background: 'var(--sf-paper)', borderColor: 'var(--sf-rule)' }}
       >
         <Container className="flex h-16 items-center gap-2 sm:gap-4 md:h-[4.5rem]">
           {/* Phones: the name may wrap to two lines rather than truncate; it keeps a floor width so it never collapses to the logo. */}
@@ -116,12 +116,12 @@ export function Header() {
                   key={item.href}
                   href={item.href}
                   aria-current={active ? 'page' : undefined}
-                  className="relative whitespace-nowrap rounded-full px-3 py-2 text-[length:var(--sf-text-sm)] font-semibold transition-colors"
+                  className="relative whitespace-nowrap px-3 py-2 text-[length:var(--sf-text-sm)] font-semibold transition-colors"
                   style={{ color: active ? 'var(--sf-ink)' : 'var(--sf-ink-2)' }}
                 >
                   {item.label}
                   {active && (
-                    <span aria-hidden="true" className="absolute inset-x-3 -bottom-[0.95rem] h-0.5 rounded-full" style={{ background: 'var(--sf-accent)' }} />
+                    <span aria-hidden="true" className="absolute inset-x-3 -bottom-[0.95rem] h-[3px]" style={{ background: 'var(--sf-accent)' }} />
                   )}
                 </Link>
               )
@@ -136,7 +136,7 @@ export function Header() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Make, model, stock #"
-                className="sf-input sf-input-icon w-48 rounded-full 2xl:w-60"
+                className="sf-input sf-input-icon w-48 2xl:w-60"
                 aria-label="Search inventory"
               />
             </form>
@@ -144,13 +144,13 @@ export function Header() {
             {/* On phones Compare lives in the menu (and the compare bar) until something is selected. */}
             <Link
               href="/compare"
-              className={`relative size-11 place-items-center rounded-full transition-colors hover:bg-[var(--sf-paper-2)] ${savedCount > 0 ? 'grid' : 'hidden sm:grid'}`}
+              className={`relative size-11 place-items-center rounded-[3px] transition-colors hover:bg-[var(--sf-paper-2)] ${savedCount > 0 ? 'grid' : 'hidden sm:grid'}`}
               aria-label={`Compare vehicles${savedCount ? `, ${savedCount} selected` : ''}`}
             >
               <SquareStack className="size-5" aria-hidden="true" />
               {savedCount > 0 && (
                 <span
-                  className="sf-figure absolute right-1 top-1 grid h-[1.125rem] min-w-[1.125rem] place-items-center rounded-full px-1 text-[10px] font-bold"
+                  className="sf-figure absolute right-1 top-1 grid h-[1.125rem] min-w-[1.125rem] place-items-center rounded-[2px] px-1 text-[10px] font-bold"
                   style={{ background: 'var(--sf-accent)', color: 'var(--sf-accent-ink)' }}
                 >
                   {savedCount}
@@ -161,14 +161,14 @@ export function Header() {
             <Link
               href="/account"
               aria-current={isActive(pathname, '/account') ? 'page' : undefined}
-              className="hidden size-11 place-items-center rounded-full transition-colors hover:bg-[var(--sf-paper-2)] sm:grid"
+              className="hidden size-11 place-items-center rounded-[3px] transition-colors hover:bg-[var(--sf-paper-2)] sm:grid"
               aria-label="Account"
             >
               <UserRound className="size-5" aria-hidden="true" />
             </Link>
 
             {hasPhone && (
-              <a href={business.phoneHref} className="grid size-11 place-items-center rounded-full transition-colors hover:bg-[var(--sf-paper-2)] sm:hidden" aria-label={`Call ${business.phoneDisplay}`}>
+              <a href={business.phoneHref} className="grid size-11 place-items-center rounded-[3px] transition-colors hover:bg-[var(--sf-paper-2)] sm:hidden" aria-label={`Call ${business.phoneDisplay}`}>
                 <Phone className="size-5" aria-hidden="true" />
               </a>
             )}
@@ -180,7 +180,7 @@ export function Header() {
             <button
               ref={menuButtonRef}
               type="button"
-              className="grid size-11 place-items-center rounded-full transition-colors hover:bg-[var(--sf-paper-2)] xl:hidden"
+              className="grid size-11 place-items-center rounded-[3px] transition-colors hover:bg-[var(--sf-paper-2)] xl:hidden"
               onClick={() => setMenuOpen((v) => !v)}
               aria-expanded={menuOpen}
               aria-controls="storefront-mobile-menu"
@@ -206,7 +206,7 @@ export function Header() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Make, model, stock #"
-                className="sf-input sf-input-icon rounded-full"
+                className="sf-input sf-input-icon"
                 aria-label="Search inventory"
               />
             </form>
@@ -228,15 +228,15 @@ export function Header() {
               })}
             </nav>
             {(hasPhone || business.directionsHref) && (
-              <div className="sf-track sf-track-block mt-4">
+              <div className="mt-4 grid grid-cols-2 gap-2">
                 {hasPhone && (
-                  <a href={business.phoneHref} className="sf-pill sf-pill-raised">
+                  <a href={business.phoneHref} className="sf-btn sf-btn-ghost">
                     <Phone className="size-4" aria-hidden="true" />
                     Call
                   </a>
                 )}
                 {business.directionsHref && (
-                  <a href={business.directionsHref} target="_blank" rel="noreferrer" className="sf-pill sf-pill-raised">
+                  <a href={business.directionsHref} target="_blank" rel="noreferrer" className="sf-btn sf-btn-ghost">
                     Directions
                     <ArrowUpRight className="size-4" aria-hidden="true" />
                   </a>

@@ -13,8 +13,7 @@ export async function AccountProfilePage() {
   return (
     <section>
       <header className="border-b pb-[var(--sf-space-md)]" style={{ borderColor: 'var(--sf-rule)' }}>
-        <p className="sf-eyebrow">Account</p>
-        <h1 className="sf-display mt-3 text-[length:var(--sf-text-display)]">Profile</h1>
+        <h1 className="sf-display text-[length:var(--sf-text-display)]">Profile</h1>
       </header>
       <div>
         <ProfileName customer={customer} />

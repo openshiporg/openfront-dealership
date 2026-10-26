@@ -24,7 +24,7 @@ export function ComparisonBar() {
       <div className="sf-band h-20" aria-hidden="true" />
       <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-3 md:bottom-5">
         <div
-          className="sf-band pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-full py-1.5 pl-5 pr-1.5"
+          className="sf-band pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-[var(--sf-radius-md)] py-1.5 pl-4 pr-1.5"
           style={{ boxShadow: 'var(--sf-shadow-float)' }}
           role="region"
           aria-label="Compare"
@@ -33,11 +33,11 @@ export function ComparisonBar() {
             <span className="sf-figure font-semibold">{count}</span>
             <span style={{ color: 'var(--sf-on-dark-2)' }}> of 4 selected</span>
           </p>
-          <div className="sf-track shrink-0">
-            <button type="button" onClick={() => clearComparison()} className="sf-pill">
+          <div className="flex shrink-0 gap-1.5">
+            <button type="button" onClick={() => clearComparison()} className="sf-btn sf-btn-ghost sf-btn-sm min-h-10">
               Clear
             </button>
-            <Link href="/compare" className="sf-pill sf-pill-primary">
+            <Link href="/compare" className="sf-btn sf-btn-primary sf-btn-sm min-h-10">
               Compare
             </Link>
           </div>

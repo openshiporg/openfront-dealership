@@ -22,9 +22,8 @@ import {
   FormSection,
   MobileSummary,
   Notice,
-  PILL_TARGET,
+  ACTION_ROW,
   RequestLayout,
-  WRAP_TRACK,
   Sticker,
   StickerVehicle,
   type StickerRowData,
@@ -307,7 +306,7 @@ function FinancingContent() {
 
   return (
     <>
-      <PageHeader eyebrow="Financing" title="Payment estimate" />
+      <PageHeader title="Payment estimate" />
 
       <RequestLayout summary={summary}>
         <div className="space-y-[var(--sf-space-xl)]">
@@ -324,15 +323,12 @@ function FinancingContent() {
             <Notice tone="bad">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span>This vehicle couldn&apos;t be loaded.</span>
-                <span className="sf-track">
-                  <button type="button" onClick={retryVehicleLookup} className={`sf-pill sf-pill-raised ${PILL_TARGET}`}>Retry</button>
-                </span>
+                <button type="button" onClick={retryVehicleLookup} className="sf-btn sf-btn-ghost sf-btn-sm min-h-10">Retry</button>
               </div>
             </Notice>
           )}
 
           <FormSection
-            step="01"
             title="Loan"
             first
             aside={selectedVehicle ? (
@@ -363,7 +359,7 @@ function FinancingContent() {
                         }))
                       }}
                       className="sf-input sf-figure pl-8"
-                      placeholder="35000"
+                      placeholder="e.g. 35,000"
                       step="0.01"
                       min="0"
                       aria-invalid={invalidPriceFromLink || undefined}
@@ -382,7 +378,7 @@ function FinancingContent() {
                       value={formData.interestRate}
                       onChange={(e) => setFormData((prev) => ({ ...prev, interestRate: parseFloat(e.target.value) || 0 }))}
                       className="sf-input sf-figure pr-8"
-                      placeholder="7.5"
+                      placeholder="e.g. 7.5"
                       step="0.1"
                       min="0"
                       max="30"
@@ -404,7 +400,7 @@ function FinancingContent() {
                       aria-pressed={formData.loanTerm === term}
                     >
                       <span className="sf-figure text-[length:var(--sf-text-lg)]">{term}</span>
-                      <span className="sf-eyebrow tracking-[0.06em] max-[379px]:hidden">mo</span>
+                      <span className="sf-faint text-[length:var(--sf-text-xs)] max-[379px]:hidden">mo</span>
                     </button>
                   ))}
                 </div>
@@ -439,7 +435,7 @@ function FinancingContent() {
                       value={formData.downPayment}
                       onChange={(e) => handleDownPaymentChange(e.target.value)}
                       className="sf-input sf-figure pl-8"
-                      placeholder="3500"
+                      placeholder="e.g. 3,500"
                       step="100"
                       min="0"
                     />
@@ -471,7 +467,7 @@ function FinancingContent() {
                     value={formData.tradeInValue}
                     onChange={(e) => setFormData((prev) => ({ ...prev, tradeInValue: e.target.value }))}
                     className="sf-input sf-figure pl-8"
-                    placeholder="5000"
+                    placeholder="e.g. 5,000"
                     step="100"
                     min="0"
                   />
@@ -496,10 +492,7 @@ function FinancingContent() {
                 aria-expanded={showAmortization}
                 className="flex min-h-11 w-full items-center justify-between gap-4 text-left"
               >
-                <span className="flex items-baseline gap-3">
-                  <span className="sf-figure sf-faint text-[length:var(--sf-text-sm)]">02</span>
-                  <span className="sf-heading text-[length:var(--sf-text-xl)]">Amortization</span>
-                </span>
+                <span className="sf-heading text-[length:var(--sf-text-xl)]">Amortization</span>
                 <ChevronDown
                   className={`size-5 shrink-0 transition-transform ${showAmortization ? 'rotate-180' : ''}`}
                   aria-hidden="true"
@@ -544,7 +537,7 @@ function FinancingContent() {
             </section>
           )}
 
-          <FormSection step="03" title="Financing request">
+          <FormSection title="Financing request">
             {applicationStatus === 'success' ? (
               <div className="space-y-5">
                 <p role="status" className="sf-title-line">
@@ -569,20 +562,20 @@ function FinancingContent() {
                     </div>
                   )}
                 </dl>
-                <nav aria-label="Next" className={`sf-track ${WRAP_TRACK}`}>
+                <nav aria-label="Next" className={ACTION_ROW}>
                   <Link
                     href={selectedVehicle ? `/inventory/${selectedVehicle.id}` : '/inventory'}
-                    className={`sf-pill sf-pill-primary ${PILL_TARGET}`}
+                    className="sf-btn sf-btn-primary"
                   >
                     {selectedVehicle ? 'Return to vehicle' : 'Browse inventory'}
                   </Link>
                   <Link
                     href={selectedVehicle ? `/test-drive?vehicleId=${selectedVehicle.id}` : '/test-drive'}
-                    className={`sf-pill ${PILL_TARGET}`}
+                    className="sf-btn sf-btn-ghost"
                   >
                     Test drive
                   </Link>
-                  <Link href="/account" className={`sf-pill ${PILL_TARGET}`}>Account</Link>
+                  <Link href="/account" className="sf-btn sf-btn-ghost">Account</Link>
                 </nav>
               </div>
             ) : (
@@ -726,7 +719,7 @@ function FinancingContent() {
 function FinancingFallback() {
   return (
     <>
-      <PageHeader eyebrow="Financing" title="Payment estimate" />
+      <PageHeader title="Payment estimate" />
       <Container className="sf-section">
         <div className="grid gap-[var(--sf-space-xl)] lg:grid-cols-[minmax(0,1fr)_23rem]">
           <div className="sf-skeleton h-96" />

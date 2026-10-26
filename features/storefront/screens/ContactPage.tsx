@@ -8,7 +8,7 @@ import { Container } from '../components/Container'
 import { PageHeader } from '../components/PageHeader'
 import { useStorefrontBusiness } from '../components/StorefrontBusinessProvider'
 import { customerRequestReference } from '../lib/customerRequests'
-import { Field, Notice, PILL_TARGET, RequestReceived, Sticker } from '../components/forms/RequestForm'
+import { Field, Notice, RequestReceived, Sticker } from '../components/forms/RequestForm'
 
 const PREFERRED_CONTACT = [
   { value: 'email', label: 'Email' },
@@ -69,7 +69,7 @@ export function ContactPage() {
   if (submitted) {
     return (
       <RequestReceived
-        eyebrow="Message"
+        context="Message"
         reference={submissionReference}
         summary={
           <Sticker
@@ -85,9 +85,9 @@ export function ContactPage() {
         }
         actions={
           <>
-            <Link href="/" className={`sf-pill sf-pill-primary ${PILL_TARGET}`}>Back home</Link>
-            <Link href="/inventory" className={`sf-pill ${PILL_TARGET}`}>Inventory</Link>
-            <Link href="/service" className={`sf-pill ${PILL_TARGET}`}>Service</Link>
+            <Link href="/" className="sf-btn sf-btn-primary">Back home</Link>
+            <Link href="/inventory" className="sf-btn sf-btn-ghost">Inventory</Link>
+            <Link href="/service" className="sf-btn sf-btn-ghost">Service</Link>
           </>
         }
       />
@@ -107,27 +107,27 @@ export function ContactPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Contact" title={business.fullName} />
+      <PageHeader title={business.fullName} />
 
       <Container className="sf-section">
         <div className="grid gap-[var(--sf-space-xl)] lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] xl:gap-[var(--sf-space-2xl)]">
           <aside className="order-2 min-w-0 space-y-[var(--sf-space-lg)] lg:order-1">
             <section>
-              <p className="sf-eyebrow mb-3">Visit</p>
+              <h2 className="sf-heading mb-3 text-[length:var(--sf-text-lg)]">Visit</h2>
               {hasAddress ? (
                 <>
                   <address className="not-italic">
-                    {business.addressLine1 && <p className="sf-heading text-[length:var(--sf-text-xl)]">{business.addressLine1}</p>}
+                    {business.addressLine1 && <p className="text-[length:var(--sf-text-lg)] font-semibold">{business.addressLine1}</p>}
                     {business.addressLine2 && <p className="sf-muted mt-1">{business.addressLine2}</p>}
                   </address>
                   {business.directionsHref && (
-                    <div className="sf-track mt-4">
-                      <a href={business.directionsHref} target="_blank" rel="noopener noreferrer" className={`sf-pill sf-pill-raised ${PILL_TARGET}`}>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <a href={business.directionsHref} target="_blank" rel="noopener noreferrer" className="sf-btn sf-btn-primary">
                         Directions
                         <ArrowUpRight className="size-4" aria-hidden="true" />
                       </a>
                       {business.phoneHref && business.phoneDisplay && (
-                        <a href={business.phoneHref} className={`sf-pill ${PILL_TARGET}`}>Call</a>
+                        <a href={business.phoneHref} className="sf-btn sf-btn-ghost">Call</a>
                       )}
                     </div>
                   )}
@@ -138,7 +138,7 @@ export function ContactPage() {
             </section>
 
             <section>
-              <p className="sf-eyebrow mb-3">Departments</p>
+              <h2 className="sf-heading mb-3 text-[length:var(--sf-text-lg)]">Departments</h2>
               {business.phoneDisplay || departments.length ? (
                 <dl className="border-t" style={{ borderColor: 'var(--sf-rule)' }}>
                   {business.phoneHref && business.phoneDisplay && (
@@ -158,7 +158,7 @@ export function ContactPage() {
             </section>
 
             <section>
-              <p className="sf-eyebrow mb-3">Hours</p>
+              <h2 className="sf-heading mb-3 text-[length:var(--sf-text-lg)]">Hours</h2>
               {hours.length ? (
                 <dl className="border-t" style={{ borderColor: 'var(--sf-rule)' }}>
                   {hours.map((row) => (
@@ -175,7 +175,7 @@ export function ContactPage() {
 
           <form onSubmit={handleSubmit} className="order-1 min-w-0 lg:order-2 lg:border-l lg:pl-[var(--sf-space-xl)]" style={{ borderColor: 'var(--sf-rule)' }}>
             <h2 className="sf-heading mb-5 text-[length:var(--sf-text-xl)]">Message</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4">
               <Field label="First name" htmlFor="contact-first-name">
                 <input
                   id="contact-first-name"
@@ -220,14 +220,14 @@ export function ContactPage() {
                   className="sf-input"
                 />
               </Field>
-              <div className="sm:col-span-2">
+              <div>
                 <p id="contact-preferred" className="sf-label">Preferred contact</p>
                 <div role="group" aria-labelledby="contact-preferred" className="sf-track">
                   {PREFERRED_CONTACT.map((option) => (
                     <button
                       key={option.value}
                       type="button"
-                      className={`sf-pill ${PILL_TARGET} px-5`}
+                      className="sf-pill min-h-11 px-5"
                       aria-pressed={formData.preferredContact === option.value}
                       onClick={() => setFormData((p) => ({ ...p, preferredContact: option.value }))}
                     >
@@ -236,7 +236,7 @@ export function ContactPage() {
                   ))}
                 </div>
               </div>
-              <Field label="Message" htmlFor="contact-message" className="sm:col-span-2">
+              <Field label="Message" htmlFor="contact-message">
                 <textarea
                   id="contact-message"
                   required

@@ -19,7 +19,6 @@ import {
   FormSection,
   MobileSummary,
   Notice,
-  PILL_TARGET,
   RadioPills,
   RequestLayout,
   RequestReceived,
@@ -193,7 +192,7 @@ export function TradeInPage() {
   if (submitted) {
     return (
       <RequestReceived
-        eyebrow="Trade-in"
+        context="Trade-in"
         reference={submissionReference}
         note={estimate
           ? TRADE_IN_ESTIMATE_DISCLAIMER
@@ -213,9 +212,9 @@ export function TradeInPage() {
         ], business.shortName || business.fullName)}
         actions={
           <>
-            <Link href="/inventory" className={`sf-pill sf-pill-primary ${PILL_TARGET}`}>Browse inventory</Link>
-            <button type="button" onClick={reset} className={`sf-pill ${PILL_TARGET}`}>New trade-in request</button>
-            <Link href="/financing" className={`sf-pill ${PILL_TARGET}`}>Financing</Link>
+            <Link href="/inventory" className="sf-btn sf-btn-primary">Browse inventory</Link>
+            <button type="button" onClick={reset} className="sf-btn sf-btn-ghost">New trade-in request</button>
+            <Link href="/financing" className="sf-btn sf-btn-ghost">Financing</Link>
           </>
         }
       />
@@ -229,7 +228,7 @@ export function TradeInPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Trade-in" title="Trade-in review" />
+      <PageHeader title="Trade-in review" />
 
       <RequestLayout summary={summary}>
         <ol className="sf-track mb-[var(--sf-space-lg)]" aria-label="Steps">
@@ -243,7 +242,7 @@ export function TradeInPage() {
                 aria-current={step === n ? 'step' : undefined}
                 style={step > n ? { color: 'var(--sf-ink)' } : undefined}
               >
-                <span className="sf-figure sf-faint hidden sm:inline">{String(n).padStart(2, '0')}</span>
+                <span className="sf-figure hidden opacity-70 sm:inline">{n}</span>
                 {label}
               </li>
             )
@@ -263,8 +262,8 @@ export function TradeInPage() {
           />
 
           {step === 1 && (
-            <FormSection step="01" title="Your vehicle" first>
-              <div className="grid grid-cols-2 gap-4">
+            <FormSection title="Your vehicle" first>
+              <div className="grid gap-4">
                 <Field label="Year" htmlFor="trade-year">
                   <select id="trade-year" required value={formData.year} onChange={(e) => setFormData((p) => ({ ...p, year: e.target.value }))} className="sf-input">
                     <option value="">Select year</option>
@@ -282,13 +281,13 @@ export function TradeInPage() {
                   </select>
                 </Field>
                 <Field label="Model" htmlFor="trade-model">
-                  <input id="trade-model" type="text" required value={formData.model} onChange={(e) => setFormData((p) => ({ ...p, model: e.target.value }))} className="sf-input" placeholder="Accord" />
+                  <input id="trade-model" type="text" required value={formData.model} onChange={(e) => setFormData((p) => ({ ...p, model: e.target.value }))} className="sf-input" placeholder="e.g. Accord" />
                 </Field>
                 <Field label="Trim" htmlFor="trade-trim" optional>
-                  <input id="trade-trim" type="text" value={formData.trim} onChange={(e) => setFormData((p) => ({ ...p, trim: e.target.value }))} className="sf-input" placeholder="Sport" />
+                  <input id="trade-trim" type="text" value={formData.trim} onChange={(e) => setFormData((p) => ({ ...p, trim: e.target.value }))} className="sf-input" placeholder="e.g. Sport" />
                 </Field>
                 <Field label="Mileage" htmlFor="trade-mileage">
-                  <input id="trade-mileage" type="number" inputMode="numeric" required min="0" max="2000000" step="1" value={formData.mileage} onChange={(e) => setFormData((p) => ({ ...p, mileage: e.target.value }))} className="sf-input sf-figure" placeholder="45000" />
+                  <input id="trade-mileage" type="number" inputMode="numeric" required min="0" max="2000000" step="1" value={formData.mileage} onChange={(e) => setFormData((p) => ({ ...p, mileage: e.target.value }))} className="sf-input sf-figure" placeholder="e.g. 45,000" />
                 </Field>
                 <Field label="VIN" htmlFor="trade-vin" optional>
                   <input id="trade-vin" type="text" value={formData.vin} onChange={(e) => setFormData((p) => ({ ...p, vin: e.target.value }))} className="sf-input sf-figure" placeholder="17 characters" maxLength={17} autoCapitalize="characters" spellCheck={false} />
@@ -298,7 +297,7 @@ export function TradeInPage() {
           )}
 
           {step === 2 && (
-            <FormSection step="02" title="Condition" first>
+            <FormSection title="Condition" first>
               <div className="space-y-5">
                 <RadioPills
                   legend="Overall condition"
@@ -333,8 +332,8 @@ export function TradeInPage() {
           )}
 
           {step === 3 && (
-            <FormSection step="03" title="Contact" first>
-              <div className="grid gap-4 sm:grid-cols-2">
+            <FormSection title="Contact" first>
+              <div className="grid gap-4">
                 <Field label="First name" htmlFor="trade-first-name">
                   <input id="trade-first-name" type="text" required autoComplete="given-name" value={formData.firstName} onChange={(e) => setFormData((p) => ({ ...p, firstName: e.target.value }))} className="sf-input" />
                 </Field>

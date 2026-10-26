@@ -26,13 +26,11 @@ export function MobileSummary({ children }: { children: ReactNode }) {
 }
 
 export function FormSection({
-  step,
   title,
   children,
   aside,
   first,
 }: {
-  step?: string
   title: string
   children: ReactNode
   aside?: ReactNode
@@ -41,10 +39,7 @@ export function FormSection({
   return (
     <section className={first ? undefined : 'border-t pt-[var(--sf-space-md)]'} style={first ? undefined : { borderColor: 'var(--sf-rule)' }}>
       <div className="mb-5 flex items-baseline justify-between gap-4">
-        <h2 className="flex min-w-0 items-baseline gap-3">
-          {step && <span className="sf-figure sf-faint text-[length:var(--sf-text-sm)]">{step}</span>}
-          <span className="sf-heading text-[length:var(--sf-text-xl)]">{title}</span>
-        </h2>
+        <h2 className="sf-heading min-w-0 text-[length:var(--sf-text-xl)]">{title}</h2>
         {aside}
       </div>
       {children}
@@ -81,7 +76,7 @@ export type PillOption = { value: string; label: ReactNode }
 const PILL_FOCUS =
   'min-h-11 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--sf-focus)]'
 
-/* Native radios styled as raised pills, so name/required/onChange keep working as form fields. */
+/* Native radios styled as joined segmented plates, so name/required/onChange keep working as form fields. */
 export function RadioPills({
   legend,
   name,
@@ -102,8 +97,10 @@ export function RadioPills({
   className?: string
 }) {
   const container = variant === 'grid'
-    ? `sf-well grid gap-1 p-1.5 ${className || 'grid-cols-3 sm:grid-cols-4'}`
+    ? `grid gap-1.5 ${className || 'grid-cols-3 sm:grid-cols-4'}`
     : `sf-track sf-track-block ${className}`
+  // In a grid each choice is its own square plate; in a track the plates are joined.
+  const plate = variant === 'grid' ? 'border border-[var(--sf-ink-3)] rounded-[var(--sf-radius-sm)] data-[active=true]:border-[var(--sf-ink)]' : ''
 
   return (
     <fieldset className="min-w-0">
@@ -112,7 +109,7 @@ export function RadioPills({
         {options.map((option) => (
           <label
             key={option.value}
-            className={`sf-pill ${PILL_FOCUS}`}
+            className={`sf-pill ${plate} ${PILL_FOCUS}`}
             data-active={value === option.value ? 'true' : undefined}
           >
             <input
@@ -187,7 +184,7 @@ export function StickerVehicle({ vehicle, label }: { vehicle: Vehicle; label: st
   const src = vehicleImageUrl(primaryVehicleImage(vehicle.images))
   return (
     <div className="flex items-center gap-3 border-b border-dashed p-3" style={{ borderColor: 'var(--sf-rule)' }}>
-      <div className="sf-photo relative h-16 w-24 shrink-0 rounded-[var(--sf-radius-sm)]">
+      <div className="sf-photo relative h-16 w-24 shrink-0">
         {src ? (
           <Image src={src} alt={vehicleTitle(vehicle)} fill className="object-cover" sizes="96px" unoptimized />
         ) : (
@@ -205,15 +202,15 @@ export function StickerVehicle({ vehicle, label }: { vehicle: Vehicle; label: st
   )
 }
 
-/* "Request received": status dot on the title line, submitted summary in a sticker, next actions as a pill track. */
+/* "Request received": status dot on the title line, submitted summary in a sticker, next actions as a button row. */
 export function RequestReceived({
-  eyebrow,
+  context,
   reference,
   summary,
   actions,
   note,
 }: {
-  eyebrow: string
+  context: string
   reference?: string | null
   summary?: ReactNode
   actions: ReactNode
@@ -223,11 +220,11 @@ export function RequestReceived({
     <Container className="sf-section">
       <div className="grid gap-[var(--sf-space-xl)] lg:grid-cols-[minmax(0,1fr)_23rem] lg:items-start">
         <div className="min-w-0">
-          <p className="sf-eyebrow">{eyebrow}</p>
-          <h1 className="sf-title-line mt-3">
+          <h1 className="sf-title-line">
             <span className="sf-dot" data-tone="ok" aria-hidden="true" />
             <span className="sf-display text-[length:var(--sf-text-display)]">Request received</span>
           </h1>
+          <p className="sf-muted mt-3 text-[length:var(--sf-text-md)]">{context}</p>
           {reference && (
             <p role="status" className="mt-5 flex flex-wrap items-baseline gap-3">
               <span className="sf-eyebrow">Reference</span>
@@ -235,7 +232,7 @@ export function RequestReceived({
             </p>
           )}
           {note && <p className="sf-muted mt-4 max-w-md text-[length:var(--sf-text-sm)]">{note}</p>}
-          <nav aria-label="Next" className={`sf-track mt-[var(--sf-space-lg)] ${WRAP_TRACK}`}>
+          <nav aria-label="Next" className={`mt-[var(--sf-space-lg)] ${ACTION_ROW}`}>
             {actions}
           </nav>
         </div>
@@ -247,8 +244,8 @@ export function RequestReceived({
 
 export const PILL_TARGET = 'min-h-11'
 
-/* A pill track that wraps on narrow phones instead of hiding actions behind a scroll. */
-export const WRAP_TRACK = 'flex-wrap rounded-[var(--sf-radius-md)] sm:flex-nowrap sm:rounded-full'
+/* A row of standalone sf-btn actions that wraps on narrow phones. */
+export const ACTION_ROW = 'flex flex-wrap gap-2'
 
 /* "2026-10-24" -> "Sat, Oct 24, 2026" without shifting the day across time zones. */
 export function formatRequestDate(value: string) {

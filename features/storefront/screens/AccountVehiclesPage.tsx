@@ -58,7 +58,7 @@ export async function AccountVehiclesPage() {
 
   return (
     <section className="pb-24">
-      <AccountHeader eyebrow="Account" title="My vehicles" />
+      <AccountHeader title="My vehicles" />
 
       <AccountSection title="Purchases">
         {purchases === null ? (

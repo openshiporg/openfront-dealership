@@ -122,13 +122,13 @@ export function LeadCaptureModal({
     <div
       ref={overlayRef}
       className="fixed inset-0 z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4"
-      style={{ background: 'oklch(0.16 0.012 262 / 0.6)', backdropFilter: 'blur(2px)' }}
+      style={{ background: 'oklch(0.16 0.012 262 / 0.6)' }}
       tabIndex={-1}
       onKeyDown={handleDialogKeyDown}
       data-storefront-dialog-overlay
     >
       <div
-        className="flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[var(--sf-radius-lg)] sm:max-h-[90vh] sm:max-w-lg sm:rounded-[var(--sf-radius-lg)]"
+        className="flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[var(--sf-radius-md)] sm:max-h-[90vh] sm:max-w-lg sm:rounded-[var(--sf-radius-md)]"
         style={{ background: 'var(--sf-paper)', boxShadow: 'var(--sf-shadow-float)' }}
         role="dialog"
         aria-modal="true"
@@ -136,19 +136,19 @@ export function LeadCaptureModal({
       >
         <div className="flex items-start justify-between gap-4 border-b px-5 pb-4 pt-5 sm:px-6" style={{ borderColor: 'var(--sf-rule)' }}>
           <div className="min-w-0">
-            <p className="sf-eyebrow truncate">
-              {vehicleTitle(vehicle)}
-              {vehicle.stockNumber && <span className="sf-figure"> · #{vehicle.stockNumber}</span>}
-            </p>
-            <h2 id="lead-modal-title" className="sf-heading mt-1.5 text-[length:var(--sf-text-xl)]">
+            <h2 id="lead-modal-title" className="sf-heading text-[length:var(--sf-text-xl)]">
               {titles[intent]}
             </h2>
+            <p className="sf-muted mt-1.5 flex min-w-0 items-center gap-2 text-[length:var(--sf-text-sm)]">
+              <span className="truncate">{vehicleTitle(vehicle)}</span>
+              {vehicle.stockNumber && <span className="sf-stall shrink-0">#{vehicle.stockNumber}</span>}
+            </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="-mr-2 -mt-1 grid size-11 shrink-0 place-items-center rounded-full transition-colors hover:bg-[var(--sf-paper-2)] disabled:opacity-50"
+            className="-mr-2 -mt-1 grid size-11 shrink-0 place-items-center rounded-[var(--sf-radius-sm)] transition-colors hover:bg-[var(--sf-paper-2)] disabled:opacity-50"
             aria-label="Close"
           >
             <X className="size-5" aria-hidden="true" />
@@ -281,7 +281,7 @@ export function LeadCaptureModal({
           <div>
             <label htmlFor={fieldId('message')} className="sf-label">
               {intent === 'contact' ? 'Vehicle question' : 'Message'}
-              {intent !== 'contact' && <span className="sf-faint normal-case tracking-normal"> · Optional</span>}
+              {intent !== 'contact' && <span className="sf-faint"> / Optional</span>}
             </label>
             <textarea
               id={fieldId('message')}

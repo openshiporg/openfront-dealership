@@ -173,7 +173,7 @@ export async function AccountRequestDetailPage({ refParam }: { refParam: string 
       <AccountBack href="/account" label="Requests" />
       <div className="mt-2">
         <AccountHeader
-          eyebrow={reference || 'Request'}
+          reference={reference}
           title={detail.label || 'Request'}
           tone={statusTone(detail.status)}
           status={customerRequestStatusLabel(kind, detail.status)}

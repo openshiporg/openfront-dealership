@@ -7,7 +7,7 @@ import { CalendarClock, X } from 'lucide-react'
 import { cancelCustomerBooking, rescheduleCustomerBooking } from '../../actions/customerRecords'
 import { DEFAULT_SERVICE_SLOTS, DEFAULT_TEST_DRIVE_SLOTS, closedDayLabel, dayAvailability, localDateString } from '../../lib/bookingSlots'
 import { useStorefrontBusiness } from '../StorefrontBusinessProvider'
-import { Field, Notice, PILL_TARGET, RadioPills, WRAP_TRACK } from '../forms/RequestForm'
+import { ACTION_ROW, Field, Notice, RadioPills } from '../forms/RequestForm'
 
 type Mode = 'idle' | 'reschedule' | 'cancel'
 
@@ -91,15 +91,15 @@ export function BookingActions({
       {done && <Notice tone="ok">{done}</Notice>}
 
       {mode === 'idle' && (
-        <div className={`sf-track ${WRAP_TRACK}`}>
+        <div className={ACTION_ROW}>
           {canReschedule && (
-            <button type="button" onClick={() => reset('reschedule')} className={`sf-pill sf-pill-raised ${PILL_TARGET} px-4`}>
+            <button type="button" onClick={() => reset('reschedule')} className="sf-btn sf-btn-ghost">
               <CalendarClock className="size-4" aria-hidden="true" />
               Reschedule
             </button>
           )}
           {canCancel && (
-            <button type="button" onClick={() => reset('cancel')} className={`sf-pill ${PILL_TARGET} px-4`}>
+            <button type="button" onClick={() => reset('cancel')} className="sf-btn sf-btn-ghost">
               <X className="size-4" aria-hidden="true" />
               Cancel booking
             </button>
@@ -114,11 +114,11 @@ export function BookingActions({
             <span>Cancel this {kind === 'service' ? 'appointment' : 'test drive'}?</span>
           </p>
           {error && <Notice tone="bad">{error}</Notice>}
-          <div className={`sf-track ${WRAP_TRACK}`}>
-            <button type="button" disabled={pending} onClick={confirmCancel} className={`sf-pill sf-pill-primary ${PILL_TARGET} px-4`}>
+          <div className={ACTION_ROW}>
+            <button type="button" disabled={pending} onClick={confirmCancel} className="sf-btn sf-btn-primary">
               {pending ? 'Cancelling' : 'Confirm cancel'}
             </button>
-            <button type="button" disabled={pending} onClick={() => reset('idle')} className={`sf-pill sf-pill-raised ${PILL_TARGET} px-4`}>
+            <button type="button" disabled={pending} onClick={() => reset('idle')} className="sf-btn sf-btn-ghost">
               Keep booking
             </button>
           </div>
@@ -159,11 +159,11 @@ export function BookingActions({
             />
           ))}
           {error && <Notice tone="bad">{error}</Notice>}
-          <div className={`sf-track ${WRAP_TRACK}`}>
-            <button type="submit" disabled={pending} className={`sf-pill sf-pill-primary ${PILL_TARGET} px-4`}>
+          <div className={ACTION_ROW}>
+            <button type="submit" disabled={pending} className="sf-btn sf-btn-primary">
               {pending ? 'Saving' : 'Save new time'}
             </button>
-            <button type="button" disabled={pending} onClick={() => reset('idle')} className={`sf-pill sf-pill-raised ${PILL_TARGET} px-4`}>
+            <button type="button" disabled={pending} onClick={() => reset('idle')} className="sf-btn sf-btn-ghost">
               Keep current time
             </button>
           </div>

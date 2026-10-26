@@ -47,14 +47,14 @@ export function Footer({ branding = true }: { branding?: boolean }) {
               </address>
             )}
             {(business.phoneDisplay || business.directionsHref) && (
-              <div className="sf-track mt-5">
+              <div className="mt-5 flex flex-wrap gap-2">
                 {business.phoneHref && business.phoneDisplay && (
-                  <a href={business.phoneHref} className="sf-pill" data-active="true">
+                  <a href={business.phoneHref} className="sf-btn sf-btn-primary sf-btn-sm">
                     <span className="sf-figure">{business.phoneDisplay}</span>
                   </a>
                 )}
                 {business.directionsHref && (
-                  <a href={business.directionsHref} target="_blank" rel="noreferrer" className="sf-pill">
+                  <a href={business.directionsHref} target="_blank" rel="noreferrer" className="sf-btn sf-btn-ghost sf-btn-sm">
                     Directions
                     <ArrowUpRight className="size-4" aria-hidden="true" />
                   </a>

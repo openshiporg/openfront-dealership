@@ -401,18 +401,8 @@ export function OverviewDashboardPageClient({
           ) : (
             <p className="py-3 text-[13px] text-muted-foreground">Nothing waiting</p>
           )}
-          {clear.length > 0 && (
-            <p className="mt-3 flex flex-wrap items-baseline gap-x-1 gap-y-1 text-[12px] text-muted-foreground">
-              <span className="font-medium">Clear:</span>
-              {clear.map((item, index) => (
-                <span key={item.key}>
-                  <Link href={item.href} className="inline-flex min-h-10 items-center underline-offset-4 hover:text-foreground hover:underline sm:min-h-0">
-                    {item.label}
-                  </Link>
-                  {index < clear.length - 1 && <span aria-hidden="true">,</span>}
-                </span>
-              ))}
-            </p>
+          {waiting.length > 0 && clear.length > 0 && (
+            <p className="mt-2 text-[12px] text-muted-foreground">{clear.length} other queues clear</p>
           )}
         </DeskSection>
 

@@ -234,7 +234,7 @@ export function ServicePage() {
 
   return (
     <>
-      <PageHeader title="Book service" />
+      <PageHeader title="Book service" tone="lane" />
 
       <RequestLayout summary={summary}>
         <div className="space-y-[var(--sf-space-xl)]">

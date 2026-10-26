@@ -107,14 +107,15 @@ export function PlatformFilterBar({
           >
             <Input
               type="search"
-              className="pl-9 w-full h-10 rounded-[4px] placeholder:text-muted-foreground/80"
+              className="pl-9 w-full h-10 rounded-[4px] text-[13px] placeholder:text-muted-foreground/80"
               value={searchString}
               onChange={(e) => setSearchString(e.target.value)}
               placeholder={`Search by ${
                 searchLabels.length
-                  ? searchLabels.join(", ").toLowerCase()
+                  ? searchLabels.slice(0, 3).join(", ").toLowerCase()
                   : "ID"
               }`}
+              aria-label={`Search ${list.plural ?? "records"}`}
             />
           </form>
         </div>

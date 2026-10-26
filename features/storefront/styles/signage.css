@@ -702,3 +702,23 @@ textarea.sf-input {
   }
 }
 }
+
+/* Service lane: the drive-through bay, asphalt with a painted lane-yellow line. */
+.sf-lane {
+  position: relative;
+  background: var(--sf-asphalt);
+  color: var(--sf-on-dark);
+}
+
+.sf-lane::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 6px;
+  background: repeating-linear-gradient(90deg, var(--sf-lane) 0 3rem, transparent 3rem 4.5rem);
+}
+
+.sf-lane .sf-muted {
+  color: oklch(0.85 0.01 262);
+}

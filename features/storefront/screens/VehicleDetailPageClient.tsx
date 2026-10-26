@@ -265,6 +265,8 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
               title={title}
               conditionLabel={conditionLabel}
               stockNumber={vehicle.stockNumber}
+              make={vehicle.make}
+              model={vehicle.model}
             />
           </div>
 

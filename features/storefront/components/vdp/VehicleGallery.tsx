@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { VehicleImage } from '@/features/storefront/lib/types'
 import { vehicleImageUrl } from '../../lib/images'
 import { PhotoAttribution } from '../PhotoAttribution'
+import { isRepresentativePhoto } from '../../lib/photoAttribution'
 import { VehiclePhotoPlaceholder } from '../VehiclePhotoPlaceholder'
 
 const SWIPE_THRESHOLD = 40
@@ -17,6 +18,8 @@ export function VehicleGallery({
   title,
   conditionLabel,
   stockNumber,
+  make,
+  model,
 }: {
   images: VehicleImage[]
   activeIndex: number
@@ -24,6 +27,8 @@ export function VehicleGallery({
   title: string
   conditionLabel: string
   stockNumber?: string | null
+  make?: string | null
+  model?: string | null
 }) {
   const stripRef = useRef<HTMLDivElement>(null)
   const pointerStart = useRef<{ x: number; y: number } | null>(null)
@@ -88,6 +93,9 @@ export function VehicleGallery({
 
         <span className="sf-chip sf-chip-dark absolute left-3 top-3">{conditionLabel}</span>
         {stockNumber && <span className="sf-stall absolute bottom-3 left-3">#{stockNumber}</span>}
+        {isRepresentativePhoto(currentImageUrl, { make, model }) && (
+          <span className="sf-chip sf-chip-dark absolute bottom-3 right-3">Representative photo</span>
+        )}
 
         {hasMany && (
           <>

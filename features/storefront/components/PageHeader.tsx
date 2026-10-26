@@ -9,12 +9,12 @@ export function PageHeader({
   title: string
   description?: string
   actions?: ReactNode
-  tone?: 'light' | 'dark'
+  tone?: 'light' | 'dark' | 'lane'
 }) {
   return (
     <section
-      className={tone === 'dark' ? 'sf-band' : 'border-b'}
-      style={tone === 'dark' ? undefined : { borderColor: 'var(--sf-rule)' }}
+      className={tone === 'dark' ? 'sf-band' : tone === 'lane' ? 'sf-lane' : 'border-b'}
+      style={tone === 'light' ? { borderColor: 'var(--sf-rule)' } : undefined}
     >
       <div className="sf-container flex flex-col gap-5 py-[var(--sf-space-lg)] md:flex-row md:items-end md:justify-between md:py-[var(--sf-space-xl)]">
         <div className="min-w-0">

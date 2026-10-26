@@ -167,7 +167,7 @@ export function UserListPageClient({
   const header = (
     <DeskHeader
       title="Staff"
-      meta={statusCounts ? `${statusCounts.all} members · ${statusCounts.sales} sales · ${statusCounts.service} service · ${statusCounts.finance} finance` : undefined}
+      meta={statusCounts ? `${statusCounts.all} ${statusCounts.all === 1 ? 'member' : 'members'} · ${statusCounts.sales} sales · ${statusCounts.service} service · ${statusCounts.finance} finance` : undefined}
       actions={
         <Pill variant="primary" onClick={() => setIsCreateDrawerOpen(true)} aria-label="Add staff member">
           <CirclePlus />

@@ -50,3 +50,11 @@ export function photoAttributionFor(src?: string | null): PhotoAttribution | nul
   const path = src.split(/[?#]/)[0]
   return BUILT_IN_PHOTO_ATTRIBUTIONS.find((photo) => photo.path === path) ?? null
 }
+
+// A bundled photo stands in for a vehicle when the photographed model is not this vehicle's model.
+export function isRepresentativePhoto(src: string | null | undefined, vehicle: { make?: string | null; model?: string | null }): boolean {
+  const photo = photoAttributionFor(src)
+  if (!photo || !vehicle.make || !vehicle.model) return false
+  const subject = photo.vehicle.toLowerCase()
+  return !(subject.includes(vehicle.make.toLowerCase()) && subject.includes(vehicle.model.toLowerCase()))
+}

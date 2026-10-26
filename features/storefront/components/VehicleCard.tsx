@@ -14,6 +14,7 @@ import { formatMileage, formatPrice } from '../lib/format'
 import { primaryVehicleImage, vehicleImageUrl } from '../lib/images'
 import { vehicleConditionLabel, vehicleStatus } from '../lib/vehicleStatus'
 import { PhotoAttribution } from './PhotoAttribution'
+import { isRepresentativePhoto } from '../lib/photoAttribution'
 import { useStorefrontBusiness } from './StorefrontBusinessProvider'
 import { VehiclePhotoPlaceholder } from './VehiclePhotoPlaceholder'
 
@@ -46,6 +47,7 @@ export function VehicleCard({
   const title = vehicle.trim ? `${name} ${vehicle.trim}` : name
   const status = vehicleStatus(vehicle.status)
   const href = `/inventory/${vehicle.id}`
+  const representative = isRepresentativePhoto(imageUrl, vehicle)
 
   const toggleCompare = () => {
     if (comparing) {
@@ -80,6 +82,7 @@ export function VehicleCard({
           )}
           <span className="sf-chip sf-chip-dark absolute left-3 top-3">{vehicleConditionLabel(vehicle.condition)}</span>
           <span className="sf-stall absolute bottom-3 left-3">#{vehicle.stockNumber}</span>
+          {representative && <span className="sf-chip sf-chip-dark absolute bottom-3 right-3">Representative photo</span>}
         </Link>
         <div className="flex min-w-0 flex-col justify-end gap-5">
           <div className="min-w-0">
@@ -131,6 +134,7 @@ export function VehicleCard({
         )}
         <span className="sf-chip sf-chip-dark absolute left-2.5 top-2.5">{vehicleConditionLabel(vehicle.condition)}</span>
         <span className="sf-stall absolute bottom-2.5 left-2.5">#{vehicle.stockNumber}</span>
+        {representative && <span className="sf-chip sf-chip-dark absolute bottom-2.5 right-2.5">Representative photo</span>}
       </Link>
 
       <div className="flex flex-1 flex-col pt-3">

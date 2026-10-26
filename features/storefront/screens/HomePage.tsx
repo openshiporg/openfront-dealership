@@ -11,6 +11,7 @@ import { VehicleCard } from '../components/VehicleCard'
 import { vehicleConditionLabel } from '../lib/vehicleStatus'
 import { formatPrice, vehicleTitle } from '../lib/format'
 import { primaryVehicleImage, vehicleImageUrl } from '../lib/images'
+import { isRepresentativePhoto } from '../lib/photoAttribution'
 import { loadHomeQuery, selectHomeFeaturedVehicles, selectHomeInventoryCount } from '../lib/data/home-inventory'
 import { loadStorefrontBusiness } from '../lib/data/storefront-business'
 import { createStorefrontBusiness } from '../lib/business'
@@ -20,7 +21,7 @@ async function getFeaturedVehicles() {
     () => fetchGraphQL<unknown>(GET_VEHICLES, {
       where: { status: { equals: 'available' } },
       orderBy: [{ year: 'desc' }],
-      take: 6,
+      take: 7,
     }),
     selectHomeFeaturedVehicles<Vehicle>,
   )
@@ -118,8 +119,9 @@ export async function HomePage() {
           {lead && leadImage ? (
             <Link href={`/inventory/${lead.id}`} className="sf-lead-frame group flex min-h-[18rem] flex-col sm:min-h-[24rem]">
               <Image src={leadImage} alt={vehicleTitle(lead)} fill priority unoptimized sizes="(min-width: 1024px) 46rem, 100vw" className="object-cover transition-transform duration-700 group-hover:scale-[1.02]" />
-              <span className="relative m-3 self-start md:m-4">
+              <span className="relative m-3 flex items-start justify-between gap-2 md:m-4">
                 <span className="sf-stall">#{lead.stockNumber}</span>
+                {isRepresentativePhoto(leadImage, lead) && <span className="sf-chip sf-chip-dark">Representative photo</span>}
               </span>
               <span className="relative mt-auto flex flex-wrap items-end justify-between gap-x-6 gap-y-1 border-t px-4 py-3 md:px-5" style={{ background: 'var(--sf-paper)', borderColor: 'var(--sf-rule)' }}>
                 <span className="min-w-0">
@@ -153,7 +155,7 @@ export async function HomePage() {
             </div>
           ) : vehicles.length > 0 ? (
             <div className="grid min-w-0 grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-              {vehicles.map((vehicle, index) => (
+              {vehicles.filter((vehicle) => vehicle.id !== lead?.id).slice(0, 6).map((vehicle, index) => (
                 <VehicleCard key={vehicle.id} vehicle={vehicle} priority={index < 3} />
               ))}
             </div>

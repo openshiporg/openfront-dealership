@@ -1094,7 +1094,7 @@ export function VehicleListPageClient({
                           : <span className="absolute inset-0 grid place-items-center text-[10px] text-muted-foreground">No photo</span>}
                       </div>
                     </Td>
-                    <Td className="min-w-0 max-w-[22rem]">
+                    <Td className="min-w-0 max-w-[22rem] max-md:max-w-[13rem]">
                       <div className="min-w-0 break-words">{vehicleName(vehicle)}</div>
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">{subline.join(' · ')}</p>
                       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 md:hidden">

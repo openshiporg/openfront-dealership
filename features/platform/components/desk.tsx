@@ -15,7 +15,7 @@ export type DeskTone = 'ok' | 'warn' | 'bad' | 'info' | 'idle' | 'accent'
 
 const MARK_TONE: Record<DeskTone, string> = {
   ok: 'bg-emerald-600 dark:bg-emerald-400',
-  warn: 'bg-amber-500 dark:bg-amber-400',
+  warn: 'bg-orange-700 dark:bg-orange-400',
   bad: 'bg-red-600 dark:bg-red-400',
   info: 'bg-sky-600 dark:bg-sky-400',
   idle: 'bg-zinc-400 dark:bg-zinc-500',
@@ -24,7 +24,7 @@ const MARK_TONE: Record<DeskTone, string> = {
 
 const TEXT_TONE: Record<DeskTone, string> = {
   ok: 'text-emerald-700 dark:text-emerald-300',
-  warn: 'text-amber-700 dark:text-amber-300',
+  warn: 'text-orange-800 dark:text-orange-300',
   bad: 'text-red-700 dark:text-red-300',
   info: 'text-sky-700 dark:text-sky-300',
   idle: 'text-muted-foreground',
@@ -212,7 +212,7 @@ export function Segmented<T extends string>({
           {option.tone && <StatusDot tone={option.tone} className="size-1.5" />}
           {option.label}
           {option.count !== undefined && (
-            <span className={cn('text-[11px] tabular-nums', option.count > 0 ? 'text-foreground/70' : 'text-muted-foreground/70')}>{option.count}</span>
+            <span className={cn('text-[12px] tabular-nums', option.count > 0 ? 'text-foreground/70' : 'text-muted-foreground/70')}>{option.count}</span>
           )}
         </Pill>
       ))}
@@ -238,9 +238,9 @@ export function Figure({
       className={cn(
         deskFigureFont.className,
         'inline-block font-bold leading-none tabular-nums tracking-[-0.01em] [font-stretch:72%]',
-        size === 'sm' && 'text-[15px]',
+        size === 'sm' && 'text-[14px]',
         size === 'md' && 'text-xl',
-        size === 'lg' && 'text-[28px]',
+        size === 'lg' && 'text-2xl',
         attention && 'rounded-[2px] bg-[oklch(0.9_0.17_95)] px-1 text-zinc-950 dark:bg-[oklch(0.84_0.16_92)]',
         className,
       )}
@@ -259,7 +259,7 @@ export function Attention({ children, className }: { children: React.ReactNode; 
   )
 }
 
-/** One summary figure. Summary strips sit below the work, so they stay quiet. */
+/** One summary figure. Summary strips sit below the work, so they stay quiet: body-scale figures, no boxes. */
 export function Readout({
   label,
   value,
@@ -274,24 +274,24 @@ export function Readout({
   className?: string
 }) {
   return (
-    <div className={cn('min-w-0 px-4 py-3', className)}>
-      <TitleLine as="p" tone={tone && tone !== 'idle' ? tone : undefined} className="text-[12px] font-medium text-muted-foreground">
+    <div className={cn('min-w-0 py-2.5 pr-4', className)}>
+      <TitleLine as="p" tone={tone && tone !== 'idle' ? tone : undefined} className="text-[12px] text-muted-foreground">
         {label}
       </TitleLine>
-      <p className="mt-1.5 truncate text-foreground">
-        <Figure size="lg">{value}</Figure>
+      <p className="mt-0.5 truncate text-foreground">
+        <Figure size="md">{value}</Figure>
       </p>
-      {sub && <p className="mt-1 truncate text-xs text-muted-foreground">{sub}</p>}
+      {sub && <p className="mt-0.5 truncate text-[12px] text-muted-foreground">{sub}</p>}
     </div>
   )
 }
 
-/** Hairline-divided row of summary figures; two up on phones. */
+/** One borderless hairline row of summary figures; two up on phones. */
 export function ReadoutStrip({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <div
       className={cn(
-        'grid grid-cols-2 gap-px overflow-hidden rounded-md border bg-border md:grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] [&>*]:bg-card max-md:[&>*:last-child:nth-child(odd)]:col-span-2',
+        'grid grid-cols-2 gap-x-4 border-y md:grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] md:[&>*+*]:border-l md:[&>*+*]:pl-4',
         className,
       )}
     >
@@ -319,7 +319,7 @@ export function DeskSection({
   return (
     <section className={cn('min-w-0', className)} aria-labelledby={id}>
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-foreground/15 pb-2">
-        <h2 id={id} className="flex items-baseline gap-2 text-[15px] font-semibold text-foreground">
+        <h2 id={id} className="flex items-baseline gap-2 text-[14px] font-semibold text-foreground">
           {title}
           {count !== undefined && <span className="text-[13px] font-normal tabular-nums text-muted-foreground">{count}</span>}
         </h2>
@@ -342,7 +342,7 @@ export function Panel({ children, className, ...props }: React.HTMLAttributes<HT
 /** Dense table inside a panel. Columns marked `priority` 2/3 drop at narrower widths. */
 export function DeskTable({ children, className, ...props }: React.TableHTMLAttributes<HTMLTableElement>) {
   return (
-    <div className="min-w-0 overflow-x-auto rounded-md border bg-card">
+    <div className="w-full min-w-0 max-w-full overflow-x-auto rounded-md border bg-card">
       <table className={cn('w-full border-collapse text-[13px]', className)} {...props}>
         {children}
       </table>
@@ -442,7 +442,7 @@ export function Notice({
       className={cn(
         'flex min-w-0 items-baseline gap-2 rounded-[4px] border px-3 py-2 text-[13px]',
         tone === 'bad' && 'border-red-600/30 bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200',
-        tone === 'warn' && 'border-amber-500/40 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100',
+        tone === 'warn' && 'border-orange-600/35 bg-orange-50 text-orange-900 dark:bg-orange-950/40 dark:text-orange-100',
         tone === 'ok' && 'border-emerald-600/30 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100',
         (tone === 'idle' || tone === 'info' || tone === 'accent') && 'bg-muted/50 text-foreground',
         className,

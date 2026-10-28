@@ -308,7 +308,7 @@ export function ServicePage() {
             <form onSubmit={handleSubmit} className="space-y-[var(--sf-space-xl)]">
               <FormSection title="Date and time">
                 <div className="space-y-5">
-                  <div className="grid gap-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <Field label="Date" htmlFor="appointmentDate">
                       <input
                         id="appointmentDate"

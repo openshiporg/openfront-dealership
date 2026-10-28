@@ -384,7 +384,7 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
           <div className="min-w-0 lg:col-start-1 lg:row-start-2">
             <section aria-labelledby="vdp-spec">
               <h2 id="vdp-spec" className="sf-heading text-[length:var(--sf-text-xl)]">Specifications</h2>
-              <dl className="sf-spec mt-4">
+              <dl className="sf-spec mt-4 grid-cols-2 sm:grid-cols-3">
                 {specs.map((spec) => (
                   <div key={spec.label}>
                     <dt>{spec.label}</dt>

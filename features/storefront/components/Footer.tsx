@@ -36,7 +36,7 @@ export function Footer({ branding = true }: { branding?: boolean }) {
       <Container className="py-[var(--sf-space-xl)] md:py-[var(--sf-space-2xl)]">
         <div className="grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-[1.5fr_1fr_1fr_1.2fr]">
           <div className="col-span-2 min-w-0 md:col-span-1">
-            <Link href="/" className="flex items-center gap-3">
+            <Link href="/" className="flex min-h-11 items-center gap-3">
               <StoreLogo svg={business.logoIcon} color={business.logoColor} className="size-8" />
               <span className="sf-heading text-[length:var(--sf-text-xl)]">{business.fullName}</span>
             </Link>
@@ -65,10 +65,10 @@ export function Footer({ branding = true }: { branding?: boolean }) {
 
           <nav aria-label="Shop" className="min-w-0">
             <p className="sf-eyebrow mb-4">Shop</p>
-            <ul className="space-y-2.5 text-[length:var(--sf-text-sm)]">
+            <ul className="text-[length:var(--sf-text-sm)] md:space-y-2.5">
               {SHOP.map((link) => (
                 <li key={link.href}>
-                  <Link href={link.href} className="transition-opacity hover:opacity-70">{link.label}</Link>
+                  <Link href={link.href} className="inline-flex min-h-10 items-center transition-opacity hover:opacity-70 md:min-h-0">{link.label}</Link>
                 </li>
               ))}
             </ul>
@@ -76,10 +76,10 @@ export function Footer({ branding = true }: { branding?: boolean }) {
 
           <nav aria-label="Visit" className="min-w-0">
             <p className="sf-eyebrow mb-4">Visit</p>
-            <ul className="space-y-2.5 text-[length:var(--sf-text-sm)]">
+            <ul className="text-[length:var(--sf-text-sm)] md:space-y-2.5">
               {VISIT.map((link) => (
                 <li key={link.href}>
-                  <Link href={link.href} className="transition-opacity hover:opacity-70">{link.label}</Link>
+                  <Link href={link.href} className="inline-flex min-h-10 items-center transition-opacity hover:opacity-70 md:min-h-0">{link.label}</Link>
                 </li>
               ))}
             </ul>
@@ -92,7 +92,7 @@ export function Footer({ branding = true }: { branding?: boolean }) {
                 {hours.map((row) => (
                   <div key={row.label} className="flex gap-4">
                     <dt className="sf-figure w-16 shrink-0" style={{ color: 'var(--sf-on-dark-2)' }}>{row.label}</dt>
-                    <dd className="min-w-0">{row.value}</dd>
+                    <dd className="min-w-0 tabular-nums">{row.value}</dd>
                   </div>
                 ))}
               </dl>

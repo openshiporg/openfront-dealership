@@ -138,7 +138,7 @@ export function VehicleCard({
       </Link>
 
       <div className="flex flex-1 flex-col pt-3">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-1 items-start justify-between gap-4">
           <div className="min-w-0">
             <h3 className="sf-heading min-w-0 text-[length:var(--sf-text-lg)]">
               <Link href={href} className="hover:text-[var(--sf-accent)]">{name}</Link>
@@ -155,7 +155,7 @@ export function VehicleCard({
           </div>
           <div className="min-w-0 border-l py-2 pl-3 pr-2" style={{ borderColor: 'var(--sf-rule)' }}>
             <dt className="sf-faint">Color</dt>
-            <dd className="truncate text-[length:var(--sf-text-sm)]">{vehicle.color || 'Not listed'}</dd>
+            <dd className="line-clamp-2 break-words leading-snug text-[length:var(--sf-text-sm)]" title={vehicle.color || undefined}>{vehicle.color || 'Not listed'}</dd>
           </div>
           <div className="min-w-0 border-l py-2 pl-3" style={{ borderColor: 'var(--sf-rule)' }}>
             <dt className="sf-faint">Status</dt>
@@ -166,7 +166,7 @@ export function VehicleCard({
           </div>
         </dl>
 
-        <div className="mt-auto flex items-center justify-between gap-3 pt-3">
+        <div className="flex items-center justify-between gap-3 pt-3">
           <PhotoAttribution src={imageUrl} className="min-w-0" />
           {compareButton && <div className="ml-auto shrink-0">{compareButton}</div>}
         </div>

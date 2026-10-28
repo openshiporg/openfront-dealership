@@ -103,7 +103,7 @@ export function Header() {
       >
         <Container className="flex h-16 items-center gap-2 sm:gap-4 md:h-[4.5rem]">
           {/* Phones: the name may wrap to two lines rather than truncate; it keeps a floor width so it never collapses to the logo. */}
-          <Link href="/" className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5 xl:flex-initial" aria-label={`${business.shortName} home`} title={business.shortName}>
+          <Link href="/" className="flex min-h-11 min-w-0 flex-1 items-center gap-2 sm:gap-2.5 xl:flex-initial" aria-label={`${business.shortName} home`} title={business.shortName}>
             <StoreLogo svg={business.logoIcon} color={business.logoColor} className="size-7 shrink-0" />
             <span className="sf-heading line-clamp-2 min-w-[6rem] break-words text-[0.9375rem] leading-tight sm:line-clamp-1 sm:text-[1rem] md:text-[1.1875rem]">{business.shortName}</span>
           </Link>

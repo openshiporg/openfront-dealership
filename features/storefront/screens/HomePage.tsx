@@ -117,9 +117,11 @@ export async function HomePage() {
           </div>
 
           {lead && leadImage ? (
-            <Link href={`/inventory/${lead.id}`} className="sf-lead-frame group flex min-h-[18rem] flex-col sm:min-h-[24rem]">
-              <Image src={leadImage} alt={vehicleTitle(lead)} fill priority unoptimized sizes="(min-width: 1024px) 46rem, 100vw" className="object-cover transition-transform duration-700 group-hover:scale-[1.02]" />
-              <span className="relative m-3 flex items-start justify-between gap-2 md:m-4">
+            <Link href={`/inventory/${lead.id}`} className="sf-lead-frame group flex flex-col lg:min-h-[24rem]">
+              <span className="relative block aspect-[4/3] overflow-hidden lg:absolute lg:inset-0 lg:aspect-auto">
+                <Image src={leadImage} alt={vehicleTitle(lead)} fill priority unoptimized sizes="(min-width: 1024px) 46rem, 100vw" className="object-cover transition-transform duration-700 group-hover:scale-[1.02]" />
+              </span>
+              <span className="absolute inset-x-0 top-0 m-3 flex items-start justify-between gap-2 md:m-4">
                 <span className="sf-stall">#{lead.stockNumber}</span>
                 {isRepresentativePhoto(leadImage, lead) && <span className="sf-chip sf-chip-dark">Representative photo</span>}
               </span>

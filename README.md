@@ -1,6 +1,10 @@
+<!-- logo -->
+
 ![Openfront Dealership](https://openship.org/og/openfront-dealership.png)
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fopenshiporg%2Fopenfront-dealership&env=DATABASE_URL%2CSESSION_SECRET%2CS3_BUCKET_NAME%2CS3_REGION%2CS3_ACCESS_KEY_ID%2CS3_SECRET_ACCESS_KEY)
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/openfront-dealership)
 
 Openfront Dealership is a self-hostable digital showroom and dealership-operations application. Shoppers can explore vehicles, compare options, and submit sales, test-drive, trade-in, finance, or service requests. Teams coordinate inventory, CRM, deal desk, finance records, delivery, service, parts, and accounting.
 
@@ -10,12 +14,10 @@ Openfront Dealership is a self-hostable digital showroom and dealership-operatio
 
 ![Vehicle photograph included with the Dealership storefront](public/images/family-suv.jpg)
 
-Explore the application locally using the setup instructions below.
-
 | | |
 |---|---|
-| **Public application** | `/` on your development URL |
-| **Dashboard** | `/dashboard` on your development URL |
+| **Storefront** | [dealership.openship.org](https://dealership.openship.org) |
+| **Dashboard** | [dealership.openship.org/dashboard](https://dealership.openship.org/dashboard) |
 
 [Learn more →](https://openship.org/products/openfront-dealership)
 

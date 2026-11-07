@@ -4,6 +4,7 @@
   "license": "MIT",
   "private": true,
   "scripts": {
+    "test:prisma-errors": "tsx --test features/keystone/lib/keystonePrismaErrors.test.ts",
     "dev": "keystone build --no-ui && npm run migrate && next dev",
     "build": "keystone build --no-ui && next build",
     "release:migrate": "prisma migrate deploy",

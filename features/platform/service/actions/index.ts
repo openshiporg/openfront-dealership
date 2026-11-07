@@ -103,7 +103,16 @@ export async function transitionServiceAppointment(input: { id: string; toStatus
   `, input)
 }
 
-/** Appointment details are open CRUD for service staff (ServiceAppointment.ts); status stays command-only. */
+/** Moves an appointment under the hourly service slot capacity. */
+export async function rescheduleServiceAppointment(input: { id: string; appointmentDate: string; idempotencyKey: string }) {
+  return command<{ rescheduleServiceAppointment: { id: string } }>(`
+    mutation RescheduleServiceAppointment($id: ID!, $appointmentDate: DateTime!, $idempotencyKey: String!) {
+      rescheduleServiceAppointment(id: $id, appointmentDate: $appointmentDate, idempotencyKey: $idempotencyKey) { id }
+    }
+  `, input)
+}
+
+/** Appointment details are open CRUD for service staff (ServiceAppointment.ts); status and date stay command-only. */
 export async function updateServiceAppointment(id: string, data: Record<string, unknown>) {
   const response = await keystoneClient<{ updateServiceAppointment: { id: string } | null }>(`
     mutation UpdateServiceAppointment($id: ID!, $data: ServiceAppointmentUpdateInput!) {

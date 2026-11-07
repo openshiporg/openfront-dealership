@@ -154,6 +154,8 @@ async function arrangeInventoryVehiclePhotosCommand(_root: unknown, { data }: an
     const currentIds = new Set(current.map((image: any) => image.id))
     if (current.length !== imageIds.length || imageIds.some(id => !currentIds.has(id))) throw new Error('Photos changed; reload and try again')
     if (photoArrangementUnchanged(current, imageIds)) return false
+    // Clear the old primary before promoting the new one: at most one primary photo per vehicle (unique index).
+    await tx.prisma.vehicleImage.updateMany({ where: { vehicleId: stock.vehicle.id, isPrimary: true, id: { not: imageIds[0] } }, data: { isPrimary: false } })
     for (const [index, id] of imageIds.entries()) {
       await tx.prisma.vehicleImage.update({ where: { id }, data: { sortOrder: index, isPrimary: index === 0 } })
     }

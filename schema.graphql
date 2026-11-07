@@ -8875,6 +8875,7 @@ type Mutation {
   recordLeadInteraction(data: RecordLeadInteractionInput!): LeadInteractionResult!
   updateTestDriveWorkflow(data: TestDriveWorkflowInput!): TestDrive
   transitionServiceAppointment(id: ID!, toStatus: String!, idempotencyKey: String!): ServiceAppointment
+  rescheduleServiceAppointment(id: ID!, appointmentDate: DateTime!, idempotencyKey: String!): ServiceAppointment
   recordTradeInAppraisal(data: RecordTradeInAppraisalInput!): TradeIn
   createLeadTask(data: CreateLeadTaskInput!): Task
   completeTask(id: ID!, idempotencyKey: String!): Task

@@ -39,6 +39,9 @@ export async function openServiceOrder(_root: unknown, { data }: { data: any }, 
     taxCents: cents(data.taxCents, 'Tax'),
     grandTotalCents: cents(data.grandTotalCents, 'Grand total'),
   }
+  if (evidence.grandTotalCents !== evidence.laborTotalCents + evidence.partsTotalCents + evidence.taxCents) {
+    throw new Error('Grand total must equal labor plus parts plus tax')
+  }
   const orderId = await context.transaction(async (tx: any) => {
     await tx.prisma.$queryRaw`SELECT 1 AS "locked" FROM pg_advisory_xact_lock(hashtextextended(${`command:${eventKey}`}, 0))`
     const replay = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { aggregateId: true } })

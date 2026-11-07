@@ -13,6 +13,7 @@ import {
   getRooftopStaff,
   getServiceAppointmentDetail,
   openServiceOrder,
+  rescheduleServiceAppointment,
   transitionServiceAppointment,
   updateServiceAppointment,
 } from '../actions'
@@ -212,7 +213,6 @@ export function ServiceAppointmentDetailPageClient({
     }
     const techId = values.assignedTechId && values.assignedTechId !== UNASSIGNED ? values.assignedTechId : null
     const data: Record<string, unknown> = {
-      appointmentDate: at!.toISOString(),
       serviceType: values.serviceType,
       description: (values.description || '').trim(),
       estimatedDuration: duration ?? null,
@@ -226,6 +226,17 @@ export function ServiceAppointmentDetailPageClient({
     else if (appointment.assignedTech) data.assignedTech = { disconnect: true }
     setForm({ ...form, errors: {}, formError: null })
     setBusy('form')
+    // A new time goes through the reschedule command, which enforces the hourly slot capacity.
+    if (!appointment.appointmentDate || new Date(appointment.appointmentDate).getTime() !== at!.getTime()) {
+      const scope = `reschedule:${at!.toISOString()}`
+      const moved = await rescheduleServiceAppointment({ id: appointment.id, appointmentDate: at!.toISOString(), idempotencyKey: attemptKeys.key(scope) })
+      attemptKeys.settle(scope, moved)
+      if (!moved.success) {
+        setBusy(null)
+        setForm(current => (current ? { ...current, formError: moved.error } : current))
+        return
+      }
+    }
     const response = await updateServiceAppointment(appointment.id, data)
     setBusy(null)
     if (!response.success) {

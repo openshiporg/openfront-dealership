@@ -49,12 +49,13 @@ export const ServicePackage = list({
     }),
 
     // Pricing and Duration
-    priceCents: integer({ validation: { isRequired: true }, label: 'Price (cents)', ui: { description: 'Package price in integer USD cents' } }),
+    priceCents: integer({ validation: { isRequired: true, min: 0 }, label: 'Price (cents)', ui: { description: 'Package price in integer USD cents' } }),
     price: virtual({
       field: graphql.field({ type: graphql.Float, resolve(item: any) { return item.priceCents / 100 } }),
       ui: { itemView: { fieldMode: 'read' } },
     }),
     estimatedDuration: integer({
+      validation: { min: 0 },
       label: 'Estimated Duration (Minutes)',
       ui: {
         description: 'Expected time to complete',

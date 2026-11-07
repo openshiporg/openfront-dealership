@@ -131,6 +131,8 @@ async function transitionDealCommand(
       if (!deal.vehicle?.id) throw new Error('A vehicle is required before deal submission')
       if (!deal.acceptedAt || !deal.acceptedSnapshot || Object.keys(deal.acceptedSnapshot).length === 0) throw new Error('Accepted worksheet evidence is required before submission')
       if (Number(deal.acceptedSnapshot.worksheetVersion || 0) !== Number(deal.worksheetVersion || 0)) throw new Error('The current worksheet version must be presented and accepted before submission')
+      // Serialize submissions for one vehicle; the partial unique index Deal_single_active_per_vehicle_key backs this.
+      await transactionContext.prisma.$queryRaw`SELECT "id" FROM "Vehicle" WHERE "id" = ${deal.vehicle.id} FOR UPDATE`
       const vehicleState = await transactionContext.prisma.vehicle.findUnique({ where: { id: deal.vehicle.id }, select: { status: true } })
       if (vehicleState?.status === 'available') {
         const reserved = await transactionContext.prisma.vehicle.updateMany({ where: { id: deal.vehicle.id, status: 'available' }, data: { status: 'pending' } })

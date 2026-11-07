@@ -15,7 +15,8 @@ export const ReportRun = list({
     savedReport: relationship({ ref: 'SavedReport', db: requiredRelationshipDb('savedReport') }),
     status: select({ type: 'string', options: ['queued', 'completed', 'failed', 'expired'].map(value => ({ label: value, value })), validation: { isRequired: true } }),
     exportFormat: select({ type: 'string', options: ['json', 'csv'].map(value => ({ label: value, value })), validation: { isRequired: true } }),
-    resultSnapshot: json({ defaultValue: {} }),
+    // Runs keep their result for 30 days (expiresAt); after that the snapshot is no longer served.
+    resultSnapshot: json({ defaultValue: {}, access: { read: ({ item }: any) => !item?.expiresAt || new Date(item.expiresAt).getTime() > Date.now() } }),
     resultDigest: text(),
     errorCode: text(),
     completedAt: timestamp(),

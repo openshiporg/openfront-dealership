@@ -3,6 +3,7 @@ import { permissions } from '../access'
 import { domainEventRequestHash, recordDomainEventInTransaction, type DomainEventInput } from '../lifecycle/domainEvents'
 import { assertSessionRooftopPermission } from '../tenantRecords'
 import { cancelTestDriveInTransaction, TEST_DRIVE_CANCEL_SELECT } from './customerBookings'
+import { assertServiceSlotCapacity } from './bookingCapacity'
 
 function commandKey(value: unknown) {
   const key = String(value || '').trim()
@@ -217,6 +218,46 @@ export async function transitionServiceAppointment(_root: unknown, { id, toStatu
     const changed = await tx.prisma.serviceAppointment.updateMany({
       where: { id, status: appointment.status, updatedAt: new Date(appointment.updatedAt) },
       data: { status: toStatus },
+    })
+    if (changed.count !== 1) throw new Error('Service appointment changed concurrently; reload and retry')
+    await recordDomainEventInTransaction(tx, event)
+  }, { timeout: 30_000 })
+  return context.db.ServiceAppointment.findOne({ where: { id } })
+}
+
+/**
+ * Staff reschedule. Moves an open appointment under the same hourly slot capacity the booking
+ * paths enforce; the date field itself is not writable through generic updates.
+ */
+export async function rescheduleServiceAppointment(_root: unknown, { id, appointmentDate, idempotencyKey }: any, context: any) {
+  if (!context.session?.itemId || !permissions.canManageService({ session: context.session })) throw new Error('Service management permission is required')
+  const appointment = await context.query.ServiceAppointment.findOne({ where: { id }, query: 'id status appointmentDate rooftop { id } updatedAt' })
+  if (!appointment?.rooftop?.id) throw new Error('Service appointment not found or not accessible')
+  await assertSessionRooftopPermission(context, appointment.rooftop.id, 'canManageService')
+  if (!['scheduled', 'checked-in'].includes(appointment.status)) throw new Error('Only scheduled or checked-in appointments can be rescheduled')
+  const at = new Date(String(appointmentDate || ''))
+  if (Number.isNaN(at.getTime())) throw new Error('Choose a valid date and time')
+  if (at.getTime() > Date.now() + 366 * 24 * 60 * 60 * 1000) throw new Error('Appointments can be scheduled up to a year ahead')
+  const event: DomainEventInput = {
+    eventKey: `service-appointment-reschedule:${commandKey(idempotencyKey)}`,
+    rooftopId: appointment.rooftop.id,
+    aggregateType: 'ServiceAppointment', aggregateId: id, action: 'rescheduled', topic: 'service-appointment.rescheduled',
+    actorId: context.session.itemId,
+    afterSnapshot: { appointmentId: id, from: appointment.appointmentDate, to: at.toISOString() },
+    payload: { appointmentId: id, rooftopId: appointment.rooftop.id, appointmentDate: at.toISOString() },
+  }
+  await context.transaction(async (tx: any) => {
+    if (await replayOrLock(tx, event)) return
+    let capacitySlot: string
+    try {
+      capacitySlot = await assertServiceSlotCapacity(tx, appointment.rooftop.id, at.toISOString(), id)
+    } catch (error) {
+      // Staff commands report plain errors; keep the booking path's wording.
+      throw new Error(error instanceof Error ? error.message : 'That service capacity slot is full. Choose another time.')
+    }
+    const changed = await tx.prisma.serviceAppointment.updateMany({
+      where: { id, status: appointment.status, updatedAt: new Date(appointment.updatedAt) },
+      data: { appointmentDate: at, capacitySlot },
     })
     if (changed.count !== 1) throw new Error('Service appointment changed concurrently; reload and retry')
     await recordDomainEventInTransaction(tx, event)

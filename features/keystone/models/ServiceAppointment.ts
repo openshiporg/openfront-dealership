@@ -63,7 +63,8 @@ export const ServiceAppointment = list({
     }),
     vehicleVin: text(),
     transportationNeed: select({ type: 'string', options: ['none','waiter','shuttle','loaner','rental','drop-off'].map(value => ({ label: value, value })), defaultValue: 'none' }),
-    capacitySlot: text(),
+    // Derived from appointmentDate by the booking and reschedule commands.
+    capacitySlot: text({ access: { create: denyAll, update: denyAll } }),
     customerVehicleDescription: text({
       label: 'Customer Vehicle',
       ui: {
@@ -73,6 +74,8 @@ export const ServiceAppointment = list({
 
     // Appointment Details
     appointmentDate: timestamp({
+      // Moves go through rescheduleServiceAppointment so the hourly slot capacity is enforced.
+      access: { update: denyAll },
       label: 'Appointment Date',
       validation: { isRequired: true },
     }),
@@ -96,6 +99,7 @@ export const ServiceAppointment = list({
       label: 'Description',
     }),
     estimatedDuration: integer({
+      validation: { min: 0 },
       label: 'Estimated Duration (Minutes)',
       ui: {
         description: 'Estimated time to complete service',
@@ -130,6 +134,7 @@ export const ServiceAppointment = list({
 
     // Vehicle Info at Service
     mileageIn: integer({
+      validation: { min: 0 },
       label: 'Mileage In',
       ui: {
         description: 'Odometer reading when vehicle checked in',

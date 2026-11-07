@@ -56,6 +56,7 @@ export const PartsInventory = list({
       label: 'Quantity in Stock',
     }),
     minimumQuantity: integer({
+      validation: { min: 0 },
       label: 'Minimum Quantity',
       ui: {
         description: 'Reorder threshold',
@@ -63,8 +64,8 @@ export const PartsInventory = list({
     }),
 
     // Pricing
-    costCents: integer({ label: 'Cost (cents)', ui: { description: 'Dealer cost per unit in integer USD cents' } }),
-    priceCents: integer({ validation: { isRequired: true }, label: 'Retail Price (cents)', ui: { description: 'Retail price in integer USD cents' } }),
+    costCents: integer({ validation: { min: 0 }, label: 'Cost (cents)', ui: { description: 'Dealer cost per unit in integer USD cents' } }),
+    priceCents: integer({ validation: { isRequired: true, min: 0 }, label: 'Retail Price (cents)', ui: { description: 'Retail price in integer USD cents' } }),
     cost: virtual({
       field: graphql.field({ type: graphql.Float, resolve(item: any) { return item.costCents == null ? null : item.costCents / 100 } }),
       ui: { itemView: { fieldMode: 'read' } },

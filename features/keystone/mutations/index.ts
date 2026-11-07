@@ -34,6 +34,7 @@ import {
   recordTradeInAppraisal,
   transitionLead,
   transitionServiceAppointment,
+  rescheduleServiceAppointment,
   updateTestDriveWorkflow,
 } from './operatorWorkflows';
 import { domainTimeline } from './domainTimeline';
@@ -681,6 +682,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         recordLeadInteraction(data: RecordLeadInteractionInput!): LeadInteractionResult!
         updateTestDriveWorkflow(data: TestDriveWorkflowInput!): TestDrive
         transitionServiceAppointment(id: ID!, toStatus: String!, idempotencyKey: String!): ServiceAppointment
+        rescheduleServiceAppointment(id: ID!, appointmentDate: DateTime!, idempotencyKey: String!): ServiceAppointment
         recordTradeInAppraisal(data: RecordTradeInAppraisalInput!): TradeIn
         createLeadTask(data: CreateLeadTaskInput!): Task
         completeTask(id: ID!, idempotencyKey: String!): Task
@@ -829,6 +831,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         recordLeadInteraction: operatorCommand(recordLeadInteraction),
         updateTestDriveWorkflow,
         transitionServiceAppointment: operatorCommand(transitionServiceAppointment),
+        rescheduleServiceAppointment: operatorCommand(rescheduleServiceAppointment),
         recordTradeInAppraisal: operatorCommand(recordTradeInAppraisal),
         createLeadTask: operatorCommand(createLeadTask),
         completeTask: operatorCommand(completeTask),

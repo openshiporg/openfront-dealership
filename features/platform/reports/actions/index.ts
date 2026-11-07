@@ -132,12 +132,13 @@ export async function queueDueReports(): Promise<Result<{ queuedCount: number }>
 }
 
 export async function getReportRunResult(id: string): Promise<Result<{ snapshot: unknown; exportFormat: string; name: string; completedAt: string | null }>> {
-  const response = await keystoneClient<{ reportRun: { resultSnapshot: unknown; exportFormat: string; completedAt: string | null; savedReport: { name: string } | null } | null }>(`
-    query ReportRunResult($id: ID!) { reportRun(where: { id: $id }) { resultSnapshot exportFormat completedAt savedReport { name } } }
+  const response = await keystoneClient<{ reportRun: { resultSnapshot: unknown; exportFormat: string; completedAt: string | null; expiresAt: string | null; savedReport: { name: string } | null } | null }>(`
+    query ReportRunResult($id: ID!) { reportRun(where: { id: $id }) { resultSnapshot exportFormat completedAt expiresAt savedReport { name } } }
   `, { id }, { cache: 'no-store' })
   if (!response.success) return { success: false, error: response.error }
   if (!response.data.reportRun) return { success: false, error: 'Run not found' }
   const run = response.data.reportRun
+  if (run.expiresAt && new Date(run.expiresAt).getTime() <= Date.now()) return { success: false, error: 'This run has expired. Run the report again for current results.' }
   return { success: true, data: { snapshot: run.resultSnapshot, exportFormat: run.exportFormat, name: run.savedReport?.name || 'report', completedAt: run.completedAt } }
 }
 

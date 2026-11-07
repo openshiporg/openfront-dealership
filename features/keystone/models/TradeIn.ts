@@ -66,6 +66,7 @@ export const TradeIn = list({
       label: 'Trim',
     }),
     mileage: integer({
+      validation: { min: 0 },
       label: 'Mileage',
       ui: {
         description: 'Current odometer reading',

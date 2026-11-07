@@ -329,6 +329,8 @@ export async function intakeInventoryVehicleInTransaction(
       sortOrder: 0,
       isPrimary: true,
     }
+    // The intake photo becomes the primary; demote any other primary first (one per vehicle).
+    await prisma.vehicleImage.updateMany({ where: { vehicleId: vehicle.id, isPrimary: true, ...(existingImage ? { id: { not: existingImage.id } } : {}) }, data: { isPrimary: false } })
     if (existingImage) await prisma.vehicleImage.update({ where: { id: existingImage.id }, data: imageValues })
     else {
       await prisma.vehicleImage.create({ data: imageValues })

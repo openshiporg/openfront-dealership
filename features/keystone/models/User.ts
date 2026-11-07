@@ -149,6 +149,7 @@ export const User = list({
       access: { create: permissions.canManagePeople, update: permissions.canManagePeople, read: ({ session, item }) => permissions.canManagePeople({ session }) || session?.itemId === item.id },
       label: 'Commission Rate (%)',
       defaultValue: 0,
+      validation: { min: 0, max: 100 },
       ui: {
         description: 'Sales commission percentage (e.g., 10 for 10%)',
         itemView: { fieldMode: ({ session, item }) => permissions.canManagePeople({ session }) ? 'edit' : session?.itemId === item?.id ? 'read' : 'hidden' },

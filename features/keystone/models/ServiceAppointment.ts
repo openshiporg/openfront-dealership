@@ -10,7 +10,8 @@ export const ServiceAppointment = list({
   access: {
     operation: {
       query: permissions.canManageService,
-      create: permissions.canManageService,
+      // New appointments go through bookServiceAppointment, which applies the hourly slot capacity.
+      create: () => false,
       update: permissions.canManageService,
       delete: permissions.canManageService,
     },

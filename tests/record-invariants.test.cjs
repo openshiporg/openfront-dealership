@@ -18,6 +18,7 @@ function load(relative, mocks = {}) {
 
 const access = { permissions: { canManageService: () => true } };
 const tenant = { assertSessionRooftopPermission: async () => {} };
+const FUTURE = new Date(Date.UTC(new Date().getUTCFullYear() + 1, 0, 12, 15, 20)).toISOString();
 const events = { recordDomainEventInTransaction: async () => ({ reused: false }), domainEventRequestHash: () => 'h' };
 
 test('a repair order cannot open with a grand total that is not labor + parts + tax', async () => {
@@ -61,21 +62,21 @@ function rescheduleHarness({ count, status = 'scheduled', changed = 1 }) {
 
 test('staff reschedule refuses a full hourly slot and writes nothing', async () => {
   const { reschedule, context, writes } = rescheduleHarness({ count: 4 });
-  await assert.rejects(reschedule(null, { id: 'a1', appointmentDate: '2026-11-12T15:20:00.000Z', idempotencyKey: 'reschedule-1' }, context), /service capacity slot is full/);
+  await assert.rejects(reschedule(null, { id: 'a1', appointmentDate: FUTURE, idempotencyKey: 'reschedule-1' }, context), /service capacity slot is full/);
   assert.equal(writes.length, 0);
 });
 
 test('staff reschedule moves the appointment and stamps the hour slot it now holds', async () => {
   const { reschedule, context, writes } = rescheduleHarness({ count: 3 });
-  await reschedule(null, { id: 'a1', appointmentDate: '2026-11-12T15:20:00.000Z', idempotencyKey: 'reschedule-2' }, context);
+  await reschedule(null, { id: 'a1', appointmentDate: FUTURE, idempotencyKey: 'reschedule-2' }, context);
   assert.equal(writes.length, 1);
-  assert.equal(writes[0].data.capacitySlot, '2026-11-12T15:00:00.000Z');
+  assert.equal(writes[0].data.capacitySlot, FUTURE.slice(0, 13) + ':00:00.000Z');
   assert.equal(writes[0].where.status, 'scheduled');
 });
 
 test('closed appointments cannot be rescheduled', async () => {
   const { reschedule, context } = rescheduleHarness({ count: 0, status: 'completed' });
-  await assert.rejects(reschedule(null, { id: 'a1', appointmentDate: '2026-11-12T15:20:00.000Z', idempotencyKey: 'reschedule-3' }, context), /Only scheduled or checked-in/);
+  await assert.rejects(reschedule(null, { id: 'a1', appointmentDate: FUTURE, idempotencyKey: 'reschedule-3' }, context), /Only scheduled or checked-in/);
 });
 
 test('the migration backs each command rule with a constraint', () => {

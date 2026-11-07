@@ -237,6 +237,7 @@ export async function rescheduleServiceAppointment(_root: unknown, { id, appoint
   if (!['scheduled', 'checked-in'].includes(appointment.status)) throw new Error('Only scheduled or checked-in appointments can be rescheduled')
   const at = new Date(String(appointmentDate || ''))
   if (Number.isNaN(at.getTime())) throw new Error('Choose a valid date and time')
+  if (at.getTime() < Date.now() - 5 * 60 * 1000) throw new Error('Choose a future time.')
   if (at.getTime() > Date.now() + 366 * 24 * 60 * 60 * 1000) throw new Error('Appointments can be scheduled up to a year ahead')
   const event: DomainEventInput = {
     eventKey: `service-appointment-reschedule:${commandKey(idempotencyKey)}`,

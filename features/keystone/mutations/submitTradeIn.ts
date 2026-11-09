@@ -74,7 +74,6 @@ export async function submitTradeIn(_root: unknown, { data }: { data: any }, con
       interestedVehicleId: optionalText(data.interestedVehicleId, 100, 'Interested vehicle'),
     },
     aggregateType: 'TradeIn',
-    topic: 'public-trade-in.submitted',
     aggregateId: result => String(result.tradeInId),
     handler: async (transactionContext, { rooftopId }) => {
       const vehicle = await resolveAvailableVehicle(transactionContext, data.interestedVehicleId, rooftopId)

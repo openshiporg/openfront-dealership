@@ -71,11 +71,11 @@ async function createWalkInTradeInCommand(_root: unknown, { data }: { data: any 
     await tx.prisma.$queryRaw`SELECT 1 AS "locked" FROM pg_advisory_xact_lock(hashtextextended(${`command:${eventKey}`}, 0))`
     const prior = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { aggregateId: true } })
     if (prior) {
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: 'TradeIn', aggregateId: prior.aggregateId, action: 'created', topic: 'trade-in.created', actorId: context.session.itemId, afterSnapshot: evidence, payload: { tradeInId: prior.aggregateId, rooftopId, leadId } })
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: 'TradeIn', aggregateId: prior.aggregateId, action: 'created', actorId: context.session.itemId, afterSnapshot: evidence, })
       return { id: prior.aggregateId, reused: true }
     }
     const tradeIn = await tx.prisma.tradeIn.create({ data: { ...values, rooftopId, leadId }, select: { id: true } })
-    await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: 'TradeIn', aggregateId: tradeIn.id, action: 'created', topic: 'trade-in.created', actorId: context.session.itemId, afterSnapshot: evidence, payload: { tradeInId: tradeIn.id, rooftopId, leadId } })
+    await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: 'TradeIn', aggregateId: tradeIn.id, action: 'created', actorId: context.session.itemId, afterSnapshot: evidence, })
     return { id: tradeIn.id, reused: false }
   }, { timeout: 30_000 })
   const row = await context.sudo().prisma.tradeIn.findUnique({ where: { id: result.id }, select: { id: true, updatedAt: true } })
@@ -167,8 +167,8 @@ async function setDealTradeInCommand(_root: unknown, { data }: { data: any }, co
         },
       })
       if (changed.count !== 1) throw new Error('Deal changed concurrently; reload and retry')
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: 'Deal', aggregateId: dealId, action, topic: `deal.${action}`, actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: deal.rooftopId, dealId, tradeInId: affectedTradeInId, tradeInValueCents } })
-      await recordDomainEventInTransaction(tx, { eventKey: `${eventKey}:trade-in`, rooftopId: deal.rooftopId, aggregateType: 'TradeIn', aggregateId: affectedTradeInId, action: tradeIn ? 'attached-to-deal' : 'detached-from-deal', topic: `trade-in.${tradeIn ? 'attached' : 'detached'}`, actorId: context.session.itemId, afterSnapshot: { tradeInId: affectedTradeInId, dealId, reason: reason || null, tradeInValueCents }, payload: { rooftopId: deal.rooftopId, dealId, tradeInId: affectedTradeInId } })
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: 'Deal', aggregateId: dealId, action, actorId: context.session.itemId, afterSnapshot: evidence, })
+      await recordDomainEventInTransaction(tx, { eventKey: `${eventKey}:trade-in`, rooftopId: deal.rooftopId, aggregateType: 'TradeIn', aggregateId: affectedTradeInId, action: tradeIn ? 'attached-to-deal' : 'detached-from-deal', actorId: context.session.itemId, afterSnapshot: { tradeInId: affectedTradeInId, dealId, reason: reason || null, tradeInValueCents }, })
       const current = await tx.prisma.deal.findUnique({ where: { id: dealId }, select: { id: true, status: true, updatedAt: true } })
       return { id: current.id, status: current.status, updatedAt: current.updatedAt, reused: false }
     }, { timeout: 30_000, isolationLevel: 'Serializable' })

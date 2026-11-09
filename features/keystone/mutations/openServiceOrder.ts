@@ -45,9 +45,8 @@ export async function openServiceOrder(_root: unknown, { data }: { data: any }, 
     if (replay) {
       await recordDomainEventInTransaction(tx, {
         eventKey, rooftopId, aggregateType: 'ServiceOrder', aggregateId: replay.aggregateId,
-        action: 'opened', topic: 'service-order.opened', actorId: context.session.itemId,
-        afterSnapshot: evidence, payload: { serviceOrderId: replay.aggregateId, rooftopId, status: 'estimate' },
-      })
+        action: 'opened', actorId: context.session.itemId,
+        afterSnapshot: evidence,       })
       return replay.aggregateId
     }
     const current = await tx.prisma.serviceAppointment.findUnique({ where: { id: appointmentId }, select: { serviceOrder: { select: { id: true } } } })
@@ -71,9 +70,8 @@ export async function openServiceOrder(_root: unknown, { data }: { data: any }, 
     if (attached.count !== 1) throw new Error('Appointment changed concurrently; reload and retry')
     await recordDomainEventInTransaction(tx, {
       eventKey, rooftopId, aggregateType: 'ServiceOrder', aggregateId: order.id,
-      action: 'opened', topic: 'service-order.opened', actorId: context.session.itemId,
-      afterSnapshot: evidence, payload: { serviceOrderId: order.id, rooftopId, status: 'estimate' },
-    })
+      action: 'opened', actorId: context.session.itemId,
+      afterSnapshot: evidence,     })
     return order.id
   }, { timeout: 30_000 })
 

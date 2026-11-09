@@ -6,7 +6,7 @@ Conventions used below:
 
 - **Write path.** "Command only" means the list's `access.operation.create` and `update` are `() => false` or `denyAll`, so every write goes through a custom mutation (or a hook or seed running as sudo). "Open CRUD" means Keystone create/update are allowed for the named permission, so the generic `/dashboard/<list>` pages can write it.
 - **Rooftop scoping.** Almost every operating list has `rooftop: rooftopField()` (`features/keystone/tenantRecords.ts:12`) and a `withRooftopScope` / `withRooftopPermissionScope` filter (`tenantRecords.ts:30`). Item create is gated by `canCreateRooftopRecord` (`tenantRecords.ts:107`). Permissions resolve from the user's Role, and the operating permissions can also come from an active dealer-group or rooftop membership role for that scope only (`access.ts:45-73`).
-- **Audit.** Every custom command writes a `DomainAuditEvent` plus a `DomainOutboxEvent` in the same transaction through `recordDomainEventInTransaction` (`lifecycle/domainEvents.ts:54-112`). The idempotency key is the event key, so a retry with the same key replays and a reused key with different evidence throws. This is why most lists are command-only.
+- **Audit.** Every custom command writes a `DomainAuditEvent` in the same transaction through `recordDomainEventInTransaction` (`lifecycle/domainEvents.ts:54-112`). The idempotency key is the event key, so a retry with the same key replays and a reused key with different evidence throws. This is why most lists are command-only.
 - **Registered lists.** `features/keystone/models/index.ts:73-145` registers **71** lists, not 73. The other four files in the folder are helpers: `fields.ts` (Role permission checkboxes), `trackingFields.ts` (`createdAt` and `updatedAt`), `prismaSchema.ts` and `index.ts`. `AuthenticationThrottle` is registered, but it is GraphQL-omitted and unused (`AuthenticationThrottle.ts:1-9`).
 - **Platform route** means `/dashboard/platform/<slice>`. A thin wrapper lives at `app/dashboard/(admin)/platform/<slice>/page.tsx`, and the logic lives in `features/platform/<slice>`. **Generic page** means the Keystone model pages at `/dashboard/<list>` (`app/dashboard/(admin)/[listKey]/**`). Generic pages do not count as platform coverage.
 
@@ -150,7 +150,6 @@ Also catalog or config, listed above under their own domains: ServicePackage, Fi
 | **SavedReport** | Saved operational report definition | name, reportType (`operations`, `audit`, `accounting-exceptions`, `payment-reconciliation`), filters (must be empty: "not supported yet", `reportingOperations.ts:120`), exportFormat (`json`, `csv`), schedule (`manual`, `daily`, `weekly`, `monthly`), active, nextRunAt | owner, rooftop | `saveOperationalReport` (`reportingOperations.ts:114-152`) | active flag; nextRunAt is advanced by runs | Command only |
 | **ReportRun** | One execution of a saved report | status (`queued`, `completed`, `failed`, `expired`), exportFormat, resultSnapshot, resultDigest, errorCode, completedAt, expiresAt | savedReport | `runSavedReport` (completed inline, `:154-181`); `queueDueSavedReports` (queued, `:183-204`) | `queued` is written but nothing processes queued runs into `completed` | Command only |
 | **DomainAuditEvent** | Append-only audit of every command and of Vehicle hooks | eventKey, requestHash, aggregateType, aggregateId, action, before/afterSnapshot, metadata, actor, occurredAt | actor | System (`lifecycle/domainEvents.ts:82-97`) | none | Command only; read needs `canViewReports`. Read through `domainTimeline` and `auditSearch`. |
-| **DomainOutboxEvent** | Outbox for downstream delivery | deliveryKey, topic, aggregate, payload, status (`pending`, `processing`, `delivered`, `failed`), attemptCount, availableAt, processedAt, lastError | none | System (`domainEvents.ts:98-110`) | Always written as `pending`. **No dispatcher in this repo moves it on.** | Command only |
 
 ### 1.11 Onboarding seed (`features/platform/onboarding/lib/seed.json`)
 
@@ -340,7 +339,6 @@ Each step lists the lists it touches, the command it uses, and the platform page
 
 ### W15. Also supported by the schema
 
-- **Outbox and observability.** DomainOutboxEvent rows are always `pending` and no dispatcher exists here. An admin view of pending and failed rows has no page.
 - **Customer account.** `registerCustomerAccount` and `customerRequestHistory` serve the storefront account (section 3.3).
 
 ---
@@ -449,7 +447,6 @@ The nav is defined in `features/platform/lib/navigation.ts:36-68`. Onboarding is
 | Reporting | SavedReport | none | **MISSING** | `saveOperationalReport` has no UI |
 | Reporting | ReportRun | none | **MISSING** | `runSavedReport` and `queueDueSavedReports` have no UI |
 | System | DomainAuditEvent | timelines on deals, finance and delivery | **THIN** | No `auditSearch` page |
-| System | DomainOutboxEvent | none | **MISSING** | System list; the parent would be an audit page |
 
 **Totals (70 live lists; AuthenticationThrottle excluded):**
 
@@ -529,7 +526,7 @@ Ordered by how much merchant work is blocked today. Each slice follows the E-com
 |---|---|---|---|---|---|
 | 12 | **catalog**: `/platform/catalog` (tabs: Makes and models, Service packages, Lead routing) | CRUD for Make and Model; service menu CRUD (the storefront `/service` reads it); routing rules with priority, source, assignee, SLA and active | Make, Model, ServicePackage, LeadRoutingRule | Open CRUD (Make, Model, ServicePackage); `configureLeadRoutingRule` | None |
 | 13 | **dealership**: `/platform/dealership` (or tabs in store-settings) | Dealer group edit; rooftop list, create and edit (status, slug, time zone, currency); payment providers | DealerGroup, Rooftop, PaymentProvider | Open CRUD with `canManageDealerships` / `canManagePayments` | None. Align the currency rule with onboarding (USD only). |
-| 14 | **reports**: `/platform/reports` | Saved reports, run now, run history and downloads, audit search, outbox health | SavedReport, ReportRun, DomainAuditEvent, DomainOutboxEvent | `saveOperationalReport`, `runSavedReport`, `queueDueSavedReports`, `auditSearch` | Queued ReportRuns are never processed (no worker), and saved filters are rejected ("not supported yet"). Outbox needs a read query; generic read needs `canViewReports`. |
+| 14 | **reports**: `/platform/reports` | Saved reports, run now, run history and downloads, audit search | SavedReport, ReportRun, DomainAuditEvent | `saveOperationalReport`, `runSavedReport`, `queueDueSavedReports`, `auditSearch` | Queued ReportRuns are never processed (no worker), and saved filters are rejected ("not supported yet"). Generic read needs `canViewReports`. |
 | 15 | **settings: API keys and retention**: `/platform/api-keys`, `/platform/retention` | Own keys: create (show the token once), scopes, IP limits, revoke. Retention policy per category, with legal hold. | ApiKey, RetentionPolicy | Open ApiKey CRUD (owner) | **`configureRetentionPolicy`**: RetentionPolicy create and update are denied and nothing writes it. Also there is no sweeper that reads it. |
 
 ### Storefront flows to add

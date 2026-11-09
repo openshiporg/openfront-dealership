@@ -41,7 +41,7 @@ export async function transferLeadOwnership(_root: unknown, { data }: any, conte
   const firstResponseDueAt = new Date(assignedAt.getTime() + 30 * 60_000)
   const evidence = { leadId: lead.id, assignedToId, expectedUpdatedAt: expectedUpdatedAt.toISOString(), reason, assignedAt, firstResponseDueAt }
   const reused = await context.transaction(async (tx: any) => {
-    const event: DomainEventInput = { eventKey, rooftopId: lead.rooftop.id, aggregateType: 'Lead', aggregateId: lead.id, action: 'ownership-transferred', topic: 'lead.ownership-transferred', actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: lead.rooftop.id, leadId: lead.id, assignedToId } }
+    const event: DomainEventInput = { eventKey, rooftopId: lead.rooftop.id, aggregateType: 'Lead', aggregateId: lead.id, action: 'ownership-transferred', actorId: context.session.itemId, afterSnapshot: evidence, }
     const recorded = await recordDomainEventInTransaction(tx, event)
     if (recorded.reused) return true
     const changed = await tx.prisma.lead.updateMany({ where: { id: lead.id, rooftopId: lead.rooftop.id, updatedAt: expectedUpdatedAt }, data: { assignedSalespersonId: assignedToId, assignedAt, firstResponseDueAt } })
@@ -128,7 +128,7 @@ export async function saveDealWorksheet(_root: unknown, { data }: any, context: 
   const reused = await context.transaction(async (tx: any) => {
     await lockDeal(tx, deal.id)
     await currentDealAuthority(tx, context.session, deal.id, ['canManageDeals'])
-    const event: DomainEventInput = { eventKey, rooftopId: deal.rooftop.id, aggregateType: 'Deal', aggregateId: deal.id, action: 'worksheet-saved', topic: 'deal.worksheet-saved', actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: deal.rooftop.id, dealId: deal.id, terms } }
+    const event: DomainEventInput = { eventKey, rooftopId: deal.rooftop.id, aggregateType: 'Deal', aggregateId: deal.id, action: 'worksheet-saved', actorId: context.session.itemId, afterSnapshot: evidence, }
     const recorded = await recordDomainEventInTransaction(tx, event)
     if (recorded.reused) return true
     const changed = await tx.prisma.deal.updateMany({
@@ -154,7 +154,7 @@ export async function presentDealWorksheet(_root: unknown, { data }: any, contex
   const reused = await context.transaction(async (tx: any) => {
     await lockDeal(tx, deal.id)
     await currentDealAuthority(tx, context.session, deal.id, ['canManageDeals'])
-    const event: DomainEventInput = { eventKey, rooftopId: deal.rooftop.id, aggregateType: 'Deal', aggregateId: deal.id, action: 'worksheet-presented', topic: 'deal.worksheet-presented', actorId: context.session.itemId, afterSnapshot: snapshot, payload: { rooftopId: deal.rooftop.id, dealId: deal.id, worksheetVersion: deal.worksheetVersion } }
+    const event: DomainEventInput = { eventKey, rooftopId: deal.rooftop.id, aggregateType: 'Deal', aggregateId: deal.id, action: 'worksheet-presented', actorId: context.session.itemId, afterSnapshot: snapshot, }
     const recorded = await recordDomainEventInTransaction(tx, event)
     if (recorded.reused) return true
     const changed = await tx.prisma.deal.updateMany({ where: { id: deal.id, status: 'pencil', updatedAt: expectedUpdatedAt }, data: { presentedSnapshot: snapshot, presentedAt: new Date() } })
@@ -178,7 +178,7 @@ export async function acceptDealWorksheet(_root: unknown, { data }: any, context
   const reused = await context.transaction(async (tx: any) => {
     await lockDeal(tx, deal.id)
     await currentDealAuthority(tx, context.session, deal.id, ['canManageDeals'])
-    const event: DomainEventInput = { eventKey, rooftopId: deal.rooftop.id, aggregateType: 'Deal', aggregateId: deal.id, action: 'worksheet-accepted', topic: 'deal.worksheet-accepted', actorId: context.session.itemId, afterSnapshot: snapshot, payload: { rooftopId: deal.rooftop.id, dealId: deal.id, worksheetVersion: deal.worksheetVersion } }
+    const event: DomainEventInput = { eventKey, rooftopId: deal.rooftop.id, aggregateType: 'Deal', aggregateId: deal.id, action: 'worksheet-accepted', actorId: context.session.itemId, afterSnapshot: snapshot, }
     const recorded = await recordDomainEventInTransaction(tx, event)
     if (recorded.reused) return true
     const changed = await tx.prisma.deal.updateMany({ where: { id: deal.id, status: 'pencil', updatedAt: expectedUpdatedAt }, data: { acceptedSnapshot: snapshot, acceptedAt: new Date() } })
@@ -211,7 +211,7 @@ export async function selectDealLenderOffer(_root: unknown, { data }: any, conte
     const evidence = { request, dealId: deal.id, lenderDecisionId: decision.id, binding, offer: { providerKey: decision.providerKey, decision: decision.decision, approvedAmountCents: decision.approvedAmountCents, aprBasisPoints: decision.aprBasisPoints, termMonths: decision.termMonths, monthlyPaymentCents: decision.monthlyPaymentCents } }
     const prior = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey } })
     if (!prior && deal.status !== 'pencil') throw new Error('Only pencil finance or lease deals can select lender offers')
-    const recorded = await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: 'Deal', aggregateId: deal.id, action: 'lender-offer-selected', topic: 'deal.lender-offer-selected', actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: deal.rooftopId, dealId: deal.id, lenderDecisionId: decision.id } })
+    const recorded = await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: 'Deal', aggregateId: deal.id, action: 'lender-offer-selected', actorId: context.session.itemId, afterSnapshot: evidence, })
     if (recorded.reused) {
       if (deal.selectedLenderDecisionId !== decision.id) throw new Error('Lender selection was superseded; select with a new request')
     } else {
@@ -241,7 +241,7 @@ export async function reopenDealWorksheet(_root: unknown, { data }: any, context
     await currentDealAuthority(tx, context.session, deal.id, ['canManageDeals', 'canApproveDeals'])
     const currentVehicle = await tx.prisma.vehicle.findUnique({ where: { id: rawDeal.vehicleId } })
     if (currentVehicle?.status !== 'pending' || currentVehicle.rooftopId !== deal.rooftop.id) throw new Error('Reserved vehicle is required to reopen a deal')
-    const event: DomainEventInput = { eventKey, rooftopId: deal.rooftop.id, aggregateType: 'Deal', aggregateId: deal.id, action: 'worksheet-reopened', topic: 'deal.worksheet-reopened', actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: deal.rooftop.id, dealId: deal.id, priorStatus: deal.status, status: 'pencil' } }
+    const event: DomainEventInput = { eventKey, rooftopId: deal.rooftop.id, aggregateType: 'Deal', aggregateId: deal.id, action: 'worksheet-reopened', actorId: context.session.itemId, afterSnapshot: evidence, }
     const recorded = await recordDomainEventInTransaction(tx, event)
     if (recorded.reused) return true
     const changed = await tx.prisma.deal.updateMany({ where: { id: deal.id, status: deal.status, updatedAt: expectedUpdatedAt }, data: { status: 'pencil', lockedAt: null, evidenceSnapshot: {}, presentedAt: null, presentedSnapshot: {}, acceptedAt: null, acceptedSnapshot: {}, selectedLenderDecisionId: null } })
@@ -283,7 +283,7 @@ export async function completeDealDelivery(_root: unknown, { data }: any, contex
       if (stableJson(prior.afterSnapshot?.request) !== stableJson(request) || prior.afterSnapshot?.binding?.leadId !== deal.leadId || prior.afterSnapshot?.vehicleId !== deal.vehicleId ||
           prior.afterSnapshot?.binding?.rooftopId !== authority.rooftopId || deal.status !== 'delivered' || deal.vehicle.status !== 'sold') throw new Error('Delivery retry is changed, superseded, or inconsistent; reload and reconcile')
       // Already committed is a historical fact, not NEW admission against today's artifacts.
-      // Scoped readback cannot retrospectively undo its original audit/outbox or sold VIN.
+      // Scoped readback cannot retrospectively undo its original audit or sold VIN.
       const current = await authority.context.query.Deal.findOne({ where: { id: deal.id }, query: 'id status updatedAt' })
       if (!current) throw new Error('Committed delivery receipt readback is unavailable in current scope')
       return { ...current, reused: true }
@@ -299,7 +299,6 @@ export async function completeDealDelivery(_root: unknown, { data }: any, contex
     if (stableJson(deliveryCase.deliverySnapshot?.checklist) !== stableJson(checklist) ||
         deliveryCase.deliverySnapshot?.customerAcknowledgment !== deliveryCase.customerAcknowledgment ||
         deliveryCase.deliverySnapshot?.acknowledgedAt !== deliveryCase.acknowledgedAt.toISOString()) throw new Error('Delivery acknowledgment no longer matches its recorded checklist evidence')
-    const payload = { rooftopId: deal.rooftopId, dealId: deal.id, vehicleId: deal.vehicleId, status: 'delivered' }
     if (deal.status !== 'financed') throw new Error('Only financed deals can be delivered')
     if (deliveryCase.status !== 'ready') throw new Error('Ready customer-acknowledged delivery case is required')
     if (stableJson(deliveryCase.deliverySnapshot?.binding) !== stableJson({ ...worksheetBinding(deal), acceptedHash: domainEventRequestHash(deal.acceptedSnapshot) })) throw new Error('Delivery acknowledgment is unbound or stale; record it for the current worksheet')
@@ -316,7 +315,7 @@ export async function completeDealDelivery(_root: unknown, { data }: any, contex
     if (completedCase.count !== 1) throw new Error('Delivery case changed concurrently')
     // The sale is done: the buyer's lead closes as won in the same transaction.
     await closeLeadWonOnDelivery(tx, { dealId: deal.id, leadId: deal.leadId, rooftopId: deal.rooftopId, actorId: context.session.itemId, deliveryEventKey: eventKey, occurredAt: new Date() })
-    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: 'Deal', aggregateId: deal.id, action: 'delivery-completed', topic: 'deal.delivery-completed', actorId: context.session.itemId, afterSnapshot: evidence, payload })
+    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: 'Deal', aggregateId: deal.id, action: 'delivery-completed', actorId: context.session.itemId, afterSnapshot: evidence })
     const current = await authority.context.query.Deal.findOne({ where: { id: deal.id }, query: 'id status updatedAt' })
     return { ...current, reused: false }
   }, { timeout: 30_000, isolationLevel: 'Serializable' })
@@ -335,17 +334,17 @@ export async function openFinanceFollowUp(_root: unknown, { data }: any, context
     const replay = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { metadata: true } })
     if (replay) {
       const priorTaskId = String((replay.metadata as any)?.taskId || '')
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: lead.rooftop.id, aggregateType: 'Lead', aggregateId: lead.id, action: 'finance-follow-up-opened', topic: 'financing.follow-up-opened', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { taskId: priorTaskId }, payload: { rooftopId: lead.rooftop.id, leadId: lead.id, taskId: priorTaskId } })
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: lead.rooftop.id, aggregateType: 'Lead', aggregateId: lead.id, action: 'finance-follow-up-opened', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { taskId: priorTaskId }, })
       return { id: priorTaskId, reused: true }
     }
     if (lead.tasks.length) {
       const existingTaskId = lead.tasks[0].id
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: lead.rooftop.id, aggregateType: 'Lead', aggregateId: lead.id, action: 'finance-follow-up-opened', topic: 'financing.follow-up-opened', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { taskId: existingTaskId }, payload: { rooftopId: lead.rooftop.id, leadId: lead.id, taskId: existingTaskId } })
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: lead.rooftop.id, aggregateType: 'Lead', aggregateId: lead.id, action: 'finance-follow-up-opened', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { taskId: existingTaskId }, })
       return { id: existingTaskId, reused: true }
     }
     const dueDate = new Date(Date.now() + 86_400_000)
     await tx.prisma.task.create({ data: { id: taskId, rooftopId: lead.rooftop.id, leadId: lead.id, title: `F&I follow-up: ${`${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'Finance applicant'}`, description: evidence.reason, priority: 'high', completed: false, dueDate } })
-    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: lead.rooftop.id, aggregateType: 'Lead', aggregateId: lead.id, action: 'finance-follow-up-opened', topic: 'financing.follow-up-opened', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { taskId }, payload: { rooftopId: lead.rooftop.id, leadId: lead.id, taskId } })
+    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: lead.rooftop.id, aggregateType: 'Lead', aggregateId: lead.id, action: 'finance-follow-up-opened', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { taskId }, })
     return { id: taskId, reused: false }
   }, { timeout: 30_000 })
   return { id: resolved.id, status: 'open', updatedAt: new Date(), reused: resolved.reused }
@@ -374,7 +373,7 @@ export async function addServiceOrderLineItem(_root: unknown, { data }: any, con
     const replay = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { metadata: true } })
     if (replay) {
       const priorLineId = String((replay.metadata as any)?.lineItemId || '')
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: order.rooftop.id, aggregateType: 'ServiceOrder', aggregateId: order.id, action: 'line-item-added', topic: 'service-order.line-item-added', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { lineItemId: priorLineId }, payload: { rooftopId: order.rooftop.id, serviceOrderId: order.id, lineItemId: priorLineId, priceCents } })
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: order.rooftop.id, aggregateType: 'ServiceOrder', aggregateId: order.id, action: 'line-item-added', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { lineItemId: priorLineId }, })
       return { id: priorLineId, reused: true }
     }
     if (!['estimate', 'approved', 'in-progress'].includes(order.status)) throw new Error('Service order lines are locked at completion')
@@ -382,7 +381,7 @@ export async function addServiceOrderLineItem(_root: unknown, { data }: any, con
     if (!current || current.updatedAt.getTime() !== expectedUpdatedAt.getTime()) throw new Error('Service order changed concurrently; reload and retry')
     await tx.prisma.repairOrderLineItem.create({ data: { id: lineId, rooftopId: order.rooftop.id, serviceOrderId: order.id, itemType, description, partNumber: evidence.partNumber, quantity, unitPriceCents, priceCents, costCents } })
     await recomputeServiceOrderTotals(tx, order.id, current.taxCents ?? 0)
-    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: order.rooftop.id, aggregateType: 'ServiceOrder', aggregateId: order.id, action: 'line-item-added', topic: 'service-order.line-item-added', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { lineItemId: lineId }, payload: { rooftopId: order.rooftop.id, serviceOrderId: order.id, lineItemId: lineId, priceCents } })
+    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: order.rooftop.id, aggregateType: 'ServiceOrder', aggregateId: order.id, action: 'line-item-added', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { lineItemId: lineId }, })
     return { id: lineId, reused: false }
   }, { timeout: 30_000 })
   const current = await context.query.ServiceOrder.findOne({ where: { id: order.id }, query: 'id status updatedAt' })

@@ -111,11 +111,9 @@ export async function confirmCustomerEmailVerification(_root: unknown, { token }
         aggregateType: 'Customer',
         aggregateId: customer.id,
         action: 'account-linked',
-        topic: 'customer.account-linked',
         actorId: accountId,
         afterSnapshot: { customerId: customer.id, accountId, previousAccountId: customer.accountId ?? null, evidence: 'email-verification' },
-        payload: { customerId: customer.id, rooftopId: customer.rooftopId, accountId },
-      })
+       })
     }
     const linked = await tx.prisma.customer.count({ where: { accountId, status: 'active', normalizedEmail: email } })
     return { email, linkedCustomerCount: linked, newlyLinkedCount, verified: true }

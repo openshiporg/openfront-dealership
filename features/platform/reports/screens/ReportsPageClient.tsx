@@ -8,14 +8,13 @@ import { Attention, DeskHeader, DeskSection, Pill, Segmented, Status, type DeskT
 import { TAP } from '@/features/platform/catalog/components/formKit'
 import { type ReportRun, type ReportsData, getReportsData } from '../actions'
 import { AuditPanel } from '../components/AuditPanel'
-import { OutboxPanel } from '../components/OutboxPanel'
 import { RunsPanel, type RunStatusFilter } from '../components/RunsPanel'
 import { SavedReportsPanel } from '../components/SavedReportsPanel'
 import { effectiveRunStatus, reportTypeLabel } from '../lib/reportOptions'
 import { formatDateTime } from '../lib/time'
 import { countLabel } from '@/features/platform/lib/format'
 
-export type ReportsTab = 'saved' | 'runs' | 'audit' | 'outbox'
+export type ReportsTab = 'saved' | 'runs' | 'audit'
 
 type QueueItem = {
   key: string
@@ -180,7 +179,6 @@ export function ReportsPageClient({ initialData, initialTab, timeZone }: { initi
               { value: 'saved', label: 'Saved reports', count: data.savedReports.data.length },
               { value: 'runs', label: 'Runs', count: data.runs.data.length, tone: failedRuns ? 'bad' : queuedRuns.length ? 'info' : undefined },
               { value: 'audit', label: 'Audit' },
-              { value: 'outbox', label: 'Outbox' },
             ]}
           />
           {tab === 'saved' && (
@@ -208,7 +206,6 @@ export function ReportsPageClient({ initialData, initialTab, timeZone }: { initi
             />
           )}
           {tab === 'audit' && <AuditPanel rooftops={data.rooftops} timeZone={timeZone} />}
-          {tab === 'outbox' && <OutboxPanel timeZone={timeZone} />}
         </div>
       </div>
     </PageContainer>

@@ -52,7 +52,6 @@ export async function submitInquiry(_root: unknown, { data }: { data: any }, con
       vehicleId: optionalText(data.vehicleId, 100, 'Vehicle'),
     },
     aggregateType: 'Lead',
-    topic: 'public-inquiry.submitted',
     aggregateId: result => String(result.leadId),
     handler: async (transactionContext, { rooftopId }) => {
       const vehicle = await resolveAvailableVehicle(transactionContext, data.vehicleId, rooftopId)

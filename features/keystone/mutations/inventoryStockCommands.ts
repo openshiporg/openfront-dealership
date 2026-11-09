@@ -101,7 +101,7 @@ async function establishInventoryStockCommand(_root: unknown, { data }: any, con
     await tx.prisma.$queryRaw`SELECT 1 AS "locked" FROM pg_advisory_xact_lock(hashtextextended(${`command:${eventKey}`}, 0))`
     const replay = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { aggregateId: true } })
     if (replay) {
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: 'InventoryStock', aggregateId: replay.aggregateId, action: 'established', topic: 'inventory-stock.established', actorId: context.session.itemId, afterSnapshot: evidence, payload: { stockId: replay.aggregateId, rooftopId, ...evidence } })
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: 'InventoryStock', aggregateId: replay.aggregateId, action: 'established', actorId: context.session.itemId, afterSnapshot: evidence, })
       return { id: replay.aggregateId, reused: true }
     }
     const existing = await tx.prisma.inventoryStock.findFirst({ where: { OR: [{ stockKey }, { vehicleId }] }, select: { id: true } })
@@ -114,7 +114,7 @@ async function establishInventoryStockCommand(_root: unknown, { data }: any, con
       const attached = await tx.prisma.inventoryAcquisition.updateMany({ where: { id: acquisitionId, rooftopId, vehicleId, stockId: null }, data: { stockId: id } })
       if (attached.count !== 1) throw new Error('Acquisition changed concurrently or is already stocked')
     }
-    const event: DomainEventInput = { eventKey, rooftopId, aggregateType: 'InventoryStock', aggregateId: id, action: 'established', topic: 'inventory-stock.established', actorId: context.session.itemId, afterSnapshot: evidence, payload: { stockId: id, rooftopId, ...evidence } }
+    const event: DomainEventInput = { eventKey, rooftopId, aggregateType: 'InventoryStock', aggregateId: id, action: 'established', actorId: context.session.itemId, afterSnapshot: evidence, }
     await recordDomainEventInTransaction(tx, event)
     await stockEvent(tx, event, 'established', reason, purchaseCostCents, evidence)
     return { id, reused: false }
@@ -146,7 +146,7 @@ async function receiveAcquisitionIntoStock(data: any, context: any) {
     await tx.prisma.$queryRaw`SELECT 1 AS "locked" FROM pg_advisory_xact_lock(hashtextextended(${`command:${eventKey}`}, 0))`
     const replay = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { aggregateId: true } })
     if (replay) {
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: 'InventoryStock', aggregateId: replay.aggregateId, action: 'established', topic: 'inventory-stock.established', actorId: context.session.itemId, afterSnapshot: evidence, payload: { stockId: replay.aggregateId, rooftopId, ...evidence } })
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: 'InventoryStock', aggregateId: replay.aggregateId, action: 'established', actorId: context.session.itemId, afterSnapshot: evidence, })
       return { id: replay.aggregateId, reused: true }
     }
     const current = await tx.prisma.inventoryAcquisition.findUnique({ where: { id: acquisitionId }, select: { status: true, vin: true, year: true, make: true, model: true, odometer: true, vehicleId: true, stockId: true, arrivedAt: true } })
@@ -174,7 +174,7 @@ async function receiveAcquisitionIntoStock(data: any, context: any) {
     const attached = await tx.prisma.inventoryAcquisition.updateMany({ where: { id: acquisitionId, rooftopId, vehicleId: null, stockId: null }, data: { vehicleId: vehicle.id, stockId: id } })
     if (attached.count !== 1) throw new Error('Acquisition changed concurrently or is already stocked')
     const stockEvidence = { ...evidence, vehicleId: vehicle.id }
-    const event: DomainEventInput = { eventKey, rooftopId, aggregateType: 'InventoryStock', aggregateId: id, action: 'established', topic: 'inventory-stock.established', actorId: context.session.itemId, afterSnapshot: evidence, payload: { stockId: id, rooftopId, ...evidence } }
+    const event: DomainEventInput = { eventKey, rooftopId, aggregateType: 'InventoryStock', aggregateId: id, action: 'established', actorId: context.session.itemId, afterSnapshot: evidence, }
     await recordDomainEventInTransaction(tx, event)
     await stockEvent(tx, event, 'established', reason, purchaseCostCents, stockEvidence)
     return { id, reused: false }
@@ -192,7 +192,7 @@ async function moveInventoryStockCommand(_root: unknown, { data }: any, context:
   const eventKey = `inventory-stock-move:${commandKey(data.idempotencyKey)}`
   const evidence = { stockId: stock.id, toLocationCode: locationCode, locationLabel, expectedUpdatedAt: expectedUpdatedAt.toISOString(), reason }
   const reused = await context.transaction(async (tx: any) => {
-    const event: DomainEventInput = { eventKey, rooftopId: stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: stock.id, action: 'moved', topic: 'inventory-stock.moved', actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: stock.rooftop.id, ...evidence } }
+    const event: DomainEventInput = { eventKey, rooftopId: stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: stock.id, action: 'moved', actorId: context.session.itemId, afterSnapshot: evidence, }
     if (await commandEvent(tx, event)) return true
     const changed = await tx.prisma.inventoryStock.updateMany({ where: { id: stock.id, rooftopId: stock.rooftop.id, updatedAt: expectedUpdatedAt }, data: { locationCode, locationLabel } })
     if (changed.count !== 1) throw new Error('Inventory stock changed concurrently; reload and retry')
@@ -213,7 +213,7 @@ async function recordInventoryCostCommand(_root: unknown, { data }: any, context
   const eventKey = `inventory-stock-cost:${commandKey(data.idempotencyKey)}`
   const evidence = { stockId: stock.id, costType, amountCents, reference: String(data.reference || '').trim().slice(0, 200) || null, reason }
   const reused = await context.transaction(async (tx: any) => {
-    const event: DomainEventInput = { eventKey, rooftopId: stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: stock.id, action: `cost-recorded:${costType}`, topic: 'inventory-stock.cost-recorded', actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: stock.rooftop.id, ...evidence } }
+    const event: DomainEventInput = { eventKey, rooftopId: stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: stock.id, action: `cost-recorded:${costType}`, actorId: context.session.itemId, afterSnapshot: evidence, }
     if (await commandEvent(tx, event)) return true
     await tx.prisma.inventoryStock.update({
       where: { id: stock.id },
@@ -250,12 +250,12 @@ async function openInventoryReconWorkItemCommand(_root: unknown, { data }: any, 
     const replay = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { aggregateId: true, metadata: true } })
     if (replay) {
       const priorItemId = String((replay.metadata as any)?.workItemId || '')
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: stock.id, action: 'recon-work-created', topic: 'inventory-recon.created', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { workItemId: priorItemId }, payload: { rooftopId: stock.rooftop.id, ...evidence, workItemId: priorItemId } })
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: stock.id, action: 'recon-work-created', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { workItemId: priorItemId }, })
       return priorItemId
     }
     await tx.prisma.inventoryReconWorkItem.create({ data: { id: itemId, rooftopId: stock.rooftop.id, stockId: stock.id, title, category, status: 'open', estimatedCostCents, vendorName, assignedToId, dueAt } })
     await tx.prisma.inventoryStock.update({ where: { id: stock.id }, data: { reconStatus: 'in-progress' } })
-    const event: DomainEventInput = { eventKey, rooftopId: stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: stock.id, action: 'recon-work-created', topic: 'inventory-recon.created', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { workItemId: itemId }, payload: { rooftopId: stock.rooftop.id, ...evidence, workItemId: itemId } }
+    const event: DomainEventInput = { eventKey, rooftopId: stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: stock.id, action: 'recon-work-created', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { workItemId: itemId }, }
     await recordDomainEventInTransaction(tx, event)
     await stockEvent(tx, event, 'recon-work-created', reason, estimatedCostCents ?? undefined, { ...evidence, workItemId: itemId })
     return itemId
@@ -280,7 +280,7 @@ async function transitionInventoryReconWorkItemCommand(_root: unknown, { data }:
   const priorEvent = await context.sudo().prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { id: true } })
   if (!priorEvent) assertReconTransition(item.status, toStatus)
   const reused = await context.transaction(async (tx: any) => {
-    const event: DomainEventInput = { eventKey, rooftopId: item.stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: item.stock.id, action: `recon-work:${toStatus}`, topic: 'inventory-recon.transitioned', actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: item.stock.rooftop.id, ...evidence } }
+    const event: DomainEventInput = { eventKey, rooftopId: item.stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: item.stock.id, action: `recon-work:${toStatus}`, actorId: context.session.itemId, afterSnapshot: evidence, }
     if (await commandEvent(tx, event)) return true
     const changed = await tx.prisma.inventoryReconWorkItem.updateMany({ where: { id: item.id, status: item.status, updatedAt: expectedUpdatedAt }, data: { status: toStatus, actualCostCents, completedAt: toStatus === 'completed' ? new Date() : null } })
     if (changed.count !== 1) throw new Error('Reconditioning work changed concurrently; reload and retry')

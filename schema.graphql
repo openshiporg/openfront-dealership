@@ -4778,99 +4778,6 @@ input DomainAuditEventCreateInput {
   occurredAt: DateTime
 }
 
-type DomainOutboxEvent {
-  id: ID!
-  createdAt: DateTime
-  updatedAt: DateTime
-  rooftop: Rooftop
-  deliveryKey: String
-  topic: String
-  aggregateType: String
-  aggregateId: String
-  payload: JSON
-  status: String
-  attemptCount: Int
-  availableAt: DateTime
-  processedAt: DateTime
-  lastError: String
-}
-
-input DomainOutboxEventWhereUniqueInput {
-  id: ID
-  deliveryKey: String
-}
-
-input DomainOutboxEventWhereInput {
-  AND: [DomainOutboxEventWhereInput!]
-  OR: [DomainOutboxEventWhereInput!]
-  NOT: [DomainOutboxEventWhereInput!]
-  id: IDFilter
-  createdAt: DateTimeFilter
-  updatedAt: DateTimeFilter
-  rooftop: RooftopWhereInput
-  deliveryKey: StringFilter
-  topic: StringFilter
-  aggregateType: StringFilter
-  aggregateId: StringFilter
-  status: StringFilter
-  attemptCount: IntFilter
-  availableAt: DateTimeFilter
-  processedAt: DateTimeNullableFilter
-  lastError: StringNullableFilter
-}
-
-input DomainOutboxEventOrderByInput {
-  id: OrderDirection
-  createdAt: OrderDirection
-  updatedAt: OrderDirection
-  deliveryKey: OrderDirection
-  topic: OrderDirection
-  aggregateType: OrderDirection
-  aggregateId: OrderDirection
-  status: OrderDirection
-  attemptCount: OrderDirection
-  availableAt: OrderDirection
-  processedAt: OrderDirection
-  lastError: OrderDirection
-}
-
-input DomainOutboxEventUpdateInput {
-  createdAt: DateTime
-  updatedAt: DateTime
-  rooftop: RooftopRelateToOneForUpdateInput
-  deliveryKey: String
-  topic: String
-  aggregateType: String
-  aggregateId: String
-  payload: JSON
-  status: String
-  attemptCount: Int
-  availableAt: DateTime
-  processedAt: DateTime
-  lastError: String
-}
-
-input DomainOutboxEventUpdateArgs {
-  where: DomainOutboxEventWhereUniqueInput!
-  data: DomainOutboxEventUpdateInput!
-}
-
-input DomainOutboxEventCreateInput {
-  createdAt: DateTime
-  updatedAt: DateTime
-  rooftop: RooftopRelateToOneForCreateInput
-  deliveryKey: String
-  topic: String
-  aggregateType: String
-  aggregateId: String
-  payload: JSON
-  status: String
-  attemptCount: Int
-  availableAt: DateTime
-  processedAt: DateTime
-  lastError: String
-}
-
 type InventoryStock {
   id: ID!
   createdAt: DateTime
@@ -8613,12 +8520,6 @@ type Mutation {
   updateDomainAuditEvents(data: [DomainAuditEventUpdateArgs!]!): [DomainAuditEvent]
   deleteDomainAuditEvent(where: DomainAuditEventWhereUniqueInput!): DomainAuditEvent
   deleteDomainAuditEvents(where: [DomainAuditEventWhereUniqueInput!]!): [DomainAuditEvent]
-  createDomainOutboxEvent(data: DomainOutboxEventCreateInput!): DomainOutboxEvent
-  createDomainOutboxEvents(data: [DomainOutboxEventCreateInput!]!): [DomainOutboxEvent]
-  updateDomainOutboxEvent(where: DomainOutboxEventWhereUniqueInput!, data: DomainOutboxEventUpdateInput!): DomainOutboxEvent
-  updateDomainOutboxEvents(data: [DomainOutboxEventUpdateArgs!]!): [DomainOutboxEvent]
-  deleteDomainOutboxEvent(where: DomainOutboxEventWhereUniqueInput!): DomainOutboxEvent
-  deleteDomainOutboxEvents(where: [DomainOutboxEventWhereUniqueInput!]!): [DomainOutboxEvent]
   createInventoryStock(data: InventoryStockCreateInput!): InventoryStock
   createInventoryStocks(data: [InventoryStockCreateInput!]!): [InventoryStock]
   updateInventoryStock(where: InventoryStockWhereUniqueInput!, data: InventoryStockUpdateInput!): InventoryStock
@@ -9067,9 +8968,6 @@ type Query {
   domainAuditEvent(where: DomainAuditEventWhereUniqueInput!): DomainAuditEvent
   domainAuditEvents(where: DomainAuditEventWhereInput! = {}, orderBy: [DomainAuditEventOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: DomainAuditEventWhereUniqueInput): [DomainAuditEvent!]
   domainAuditEventsCount(where: DomainAuditEventWhereInput! = {}): Int
-  domainOutboxEvent(where: DomainOutboxEventWhereUniqueInput!): DomainOutboxEvent
-  domainOutboxEvents(where: DomainOutboxEventWhereInput! = {}, orderBy: [DomainOutboxEventOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: DomainOutboxEventWhereUniqueInput): [DomainOutboxEvent!]
-  domainOutboxEventsCount(where: DomainOutboxEventWhereInput! = {}): Int
   inventoryStock(where: InventoryStockWhereUniqueInput!): InventoryStock
   inventoryStocks(where: InventoryStockWhereInput! = {}, orderBy: [InventoryStockOrderByInput!]! = [], take: Int, skip: Int! = 0, cursor: InventoryStockWhereUniqueInput): [InventoryStock!]
   inventoryStocksCount(where: InventoryStockWhereInput! = {}): Int

@@ -50,7 +50,6 @@ export async function submitTestDrive(_root: unknown, { data }: { data: SubmitTe
       vehicleId: optionalText(data.vehicleId, 100, 'Vehicle'),
     },
     aggregateType: 'TestDrive',
-    topic: 'public-test-drive.submitted',
     aggregateId: result => String(result.testDriveId),
     handler: async (transactionContext, { rooftopId }) => {
       // The public policy has validated this active rooftop and request token.

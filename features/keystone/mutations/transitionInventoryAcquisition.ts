@@ -63,11 +63,9 @@ async function transitionInventoryAcquisitionCommand(
     aggregateType: 'InventoryAcquisition',
     aggregateId: id,
     action: `transitioned:${toStatus}`,
-    topic: 'inventory-acquisition.transitioned',
     actorId: context.session.itemId,
     afterSnapshot: requestEvidence,
-    payload: { acquisitionId: id, rooftopId: acquisition.rooftop.id, status: toStatus },
-  }
+   }
   const replay = await context.sudo().prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { aggregateId: true } })
   if (replay) {
     if (replay.aggregateId !== id) throw new Error('Acquisition transition idempotency key belongs to another acquisition')

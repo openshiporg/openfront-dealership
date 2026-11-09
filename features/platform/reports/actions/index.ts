@@ -46,20 +46,6 @@ export type AuditEvent = {
   actor: { id: string; name: string | null; email: string | null } | null
   rooftop: ReportRooftop | null
 }
-export type OutboxEvent = {
-  id: string
-  deliveryKey: string
-  topic: string
-  aggregateType: string
-  aggregateId: string
-  status: string
-  attemptCount: number
-  availableAt: string
-  processedAt: string | null
-  lastError: string | null
-  createdAt: string
-}
-export type OutboxCounts = { pending: number; processing: number; delivered: number; failed: number; oldestPending: string | null }
 
 type Section<T> = { data: T; error: string | null }
 export type ReportsData = {
@@ -163,38 +149,4 @@ export async function searchAudit(query: AuditQuery): Promise<Result<AuditEvent[
   })
   if (!response.success) return { success: false, error: response.error }
   return { success: true, data: response.data.auditSearch || [] }
-}
-
-export async function getOutbox(status: string, topic: string): Promise<Result<{ events: OutboxEvent[]; counts: OutboxCounts }>> {
-  const where: Record<string, unknown> = {}
-  if (status !== 'all') where.status = { equals: status }
-  if (topic.trim()) where.topic = { contains: topic.trim(), mode: 'insensitive' }
-  const response = await keystoneClient<{
-    events: OutboxEvent[] | null
-    pending: number
-    processing: number
-    delivered: number
-    failed: number
-    oldest: Array<{ availableAt: string }> | null
-  }>(`
-    query OutboxHealth($where: DomainOutboxEventWhereInput!) {
-      events: domainOutboxEvents(where: $where, orderBy: [{ availableAt: desc }], take: 200) {
-        id deliveryKey topic aggregateType aggregateId status attemptCount availableAt processedAt lastError createdAt
-      }
-      pending: domainOutboxEventsCount(where: { status: { equals: "pending" } })
-      processing: domainOutboxEventsCount(where: { status: { equals: "processing" } })
-      delivered: domainOutboxEventsCount(where: { status: { equals: "delivered" } })
-      failed: domainOutboxEventsCount(where: { status: { equals: "failed" } })
-      oldest: domainOutboxEvents(where: { status: { equals: "pending" } }, orderBy: [{ availableAt: asc }], take: 1) { availableAt }
-    }
-  `, { where }, { cache: 'no-store' })
-  if (!response.success) return { success: false, error: response.error }
-  const data = response.data
-  return {
-    success: true,
-    data: {
-      events: data.events || [],
-      counts: { pending: data.pending || 0, processing: data.processing || 0, delivered: data.delivered || 0, failed: data.failed || 0, oldestPending: data.oldest?.[0]?.availableAt || null },
-    },
-  }
 }

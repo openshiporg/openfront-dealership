@@ -80,11 +80,10 @@ async function recordCashDealDepositCommand(_root: unknown, { data }: any, conte
     const form8300Required = after?.form8300Required ?? false
     await recordDomainEventInTransaction(tx, {
       eventKey, rooftopId: deal.rooftopId, aggregateType: 'Deal', aggregateId: deal.id,
-      action: 'cash-deposit-recorded', topic: 'deal.cash-deposit-recorded', actorId,
+      action: 'cash-deposit-recorded', actorId,
       afterSnapshot: { version: 1, request, paymentId: payment.id, worksheetVersion: deal.worksheetVersion, acceptedHash: domainEventRequestHash(deal.acceptedSnapshot),
         amountDueCents: before.amountDueCents, previouslyReceivedCents: before.receivedCents, remainingCents, cashReceivedCents, form8300Required },
-      payload: { rooftopId: deal.rooftopId, dealId: deal.id, paymentId: payment.id, amountCents, paymentMethod, remainingCents, form8300Required },
-    })
+     })
     return { id: payment.id, dealId: deal.id, amountCents, paymentMethod, receiptReference, remainingCents, form8300Required, reused: false }
   }, { timeout: 30_000, isolationLevel: 'Serializable' })
 }

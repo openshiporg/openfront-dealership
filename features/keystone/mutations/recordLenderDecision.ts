@@ -59,11 +59,9 @@ export async function recordLenderDecision(_root: unknown, { data }: { data: any
         aggregateType: 'LenderDecision',
         aggregateId: existing.id,
         action: `recorded:${decision}`,
-        topic: 'lender-decision.recorded',
         actorId: context.session.itemId,
         afterSnapshot: eventEvidence,
-        payload: { decisionId: existing.id, applicationId: existing.applicationId, rooftopId: existing.rooftopId, decision },
-      })
+       })
       return existing.id
     }
     const application = await tx.prisma.financingApplication.findUnique({
@@ -125,11 +123,9 @@ export async function recordLenderDecision(_root: unknown, { data }: { data: any
       aggregateType: 'LenderDecision',
       aggregateId: created.id,
       action: `recorded:${decision}`,
-      topic: 'lender-decision.recorded',
       actorId: context.session.itemId,
       afterSnapshot: eventEvidence,
-      payload: { decisionId: created.id, applicationId: application.id, rooftopId: application.rooftopId, decision },
-    })
+     })
     return created.id
   }, { timeout: 30_000 })
 

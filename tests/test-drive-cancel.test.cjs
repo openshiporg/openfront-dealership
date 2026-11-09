@@ -36,7 +36,7 @@ const CUSTOMER = 'account-customer';
 
 // Just enough Prisma for these commands: the where shapes they actually use.
 function memoryDb(drives) {
-  const db = { testDrives: drives.map(drive => ({ completed: false, noShow: false, cancelledAt: null, updatedAt: new Date('2026-10-01T00:00:00Z'), ...drive })), audits: [], outbox: [] };
+  const db = { testDrives: drives.map(drive => ({ completed: false, noShow: false, cancelledAt: null, updatedAt: new Date('2026-10-01T00:00:00Z'), ...drive })), audits: [] };
   const time = value => new Date(value).getTime();
   const matches = (row, where = {}) => Object.entries(where).every(([key, rule]) => {
     if (key === 'AND') return rule.every(part => matches(row, part));
@@ -64,7 +64,6 @@ function memoryDb(drives) {
       findUnique: async ({ where, select }) => { const row = db.audits.find(r => r.eventKey === where.eventKey); return row ? pick(row, select) : null; },
       create: async ({ data }) => { const row = { id: `audit-${db.audits.length + 1}`, ...data }; db.audits.push(row); return { id: row.id }; },
     },
-    domainOutboxEvent: { create: async ({ data }) => { db.outbox.push(data); return data; } },
   };
   return { db, prisma };
 }
@@ -141,7 +140,6 @@ test('staff cancel leaves the drive exactly as a customer cancel does; only the 
   assert.equal(staffAudit.aggregateType, 'TestDrive');
   assert.ok(staffAudit.occurredAt instanceof Date);
   assert.deepEqual(JSON.parse(JSON.stringify(staffAudit.afterSnapshot)), { id: 'td-staff', cancelledBy: 'staff' });
-  assert.equal(db.outbox.find(o => o.aggregateId === 'td-staff').topic, 'test-drive.staff-cancelled');
 });
 
 test('staff cancel is idempotent and refuses drives that are past, closed or already cancelled', async () => {

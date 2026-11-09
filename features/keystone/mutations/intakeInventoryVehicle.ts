@@ -235,12 +235,10 @@ export async function intakeInventoryVehicleInTransaction(
       aggregateType: 'InventoryStock',
       aggregateId: String(metadata.stockId || replay.aggregateId),
       action: 'vehicle-intake',
-      topic: 'inventory.vehicle-intake',
       actorId: options.actorId,
       afterSnapshot: evidence,
       metadata,
-      payload: { rooftopId: input.rooftopId, ...metadata },
-    })
+     })
     return {
       vehicleId: String(metadata.vehicleId || ''),
       acquisitionId: String(metadata.acquisitionId || ''),
@@ -500,12 +498,10 @@ export async function intakeInventoryVehicleInTransaction(
     aggregateType: 'InventoryStock',
     aggregateId: stock.id,
     action: 'vehicle-intake',
-    topic: 'inventory.vehicle-intake',
     actorId: options.actorId,
     afterSnapshot: evidence,
     metadata,
-    payload: { rooftopId: input.rooftopId, ...metadata },
-  })
+   })
 
   return {
     ...metadata,

@@ -85,7 +85,6 @@ export async function submitServiceBooking(_root: unknown, { data }: { data: any
       concern,
     },
     aggregateType: 'ServiceAppointment',
-    topic: 'public-service-appointment.submitted',
     aggregateId: result => String(result.serviceAppointmentId),
     handler: async (transactionContext, { rooftopId }) => {
       const location = await transactionContext.prisma.rooftop.findUnique({ where: { id: rooftopId }, select: { timezone: true } })

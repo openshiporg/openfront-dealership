@@ -74,7 +74,7 @@ async function updateInventoryMerchandisingDraftCommand(_root: unknown, { data }
   }
   const reused = await context.transaction(async (tx: any) => {
     await lockInventoryStock(tx, stock.id)
-    const event: DomainEventInput = { eventKey, rooftopId: stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: stock.id, action: 'merchandising-draft-updated', topic: 'inventory-merchandising.draft-updated', actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: stock.rooftop.id, ...evidence } }
+    const event: DomainEventInput = { eventKey, rooftopId: stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: stock.id, action: 'merchandising-draft-updated', actorId: context.session.itemId, afterSnapshot: evidence, }
     const recorded = await recordDomainEventInTransaction(tx, event)
     if (recorded.reused) return true
     const current = await loadInventoryPublication(tx, stock.id)
@@ -117,7 +117,7 @@ async function submitInventoryMerchandisingCommand(_root: unknown, { data }: any
       const eventEvidence = { snapshot: replay.afterSnapshot?.snapshot, reason }
       const versionId = String((replay.metadata as any)?.versionId || '')
       const version = await tx.prisma.inventoryMerchandisingVersion.findUnique({ where: { id: versionId }, select: { version: true } })
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: stock.id, action: 'merchandising-submitted', topic: 'inventory-merchandising.submitted', actorId: context.session.itemId, afterSnapshot: eventEvidence, metadata: { versionId, version: version?.version }, payload: { stockId: stock.id, rooftopId: stock.rooftop.id, versionId, version: version?.version } })
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: stock.id, action: 'merchandising-submitted', actorId: context.session.itemId, afterSnapshot: eventEvidence, metadata: { versionId, version: version?.version }, })
       return { id: versionId, reused: true }
     }
     const current = await loadInventoryPublication(tx, stock.id)
@@ -130,7 +130,7 @@ async function submitInventoryMerchandisingCommand(_root: unknown, { data }: any
     const versionId = randomUUID()
     await tx.prisma.inventoryMerchandisingVersion.create({ data: { id: versionId, rooftopId: stock.rooftop.id, stockId: stock.id, version, versionKey: `${stock.id}:${version}`, status: 'submitted', snapshot, submittedById: context.session.itemId, submittedAt: new Date() } })
     await tx.prisma.inventoryStock.update({ where: { id: stock.id }, data: { merchandisingStatus: 'submitted', approvedRevisionHash: '', feedStatus: 'not-published' } })
-    const event: DomainEventInput = { eventKey, rooftopId: stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: stock.id, action: 'merchandising-submitted', topic: 'inventory-merchandising.submitted', actorId: context.session.itemId, afterSnapshot: eventEvidence, metadata: { versionId, version }, payload: { stockId: stock.id, rooftopId: stock.rooftop.id, versionId, version } }
+    const event: DomainEventInput = { eventKey, rooftopId: stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: stock.id, action: 'merchandising-submitted', actorId: context.session.itemId, afterSnapshot: eventEvidence, metadata: { versionId, version }, }
     await recordDomainEventInTransaction(tx, event)
     await tx.prisma.inventoryStockEvent.create({ data: { rooftopId: stock.rooftop.id, stockId: stock.id, eventKey, eventType: 'merchandising-submitted', reason, evidence: { versionId, version }, actorId: context.session.itemId } })
     return { id: versionId, reused: false }
@@ -157,7 +157,7 @@ async function decideInventoryMerchandisingCommand(_root: unknown, { data }: any
   if (!priorEvent && decision === 'approved') assertActiveInventory(version.stock.vehicle?.status)
   const reused = await context.transaction(async (tx: any) => {
     await lockInventoryStock(tx, version.stock.id)
-    const event: DomainEventInput = { eventKey, rooftopId: version.stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: version.stock.id, action: reapproval ? 'merchandising-reapproved' : `merchandising-${decision}`, topic: 'inventory-merchandising.decided', actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: version.stock.rooftop.id, ...evidence } }
+    const event: DomainEventInput = { eventKey, rooftopId: version.stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: version.stock.id, action: reapproval ? 'merchandising-reapproved' : `merchandising-${decision}`, actorId: context.session.itemId, afterSnapshot: evidence, }
     const recorded = await recordDomainEventInTransaction(tx, event)
     if (recorded.reused) return true
     const current = await loadInventoryPublication(tx, version.stock.id)
@@ -238,7 +238,7 @@ async function recordInventoryFeedRunCommand(_root: unknown, { data }: any, cont
     const replay = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { metadata: true } })
     if (replay) {
       const runId = String((replay.metadata as any)?.runId || '')
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: 'InventoryFeedRun', aggregateId: runId, action: 'recorded', topic: 'inventory-feed.recorded', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { runId }, payload: { rooftopId, runId, ...evidence } })
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: 'InventoryFeedRun', aggregateId: runId, action: 'recorded', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { runId }, })
       return { id: runId, reused: true }
     }
     const revisions = []
@@ -254,7 +254,7 @@ async function recordInventoryFeedRunCommand(_root: unknown, { data }: any, cont
     const succeededIds = stockIds.filter(id => !failedStockIds.has(id))
     if (failedIds.length) await tx.prisma.inventoryStock.updateMany({ where: { id: { in: failedIds }, rooftopId }, data: { feedStatus: 'failed' } })
     if (succeededIds.length) await tx.prisma.inventoryStock.updateMany({ where: { id: { in: succeededIds }, rooftopId }, data: { feedStatus: 'succeeded' } })
-    await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: 'InventoryFeedRun', aggregateId: runId, action: 'recorded', topic: 'inventory-feed.recorded', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { runId }, payload: { rooftopId, runId, ...evidence } })
+    await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: 'InventoryFeedRun', aggregateId: runId, action: 'recorded', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { runId }, })
     return { id: runId, reused: false }
   }, { timeout: 30_000 })
   return { id: command.id, rooftopId, channelKey: channel.key, status, attemptedCount: stockIds.length, succeededCount, failedCount, errorCount: errors.length, completedAt, reused: command.reused }

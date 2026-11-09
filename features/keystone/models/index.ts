@@ -31,7 +31,6 @@ import { MembershipAuditEvent } from './MembershipAuditEvent';
 import { InventoryAcquisition } from './InventoryAcquisition';
 import { InventoryAcquisitionEvent } from './InventoryAcquisitionEvent';
 import { DomainAuditEvent } from './DomainAuditEvent';
-import { DomainOutboxEvent } from './DomainOutboxEvent';
 import { InventoryStock } from './InventoryStock';
 import { InventoryStockEvent } from './InventoryStockEvent';
 import { InventoryReconWorkItem } from './InventoryReconWorkItem';
@@ -104,7 +103,6 @@ export const models = {
   InventoryAcquisition,
   InventoryAcquisitionEvent,
   DomainAuditEvent,
-  DomainOutboxEvent,
   InventoryStock,
   InventoryStockEvent,
   InventoryReconWorkItem,

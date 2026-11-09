@@ -2,7 +2,7 @@ import { getReportsData } from '../actions'
 import { getDealershipTimeZone } from '../../lib/dealershipTimeZone'
 import { ReportsPageClient, type ReportsTab } from './ReportsPageClient'
 
-const TABS: ReportsTab[] = ['saved', 'runs', 'audit', 'outbox']
+const TABS: ReportsTab[] = ['saved', 'runs', 'audit']
 
 export async function ReportsPage({ searchParams }: { searchParams?: Promise<{ tab?: string | string[] }> }) {
   const [data, timeZone, params] = await Promise.all([getReportsData(), getDealershipTimeZone(), searchParams ?? Promise.resolve({} as { tab?: string | string[] })])

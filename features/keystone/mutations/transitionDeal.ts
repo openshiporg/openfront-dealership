@@ -109,14 +109,9 @@ async function transitionDealCommand(
         aggregateType: 'Deal',
         aggregateId: id,
         action: `transitioned:${toStatus}`,
-        topic: 'deal.transitioned',
         actorId: context.session.itemId,
         afterSnapshot: requestEvidence,
-        payload: {
-          dealId: id, rooftopId: deal.rooftop.id, status: toStatus, vehicleId: deal.vehicle?.id ?? null,
-          vehicleStatus: toStatus === 'submitted' ? 'pending' : toStatus === 'cancelled' && deal.status !== 'pencil' ? 'available' : null,
-        },
-      })
+       })
       return sessionContext.db.Deal.findOne({ where: { id } })
     }
     assertDealTransition(deal.status, toStatus, transitionPermissions(sessionContext.session))
@@ -188,18 +183,16 @@ async function transitionDealCommand(
         await transactionContext.prisma.deliveryCase.update({ where: { id: activeCase.id }, data: { status: 'cancelled', acknowledgedAt: null, customerAcknowledgment: '', deliverySnapshot: caseEvidence } })
         await recordDomainEventInTransaction(transactionContext, {
           eventKey: `${eventKey}:delivery-case`, rooftopId: deal.rooftop.id, aggregateType: 'DeliveryCase', aggregateId: id,
-          action: 'cancel', topic: 'delivery-case.updated', actorId: context.session.itemId,
-          afterSnapshot: caseEvidence, payload: { rooftopId: deal.rooftop.id, dealId: id, status: 'cancelled' },
-        })
+          action: 'cancel', actorId: context.session.itemId,
+          afterSnapshot: caseEvidence,         })
       }
       // Release the trade-in so it can be appraised again or put on another deal.
       if (rawDeal.tradeInVehicleId) {
         await transactionContext.prisma.deal.update({ where: { id }, data: { tradeInVehicleId: null } })
         await recordDomainEventInTransaction(transactionContext, {
           eventKey: `${eventKey}:trade-in`, rooftopId: deal.rooftop.id, aggregateType: 'TradeIn', aggregateId: rawDeal.tradeInVehicleId,
-          action: 'released-from-deal', topic: 'trade-in.released', actorId: context.session.itemId,
-          afterSnapshot: { tradeInId: rawDeal.tradeInVehicleId, dealId: id, reason }, payload: { rooftopId: deal.rooftop.id, dealId: id, tradeInId: rawDeal.tradeInVehicleId },
-        })
+          action: 'released-from-deal', actorId: context.session.itemId,
+          afterSnapshot: { tradeInId: rawDeal.tradeInVehicleId, dealId: id, reason },         })
       }
     }
 
@@ -209,14 +202,9 @@ async function transitionDealCommand(
       aggregateType: 'Deal',
       aggregateId: id,
       action: `transitioned:${toStatus}`,
-      topic: 'deal.transitioned',
       actorId: context.session.itemId,
       afterSnapshot: requestEvidence,
-      payload: {
-        dealId: id, rooftopId: deal.rooftop.id, status: toStatus, vehicleId: deal.vehicle?.id ?? null,
-        vehicleStatus: toStatus === 'submitted' ? 'pending' : toStatus === 'cancelled' && deal.status !== 'pencil' ? 'available' : null,
-      },
-    })
+     })
 
     return sessionContext.db.Deal.findOne({ where: { id } })
   }, { timeout: 30_000, isolationLevel: 'Serializable' })

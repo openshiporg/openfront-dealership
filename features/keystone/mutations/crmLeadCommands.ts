@@ -128,11 +128,10 @@ export async function createLead(_root: unknown, { data }: any, context: any) {
       },
     })
     await recordDomainEventInTransaction(tx, {
-      eventKey, rooftopId, aggregateType: 'Lead', aggregateId: lead.id, action: 'created', topic: 'lead.created', actorId: context.session.itemId,
+      eventKey, rooftopId, aggregateType: 'Lead', aggregateId: lead.id, action: 'created', actorId: context.session.itemId,
       afterSnapshot: { requestEvidence, customerId: customer.id, assigneeId: assignment.assigneeId, routeKey: assignment.routeKey, firstResponseDueAt: assignment.firstResponseDueAt.toISOString() },
       metadata: { leadId: lead.id, customerId: customer.id },
-      payload: { rooftopId, leadId: lead.id, customerId: customer.id, source, assigneeId: assignment.assigneeId, routeKey: assignment.routeKey },
-    })
+     })
     return { id: lead.id, customerId: customer.id, assignedToId: assignment.assigneeId, routeKey: assignment.routeKey, firstResponseDueAt: assignment.firstResponseDueAt, reused: false }
   }, { timeout: 30_000 })
 }
@@ -181,11 +180,10 @@ export async function updateLeadDetails(_root: unknown, { data }: any, context: 
     const updated = await tx.prisma.lead.findUniqueOrThrow({ where: { id: leadId }, select: { status: true, updatedAt: true } })
     const changedFields = Object.keys(changes).filter(field => (before as any)[field] !== (changes as any)[field])
     await recordDomainEventInTransaction(tx, {
-      eventKey, rooftopId, aggregateType: 'Lead', aggregateId: leadId, action: 'details-updated', topic: 'lead.details-updated', actorId: context.session.itemId,
+      eventKey, rooftopId, aggregateType: 'Lead', aggregateId: leadId, action: 'details-updated', actorId: context.session.itemId,
       beforeSnapshot: before,
       afterSnapshot: { requestEvidence, status: updated.status, changedFields },
-      payload: { rooftopId, leadId, changedFields },
-    })
+     })
     return { id: leadId, status: updated.status, updatedAt: updated.updatedAt, reused: false }
   }, { timeout: 30_000 })
 }

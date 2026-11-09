@@ -87,11 +87,9 @@ export async function cancelCustomerBooking(_root: unknown, { kind, id, idempote
     aggregateType: bookingType === 'service' ? 'ServiceAppointment' : 'TestDrive',
     aggregateId: record.id,
     action: bookingType === 'service' ? 'transitioned:cancelled' : 'customer-cancelled',
-    topic: bookingType === 'service' ? 'service-appointment.transitioned' : 'test-drive.customer-cancelled',
     actorId: accountId,
     afterSnapshot: { id: record.id, cancelledBy: 'customer' },
-    payload: { id: record.id, rooftopId: record.rooftopId, status: 'cancelled', source: 'storefront-account' },
-  }
+   }
   await context.transaction(async (tx: any) => {
     if (await replayOrLock(tx, event)) return
     if (bookingType === 'service') {
@@ -129,11 +127,9 @@ export async function rescheduleCustomerBooking(
     aggregateType: bookingType === 'service' ? 'ServiceAppointment' : 'TestDrive',
     aggregateId: record.id,
     action: 'customer-rescheduled',
-    topic: bookingType === 'service' ? 'service-appointment.customer-rescheduled' : 'test-drive.customer-rescheduled',
     actorId: accountId,
     afterSnapshot: { id: record.id, scheduledAt: scheduled.iso },
-    payload: { id: record.id, rooftopId: record.rooftopId, scheduledAt: scheduled.iso, source: 'storefront-account' },
-  }
+   }
   await context.transaction(async (tx: any) => {
     if (await replayOrLock(tx, event)) return
     if (bookingType === 'service') {

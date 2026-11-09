@@ -96,10 +96,9 @@ export async function updateServiceOrderLineItem(_root: unknown, { data }: any, 
   const result = await runOrderCommand(context, order, expectedUpdatedAt, {
     eventKey: `service-line-update:${idempotencyKey(data.idempotencyKey)}`,
     rooftopId: order.rooftop.id, aggregateType: 'ServiceOrder', aggregateId: order.id,
-    action: 'line-item-updated', topic: 'service-order.line-item-updated', actorId: context.session.itemId,
+    action: 'line-item-updated', actorId: context.session.itemId,
     afterSnapshot: evidence,
-    payload: { rooftopId: order.rooftop.id, serviceOrderId: order.id, lineItemId, priceCents },
-  }, async (tx, current) => {
+   }, async (tx, current) => {
     const line = await tx.prisma.repairOrderLineItem.findFirst({ where: { id: lineItemId, serviceOrderId: order.id, rooftopId: order.rooftop.id }, select: { id: true, itemType: true, description: true, partNumber: true, quantity: true, unitPriceCents: true, priceCents: true } })
     if (!line) throw new Error('Line item not found on this service order')
     await tx.prisma.repairOrderLineItem.update({ where: { id: line.id }, data: { itemType, description, partNumber, quantity, unitPriceCents, priceCents, ...(costCents !== undefined ? { costCents } : {}) } })
@@ -117,10 +116,9 @@ export async function removeServiceOrderLineItem(_root: unknown, { data }: any, 
   const result = await runOrderCommand(context, order, expectedUpdatedAt, {
     eventKey: `service-line-remove:${idempotencyKey(data.idempotencyKey)}`,
     rooftopId: order.rooftop.id, aggregateType: 'ServiceOrder', aggregateId: order.id,
-    action: 'line-item-removed', topic: 'service-order.line-item-removed', actorId: context.session.itemId,
+    action: 'line-item-removed', actorId: context.session.itemId,
     afterSnapshot: evidence,
-    payload: { rooftopId: order.rooftop.id, serviceOrderId: order.id, lineItemId },
-  }, async (tx, current) => {
+   }, async (tx, current) => {
     const line = await tx.prisma.repairOrderLineItem.findFirst({ where: { id: lineItemId, serviceOrderId: order.id, rooftopId: order.rooftop.id }, select: { id: true, itemType: true, description: true, partNumber: true, quantity: true, unitPriceCents: true, priceCents: true } })
     if (!line) throw new Error('Line item not found on this service order')
     await tx.prisma.repairOrderLineItem.delete({ where: { id: line.id } })
@@ -139,10 +137,9 @@ export async function setServiceOrderTax(_root: unknown, { data }: any, context:
   const result = await runOrderCommand(context, order, expectedUpdatedAt, {
     eventKey: `service-order-tax:${idempotencyKey(data.idempotencyKey)}`,
     rooftopId: order.rooftop.id, aggregateType: 'ServiceOrder', aggregateId: order.id,
-    action: 'tax-set', topic: 'service-order.tax-set', actorId: context.session.itemId,
+    action: 'tax-set', actorId: context.session.itemId,
     afterSnapshot: evidence,
-    payload: { rooftopId: order.rooftop.id, serviceOrderId: order.id, taxCents },
-  }, async (tx, current) => {
+   }, async (tx, current) => {
     const totals = await recomputeServiceOrderTotals(tx, order.id, taxCents)
     return { previousTaxCents: current.taxCents, totals }
   })

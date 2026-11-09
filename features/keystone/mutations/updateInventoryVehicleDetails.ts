@@ -98,8 +98,7 @@ async function updateInventoryVehicleDetailsCommand(_root: unknown, { data }: an
   const request = { stockId: stock.id, vehicleId: stock.vehicle.id, ...next, priceChangeReason, expectedUpdatedAt: expectedUpdatedAt.toISOString(), reason }
   const event: DomainEventInput = {
     eventKey, rooftopId, aggregateType: 'InventoryStock', aggregateId: stock.id, action: 'vehicle-details-updated',
-    topic: 'inventory-vehicle.details-updated', actorId, afterSnapshot: request, payload: { rooftopId, ...request },
-  }
+    actorId, afterSnapshot: request,   }
 
   const reused = await context.transaction(async (tx: any) => {
     await lockInventoryStock(tx, stock.id)

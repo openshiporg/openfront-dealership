@@ -77,7 +77,6 @@ export async function submitFinancing(_root: unknown, { data }: { data: any }, c
       privacyAcknowledged,
     },
     aggregateType: 'FinancingApplication',
-    topic: 'financing-application.submitted',
     aggregateId: result => String(result.applicationId),
     handler: async (transactionContext, { rooftopId }) => {
       const vehicle = await resolveAvailableVehicle(transactionContext, data.vehicleId, rooftopId)

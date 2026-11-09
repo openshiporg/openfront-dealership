@@ -28,11 +28,9 @@ export async function queueFinancingApplication(
       aggregateType: 'LenderSubmission',
       aggregateId: replay.id,
       action: 'queued',
-      topic: 'lender-submission.queued',
       actorId: context.session.itemId,
       afterSnapshot: { applicationId: replay.applicationId, providerKey: adapter.key, status: replay.status },
-      payload: { submissionId: replay.id, applicationId: replay.applicationId, rooftopId: replay.rooftopId, status: replay.status },
-    })
+     })
     return context.db.LenderSubmission.findOne({ where: { id: replay.id } })
   }
   const application = await context.query.FinancingApplication.findOne({
@@ -87,11 +85,9 @@ export async function queueFinancingApplication(
       aggregateType: 'LenderSubmission',
       aggregateId: created.id,
       action: 'queued',
-      topic: 'lender-submission.queued',
       actorId: context.session.itemId,
       afterSnapshot: { applicationId: application.id, providerKey: adapter.key, status: providerResult.status },
-      payload: { submissionId: created.id, applicationId: application.id, rooftopId: application.rooftop.id, status: providerResult.status },
-    })
+     })
     return created.id
   }, { timeout: 30_000 })
 

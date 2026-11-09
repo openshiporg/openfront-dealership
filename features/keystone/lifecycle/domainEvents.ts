@@ -28,12 +28,10 @@ export type DomainEventInput = {
   aggregateType: string
   aggregateId: string
   action: string
-  topic: string
   actorId?: string | null
   beforeSnapshot?: unknown
   afterSnapshot?: unknown
   metadata?: unknown
-  payload?: unknown
   occurredAt?: Date
 }
 
@@ -44,7 +42,6 @@ function validateEvent(input: DomainEventInput) {
     aggregateType: input.aggregateType,
     aggregateId: input.aggregateId,
     action: input.action,
-    topic: input.topic,
   })) {
     if (!String(value || '').trim()) throw new Error(`Domain event ${label} is required`)
   }
@@ -70,11 +67,9 @@ export async function recordDomainEventInTransaction(transactionContext: any, in
     aggregateType: input.aggregateType,
     aggregateId: input.aggregateId,
     action: input.action,
-    topic: input.topic,
     beforeSnapshot: input.beforeSnapshot ?? null,
     afterSnapshot: input.afterSnapshot ?? null,
     metadata: input.metadata ?? {},
-    payload: input.payload ?? input.afterSnapshot ?? {},
   }
   const requestHash = domainEventRequestHash(request)
   assertQuerySucceeded(await prisma.$queryRaw`SELECT 1 AS "locked" FROM pg_advisory_xact_lock(hashtextextended(${`domain-event:${input.eventKey}`}, 0))`)
@@ -105,19 +100,6 @@ export async function recordDomainEventInTransaction(transactionContext: any, in
       occurredAt,
     },
     select: { id: true },
-  }))
-  assertQuerySucceeded(await prisma.domainOutboxEvent.create({
-    data: {
-      rooftopId: input.rooftopId,
-      deliveryKey: input.eventKey,
-      topic: input.topic,
-      aggregateType: input.aggregateType,
-      aggregateId: input.aggregateId,
-      payload: input.payload ?? input.afterSnapshot ?? {},
-      status: 'pending',
-      attemptCount: 0,
-      availableAt: occurredAt,
-    },
   }))
   return { id: audit.id, reused: false }
 }

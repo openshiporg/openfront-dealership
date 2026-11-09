@@ -33,10 +33,9 @@ export async function closeLeadWonOnDelivery(tx: any, input: { dealId: string; l
   await recordDomainEventInTransaction(tx, {
     eventKey: `${input.deliveryEventKey}:lead-closed-won`,
     rooftopId: input.rooftopId,
-    aggregateType: 'Lead', aggregateId: lead.id, action: 'transitioned:closed-won', topic: 'lead.transitioned',
+    aggregateType: 'Lead', aggregateId: lead.id, action: 'transitioned:closed-won',
     actorId: input.actorId, occurredAt: input.occurredAt,
     afterSnapshot: { leadId: lead.id, fromStatus, toStatus: 'closed-won', source: 'deal-delivery', dealId: input.dealId },
-    payload: { leadId: lead.id, rooftopId: input.rooftopId, status: 'closed-won', dealId: input.dealId },
-  })
+   })
   return fromStatus
 }

@@ -43,11 +43,10 @@ export async function transitionLead(_root: unknown, { id, toStatus, lostReasonC
   const event: DomainEventInput = {
     eventKey: `lead-transition:${commandKey(idempotencyKey)}`,
     rooftopId: lead.rooftop.id,
-    aggregateType: 'Lead', aggregateId: id, action: `transitioned:${toStatus}`, topic: 'lead.transitioned',
+    aggregateType: 'Lead', aggregateId: id, action: `transitioned:${toStatus}`,
     actorId: context.session.itemId,
     afterSnapshot: { leadId: id, toStatus, lostReasonCode: normalizedLostReason || null, lostReasonDetails: normalizedLostDetails || null },
-    payload: { leadId: id, rooftopId: lead.rooftop.id, status: toStatus, lostReasonCode: normalizedLostReason || null },
-  }
+   }
   await context.transaction(async (tx: any) => {
     if (await replayOrLock(tx, event)) return
     const changed = await tx.prisma.lead.updateMany({
@@ -77,15 +76,14 @@ export async function recordLeadInteraction(_root: unknown, { data }: any, conte
   const event: DomainEventInput = {
     eventKey: `lead-interaction:${commandKey(data.idempotencyKey)}`,
     rooftopId: lead.rooftop.id,
-    aggregateType: 'Lead', aggregateId: leadId, action: 'interaction-recorded', topic: 'lead.interaction-recorded',
+    aggregateType: 'Lead', aggregateId: leadId, action: 'interaction-recorded',
     actorId: context.session.itemId,
     afterSnapshot: {
       leadId, interactionType, outcome, notesHash: domainEventRequestHash(notes),
       requestedDate: data.date ? occurredAt.toISOString() : null,
       followUpDate: followUpDate?.toISOString() ?? null,
     },
-    payload: { leadId, rooftopId: lead.rooftop.id, interactionType, outcome },
-  }
+   }
   let interactionId = ''
   await context.transaction(async (tx: any) => {
     await tx.prisma.$queryRaw`SELECT 1 AS "locked" FROM pg_advisory_xact_lock(hashtextextended(${`command:${event.eventKey}`}, 0))`
@@ -134,11 +132,10 @@ async function cancelTestDriveByStaff(context: any, rooftopId: string, id: strin
   const event: DomainEventInput = {
     eventKey: `test-drive:${commandKey(idempotencyKey)}`,
     rooftopId,
-    aggregateType: 'TestDrive', aggregateId: id, action: 'staff-cancelled', topic: 'test-drive.staff-cancelled',
+    aggregateType: 'TestDrive', aggregateId: id, action: 'staff-cancelled',
     actorId: context.session.itemId,
     afterSnapshot: { id, cancelledBy: 'staff' },
-    payload: { id, rooftopId, status: 'cancelled', source: 'operator-desk' },
-  }
+   }
   await context.transaction(async (tx: any) => {
     if (await replayOrLock(tx, event)) return
     await cancelTestDriveInTransaction(tx, record, 'Only an open test drive that has not started yet can be cancelled')
@@ -168,11 +165,10 @@ export async function updateTestDriveWorkflow(_root: unknown, { data }: any, con
   const event: DomainEventInput = {
     eventKey: `test-drive:${commandKey(data.idempotencyKey)}`,
     rooftopId: drive.rooftop.id,
-    aggregateType: 'TestDrive', aggregateId: id, action, topic: `test-drive.${action}`,
+    aggregateType: 'TestDrive', aggregateId: id, action,
     actorId: context.session.itemId,
     afterSnapshot: { testDriveId: id, action, interestedLevel: action === 'complete' ? interestedLevel : null },
-    payload: { testDriveId: id, rooftopId: drive.rooftop.id, action },
-  }
+   }
   await context.transaction(async (tx: any) => {
     if (await replayOrLock(tx, event)) return
     const now = new Date()
@@ -208,11 +204,10 @@ export async function transitionServiceAppointment(_root: unknown, { id, toStatu
   const event: DomainEventInput = {
     eventKey: `service-appointment:${commandKey(idempotencyKey)}`,
     rooftopId: appointment.rooftop.id,
-    aggregateType: 'ServiceAppointment', aggregateId: id, action: `transitioned:${toStatus}`, topic: 'service-appointment.transitioned',
+    aggregateType: 'ServiceAppointment', aggregateId: id, action: `transitioned:${toStatus}`,
     actorId: context.session.itemId,
     afterSnapshot: { appointmentId: id, toStatus },
-    payload: { appointmentId: id, rooftopId: appointment.rooftop.id, status: toStatus },
-  }
+   }
   await context.transaction(async (tx: any) => {
     if (await replayOrLock(tx, event)) return
     const changed = await tx.prisma.serviceAppointment.updateMany({
@@ -279,11 +274,10 @@ export async function recordTradeInAppraisal(_root: unknown, { data }: any, cont
   const event: DomainEventInput = {
     eventKey: `trade-in-appraisal:${commandKey(data.idempotencyKey)}`,
     rooftopId: tradeIn.rooftop.id,
-    aggregateType: 'TradeIn', aggregateId: id, action: 'appraised', topic: 'trade-in.appraised',
+    aggregateType: 'TradeIn', aggregateId: id, action: 'appraised',
     actorId: context.session.itemId,
     afterSnapshot: { tradeInId: id, referenceValueCents, offerAmountCents, valuationSource: 'operator-recorded' },
-    payload: { tradeInId: id, rooftopId: tradeIn.rooftop.id, referenceValueCents, offerAmountCents, valuationSource: 'operator-recorded' },
-  }
+   }
   await context.transaction(async (tx: any) => {
     if (await replayOrLock(tx, event)) return
     const changed = await tx.prisma.tradeIn.updateMany({
@@ -320,10 +314,9 @@ export async function createLeadTask(_root: unknown, { data }: any, context: any
   const event: DomainEventInput = {
     eventKey: `task-create:${commandKey(data.idempotencyKey)}`,
     rooftopId: lead.rooftop.id,
-    aggregateType: 'Lead', aggregateId: leadId, action: 'task-created', topic: 'lead.task-created', actorId: context.session.itemId,
+    aggregateType: 'Lead', aggregateId: leadId, action: 'task-created', actorId: context.session.itemId,
     afterSnapshot: { leadId, title, descriptionHash: domainEventRequestHash(description), priority, communicationChannel, dueDate: dueDate?.toISOString() ?? null, assignedToId },
-    payload: { leadId, rooftopId: lead.rooftop.id, title, priority, communicationChannel, dueDate: dueDate?.toISOString() ?? null, assignedToId },
-  }
+   }
   let taskId = ''
   await context.transaction(async (tx: any) => {
     await tx.prisma.$queryRaw`SELECT 1 AS "locked" FROM pg_advisory_xact_lock(hashtextextended(${`command:${event.eventKey}`}, 0))`
@@ -354,11 +347,10 @@ export async function completeTask(_root: unknown, { id, idempotencyKey }: any, 
   const event: DomainEventInput = {
     eventKey: `task-complete:${commandKey(idempotencyKey)}`,
     rooftopId: task.rooftop.id,
-    aggregateType: 'Task', aggregateId: id, action: 'completed', topic: 'task.completed',
+    aggregateType: 'Task', aggregateId: id, action: 'completed',
     actorId: context.session.itemId,
     afterSnapshot: { taskId: id, completed: true },
-    payload: { taskId: id, rooftopId: task.rooftop.id, completed: true },
-  }
+   }
   await context.transaction(async (tx: any) => {
     if (await replayOrLock(tx, event)) return
     if (!task.completed) {

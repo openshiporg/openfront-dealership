@@ -180,12 +180,10 @@ export async function mergeCustomers(_root: unknown, { data }: any, context: any
       aggregateType: 'Customer',
       aggregateId: survivorId,
       action: 'duplicate-merged',
-      topic: 'customer.duplicate-merged',
       actorId: context.session.itemId,
       afterSnapshot: { survivorId, duplicateId, movedLeadIds, movedSalesVisitIds, reason, survivorExpectedUpdatedAt: survivorExpected.toISOString(), duplicateExpectedUpdatedAt: duplicateExpected.toISOString(), preferences: mergedPreferences },
       metadata: { duplicateId, movedLeadCount: movedLeadIds.length, movedSalesVisitCount: movedSalesVisitIds.length },
-      payload: { rooftopId, survivorId, duplicateId, movedLeadCount: movedLeadIds.length, movedSalesVisitCount: movedSalesVisitIds.length },
-    })
+     })
     return { id: survivorId, duplicateId, movedLeadCount: movedLeadIds.length, movedSalesVisitCount: movedSalesVisitIds.length, reused: false }
   }, { timeout: 30_000 })
 }
@@ -236,9 +234,8 @@ export async function configureLeadRoutingRule(_root: unknown, { data }: any, co
       })
     }
     await recordDomainEventInTransaction(tx, {
-      eventKey, rooftopId, aggregateType: 'LeadRoutingRule', aggregateId: rule.id, action: 'configured', topic: 'lead-routing.configured', actorId: context.session.itemId,
-      afterSnapshot: { ruleId: rule.id, routeKey, source, priority, firstResponseMinutes, assigneeId, active: rule.active }, metadata: { ruleId: rule.id }, payload: { rooftopId, ruleId: rule.id, source, assigneeId },
-    })
+      eventKey, rooftopId, aggregateType: 'LeadRoutingRule', aggregateId: rule.id, action: 'configured', actorId: context.session.itemId,
+      afterSnapshot: { ruleId: rule.id, routeKey, source, priority, firstResponseMinutes, assigneeId, active: rule.active }, metadata: { ruleId: rule.id },     })
     return { id: rule.id, status: rule.active ? 'active' : 'inactive', updatedAt: rule.updatedAt, reused: false }
   }, { timeout: 30_000 })
 }
@@ -281,9 +278,8 @@ export async function routeLead(_root: unknown, { data }: any, context: any) {
       data: { rooftopId: lead.rooftop.id, leadId, fromUserId: lead.assignedSalesperson?.id || null, toUserId: rule.assigneeId, actorId: context.session.itemId, reason: 'Matched active routing rule', routeKey: rule.routeKey, assignedAt, firstResponseDueAt },
     })
     await recordDomainEventInTransaction(tx, {
-      eventKey, rooftopId: lead.rooftop.id, aggregateType: 'Lead', aggregateId: leadId, action: 'routed', topic: 'lead.routed', actorId: context.session.itemId,
-      afterSnapshot: { leadId, ruleId: rule.id, routeKey: rule.routeKey, assigneeId: rule.assigneeId, assignedAt, firstResponseDueAt, requestExpectedUpdatedAt: expectedUpdatedAt.toISOString() }, metadata: { ruleId: rule.id }, payload: { rooftopId: lead.rooftop.id, leadId, assigneeId: rule.assigneeId, firstResponseDueAt },
-    })
+      eventKey, rooftopId: lead.rooftop.id, aggregateType: 'Lead', aggregateId: leadId, action: 'routed', actorId: context.session.itemId,
+      afterSnapshot: { leadId, ruleId: rule.id, routeKey: rule.routeKey, assigneeId: rule.assigneeId, assignedAt, firstResponseDueAt, requestExpectedUpdatedAt: expectedUpdatedAt.toISOString() }, metadata: { ruleId: rule.id },     })
     return { id: leadId, status: lead.status, updatedAt: assignedAt, reused: false }
   }, { timeout: 30_000 })
 }

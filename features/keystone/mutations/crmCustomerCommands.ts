@@ -100,11 +100,10 @@ export async function updateCustomerContact(_root: unknown, { data }: any, conte
     if (changed.count !== 1) throw new Error('Customer changed concurrently; reload and retry')
     const updated = await tx.prisma.customer.findUniqueOrThrow({ where: { id: customerId }, select: { updatedAt: true } })
     await recordDomainEventInTransaction(tx, {
-      eventKey, rooftopId, aggregateType: 'Customer', aggregateId: customerId, action: 'contact-updated', topic: 'customer.contact-updated', actorId: context.session.itemId,
+      eventKey, rooftopId, aggregateType: 'Customer', aggregateId: customerId, action: 'contact-updated', actorId: context.session.itemId,
       beforeSnapshot: before,
       afterSnapshot: { requestEvidence, normalizedEmail, normalizedPhone, accountUnlinked },
-      payload: { rooftopId, customerId },
-    })
+     })
     return { id: customerId, status: 'active', updatedAt: updated.updatedAt, reused: false }
   }, { timeout: 30_000 })
 }
@@ -135,10 +134,9 @@ export async function unlinkCustomerHousehold(_root: unknown, { data }: any, con
     if (changed.count !== 1) throw new Error('Customer changed concurrently; reload and retry')
     const updated = await tx.prisma.customer.findUniqueOrThrow({ where: { id: customerId }, select: { updatedAt: true } })
     await recordDomainEventInTransaction(tx, {
-      eventKey, rooftopId, aggregateType: 'CustomerHousehold', aggregateId: current.householdId, action: 'member-unlinked', topic: 'customer.household-unlinked', actorId: context.session.itemId,
+      eventKey, rooftopId, aggregateType: 'CustomerHousehold', aggregateId: current.householdId, action: 'member-unlinked', actorId: context.session.itemId,
       afterSnapshot: { requestEvidence, householdId: current.householdId },
-      payload: { rooftopId, householdId: current.householdId, customerId },
-    })
+     })
     return { id: customerId, status: 'unlinked', updatedAt: updated.updatedAt, reused: false }
   }, { timeout: 30_000 })
 }

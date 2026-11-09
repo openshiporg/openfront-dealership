@@ -204,10 +204,8 @@ export async function configurePart(_root: unknown, { data }: any, context: any)
       aggregateType: 'PartsInventory',
       aggregateId: partId || `${rooftop.id}:${partNumber}`,
       action: partId ? 'edited' : 'configured',
-      topic: 'parts.configured',
       actorId: context.session.itemId,
       afterSnapshot: evidence,
-      payload: evidence,
     })
     const byNumber = await tx.prisma.partsInventory.findFirst({ where: { rooftopId: rooftop.id, partNumber }, select: { id: true } })
     if (event.reused) {
@@ -282,11 +280,9 @@ export async function recordPartsMovement(_root: unknown, { data }: any, context
       aggregateType: 'PartsMovement',
       aggregateId: part.id,
       action: type,
-      topic: 'parts.moved',
       actorId: context.session.itemId,
       afterSnapshot: request,
-      payload: { rooftopId, partId: part.id, movementType: type, serviceOrderId },
-    })
+     })
     if (event.reused) {
       const found = await tx.prisma.partsMovement.findUnique({ where: { idempotencyKey }, select: { id: true } })
       if (!found) throw new Error('Movement replay missing')
@@ -541,11 +537,9 @@ export async function managePartsPurchaseOrder(_root: unknown, { data }: any, co
       aggregateType: 'PartsPurchaseOrder',
       aggregateId: savedId,
       action,
-      topic: 'parts-purchase-order.updated',
       actorId,
       afterSnapshot: { request, status, movements },
-      payload: { rooftopId, purchaseOrderId: savedId, reference: poReference, status, movementCount: movements.length },
-    })
+     })
     return savedId
   }, { timeout: 30_000 })
   return context.db.PartsPurchaseOrder.findOne({ where: { id } })

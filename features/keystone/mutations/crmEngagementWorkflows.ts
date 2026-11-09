@@ -80,10 +80,9 @@ export async function updateCustomerCommunicationPreferences(_root: unknown, { d
     if (replay) {
       await recordDomainEventInTransaction(tx, {
         eventKey, rooftopId: visible.rooftop.id, aggregateType: 'Customer', aggregateId: customerId,
-        action: 'contact-preferences-updated', topic: 'customer.contact-preferences-updated', actorId: context.session.itemId,
+        action: 'contact-preferences-updated', actorId: context.session.itemId,
         afterSnapshot: { customerId, expectedUpdatedAt: expectedUpdatedAt.toISOString(), ...snapshot }, metadata: replay.metadata,
-        payload: { customerId, rooftopId: visible.rooftop.id, preferredChannel },
-      })
+       })
       return { id: customerId, status: preferredChannel, updatedAt: new Date(), reused: true }
     }
     const now = new Date()
@@ -104,10 +103,9 @@ export async function updateCustomerCommunicationPreferences(_root: unknown, { d
     })
     await recordDomainEventInTransaction(tx, {
       eventKey, rooftopId: visible.rooftop.id, aggregateType: 'Customer', aggregateId: customerId,
-      action: 'contact-preferences-updated', topic: 'customer.contact-preferences-updated', actorId: context.session.itemId,
+      action: 'contact-preferences-updated', actorId: context.session.itemId,
       afterSnapshot: { customerId, expectedUpdatedAt: expectedUpdatedAt.toISOString(), ...snapshot }, metadata: { preferenceEventId: preferenceEvent.id },
-      payload: { customerId, rooftopId: visible.rooftop.id, preferredChannel },
-    })
+     })
     return { id: customerId, status: preferredChannel, updatedAt: now, reused: false }
   }, { timeout: 30_000 })
 }
@@ -138,9 +136,8 @@ export async function enrollLeadCadence(_root: unknown, { data }: any, context: 
     if (replay) {
       await recordDomainEventInTransaction(tx, {
         eventKey, rooftopId: lead.rooftop.id, aggregateType: 'Lead', aggregateId: leadId,
-        action: 'cadence-enrolled', topic: 'lead.cadence-enrolled', actorId: context.session.itemId,
-        afterSnapshot, metadata: replay.metadata, payload: { leadId, rooftopId: lead.rooftop.id, cadenceKey, campaignKey, cadenceStatus, taskId: (replay.metadata as any)?.taskId ?? null },
-      })
+        action: 'cadence-enrolled', actorId: context.session.itemId,
+        afterSnapshot, metadata: replay.metadata,       })
       return { id: leadId, status: cadenceStatus, updatedAt: new Date(), reused: true }
     }
     const dueAt = new Date(Date.now() + cadence.delayMinutes * 60_000)
@@ -159,9 +156,8 @@ export async function enrollLeadCadence(_root: unknown, { data }: any, context: 
     }
     await recordDomainEventInTransaction(tx, {
       eventKey, rooftopId: lead.rooftop.id, aggregateType: 'Lead', aggregateId: leadId,
-      action: 'cadence-enrolled', topic: 'lead.cadence-enrolled', actorId: context.session.itemId,
-      afterSnapshot, metadata: { taskId }, payload: { leadId, rooftopId: lead.rooftop.id, cadenceKey, campaignKey, cadenceStatus, taskId },
-    })
+      action: 'cadence-enrolled', actorId: context.session.itemId,
+      afterSnapshot, metadata: { taskId },     })
     return { id: leadId, status: cadenceStatus, updatedAt: dueAt, reused: false }
   }, { timeout: 30_000 })
 }
@@ -183,10 +179,9 @@ export async function advanceLeadCadence(_root: unknown, { data }: any, context:
       if (JSON.stringify(prior?.requestEvidence) !== JSON.stringify(requestEvidence)) throw new Error('Cadence idempotency key was reused with different evidence')
       await recordDomainEventInTransaction(tx, {
         eventKey, rooftopId: visible.rooftop.id, aggregateType: 'Lead', aggregateId: leadId,
-        action: 'cadence-advanced', topic: 'lead.cadence-advanced', actorId: context.session.itemId,
+        action: 'cadence-advanced', actorId: context.session.itemId,
         afterSnapshot: prior, metadata: replay.metadata,
-        payload: { leadId, rooftopId: visible.rooftop.id, cadenceKey: prior.cadenceKey, cadenceStatus: prior.cadenceStatus, cadenceStep: prior.cadenceStep, taskId: (replay.metadata as any)?.taskId ?? null },
-      })
+       })
       return { id: leadId, status: String(prior.cadenceStatus), updatedAt: new Date(), reused: true }
     }
     const lead = await tx.prisma.lead.findFirst({
@@ -218,9 +213,8 @@ export async function advanceLeadCadence(_root: unknown, { data }: any, context:
     const afterSnapshot = { requestEvidence, cadenceKey: lead.cadenceKey, campaignKey: lead.campaignKey, priorStep: lead.cadenceStep, cadenceStep: nextStep?.step || lead.cadenceStep, channel: nextStep?.channel || null, cadenceStatus, dueAt: dueAt?.toISOString() || null }
     await recordDomainEventInTransaction(tx, {
       eventKey, rooftopId: visible.rooftop.id, aggregateType: 'Lead', aggregateId: leadId,
-      action: 'cadence-advanced', topic: 'lead.cadence-advanced', actorId: context.session.itemId,
-      afterSnapshot, metadata: { taskId }, payload: { leadId, rooftopId: visible.rooftop.id, cadenceKey: lead.cadenceKey, cadenceStatus, cadenceStep: afterSnapshot.cadenceStep, taskId },
-    })
+      action: 'cadence-advanced', actorId: context.session.itemId,
+      afterSnapshot, metadata: { taskId },     })
     return { id: leadId, status: cadenceStatus, updatedAt: new Date(), reused: false }
   }, { timeout: 30_000 })
 }
@@ -244,10 +238,9 @@ export async function linkCustomerHousehold(_root: unknown, { data }: any, conte
     if (replay) {
       await recordDomainEventInTransaction(tx, {
         eventKey, rooftopId, aggregateType: 'CustomerHousehold', aggregateId: replay.aggregateId,
-        action: 'members-linked', topic: 'customer.household-linked', actorId: context.session.itemId,
+        action: 'members-linked', actorId: context.session.itemId,
         afterSnapshot: { customerIds: [...customerIds].sort(), displayName, expectedUpdatedAt: expected.map(value => value.toISOString()) }, metadata: replay.metadata,
-        payload: { rooftopId, householdId: replay.aggregateId, customerIds },
-      })
+       })
       return { id: replay.aggregateId, status: 'active', updatedAt: new Date(), reused: true }
     }
     const rows = await tx.prisma.customer.findMany({ where: { id: { in: customerIds }, rooftopId, status: 'active' }, select: { id: true, updatedAt: true, householdId: true } })
@@ -260,10 +253,9 @@ export async function linkCustomerHousehold(_root: unknown, { data }: any, conte
     await tx.prisma.customer.updateMany({ where: { id: { in: customerIds }, rooftopId }, data: { householdId: household.id } })
     await recordDomainEventInTransaction(tx, {
       eventKey, rooftopId, aggregateType: 'CustomerHousehold', aggregateId: household.id,
-      action: 'members-linked', topic: 'customer.household-linked', actorId: context.session.itemId,
+      action: 'members-linked', actorId: context.session.itemId,
       afterSnapshot: { customerIds: [...customerIds].sort(), displayName, expectedUpdatedAt: expected.map(value => value.toISOString()) }, metadata: { householdId: household.id },
-      payload: { rooftopId, householdId: household.id, customerIds },
-    })
+     })
     return { id: household.id, status: 'active', updatedAt: household.updatedAt, reused: false }
   }, { timeout: 30_000 })
 }
@@ -314,9 +306,8 @@ export async function manageSalesVisit(_root: unknown, { data }: any, context: a
       if (JSON.stringify(prior?.requestEvidence) !== JSON.stringify(requestEvidence)) throw new Error('Sales visit idempotency key was reused with different evidence')
       await recordDomainEventInTransaction(tx, {
         eventKey, rooftopId, aggregateType: 'SalesVisit', aggregateId: replay.aggregateId,
-        action, topic: `sales-visit.${action}`, actorId: context.session.itemId,
-        afterSnapshot: prior, metadata: replay.metadata, payload: { rooftopId, visitId: replay.aggregateId, action },
-      })
+        action, actorId: context.session.itemId,
+        afterSnapshot: prior, metadata: replay.metadata,       })
       return { id: replay.aggregateId, status: String(prior?.status || action), updatedAt: new Date(), reused: true }
     }
     const now = new Date()
@@ -343,9 +334,8 @@ export async function manageSalesVisit(_root: unknown, { data }: any, context: a
     const afterSnapshot = { visitId: visit.id, leadId: visit.leadId, kind: visit.kind, status: visit.status, managerId: visit.managerId || null, vehicleId: visit.vehicleId || null, scheduledAt: visit.scheduledAt?.toISOString() || null, outcome: visit.outcome || null, requestEvidence }
     await recordDomainEventInTransaction(tx, {
       eventKey, rooftopId, aggregateType: 'SalesVisit', aggregateId: visit.id,
-      action, topic: `sales-visit.${action}`, actorId: context.session.itemId,
-      afterSnapshot, metadata: { visitId: visit.id }, payload: { rooftopId, visitId: visit.id, leadId: visit.leadId, status: visit.status },
-    })
+      action, actorId: context.session.itemId,
+      afterSnapshot, metadata: { visitId: visit.id },     })
     return { id: visit.id, status: visit.status, updatedAt: visit.updatedAt, reused: false }
   }, { timeout: 30_000 })
 }

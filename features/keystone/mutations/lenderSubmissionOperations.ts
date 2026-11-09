@@ -52,11 +52,9 @@ async function recordLenderSubmissionStatusCommand(_root: unknown, { data }: { d
       aggregateType: 'LenderSubmission',
       aggregateId: submission.id,
       action: status,
-      topic: 'lender-submission.updated',
       actorId: context.session.itemId,
       afterSnapshot: { applicationId: submission.applicationId, status, externalReference: externalReference || null, errorCode: errorCode || null, recordedAt: now.toISOString() },
-      payload: { submissionId: submission.id, applicationId: submission.applicationId, rooftopId: submission.rooftopId, status },
-    })
+     })
     return submission.id
   }, { timeout: 30_000 })
 

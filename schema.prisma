@@ -797,7 +797,6 @@ model Rooftop {
   from_InventoryAcquisition_rooftop           InventoryAcquisition[]           @relation("InventoryAcquisition_rooftop")
   from_InventoryAcquisitionEvent_rooftop      InventoryAcquisitionEvent[]      @relation("InventoryAcquisitionEvent_rooftop")
   from_DomainAuditEvent_rooftop               DomainAuditEvent[]               @relation("DomainAuditEvent_rooftop")
-  from_DomainOutboxEvent_rooftop              DomainOutboxEvent[]              @relation("DomainOutboxEvent_rooftop")
   from_InventoryStock_rooftop                 InventoryStock[]                 @relation("InventoryStock_rooftop")
   from_InventoryStockEvent_rooftop            InventoryStockEvent[]            @relation("InventoryStockEvent_rooftop")
   from_InventoryReconWorkItem_rooftop         InventoryReconWorkItem[]         @relation("InventoryReconWorkItem_rooftop")
@@ -989,30 +988,6 @@ model DomainAuditEvent {
   @@index([aggregateId])
   @@index([actorId])
   @@index([occurredAt])
-}
-
-model DomainOutboxEvent {
-  id            String    @id @default(cuid())
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @default(now()) @updatedAt
-  rooftop       Rooftop   @relation("DomainOutboxEvent_rooftop", fields: [rooftopId], references: [id])
-  rooftopId     String    @map("rooftop")
-  deliveryKey   String    @unique @default("")
-  topic         String    @default("")
-  aggregateType String    @default("")
-  aggregateId   String    @default("")
-  payload       Json?     @default("{}")
-  status        String    @default("pending")
-  attemptCount  Int       @default(0)
-  availableAt   DateTime  @default(now())
-  processedAt   DateTime?
-  lastError     String?
-
-  @@index([rooftopId])
-  @@index([topic])
-  @@index([aggregateType])
-  @@index([status])
-  @@index([availableAt])
 }
 
 model InventoryStock {

@@ -23,7 +23,6 @@ type PublicSubmissionOptions<T extends Record<string, unknown>> = {
   honeypot?: unknown
   requestEvidence: unknown
   aggregateType: string
-  topic: string
   handler: (transactionContext: any, submission: SubmissionContext) => Promise<T>
   aggregateId: (result: T) => string
   /** Runs once, after the submission has committed; never on a replay. Failures are swallowed. */
@@ -132,13 +131,11 @@ export async function runPublicSubmission<T extends Record<string, unknown>>(
       aggregateType: options.aggregateType,
       aggregateId: options.aggregateId(result),
       action: 'submitted',
-      topic: options.topic,
       // Binds the submission to the signed-in customer for account request history.
       actorId: options.context.session?.listKey === 'User' ? options.context.session.itemId : null,
       afterSnapshot: { workflow: options.workflow, accepted: true, response },
       metadata: { submissionRequestHash, response },
-      payload: { workflow: options.workflow, rooftopId, response },
-    })
+     })
     return { ...result, reused: false }
   }, { timeout: 30_000 })
   if (!outcome.reused && options.afterCommit) {

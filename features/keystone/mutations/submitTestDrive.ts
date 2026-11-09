@@ -51,7 +51,6 @@ export async function submitTestDrive(_root: unknown, { data }: { data: SubmitTe
       vehicleId: optionalText(data.vehicleId, 100, 'Vehicle'),
     },
     aggregateType: 'TestDrive',
-    topic: 'public-test-drive.submitted',
     aggregateId: result => String(result.testDriveId),
     afterCommit: (r, rooftopId) => deliverRequestReceipt(context, ((result: any) => ({
       kind: 'test_drive', requestId: String(result.testDriveId), rooftopId, to: email, customerName,

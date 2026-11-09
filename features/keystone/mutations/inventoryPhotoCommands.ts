@@ -57,7 +57,7 @@ async function returnListingToDraft(tx: any, stock: any, actorId: string) {
 }
 
 async function recordPhotoEvent(tx: any, stock: any, context: any, eventKey: string, action: string, reason: string, evidence: Record<string, unknown>) {
-  const event: DomainEventInput = { eventKey, rooftopId: stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: stock.id, action, topic: 'inventory-merchandising.photos-changed', actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: stock.rooftop.id, ...evidence } }
+  const event: DomainEventInput = { eventKey, rooftopId: stock.rooftop.id, aggregateType: 'InventoryStock', aggregateId: stock.id, action, actorId: context.session.itemId, afterSnapshot: evidence, }
   const recorded = await recordDomainEventInTransaction(tx, event)
   if (recorded.reused) return true
   await tx.prisma.inventoryStockEvent.create({ data: { rooftopId: stock.rooftop.id, stockId: stock.id, eventKey, eventType: action, reason, evidence, actorId: context.session.itemId } })

@@ -95,12 +95,10 @@ export async function configureRetentionPolicy(_root: unknown, { data }: { data:
       aggregateType: 'RetentionPolicy',
       aggregateId: id,
       action,
-      topic: 'retention.policy-configured',
       actorId,
       beforeSnapshot: before,
       afterSnapshot: after,
-      payload: { rooftopId, policyId: id, category, retentionDays, legalHold },
-    })
+     })
     return id
   }, { timeout: 30_000 })
 

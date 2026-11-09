@@ -56,12 +56,10 @@ export async function transitionServiceOrder(
         aggregateType: 'ServiceOrder',
         aggregateId: id,
         action: `transitioned:${toStatus}`,
-        topic: 'service-order.transitioned',
         actorId: context.session.itemId,
         afterSnapshot: requestEvidence,
         metadata: replay.metadata,
-        payload: { serviceOrderId: id, rooftopId: order.rooftop.id, status: toStatus },
-      })
+       })
       return sessionContext.db.ServiceOrder.findOne({ where: { id } })
     }
 
@@ -96,12 +94,10 @@ export async function transitionServiceOrder(
       aggregateType: 'ServiceOrder',
       aggregateId: id,
       action: `transitioned:${toStatus}`,
-      topic: 'service-order.transitioned',
       actorId: context.session.itemId,
       afterSnapshot: requestEvidence,
       metadata: settlement ? { settlement } : {},
-      payload: { serviceOrderId: id, rooftopId: order.rooftop.id, status: toStatus },
-    })
+     })
 
     return sessionContext.db.ServiceOrder.findOne({ where: { id } })
   }, { timeout: 30_000 })

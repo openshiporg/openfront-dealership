@@ -67,10 +67,9 @@ async function startInventoryAcquisitionCommand(_root: unknown, { data }: { data
         eventKey: `inventory-acquisition-start:${idempotencyKey}`,
         rooftopId: replay.rooftopId,
         aggregateType: 'InventoryAcquisition', aggregateId: replay.id,
-        action: 'started', topic: 'inventory-acquisition.started', actorId: context.session.itemId,
+        action: 'started', actorId: context.session.itemId,
         afterSnapshot: domainEvidence,
-        payload: { acquisitionId: replay.id, rooftopId: replay.rooftopId, status: replay.status },
-      })
+       })
       return replay.id
     }
     const now = new Date()
@@ -112,10 +111,9 @@ async function startInventoryAcquisitionCommand(_root: unknown, { data }: { data
       eventKey: `inventory-acquisition-start:${idempotencyKey}`,
       rooftopId,
       aggregateType: 'InventoryAcquisition', aggregateId: acquisition.id,
-      action: 'started', topic: 'inventory-acquisition.started', actorId: context.session.itemId,
+      action: 'started', actorId: context.session.itemId,
       afterSnapshot: domainEvidence,
-      payload: { acquisitionId: acquisition.id, rooftopId, status: 'appraised' },
-    })
+     })
     return acquisition.id
   }, { timeout: 30_000 })
 

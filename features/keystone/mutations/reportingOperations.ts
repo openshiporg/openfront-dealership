@@ -204,7 +204,7 @@ export async function saveOperationalReport(_root: unknown, { data }: any, conte
       if (!current) throw new Error('Saved report inaccessible')
       const replay = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { id: true } })
       if (!replay && data.expectedUpdatedAt && new Date(data.expectedUpdatedAt).getTime() !== new Date(current.updatedAt).getTime()) throw new Error('This report changed since you opened it. Reload and try again.')
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: 'SavedReport', aggregateId: reportId, action: 'updated', topic: 'report.saved', actorId: context.session.itemId, afterSnapshot: { reportId, name, reportType, filters, exportFormat, schedule, active }, payload: { rooftopId, reportId, reportType, schedule, active } })
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: 'SavedReport', aggregateId: reportId, action: 'updated', actorId: context.session.itemId, afterSnapshot: { reportId, name, reportType, filters, exportFormat, schedule, active }, })
       if (replay) return reportId
       const rescheduled = schedule !== current.schedule || (active && !current.active)
       await tx.prisma.savedReport.update({ where: { id: reportId }, data: { name, reportType, filters, exportFormat, schedule, active, ...(rescheduled ? { nextRunAt: nextRun(schedule) } : {}) } })
@@ -216,7 +216,7 @@ export async function saveOperationalReport(_root: unknown, { data }: any, conte
   const id = await context.transaction(async (tx: any) => {
     await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${eventKey}, 0))`
     const existing = await tx.prisma.savedReport.findUnique({ where: { idempotencyKey } })
-    await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: 'SavedReport', aggregateId: rooftopId, action: 'configured', topic: 'report.saved', actorId: context.session.itemId, afterSnapshot: { name, reportType, filters, exportFormat, schedule }, payload: { rooftopId, reportType, schedule } })
+    await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: 'SavedReport', aggregateId: rooftopId, action: 'configured', actorId: context.session.itemId, afterSnapshot: { name, reportType, filters, exportFormat, schedule }, })
     if (existing) return existing.id
     return (await tx.prisma.savedReport.create({ data: { rooftopId, ownerId: context.session.itemId, name, reportType, filters, exportFormat, schedule, active: true, nextRunAt: nextRun(schedule), idempotencyKey }, select: { id: true } })).id
   })
@@ -276,7 +276,7 @@ export async function runSavedReport(_root: unknown, { data }: any, context: any
       await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${eventKey}, 0))`
       const current = await tx.prisma.reportRun.findUnique({ where: { id: runId }, select: { status: true } })
       if (current?.status !== 'queued') return runId
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: saved.rooftop.id, aggregateType: 'ReportRun', aggregateId: saved.id, action: 'completed', topic: 'report.completed', actorId: context.session.itemId, afterSnapshot: { reportId: saved.id, runId, digest, exportFormat: saved.exportFormat, expiresAt }, payload: { rooftopId: saved.rooftop.id, reportId: saved.id, runId, digest } })
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: saved.rooftop.id, aggregateType: 'ReportRun', aggregateId: saved.id, action: 'completed', actorId: context.session.itemId, afterSnapshot: { reportId: saved.id, runId, digest, exportFormat: saved.exportFormat, expiresAt }, })
       await tx.prisma.reportRun.update({ where: { id: runId }, data: { status: 'completed', resultSnapshot: snapshot, resultDigest: digest, completedAt: new Date(), expiresAt } })
       return runId
     })
@@ -294,7 +294,7 @@ export async function runSavedReport(_root: unknown, { data }: any, context: any
     await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${eventKey}, 0))`
     const existing = await tx.prisma.reportRun.findUnique({ where: { idempotencyKey } })
     if (existing) return existing.id
-    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: saved.rooftop.id, aggregateType: 'ReportRun', aggregateId: saved.id, action: 'completed', topic: 'report.completed', actorId: context.session.itemId, afterSnapshot: { reportId: saved.id, digest, exportFormat: saved.exportFormat, expiresAt }, payload: { rooftopId: saved.rooftop.id, reportId: saved.id, digest } })
+    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: saved.rooftop.id, aggregateType: 'ReportRun', aggregateId: saved.id, action: 'completed', actorId: context.session.itemId, afterSnapshot: { reportId: saved.id, digest, exportFormat: saved.exportFormat, expiresAt }, })
     const run = await tx.prisma.reportRun.create({ data: { rooftopId: saved.rooftop.id, savedReportId: saved.id, status: 'completed', exportFormat: saved.exportFormat, resultSnapshot: snapshot, resultDigest: digest, completedAt: new Date(), expiresAt, idempotencyKey }, select: { id: true } })
     if (saved.schedule !== 'manual') await tx.prisma.savedReport.update({ where: { id: saved.id }, data: { nextRunAt: nextRun(saved.schedule) } })
     return run.id
@@ -314,7 +314,7 @@ export async function queueDueSavedReports(_root: unknown, _args: unknown, conte
     const runId = await context.transaction(async (tx: any) => {
       await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${idempotencyKey}, 0))`
       const existing = await tx.prisma.reportRun.findUnique({ where: { idempotencyKey } })
-      await recordDomainEventInTransaction(tx, { eventKey: `report-scheduled:${idempotencyKey}`, rooftopId: saved.rooftopId, aggregateType: 'ReportRun', aggregateId: saved.id, action: 'queued', topic: 'report.run-requested', actorId: context.session.itemId, afterSnapshot: { reportId: saved.id, scheduledFor, exportFormat: saved.exportFormat }, payload: { rooftopId: saved.rooftopId, reportId: saved.id, scheduledFor } })
+      await recordDomainEventInTransaction(tx, { eventKey: `report-scheduled:${idempotencyKey}`, rooftopId: saved.rooftopId, aggregateType: 'ReportRun', aggregateId: saved.id, action: 'queued', actorId: context.session.itemId, afterSnapshot: { reportId: saved.id, scheduledFor, exportFormat: saved.exportFormat }, })
       if (existing) return existing.id
       const run = await tx.prisma.reportRun.create({ data: { rooftopId: saved.rooftopId, savedReportId: saved.id, status: 'queued', exportFormat: saved.exportFormat, idempotencyKey }, select: { id: true } })
       await tx.prisma.savedReport.update({ where: { id: saved.id }, data: { nextRunAt: nextRun(saved.schedule, scheduledFor) } })

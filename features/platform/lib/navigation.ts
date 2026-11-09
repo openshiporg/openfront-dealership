@@ -68,7 +68,7 @@ export const platformNavItems: PlatformNavItem[] = [
   { title: 'Staff',          href: '/platform/users',          color: 'purple',  description: 'Manage staff accounts, roles, and permissions.',                icon: Users,         group: 'operations' },
   { title: 'Organization',   href: '/platform/organization',   color: 'slate',   description: 'Dealer group, rooftops, access, roles and retention.',          icon: Building2,     group: 'operations' },
   { title: 'Catalog',        href: '/platform/catalog',        color: 'lime',    description: 'Makes, models, service packages and lead routing.',             icon: Tags,          group: 'operations' },
-  { title: 'Reports',        href: '/platform/reports',        color: 'violet',  description: 'Saved reports, runs, audit search and outbox.',                 icon: FileBarChart,  group: 'operations' },
+  { title: 'Reports',        href: '/platform/reports',        color: 'violet',  description: 'Saved reports, runs, audit search.',                 icon: FileBarChart,  group: 'operations' },
   { title: 'API Keys',       href: '/platform/api-keys',       color: 'zinc',    description: 'Create, scope and revoke API keys.',                            icon: KeyRound,      group: 'operations' },
 ]
 

@@ -47,11 +47,10 @@ async function manageDeliveryCaseCommand(_r: unknown, { data }: any, context: an
     if (!deal || deal.rooftopId !== authority.rooftopId) throw new Error('Deal authority changed')
     const binding = { ...worksheetBinding(deal), acceptedHash: domainEventRequestHash(deal.acceptedSnapshot) }
     const existing = await tx.prisma.deliveryCase.findFirst({ where: { dealId: deal.id, rooftopId: deal.rooftopId } })
-    const payload = (status: string) => ({ rooftopId: deal.rooftopId, dealId: deal.id, status })
     const prior = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey } })
     if (prior) {
       if (!existing || stableJson(prior.afterSnapshot?.request) !== stableJson(request) || stableJson(prior.afterSnapshot?.binding) !== stableJson(binding)) throw new Error('Delivery case retry is changed or superseded')
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: 'DeliveryCase', aggregateId: deal.id, action, topic: 'delivery-case.updated', actorId: context.session.itemId, afterSnapshot: prior.afterSnapshot, payload: payload(prior.afterSnapshot.status) })
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: 'DeliveryCase', aggregateId: deal.id, action, actorId: context.session.itemId, afterSnapshot: prior.afterSnapshot })
       return authority.context.db.DeliveryCase.findOne({ where: { id: existing.id } })
     }
     // Terminal cases cannot be re-scheduled/re-acknowledged after a handoff.
@@ -102,7 +101,7 @@ async function manageDeliveryCaseCommand(_r: unknown, { data }: any, context: an
     const saved = existing
       ? await tx.prisma.deliveryCase.update({ where: { id: existing.id }, data: values, select: { id: true } })
       : await tx.prisma.deliveryCase.create({ data: { ...values, rooftopId: deal.rooftopId, dealId: deal.id, idempotencyKey: ik(data.idempotencyKey) }, select: { id: true } })
-    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: 'DeliveryCase', aggregateId: deal.id, action, topic: 'delivery-case.updated', actorId: context.session.itemId, afterSnapshot: evidence, payload: payload(status) })
+    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: 'DeliveryCase', aggregateId: deal.id, action, actorId: context.session.itemId, afterSnapshot: evidence })
     return authority.context.db.DeliveryCase.findOne({ where: { id: saved.id } })
   }, { timeout: 30_000, isolationLevel: 'Serializable' })
 }
@@ -161,7 +160,7 @@ async function manageWeOweItemCommand(_r: unknown, { data }: any, context: any) 
   const evidence = { dealId: deal.id, deliveryCaseId: delivery.id, itemId: existing?.id || null, action, status, description, promisedAt: promisedAt?.toISOString(), ownerId, estimatedCostCents, fulfillmentEvidence: fulfillmentEvidence || null, customerAcknowledgment: customerAcknowledgment || null, fulfilledAt: fulfilledAt?.toISOString() || null }
   const id = await context.transaction(async (tx: any) => {
     await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${eventKey},0))`
-    const recorded = await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftop.id, aggregateType: 'WeOweItem', aggregateId: existing?.id || deal.id, action, topic: 'we-owe.updated', actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: deal.rooftop.id, dealId: deal.id, status } })
+    const recorded = await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftop.id, aggregateType: 'WeOweItem', aggregateId: existing?.id || deal.id, action, actorId: context.session.itemId, afterSnapshot: evidence, })
     if (recorded.reused) {
       const found = await tx.prisma.weOweItem.findUnique({ where: { idempotencyKey: ik(data.idempotencyKey) }, select: { id: true } })
       if (found) return found.id

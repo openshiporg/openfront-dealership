@@ -83,9 +83,8 @@ export async function createDealPencil(_root: unknown, { data }: { data: any }, 
     if (replay) {
       await recordDomainEventInTransaction(tx, {
         eventKey, rooftopId, aggregateType: 'Deal', aggregateId: replay.aggregateId,
-        action: 'pencil-created', topic: 'deal.pencil-created', actorId: context.session.itemId,
-        afterSnapshot: evidence, payload: { dealId: replay.aggregateId, rooftopId, status: 'pencil' },
-      })
+        action: 'pencil-created', actorId: context.session.itemId,
+        afterSnapshot: evidence,       })
       return replay.aggregateId
     }
     const deal = await tx.prisma.deal.create({
@@ -103,9 +102,8 @@ export async function createDealPencil(_root: unknown, { data }: { data: any }, 
     })
     await recordDomainEventInTransaction(tx, {
       eventKey, rooftopId, aggregateType: 'Deal', aggregateId: deal.id,
-      action: 'pencil-created', topic: 'deal.pencil-created', actorId: context.session.itemId,
-      afterSnapshot: evidence, payload: { dealId: deal.id, rooftopId, status: 'pencil' },
-    })
+      action: 'pencil-created', actorId: context.session.itemId,
+      afterSnapshot: evidence,     })
     return deal.id
   }, { timeout: 30_000 })
 

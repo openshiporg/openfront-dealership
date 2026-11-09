@@ -93,7 +93,7 @@ export async function createPaymentCheckout(_root: unknown, { data }: any, conte
   const transactionId = await context.transaction(async (tx: any) => {
     await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${source.rooftopId}:${sourceType}:${sourceId}`}, 0))`
     const existing = await tx.prisma.paymentTransaction.findUnique({ where: { idempotencyKey } })
-    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: source.rooftopId, aggregateType: 'PaymentTransaction', aggregateId: sourceId, action: 'checkout-requested', topic: 'payment.checkout-requested', actorId: context.session.itemId, afterSnapshot: { sourceType, sourceId, amountCents, currency, providerKey }, payload: { rooftopId: source.rooftopId, sourceType, sourceId, amountCents, providerKey } })
+    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: source.rooftopId, aggregateType: 'PaymentTransaction', aggregateId: sourceId, action: 'checkout-requested', actorId: context.session.itemId, afterSnapshot: { sourceType, sourceId, amountCents, currency, providerKey }, })
     if (existing) {
       if (existing.sourceType !== sourceType || existing.amountCents !== amountCents || existing.providerKey !== providerKey || existing.dealId !== (source.relation.dealId || null) || existing.serviceOrderId !== (source.relation.serviceOrderId || null)) throw new Error('Payment idempotency key was reused with different evidence')
       return existing.id
@@ -160,7 +160,7 @@ export async function requestPaymentRefund(_root: unknown, { data }: any, contex
   const refundId = await context.transaction(async (tx: any) => {
     await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`payment-refund:${transactionId}`}, 0))`
     const existing = await tx.prisma.paymentRefund.findUnique({ where: { idempotencyKey } })
-    await recordDomainEventInTransaction(tx, { eventKey: `payment-refund:${idempotencyKey}`, rooftopId: transaction.rooftop.id, aggregateType: 'PaymentRefund', aggregateId: transactionId, action: 'requested', topic: 'payment.refund-requested', actorId: context.session.itemId, afterSnapshot: { transactionId, amountCents, reason }, payload: { rooftopId: transaction.rooftop.id, transactionId, amountCents } })
+    await recordDomainEventInTransaction(tx, { eventKey: `payment-refund:${idempotencyKey}`, rooftopId: transaction.rooftop.id, aggregateType: 'PaymentRefund', aggregateId: transactionId, action: 'requested', actorId: context.session.itemId, afterSnapshot: { transactionId, amountCents, reason }, })
     if (existing) {
       if (existing.transactionId !== transactionId || existing.amountCents !== amountCents || existing.reason !== reason) throw new Error('Refund idempotency key was reused with different evidence')
       return existing.id
@@ -192,7 +192,7 @@ export async function reconcilePaymentTransaction(_root: unknown, { data }: any,
     const transaction = await session.query.PaymentTransaction.findOne({ where: { id: transactionId }, query: 'id status reconciliationReference rooftop { id }' })
     if (!transaction?.rooftop?.id || !['captured', 'partially-refunded', 'refunded'].includes(transaction.status)) throw new Error('Settled payment required for reconciliation')
     await assertSessionRooftopPermission(context, transaction.rooftop.id, 'canManagePayments')
-    await recordDomainEventInTransaction(tx, { eventKey: `payment-reconcile:${idempotencyKey}`, rooftopId: transaction.rooftop.id, aggregateType: 'PaymentTransaction', aggregateId: transactionId, action: 'reconciled', topic: 'payment.reconciled', actorId: context.session.itemId, afterSnapshot: { transactionId, reference }, payload: { rooftopId: transaction.rooftop.id, transactionId, reference } })
+    await recordDomainEventInTransaction(tx, { eventKey: `payment-reconcile:${idempotencyKey}`, rooftopId: transaction.rooftop.id, aggregateType: 'PaymentTransaction', aggregateId: transactionId, action: 'reconciled', actorId: context.session.itemId, afterSnapshot: { transactionId, reference }, })
     if (transaction.reconciliationReference && transaction.reconciliationReference !== reference) throw new Error('Payment is already reconciled with different evidence')
     await tx.prisma.paymentTransaction.updateMany({ where: { id: transactionId, reconciliationReference: '' }, data: { reconciliationReference: reference, reconciledAt: new Date(), version: { increment: 1 } } })
     return session.db.PaymentTransaction.findOne({ where: { id: transactionId } })
@@ -232,7 +232,7 @@ export async function processVerifiedPaymentWebhook(event: VerifiedPaymentEvent,
     await tx.prisma.paymentTransaction.update({ where: { id: transaction.id }, data: { status, capturedCents, refundedCents, failureCode, providerTransactionId: event.providerTransactionId || transaction.providerTransactionId, providerSessionId: event.providerSessionId || transaction.providerSessionId, version: { increment: 1 } } })
     const refund = event.providerRefundId ? await tx.prisma.paymentRefund.findFirst({ where: { providerRefundId: event.providerRefundId }, select: { id: true } }) : null
     await tx.prisma.paymentProviderEvent.create({ data: { rooftopId: transaction.rooftopId, transactionId: transaction.id, refundId: refund?.id, providerKey: transaction.providerKey, providerEventId: event.id, eventType: event.type, payloadDigest: event.rawDigest, signatureTimestamp: event.signatureTimestamp, receivedAt: new Date() } })
-    await recordDomainEventInTransaction(tx, { eventKey: `payment-webhook:${event.id}`, rooftopId: transaction.rooftopId, aggregateType: 'PaymentTransaction', aggregateId: transaction.id, action: event.type, topic: 'payment.provider-event-verified', actorId: null, afterSnapshot: { transactionId: transaction.id, status, capturedCents, refundedCents, payloadDigest: event.rawDigest }, payload: { rooftopId: transaction.rooftopId, transactionId: transaction.id, status, providerEventId: event.id } })
+    await recordDomainEventInTransaction(tx, { eventKey: `payment-webhook:${event.id}`, rooftopId: transaction.rooftopId, aggregateType: 'PaymentTransaction', aggregateId: transaction.id, action: event.type, actorId: null, afterSnapshot: { transactionId: transaction.id, status, capturedCents, refundedCents, payloadDigest: event.rawDigest }, })
     if (status === 'captured' && transaction.serviceOrderId) {
       const order = await tx.prisma.serviceOrder.findUnique({ where: { id: transaction.serviceOrderId }, select: { status: true, grandTotalCents: true } })
       const totals = await tx.prisma.paymentTransaction.aggregate({ where: { serviceOrderId: transaction.serviceOrderId, status: { in: ['captured', 'partially-refunded', 'refunded'] } }, _sum: { capturedCents: true, refundedCents: true } })

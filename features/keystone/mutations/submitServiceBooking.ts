@@ -86,7 +86,6 @@ export async function submitServiceBooking(_root: unknown, { data }: { data: any
       concern,
     },
     aggregateType: 'ServiceAppointment',
-    topic: 'public-service-appointment.submitted',
     aggregateId: result => String(result.serviceAppointmentId),
     afterCommit: (r, rooftopId) => deliverRequestReceipt(context, ((result: any) => ({
       kind: 'service', requestId: String(result.serviceAppointmentId), rooftopId, to: email, customerName,

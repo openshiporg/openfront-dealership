@@ -41,8 +41,8 @@ async function reviewFinancePrerequisitesCommand(_root: unknown, { data }: { dat
       acceptedTermsHash: domainEventRequestHash(deal.acceptedSnapshot) }
     const occurredAt = new Date()
     await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: 'Deal', aggregateId: deal.id,
-      action: 'prerequisites-reviewed', topic: 'finance-prerequisites.reviewed', actorId, afterSnapshot, occurredAt,
-      payload: { dealId: deal.id, rooftopId: deal.rooftopId, worksheetVersion: deal.worksheetVersion } })
+      action: 'prerequisites-reviewed', actorId, afterSnapshot, occurredAt,
+ })
     return { id: deal.id, status: 'review-recorded', reused: false, updatedAt: occurredAt }
   }, { timeout: 30_000, isolationLevel: 'Serializable' })
 }

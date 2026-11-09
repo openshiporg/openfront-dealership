@@ -82,7 +82,7 @@ export const Vehicle = list({
         aggregateType: 'Vehicle',
         aggregateId: record.id,
         action: operation,
-        topic: `vehicle.${operation}d`,
+       
         actorId: context.session?.itemId ?? null,
         beforeSnapshot,
         afterSnapshot: operation === 'delete' ? null : snapshot,

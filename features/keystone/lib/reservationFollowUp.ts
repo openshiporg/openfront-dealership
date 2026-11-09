@@ -91,10 +91,9 @@ export async function applyPaidReservationInTransaction(tx: any, transaction: { 
     select: { id: true },
   })
   await recordDomainEventInTransaction(tx, {
-    eventKey, rooftopId: lead.rooftopId, aggregateType: 'Lead', aggregateId: lead.id, action: 'reservation-paid', topic: 'lead.reservation-paid', actorId: null,
+    eventKey, rooftopId: lead.rooftopId, aggregateType: 'Lead', aggregateId: lead.id, action: 'reservation-paid', actorId: null,
     afterSnapshot: { transactionId: transaction.id, assigneeId, routeKey, taskId: task.id, dueAt: dueAt.toISOString(), capturedCents: transaction.capturedCents },
     metadata: { taskId: task.id },
-    payload: { rooftopId: lead.rooftopId, leadId: lead.id, transactionId: transaction.id, assigneeId, taskId: task.id },
   })
   return { leadId: lead.id, assigneeId, taskId: task.id }
 }

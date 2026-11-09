@@ -237,10 +237,9 @@ export async function rescheduleServiceAppointment(_root: unknown, { id, appoint
   const event: DomainEventInput = {
     eventKey: `service-appointment-reschedule:${commandKey(idempotencyKey)}`,
     rooftopId: appointment.rooftop.id,
-    aggregateType: 'ServiceAppointment', aggregateId: id, action: 'rescheduled', topic: 'service-appointment.rescheduled',
+    aggregateType: 'ServiceAppointment', aggregateId: id, action: 'rescheduled',
     actorId: context.session.itemId,
     afterSnapshot: { appointmentId: id, from: appointment.appointmentDate, to: at.toISOString() },
-    payload: { appointmentId: id, rooftopId: appointment.rooftop.id, appointmentDate: at.toISOString() },
   }
   await context.transaction(async (tx: any) => {
     if (await replayOrLock(tx, event)) return

@@ -30,35 +30,100 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// features/integrations/financing/operator-recorded.ts
-async function submit() {
-  return {
-    status: "queued",
-    externalReference: null,
-    responseSummary: {
-      mode: "operator-recorded",
-      externalRequestSent: false
-    }
-  };
+// features/keystone/lib/email-layout.ts
+function storeNameFromEnv(fallback = "Dealership") {
+  const match = /^\s*"?([^"<]+?)"?\s*</.exec(process.env.SMTP_FROM || "");
+  return match?.[1]?.trim() || fallback;
 }
-function prerequisiteCapability(providerKey) {
-  return {
-    providerKey,
-    configurationVersion: 1,
-    mode: "operator-recorded",
-    humanReviewRequired: true,
-    externalRequestSent: false,
-    documentSignatureVerified: false,
-    legalPolicyVerified: false,
-    fundingSettlementVerified: false
-  };
+function emailButton(label2, href) {
+  return `<table role="presentation" border="0" cellspacing="0" cellpadding="0" style="margin:8px 0 24px;">
+<tr><td class="em-btn" align="center" bgcolor="${C.button}" style="border-radius:8px;background:${C.button};">
+<a class="em-btn-a" href="${escapeHtml(href)}" target="_blank" style="display:inline-block;padding:14px 28px;font-family:${FONT};font-size:16px;font-weight:600;line-height:20px;color:${C.buttonText};text-decoration:none;border-radius:8px;">${escapeHtml(label2)}</a>
+</td></tr></table>`;
 }
-var key, label;
-var init_operator_recorded = __esm({
-  "features/integrations/financing/operator-recorded.ts"() {
+function emailPanel(html, align = "left") {
+  return `<table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin:0 0 20px;">
+<tr><td class="em-panel" align="${align}" bgcolor="${C.panel}" style="padding:16px 18px;background:${C.panel};border:1px solid ${C.line};border-radius:8px;font-family:${FONT};font-size:15px;line-height:22px;color:${C.text};">${html}</td></tr></table>`;
+}
+function emailLayout(input2) {
+  const store = escapeHtml(input2.storeName || storeNameFromEnv());
+  const support = escapeHtml(input2.supportEmail || SUPPORT_EMAIL);
+  return `<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>${escapeHtml(input2.title)}</title>
+<style>
+:root { color-scheme: light dark; supported-color-schemes: light dark; }
+body { margin:0; padding:0; -webkit-text-size-adjust:100%; }
+a { color:${C.link}; }
+@media (max-width: 620px) { .em-pad { padding-left:20px !important; padding-right:20px !important; } }
+@media (prefers-color-scheme: dark) {
+  .em-canvas { background:#09090b !important; }
+  .em-card { background:#18181b !important; border-color:#27272a !important; }
+  .em-text { color:#fafafa !important; }
+  .em-muted { color:#a1a1aa !important; }
+  .em-line { border-color:#3f3f46 !important; }
+  .em-panel { background:#27272a !important; border-color:#3f3f46 !important; color:#fafafa !important; }
+  .em-btn { background:#fafafa !important; }
+  .em-btn-a { color:#18181b !important; }
+  .em-link { color:#fafafa !important; }
+}
+[data-ogsc] .em-text { color:#fafafa !important; }
+[data-ogsc] .em-muted { color:#a1a1aa !important; }
+[data-ogsb] .em-canvas { background:#09090b !important; }
+[data-ogsb] .em-card { background:#18181b !important; }
+</style>
+</head>
+<body class="em-canvas" style="margin:0;padding:0;background:${C.canvas};">
+${input2.preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">${escapeHtml(input2.preheader)}</div>` : ""}
+<table role="presentation" class="em-canvas" width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="${C.canvas}" style="background:${C.canvas};">
+<tr><td align="center" style="padding:24px 12px;">
+<table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width:600px;">
+<tr><td class="em-pad" style="padding:8px 32px 20px;font-family:${FONT};font-size:18px;line-height:24px;font-weight:700;letter-spacing:-0.01em;"><span class="em-text" style="color:${C.text};">${store}</span></td></tr>
+<tr><td class="em-card" bgcolor="${C.card}" style="background:${C.card};border:1px solid ${C.line};border-radius:12px;">
+<table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr><td class="em-pad" style="padding:32px 32px 16px;">
+<h1 class="em-text" style="margin:0 0 16px;font-family:${FONT};font-size:24px;line-height:32px;font-weight:700;letter-spacing:-0.02em;color:${C.text};">${escapeHtml(input2.title)}</h1>
+${input2.body}
+</td></tr>
+</table>
+</td></tr>
+<tr><td class="em-pad" style="padding:20px 32px 8px;font-family:${FONT};font-size:13px;line-height:20px;color:${C.subtle};">
+<span class="em-muted" style="color:${C.subtle};">${input2.footerNote ? `${input2.footerNote}<br>` : ""}Questions? Email <a class="em-link" href="mailto:${support}" style="color:${C.muted};text-decoration:underline;">${support}</a>.<br>${store}</span>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+var SUPPORT_EMAIL, FONT, C, escapeHtml, p, emailParagraph, emailMuted;
+var init_email_layout = __esm({
+  "features/keystone/lib/email-layout.ts"() {
     "use strict";
-    key = "operator-recorded";
-    label = "Operator-recorded external lender review";
+    SUPPORT_EMAIL = "hello@dealership.openship.org";
+    FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif";
+    C = {
+      canvas: "#f4f4f5",
+      card: "#ffffff",
+      text: "#18181b",
+      muted: "#52525b",
+      subtle: "#71717a",
+      line: "#e4e4e7",
+      panel: "#fafafa",
+      button: "#18181b",
+      buttonText: "#ffffff",
+      link: "#18181b"
+    };
+    escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+    p = (html, style = "") => `<p class="em-text" style="margin:0 0 16px;font-family:${FONT};font-size:16px;line-height:24px;color:${C.text};${style}">${html}</p>`;
+    emailParagraph = p;
+    emailMuted = (html) => `<p class="em-muted" style="margin:0 0 16px;font-family:${FONT};font-size:14px;line-height:22px;color:${C.muted};">${html}</p>`;
   }
 });
 
@@ -72,7 +137,7 @@ __export(stripe_exports, {
   handleWebhookFunction: () => handleWebhookFunction,
   refundPaymentFunction: () => refundPaymentFunction
 });
-async function createPaymentFunction({ amount, currency, description, metadata, successUrl, cancelUrl, idempotencyKey: idempotencyKey6 }) {
+async function createPaymentFunction({ amount, currency, description, metadata, successUrl, cancelUrl, idempotencyKey: idempotencyKey6, customerEmail }) {
   const stripe = getStripeClient();
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
@@ -89,7 +154,9 @@ async function createPaymentFunction({ amount, currency, description, metadata, 
       }
     ],
     metadata,
-    payment_intent_data: { metadata }
+    payment_intent_data: { metadata },
+    // Prefill the email we already have so the buyer is not asked for it again.
+    ...customerEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail) ? { customer_email: customerEmail } : {}
   }, idempotencyKey6 ? { idempotencyKey: idempotencyKey6 } : void 0);
   if (!session.id || !session.url) {
     throw new Error("Stripe returned an incomplete checkout session");
@@ -241,6 +308,148 @@ async function generatePaymentLinkFunction2() {
 var init_manual = __esm({
   "features/integrations/payment/manual.ts"() {
     "use strict";
+  }
+});
+
+// features/keystone/lib/mail.ts
+var mail_exports = {};
+__export(mail_exports, {
+  sendPasswordResetEmail: () => sendPasswordResetEmail,
+  sendRequestReceiptEmail: () => sendRequestReceiptEmail,
+  sendReservationConfirmationEmail: () => sendReservationConfirmationEmail
+});
+function getBaseUrlForEmails() {
+  if (process.env.SMTP_STORE_LINK) {
+    return process.env.SMTP_STORE_LINK;
+  }
+  console.warn("SMTP_STORE_LINK not set. Please add SMTP_STORE_LINK to your environment variables for email links to work properly.");
+  return "";
+}
+function passwordResetEmail({ url }) {
+  return emailLayout({
+    preheader: "Use this link to choose a new password.",
+    title: "Reset your password",
+    body: `${emailParagraph("We received a request to reset the password for your account. Use the button below to choose a new one.")}
+${emailButton("Reset password", url)}
+${emailMuted("If you did not request this, you can safely ignore this email. Your password will not change.")}`
+  });
+}
+async function sendPasswordResetEmail(resetToken, to, baseUrl, resetPath = "/account/reset") {
+  const frontendUrl = baseUrl || getBaseUrlForEmails();
+  const info = await transport2.sendMail({
+    to,
+    from: process.env.SMTP_FROM,
+    subject: "Your password reset token!",
+    html: passwordResetEmail({
+      url: `${frontendUrl}${resetPath}?token=${encodeURIComponent(resetToken)}`
+    })
+  });
+  if (process.env.MAIL_USER?.includes("ethereal.email")) {
+    console.log(`\u{1F4E7} Message Sent!  Preview it at ${(0, import_nodemailer2.getTestMessageUrl)(info)}`);
+  }
+}
+async function sendRequestReceiptEmail(to, details) {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_FROM) return { sent: false, error: "not_configured" };
+  const escape = (value) => value.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+  const noun = details.kind === "test_drive" ? "test drive" : "service appointment";
+  try {
+    const info = await transport2.sendMail({
+      to,
+      from: process.env.SMTP_FROM,
+      subject: `${details.dealershipName}: we received your ${noun} request`,
+      html: emailLayout({
+        storeName: details.dealershipName,
+        preheader: `We received your ${noun} request.`,
+        title: `We received your ${noun} request`,
+        body: `${emailParagraph(`Hi ${escape(details.customerName)}, ${escape(details.dealershipName)} received your ${noun} request. We will contact you to confirm the time.`)}
+${emailPanel(`<strong>${escape(details.what)}</strong><br>Requested time: ${escape(details.whenLabel)}<br>Request number: ${escape(details.requestNumber)}`)}
+${details.url ? emailButton(`Visit ${details.dealershipName}`, details.url) : ""}`
+      })
+    });
+    return { sent: true, messageId: [String(info?.messageId || ""), String(info?.response || "").slice(0, 120)].filter(Boolean).join(" | ") };
+  } catch (error) {
+    return { sent: false, error: error instanceof Error ? error.message : "send_failed" };
+  }
+}
+async function sendReservationConfirmationEmail(to, details) {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_FROM) return { sent: false, error: "not_configured" };
+  const escape = (value) => value.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+  const who = details.salesperson ? `${escape(details.salesperson)} from our sales team` : "Our sales team";
+  const call = details.phone ? ` If you'd rather not wait, call us at ${escape(details.phone)}.` : "";
+  const lines = [
+    `<strong>${escape(details.vehicle)}</strong>`,
+    details.stockNumber ? `Stock ${escape(details.stockNumber)}` : "",
+    `Deposit paid: ${escape(details.depositLabel)} (refundable, counts toward your purchase)`,
+    `Reference: ${escape(details.reference)}`
+  ].filter(Boolean).join("<br>");
+  try {
+    const info = await transport2.sendMail({
+      to,
+      from: process.env.SMTP_FROM,
+      subject: `${details.dealershipName}: your ${details.vehicle} is reserved`,
+      html: emailLayout({
+        storeName: details.dealershipName,
+        preheader: `Your ${details.vehicle} is reserved.`,
+        title: "Your vehicle is reserved",
+        body: `${emailParagraph(`Hi ${escape(details.customerName)}, thanks for your deposit. We've taken the ${escape(details.vehicle)} off the market for you.`)}
+${emailPanel(lines)}
+${emailParagraph(`<strong>What happens next:</strong> ${who} will call you shortly to confirm the details and set a time to sign and take delivery.${call}`)}
+${details.address ? emailMuted(`${escape(details.dealershipName)}<br>${escape(details.address)}`) : ""}
+${details.accountUrl ? emailButton("View your reservation", details.accountUrl) : ""}`
+      })
+    });
+    return { sent: true, messageId: [String(info?.messageId || ""), String(info?.response || "").slice(0, 120)].filter(Boolean).join(" | ") };
+  } catch (error) {
+    return { sent: false, error: error instanceof Error ? error.message : "send_failed" };
+  }
+}
+var import_nodemailer2, transport2;
+var init_mail = __esm({
+  "features/keystone/lib/mail.ts"() {
+    "use strict";
+    "use server";
+    import_nodemailer2 = require("nodemailer");
+    init_email_layout();
+    transport2 = (0, import_nodemailer2.createTransport)({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT) || void 0,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASSWORD
+      }
+    });
+  }
+});
+
+// features/integrations/financing/operator-recorded.ts
+async function submit() {
+  return {
+    status: "queued",
+    externalReference: null,
+    responseSummary: {
+      mode: "operator-recorded",
+      externalRequestSent: false
+    }
+  };
+}
+function prerequisiteCapability(providerKey) {
+  return {
+    providerKey,
+    configurationVersion: 1,
+    mode: "operator-recorded",
+    humanReviewRequired: true,
+    externalRequestSent: false,
+    documentSignatureVerified: false,
+    legalPolicyVerified: false,
+    fundingSettlementVerified: false
+  };
+}
+var key, label;
+var init_operator_recorded = __esm({
+  "features/integrations/financing/operator-recorded.ts"() {
+    "use strict";
+    key = "operator-recorded";
+    label = "Operator-recorded external lender review";
   }
 });
 
@@ -1072,6 +1281,7 @@ var User = (0, import_core.list)({
       access: { create: permissions.canManagePeople, update: permissions.canManagePeople, read: ({ session, item }) => permissions.canManagePeople({ session }) || session?.itemId === item.id },
       label: "Commission Rate (%)",
       defaultValue: 0,
+      validation: { min: 0, max: 100 },
       ui: {
         description: "Sales commission percentage (e.g., 10 for 10%)",
         itemView: { fieldMode: ({ session, item }) => permissions.canManagePeople({ session }) ? "edit" : session?.itemId === item?.id ? "read" : "hidden" }
@@ -2400,6 +2610,13 @@ var Lead = (0, import_core10.list)({
       many: true,
       ui: { displayMode: "count" },
       label: "Restricted Financing Applications"
+    }),
+    paymentTransactions: (0, import_fields15.relationship)({
+      ref: "PaymentTransaction.lead",
+      many: true,
+      access: { read: permissions.canViewReports, create: import_access15.denyAll, update: import_access15.denyAll },
+      ui: { displayMode: "count" },
+      label: "Reservation deposits"
     })
   }
 });
@@ -3367,6 +3584,7 @@ var TradeIn = (0, import_core16.list)({
       label: "Trim"
     }),
     mileage: (0, import_fields21.integer)({
+      validation: { min: 0 },
       label: "Mileage",
       ui: {
         description: "Current odometer reading"
@@ -3469,7 +3687,8 @@ var ServiceAppointment = (0, import_core17.list)({
   access: {
     operation: {
       query: permissions.canManageService,
-      create: permissions.canManageService,
+      // New appointments go through bookServiceAppointment, which applies the hourly slot capacity.
+      create: () => false,
       update: permissions.canManageService,
       delete: permissions.canManageService
     },
@@ -3522,7 +3741,8 @@ var ServiceAppointment = (0, import_core17.list)({
     }),
     vehicleVin: (0, import_fields22.text)(),
     transportationNeed: (0, import_fields22.select)({ type: "string", options: ["none", "waiter", "shuttle", "loaner", "rental", "drop-off"].map((value) => ({ label: value, value })), defaultValue: "none" }),
-    capacitySlot: (0, import_fields22.text)(),
+    // Derived from appointmentDate by the booking and reschedule commands.
+    capacitySlot: (0, import_fields22.text)({ access: { create: import_access26.denyAll, update: import_access26.denyAll } }),
     customerVehicleDescription: (0, import_fields22.text)({
       label: "Customer Vehicle",
       ui: {
@@ -3531,6 +3751,8 @@ var ServiceAppointment = (0, import_core17.list)({
     }),
     // Appointment Details
     appointmentDate: (0, import_fields22.timestamp)({
+      // Moves go through rescheduleServiceAppointment so the hourly slot capacity is enforced.
+      access: { update: import_access26.denyAll },
       label: "Appointment Date",
       validation: { isRequired: true }
     }),
@@ -3554,6 +3776,7 @@ var ServiceAppointment = (0, import_core17.list)({
       label: "Description"
     }),
     estimatedDuration: (0, import_fields22.integer)({
+      validation: { min: 0 },
       label: "Estimated Duration (Minutes)",
       ui: {
         description: "Estimated time to complete service"
@@ -3585,6 +3808,7 @@ var ServiceAppointment = (0, import_core17.list)({
     }),
     // Vehicle Info at Service
     mileageIn: (0, import_fields22.integer)({
+      validation: { min: 0 },
       label: "Mileage In",
       ui: {
         description: "Odometer reading when vehicle checked in"
@@ -3623,7 +3847,8 @@ var SERVICE_ORDER_STATUSES = [
   "in-progress",
   "completed",
   "invoiced",
-  "paid"
+  "paid",
+  "cancelled"
 ];
 var SERVICE_ORDER_TRANSITIONS = {
   estimate: ["approved"],
@@ -3631,13 +3856,15 @@ var SERVICE_ORDER_TRANSITIONS = {
   "in-progress": ["completed"],
   completed: ["invoiced"],
   invoiced: ["paid"],
-  paid: []
+  paid: [],
+  // Reached only by the payment webhook when the whole invoice is refunded (house rule); never by a staff transition.
+  cancelled: []
 };
 function isServiceOrderStatus(value) {
   return typeof value === "string" && SERVICE_ORDER_STATUSES.includes(value);
 }
 function isServiceOrderEvidenceLocked(status) {
-  return status === "completed" || status === "invoiced" || status === "paid";
+  return status === "completed" || status === "invoiced" || status === "paid" || status === "cancelled";
 }
 function assertServiceOrderTransition(current, next) {
   if (!isServiceOrderStatus(current) || !isServiceOrderStatus(next)) {
@@ -3844,7 +4071,8 @@ var ServiceOrder = (0, import_core18.list)({
         { label: "In Progress", value: "in-progress" },
         { label: "Completed", value: "completed" },
         { label: "Invoiced", value: "invoiced" },
-        { label: "Paid Externally", value: "paid" }
+        { label: "Paid Externally", value: "paid" },
+        { label: "Cancelled", value: "cancelled" }
       ],
       defaultValue: "estimate",
       label: "Status",
@@ -4032,7 +4260,7 @@ var ServicePackage = (0, import_core20.list)({
       label: "Description"
     }),
     // Pricing and Duration
-    priceCents: (0, import_fields25.integer)({ validation: { isRequired: true }, label: "Price (cents)", ui: { description: "Package price in integer USD cents" } }),
+    priceCents: (0, import_fields25.integer)({ validation: { isRequired: true, min: 0 }, label: "Price (cents)", ui: { description: "Package price in integer USD cents" } }),
     price: (0, import_fields25.virtual)({
       field: import_schema7.graphql.field({ type: import_schema7.graphql.Float, resolve(item) {
         return item.priceCents / 100;
@@ -4040,6 +4268,7 @@ var ServicePackage = (0, import_core20.list)({
       ui: { itemView: { fieldMode: "read" } }
     }),
     estimatedDuration: (0, import_fields25.integer)({
+      validation: { min: 0 },
       label: "Estimated Duration (Minutes)",
       ui: {
         description: "Expected time to complete"
@@ -4132,14 +4361,15 @@ var PartsInventory = (0, import_core21.list)({
       label: "Quantity in Stock"
     }),
     minimumQuantity: (0, import_fields26.integer)({
+      validation: { min: 0 },
       label: "Minimum Quantity",
       ui: {
         description: "Reorder threshold"
       }
     }),
     // Pricing
-    costCents: (0, import_fields26.integer)({ label: "Cost (cents)", ui: { description: "Dealer cost per unit in integer USD cents" } }),
-    priceCents: (0, import_fields26.integer)({ validation: { isRequired: true }, label: "Retail Price (cents)", ui: { description: "Retail price in integer USD cents" } }),
+    costCents: (0, import_fields26.integer)({ validation: { min: 0 }, label: "Cost (cents)", ui: { description: "Dealer cost per unit in integer USD cents" } }),
+    priceCents: (0, import_fields26.integer)({ validation: { isRequired: true, min: 0 }, label: "Retail Price (cents)", ui: { description: "Retail price in integer USD cents" } }),
     cost: (0, import_fields26.virtual)({
       field: import_schema8.graphql.field({ type: import_schema8.graphql.Float, resolve(item) {
         return item.costCents == null ? null : item.costCents / 100;
@@ -4172,9 +4402,265 @@ var PartsInventory = (0, import_core21.list)({
 var import_core22 = require("@keystone-6/core");
 var import_fields27 = require("@keystone-6/core/fields");
 
+// features/platform/store-settings/lib/icon-registry.ts
+var LOGO_ICONS = [
+  {
+    id: "3portals",
+    name: "3Portals",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g clip-rule="evenodd" fill-rule="evenodd"><path d="m34.5868 8.40061-9.6868-2.59556c-.6687-.17919-1.2108.23679-1.2108.92911v10.02854c0 .6923.5421 1.3988 1.2108 1.578l9.6868 2.5955c.6687.1792 1.2109-.2368 1.2109-.9291v-10.02848c0-.69232-.5422-1.39882-1.2109-1.57801zm-9.6868-6.35625c-2.6749-.71674-4.8434.94718-4.8434 3.71647v10.02847c0 2.7693 2.1685 5.5953 4.8434 6.312l9.6868 2.5956c2.6749.7168 4.8434-.9472 4.8434-3.7165v-10.0284c0-2.76934-2.1685-5.59533-4.8434-6.31207z" fill="#8098f9"/><path d="m26.9812 16.5707-12.1085-3.2444c-.6687-.1792-1.2109.2368-1.2109.9291v12.5356c0 .6923.5422 1.3988 1.2109 1.578l12.1085 3.2445c.6687.1792 1.2108-.2368 1.2108-.9291v-12.5356c0-.6924-.5421-1.3989-1.2108-1.5781zm-12.1085-7.0051c-2.6749-.71674-4.8434.9472-4.8434 3.7165v12.5356c0 2.7693 2.1685 5.5953 4.8434 6.312l12.1085 3.2445c2.6749.7167 4.8433-.9472 4.8433-3.7165v-12.5356c0-2.7693-2.1684-5.5953-4.8433-6.312z" fill="#6172f3"/><path d="m19.3736 24.7409-14.53021-3.8934c-.66873-.1792-1.21085.2368-1.21085.9291v15.0428c0 .6923.54212 1.3988 1.21085 1.578l14.53021 3.8933c.6687.1792 1.2108-.2368 1.2108-.9291v-15.0427c0-.6923-.5421-1.3988-1.2108-1.578zm-14.53021-7.6541c-2.67493-.7167-4.84339.9472-4.84339 3.7165v15.0427c0 2.7693 2.16846 5.5953 4.84339 6.3121l14.53021 3.8933c2.6749.7168 4.8433-.9472 4.8433-3.7164v-15.0428c0-2.7693-2.1684-5.5953-4.8433-6.312z" fill="#444ce7"/></g></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g clip-rule="evenodd" fill="#fff" fill-rule="evenodd"><path d="m34.5868 8.40061-9.6868-2.59556c-.6687-.17919-1.2108.23679-1.2108.92911v10.02854c0 .6923.5421 1.3988 1.2108 1.578l9.6868 2.5955c.6687.1792 1.2109-.2368 1.2109-.9291v-10.02848c0-.69232-.5422-1.39882-1.2109-1.57801zm-9.6868-6.35625c-2.6749-.71674-4.8434.94718-4.8434 3.71647v10.02847c0 2.7693 2.1685 5.5953 4.8434 6.312l9.6868 2.5956c2.6749.7168 4.8434-.9472 4.8434-3.7165v-10.0284c0-2.76934-2.1685-5.59533-4.8434-6.31207z" opacity=".5"/><path d="m26.9812 16.5707-12.1085-3.2444c-.6687-.1792-1.2109.2368-1.2109.9291v12.5356c0 .6923.5422 1.3988 1.2109 1.578l12.1085 3.2445c.6687.1792 1.2108-.2368 1.2108-.9291v-12.5356c0-.6924-.5421-1.3989-1.2108-1.5781zm-12.1085-7.0051c-2.6749-.71674-4.8434.9472-4.8434 3.7165v12.5356c0 2.7693 2.1685 5.5953 4.8434 6.312l12.1085 3.2445c2.6749.7167 4.8433-.9472 4.8433-3.7165v-12.5356c0-2.7693-2.1684-5.5953-4.8433-6.312z" opacity=".7"/><path d="m19.3736 24.7409-14.53021-3.8934c-.66873-.1792-1.21085.2368-1.21085.9291v15.0428c0 .6923.54212 1.3988 1.21085 1.578l14.53021 3.8933c.6687.1792 1.2108-.2368 1.2108-.9291v-15.0427c0-.6923-.5421-1.3988-1.2108-1.578zm-14.53021-7.6541c-2.67493-.7167-4.84339.9472-4.84339 3.7165v15.0427c0 2.7693 2.16846 5.5953 4.84339 6.3121l14.53021 3.8933c2.6749.7168 4.8433-.9472 4.8433-3.7164v-15.0428c0-2.7693-2.1684-5.5953-4.8433-6.312z"/></g></svg>`
+  },
+  {
+    id: "45-degrees",
+    name: "45 Degrees",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 24 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m0 15.8981h17.3455l-17.061314 17.0613 2.756374 2.7564 17.06134-17.0613v17.3455h.1104l3.7877-3.7877v-15.9638l-4.2485-4.2485h-15.96596l-3.78553995 3.7855z" fill="#155eef"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 24 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m0 15.8981h17.3455l-17.061314 17.0613 2.756374 2.7564 17.06134-17.0613v17.3455h.1104l3.7877-3.7877v-15.9638l-4.2485-4.2485h-15.96596l-3.78553995 3.7855z" fill="#155eef"/></svg>`
+  },
+  {
+    id: "acme-corp",
+    name: "Acme Corp",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 48 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m0 24c15.2548 0 24-8.7452 24-24 0 15.2548 8.7452 24 24 24-15.2548 0-24 8.7452-24 24 0-15.2548-8.7452-24-24-24z" fill="#155eef" fill-rule="evenodd"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 48 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m0 24c15.2548 0 24-8.7452 24-24 0 15.2548 8.7452 24 24 24-15.2548 0-24 8.7452-24 24 0-15.2548-8.7452-24-24-24z" fill="#155eef" fill-rule="evenodd"/></svg>`
+  },
+  {
+    id: "alphawave",
+    name: "AlphaWave",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 47 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m24.9706 7.03309c-3.1242-3.1242-8.1896-3.1242-11.3137 0l-11.31375 11.31371c-3.124199 3.1242-3.124199 8.1895 0 11.3137l11.31375 11.3137c3.1241 3.1242 8.1895 3.1242 11.3137 0l5.3982-5.3983c-4.4939-1.7337-7.682-6.0944-7.682-11.1997 0-5.3087 3.4472-9.8123 8.2254-11.3943-.0935-.0982-.1884-.1955-.2848-.292z" fill="#155eef"/><path d="m30.3691 35.5798c1.3398.5168 2.7955.8001 4.3174.8001 6.6274 0 12-5.3726 12-12s-5.3726-12-12-12c-1.3185 0-2.5873.2126-3.774.6055 5.9623 6.2681 5.8675 16.1836-.2846 22.3356z" fill="#155eef" opacity=".7"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 47 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m24.9706 7.03309c-3.1242-3.1242-8.1896-3.1242-11.3137 0l-11.31375 11.31371c-3.124199 3.1242-3.124199 8.1895 0 11.3137l11.31375 11.3137c3.1241 3.1242 8.1895 3.1242 11.3137 0l5.3982-5.3983c-4.4939-1.7337-7.682-6.0944-7.682-11.1997 0-5.3087 3.4472-9.8123 8.2254-11.3943-.0935-.0982-.1884-.1955-.2848-.292z" fill="#155eef"/><path d="m30.3691 35.5798c1.3398.5168 2.7955.8001 4.3174.8001 6.6274 0 12-5.3726 12-12s-5.3726-12-12-12c-1.3185 0-2.5873.2126-3.774.6055 5.9623 6.2681 5.8675 16.1836-.2846 22.3356z" fill="#155eef" opacity=".7"/></svg>`
+  },
+  {
+    id: "alt-shift",
+    name: "Alt+Shift",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m23.4538 34.7189c-3.1818-1.1818-6.4544-1.3636-9.4544-.5455-2.0909.5455-4.09082 1.6364-5.90897 3l-1.27273 1.0909-.36362.3636.81816.7273c.09091 0 .09092.0909.18183.1818.18181.1818.36364.2727.63636.4545l.54542.3636.54545-.4545c.09091-.0909.27273-.2727.45454-.3636 1.63636-1.3636 3.45446-2.2727 5.36356-2.7272 2.4545-.6364 5.0908-.5455 7.7271.4545 2.1818.8182 6.6363 1.8181 11.9998-.4545l.1818-.091.2728-.2727c0-.0909.0909-.0909.1818-.1818.4545-.5454.9091-1.0909 1.2727-1.7272l1.8181-2.8182-2.909 1.6363c-4.2727 2.3636-8.1817 2.8182-12.0907 1.3637z"/><path d="m10.9998 24.9011c2.4545-.6363 5.0908-.5454 7.7272.4546 2.909 1.0909 10.3634 2.6363 18.7269-4.909l1.8182-1.8182-.1819-.4545c-.0909-.3636-.2727-.8182-.4545-1.2727l-.4545-1.2727-.9091.909c-.0909.1819-.2727.2728-.4546.4546-3.9999 4.0908-10.1816 8.2726-17.2724 5.7272-3.1817-1.1818-6.4544-1.3637-9.4544-.5455-2.909.8182-5.45442 2.3636-7.81801 4.5454v-.0909l-1.363614 1.4545c0 .0909-.090891.0909-.181798.1818l-.27274.2727.090913.3637c.090908.4545.272717.909.363625 1.3636l.545454 1.4545.90907-1.1818c.09091-.1818.27272-.2727.36363-.4545 1.90905-1.7273 4.54538-4.1818 8.27257-5.1818z"/><path d="m2.1818 23.2646c2.09088-2.1818 4.45445-3.5454 6.99987-4.2727 2.45453-.6363 5.09083-.5454 7.72713.4546 8.1817 2.9999 15.2725-1.9091 18.3633-4.5454l1.1818-1.1818.4546-.3636-.3637-.5455c-.2727-.2727-.4545-.6363-.7272-1l-.5455-.7272-.6363.6363c-.0909.0909-.2727.2727-.3637.3637-3.8181 3.6363-9.7271 7.3635-16.4542 4.8181-3.1818-1.1818-6.4544-1.3637-9.4544-.5455-1.90906.5455-3.72721 1.4545-5.54536 2.6363l-1.909065 1.5455c-.181815.1818-.272722.2727-.454537.4545l-.181799.1818v.2727c-.090907.6364-.090918 1.2727-.1818259 1.8182l-.0909131 2.2727 1.54544-1.6364c.18181-.1818.36364-.4545.63636-.6363z"/><path d="m26.0908 40.9007c-.2727-.0909-.4545-.1819-.7272-.2728-3.1818-1.1818-6.4545-1.3636-9.4545-.5454-.6363.1818-1.2726.3636-1.909.6364l-2.1818.9999-.5454.2728 1.8181.6363c.5455.1818 1.0909.3637 1.6364.5455l.2727.0909.2727-.0909c.2727-.0909.5455-.2728.8182-.2728.1818 0 .3636-.0909.5454-.1818 2.1818-.5454 4.5454-.5454 7.0908.2727.2727.091.4546.1819.7273.2728l.4545.1818.2727-.0909c.6364-.1818 1.3636-.3636 1.9091-.6364l2.5454-.909-2.6363-.6364c-.2727-.0909-.6364-.1818-.9091-.2727z"/><path d="m40 22.0829-1.3636 1.3636c-.1818.1818-.3636.3636-.5454.5454-3.7272 3.5454-9.7271 7.3635-16.4543 4.8181-3.1818-1.1818-6.4544-1.3636-9.4544-.5454-2.81811.8182-5.36354 2.2727-7.63623 4.4545l-1.18179 1.2727-.36362.4545.36362.5454c.27273.3637.45455.6364.63637 1l.54542.8182.63636-.8182c.09091-.0909.27272-.2727.36363-.3636 2.18178-2.3636 4.54534-3.8181 7.27264-4.5454 2.4545-.6364 5.0908-.5454 7.7271.4545 2.2727.8182 4.6363 1.0909 6.9999.8182 4.1817-.4545 8.3635-2.8181 11.4543-5.4544.1819-.1818.3636-.2727.5455-.4546l.2727-.2727v-.2727c0-.5455.0909-1.1818.0909-1.7273z"/><path d="m5.45373 13.7196c.54545-.2728 1.18182-.4546 1.72726-.6364 2.45451-.6364 5.09081-.5455 7.72711.4545 1.7273.6364 3.4545.9091 5.3636.9091 3.8181 0 7.6362-1.3636 11.1816-3.9999l1.8181-1.45455-.8181-.63636c-.2727-.27273-.6364-.54544-1-.72725l-.5455-.36363-.4545.36363c-.1818.09091-.2727.27272-.4545.36362-4.8181 3.63634-9.6362 4.63634-14.1816 2.90904-3.2727-1.18178-6.54535-1.45451-9.81802-.4545-.27272.0909-.54544.1818-.90907.2727l-.1818.0909-.27274.2727c0 .0909-.09089.0909-.1818.1818-.36363.5455-.81818 1-1.18181 1.5455l-1.72724 2.6363 2.81814-1.4545c.45453 0 .81815-.1818 1.09087-.2727z"/><path d="m12.9089 7.53769.2727.09091c1.1818.45454 3 .90907 5.2726.90907 2.3636 0 4.6363-.54545 6.909-1.45452l2.8181-1.36361-1.909-.63634c-.5454-.18182-1.0909-.36363-1.7273-.45454h-.2727l-.2727.09089c-.2727.0909-.5455.27274-.8182.36365-2.7272.99998-5.4544 1.1818-8.0907.45454-.2728-.09091-.5455-.18183-.8182-.27274l-.2727-.09091-.2728.09091c-.5454.18181-1.0908.36364-1.6363.63636l-2.09087.90908 2.18177.63633c.1818-.0909.4546.00001.7273.09092z"/></g></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m23.4538 34.7189c-3.1818-1.1818-6.4544-1.3636-9.4544-.5455-2.0909.5455-4.09082 1.6364-5.90897 3l-1.27273 1.0909-.36362.3636.81816.7273c.09091 0 .09092.0909.18183.1818.18181.1818.36364.2727.63636.4545l.54542.3636.54545-.4545c.09091-.0909.27273-.2727.45454-.3636 1.63636-1.3636 3.45446-2.2727 5.36356-2.7272 2.4545-.6364 5.0908-.5455 7.7271.4545 2.1818.8182 6.6363 1.8181 11.9998-.4545l.1818-.091.2728-.2727c0-.0909.0909-.0909.1818-.1818.4545-.5454.9091-1.0909 1.2727-1.7272l1.8181-2.8182-2.909 1.6363c-4.2727 2.3636-8.1817 2.8182-12.0907 1.3637z"/><path d="m10.9998 24.9011c2.4545-.6363 5.0908-.5454 7.7272.4546 2.909 1.0909 10.3634 2.6363 18.7269-4.909l1.8182-1.8182-.1819-.4545c-.0909-.3636-.2727-.8182-.4545-1.2727l-.4545-1.2727-.9091.909c-.0909.1819-.2727.2728-.4546.4546-3.9999 4.0908-10.1816 8.2726-17.2724 5.7272-3.1817-1.1818-6.4544-1.3637-9.4544-.5455-2.909.8182-5.45442 2.3636-7.81801 4.5454v-.0909l-1.363614 1.4545c0 .0909-.090891.0909-.181798.1818l-.27274.2727.090913.3637c.090908.4545.272717.909.363625 1.3636l.545454 1.4545.90907-1.1818c.09091-.1818.27272-.2727.36363-.4545 1.90905-1.7273 4.54538-4.1818 8.27257-5.1818z"/><path d="m2.1818 23.2646c2.09088-2.1818 4.45445-3.5454 6.99987-4.2727 2.45453-.6363 5.09083-.5454 7.72713.4546 8.1817 2.9999 15.2725-1.9091 18.3633-4.5454l1.1818-1.1818.4546-.3636-.3637-.5455c-.2727-.2727-.4545-.6363-.7272-1l-.5455-.7272-.6363.6363c-.0909.0909-.2727.2727-.3637.3637-3.8181 3.6363-9.7271 7.3635-16.4542 4.8181-3.1818-1.1818-6.4544-1.3637-9.4544-.5455-1.90906.5455-3.72721 1.4545-5.54536 2.6363l-1.909065 1.5455c-.181815.1818-.272722.2727-.454537.4545l-.181799.1818v.2727c-.090907.6364-.090918 1.2727-.1818259 1.8182l-.0909131 2.2727 1.54544-1.6364c.18181-.1818.36364-.4545.63636-.6363z"/><path d="m26.0908 40.9007c-.2727-.0909-.4545-.1819-.7272-.2728-3.1818-1.1818-6.4545-1.3636-9.4545-.5454-.6363.1818-1.2726.3636-1.909.6364l-2.1818.9999-.5454.2728 1.8181.6363c.5455.1818 1.0909.3637 1.6364.5455l.2727.0909.2727-.0909c.2727-.0909.5455-.2728.8182-.2728.1818 0 .3636-.0909.5454-.1818 2.1818-.5454 4.5454-.5454 7.0908.2727.2727.091.4546.1819.7273.2728l.4545.1818.2727-.0909c.6364-.1818 1.3636-.3636 1.9091-.6364l2.5454-.909-2.6363-.6364c-.2727-.0909-.6364-.1818-.9091-.2727z"/><path d="m40 22.0829-1.3636 1.3636c-.1818.1818-.3636.3636-.5454.5454-3.7272 3.5454-9.7271 7.3635-16.4543 4.8181-3.1818-1.1818-6.4544-1.3636-9.4544-.5454-2.81811.8182-5.36354 2.2727-7.63623 4.4545l-1.18179 1.2727-.36362.4545.36362.5454c.27273.3637.45455.6364.63637 1l.54542.8182.63636-.8182c.09091-.0909.27272-.2727.36363-.3636 2.18178-2.3636 4.54534-3.8181 7.27264-4.5454 2.4545-.6364 5.0908-.5454 7.7271.4545 2.2727.8182 4.6363 1.0909 6.9999.8182 4.1817-.4545 8.3635-2.8181 11.4543-5.4544.1819-.1818.3636-.2727.5455-.4546l.2727-.2727v-.2727c0-.5455.0909-1.1818.0909-1.7273z"/><path d="m5.45373 13.7196c.54545-.2728 1.18182-.4546 1.72726-.6364 2.45451-.6364 5.09081-.5455 7.72711.4545 1.7273.6364 3.4545.9091 5.3636.9091 3.8181 0 7.6362-1.3636 11.1816-3.9999l1.8181-1.45455-.8181-.63636c-.2728-.27273-.6364-.54544-1-.72725l-.5455-.36363-.4545.36363c-.1818.09091-.2727.27272-.4545.36362-4.8181 3.63634-9.6362 4.63634-14.1816 2.90904-3.2727-1.18178-6.54535-1.45451-9.81802-.4545-.27272.0909-.54544.1818-.90907.2727l-.1818.0909-.27274.2727c0 .0909-.09089.0909-.1818.1818-.36363.5455-.81818 1-1.18181 1.5455l-1.72724 2.6363 2.81814-1.4545c.45453 0 .81815-.1818 1.09087-.2727z"/><path d="m12.9089 7.53769.2727.09091c1.1818.45454 3 .90907 5.2726.90907 2.3636 0 4.6363-.54545 6.909-1.45452l2.8181-1.36361-1.909-.63634c-.5454-.18182-1.0909-.36363-1.7273-.45454h-.2727l-.2727.09089c-.2727.0909-.5455.27274-.8182.36365-2.7272.99998-5.4544 1.1818-8.0907.45454-.2728-.09091-.5455-.18183-.8182-.27274l-.2727-.09091-.2728.09091c-.5454.18181-1.0908.36364-1.6363.63636l-2.09087.90908 2.18177.63633c.1818-.0909.4546.00001.7273.09092z"/></g></svg>`
+  },
+  {
+    id: "biosynthesis",
+    name: "Biosynthesis",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g clip-rule="evenodd" fill-rule="evenodd"><path d="m4.29111 28.6025c.90712.9019.9071 2.3641-.00003 3.266l-.04646.0462c-.90713.9019-2.37788.9018-3.284994-.0001-.9071177-.9019-.9071038-2.3641.000031-3.266l.046453-.0462c.90714-.9019 2.37788-.9018 3.285.0001z" fill="#a4bcfd"/><path d="m15.2112 29.298c.9055.9035.9028 2.3658-.006 3.266l-6.43424 6.3741c-.90876.9002-2.3795.8976-3.28499-.0059-.90548-.9035-.90282-2.3658.00594-3.266l6.43429-6.3741c.9088-.9002 2.3795-.8976 3.285.0059z" fill="#6172f3"/><path d="m23.9431 40.2706c.7116-1.0613 2.1538-1.348 3.2212-.6405l.1394.0923c1.0674.7075 1.3558 2.1414.6442 3.2026-.7116 1.0613-2.1538 1.3481-3.2212.6406l-.1394-.0924c-1.0674-.7075-1.3558-2.1414-.6442-3.2026z" fill="#a4bcfd"/><path d="m39.2728 28.4638c.9072.9019.9072 2.3641 0 3.266l-3.159 3.1408c-.9072.9019-2.3779.9019-3.285 0s-.9071-2.3641 0-3.266l3.1591-3.1408c.9071-.9019 2.3778-.9019 3.2849 0z" fill="#6172f3"/><g fill="#444ce7"><path d="m39.3197 16.8473c.9071.9019.9071 2.3642 0 3.266l-23.3446 23.2098c-.9071.9019-2.3779.9019-3.285 0s-.9071-2.3641 0-3.266l23.3446-23.2098c.9071-.9019 2.3778-.9019 3.285 0z"/><path d="m34.905 9.71133c.9072.90187.9072 2.36417 0 3.26607l-13.426 13.3485c-.9071.9019-2.3779.9019-3.285 0s-.9071-2.3642 0-3.2661l13.4261-13.34847c.9071-.90189 2.3778-.90189 3.2849 0z"/><path d="m27.8187 5.18362c.9077.90128.9087 2.36353.0022 3.26603l-17.2588 17.18215c-.90647.9025-2.37721.9035-3.28495.0022-.90773-.9013-.90872-2.3635-.00221-3.266l17.25876-17.18218c.9065-.9025 2.3772-.90348 3.285-.0022z"/></g><path d="m10.7276 10.6841c.9056.9035.9031 2.3657-.0056 3.266l-6.75949 6.6974c-.90869.9003-2.37943.8978-3.28499-.0056-.905563-.9035-.903032-2.3657.005654-3.2661l6.759476-6.6973c.90868-.90034 2.37942-.89783 3.28495.0056z" fill="#6172f3"/><path d="m14.8678 4.00024c1.2828 0 2.3228 1.03397 2.3228 2.30944v.23094c0 1.27546-1.04 2.30943-2.3228 2.30943-1.2829 0-2.3229-1.03397-2.3229-2.30943v-.23094c0-1.27547 1.04-2.30944 2.3229-2.30944z" fill="#a4bcfd"/></g></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g clip-rule="evenodd" fill="#fff" fill-rule="evenodd"><path d="m4.29111 28.6025c.90712.9019.9071 2.3641-.00003 3.266l-.04646.0462c-.90713.9019-2.37788.9018-3.284994-.0001-.9071177-.9019-.9071038-2.3641.000031-3.266l.046453-.0462c.90714-.9019 2.37788-.9018 3.285.0001z" opacity=".5"/><path d="m15.2112 29.298c.9055.9035.9028 2.3658-.006 3.266l-6.43424 6.3741c-.90876.9002-2.3795.8976-3.28499-.0059-.90548-.9035-.90282-2.3658.00594-3.266l6.43429-6.3741c.9088-.9002 2.3795-.8976 3.285.0059z" opacity=".7"/><path d="m23.9431 40.2706c.7116-1.0613 2.1538-1.348 3.2212-.6405l.1394.0923c1.0674.7075 1.3558 2.1414.6442 3.2026-.7116 1.0613-2.1538 1.3481-3.2212.6406l-.1394-.0924c-1.0674-.7075-1.3558-2.1414-.6442-3.2026z" opacity=".5"/><path d="m39.2728 28.4638c.9072.9019.9072 2.3641 0 3.266l-3.159 3.1408c-.9072.9019-2.3779.9019-3.285 0s-.9071-2.3641 0-3.266l3.1591-3.1408c.9071-.9019 2.3778-.9019 3.2849 0z" opacity=".7"/><path d="m39.3197 16.8473c.9071.9019.9071 2.3642 0 3.266l-23.3446 23.2098c-.9071.9019-2.3779.9019-3.285 0s-.9071-2.3641 0-3.266l23.3446-23.2098c.9071-.9019 2.3778-.9019 3.285 0z"/><path d="m34.905 9.71133c.9072.90187.9072 2.36417 0 3.26607l-13.426 13.3485c-.9071.9019-2.3779.9019-3.285 0s-.9071-2.3642 0-3.2661l13.4261-13.34847c.9071-.90189 2.3778-.90189 3.2849 0z"/><path d="m27.8187 5.18362c.9077.90128.9087 2.36353.0022 3.26603l-17.2588 17.18215c-.90647.9025-2.37721.9035-3.28495.0022-.90773-.9013-.90872-2.3635-.00221-3.266l17.25876-17.18218c.9065-.9025 2.3772-.90348 3.285-.0022z"/><path d="m10.7276 10.6841c.9056.9035.9031 2.3657-.0056 3.266l-6.75949 6.6974c-.90869.9003-2.37943.8978-3.28499-.0056-.905563-.9035-.903032-2.3657.005654-3.2661l6.759476-6.6973c.90868-.90034 2.37942-.89783 3.28495.0056z" opacity=".7"/><path d="m14.8678 4.00024c1.2828 0 2.3228 1.03397 2.3228 2.30944v.23094c0 1.27546-1.04 2.30943-2.3228 2.30943-1.2829 0-2.3229-1.03397-2.3229-2.30943v-.23094c0-1.27547 1.04-2.30944 2.3229-2.30944z" opacity=".5"/></g></svg>`
+  },
+  {
+    id: "boltshift",
+    name: "Boltshift",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m20 44c11.0457 0 20-8.9543 20-20s-8.9543-20-20-20c-11.04572 0-20 8.9543-20 20s8.95428 20 20 20zm6.2393-30.6832c.3037-1.0787-.7432-1.7167-1.6993-1.0355l-13.3469 9.5083c-1.0369.7387-.8738 2.2104.245 2.2104h3.5146v-.0272h6.8498l-5.5813 1.9693-2.4605 8.7411c-.3037 1.0788.7431 1.7167 1.6993 1.0355l13.3469-9.5082c1.0369-.7387.8737-2.2105-.245-2.2105h-5.3298z" fill="#155eef" fill-rule="evenodd"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m20 44c11.0457 0 20-8.9543 20-20s-8.9543-20-20-20c-11.04572 0-20 8.9543-20 20s8.95428 20 20 20zm6.2393-30.6832c.3037-1.0787-.7432-1.7167-1.6993-1.0355l-13.3469 9.5083c-1.0369.7387-.8738 2.2104.245 2.2104h3.5146v-.0272h6.8498l-5.5813 1.9693-2.4605 8.7411c-.3037 1.0788.7431 1.7167 1.6993 1.0355l13.3469-9.5082c1.0369-.7387.8737-2.2105-.245-2.2105h-5.3298z" fill="#fff" fill-rule="evenodd"/></svg>`
+  },
+  {
+    id: "buildingblocks",
+    name: "BuildingBlocks",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 37 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m12.8841 4.30945-6.8842 3.97574 6.8891 3.97661 6.8862-3.97575zm8.8919 7.44025-6.887 3.9762-.0007 7.9532 6.8877-3.9771zm2 11.4164-6.8879 3.9772 6.8889 3.9765 6.8871-3.9763zm8.8879 7.4416-6.8868 3.9761v7.9522l6.8868-3.9761zm-10.8868 11.9287v-7.9525l-6.8891-3.9766v7.9525zm-10.8888-18.8569-6.8883-3.9775v-7.9526l6.889 3.9765zm-.0003 4.6187-9.38814-5.4209c-.928127-.5359-1.49986-1.5262-1.49986-2.598v-11.99368c0-.71444.381106-1.37463.999789-1.73193l10.383811-5.996798c.9281-.5359626 2.0716-.5361538 2.9998-.000505l10.3922 5.996973c.619.3572 1.0004 1.01758 1.0004 1.73226v11.41638l9.888 5.7096c.6188.3573.9999 1.0175.9999 1.732v11.9937c0 1.0718-.5718 2.0621-1.5 2.598l-10.3868 5.9969c-.6187.3572-1.381.3572-1.9998.0001l-10.3891-5.9969c-.9283-.5358-1.5002-1.5263-1.5002-2.5982z" fill="#155eef" fill-rule="evenodd"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 37 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m12.8841 4.30945-6.8842 3.97574 6.8891 3.97661 6.8862-3.97575zm8.8919 7.44025-6.887 3.9762-.0007 7.9532 6.8877-3.9771zm2 11.4164-6.8879 3.9772 6.8889 3.9765 6.8871-3.9763zm8.8879 7.4416-6.8868 3.9761v7.9522l6.8868-3.9761zm-10.8868 11.9287v-7.9525l-6.8891-3.9766v7.9525zm-10.8888-18.8569-6.8883-3.9775v-7.9526l6.889 3.9765zm-.0003 4.6187-9.38814-5.4209c-.928127-.5359-1.49986-1.5262-1.49986-2.598v-11.99368c0-.71444.381106-1.37463.999789-1.73193l10.383811-5.996798c.9281-.5359626 2.0716-.5361538 2.9998-.000505l10.3922 5.996973c.619.3572 1.0004 1.01758 1.0004 1.73226v11.41638l9.888 5.7096c.6188.3573.9999 1.0175.9999 1.732v11.9937c0 1.0718-.5718 2.0621-1.5 2.598l-10.3868 5.9969c-.6187.3572-1.381.3572-1.9998.0001l-10.3891-5.9969c-.9283-.5358-1.5002-1.5263-1.5002-2.5982z" fill="#155eef" fill-rule="evenodd"/></svg>`
+  },
+  {
+    id: "calescence",
+    name: "Calescence",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 36 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g clip-rule="evenodd" fill="#1570ef" fill-rule="evenodd"><path d="m35.3721 14v8.0492h-9.9698v-2.2927z"/><path d="m35.3699 14.0001-9.9698 5.7565-7.3513-4.2436v-11.513z" opacity=".9"/><path d="m18.0512 4v11.513l-7.349 4.2436-9.969778-5.7565z" opacity=".8"/><path d="m10.7002 19.7565v8.4868l-9.969731 5.756v-19.9993z" opacity=".7"/><path d="m18.0492 32.4871v11.5129l-17.318731-10.0006 9.969731-5.756z" opacity=".6"/><path d="m35.3699 33.9994-17.3211 10.0006v-11.5129l7.3513-4.2437z" opacity=".5"/><path d="m35.3721 25.9507v8.0487l-9.9698-5.756v-2.2927z" opacity=".4"/></g></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 36 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g clip-rule="evenodd" fill="#fff" fill-rule="evenodd"><path d="m35.3721 14v8.0492h-9.9698v-2.2927z"/><path d="m35.3699 14.0001-9.9698 5.7565-7.3513-4.2436v-11.513z" opacity=".9"/><path d="m18.0512 4v11.513l-7.349 4.2436-9.969778-5.7565z" opacity=".8"/><path d="m10.7002 19.7565v8.4868l-9.969731 5.756v-19.9993z" opacity=".7"/><path d="m18.0492 32.4871v11.5129l-17.318731-10.0006 9.969731-5.756z" opacity=".6"/><path d="m35.3699 33.9994-17.3211 10.0006v-11.5129l7.3513-4.2437z" opacity=".5"/><path d="m35.3721 25.9507v8.0487l-9.9698-5.756v-2.2927z" opacity=".4"/></g></svg>`
+  },
+  {
+    id: "capsule",
+    name: "Capsule",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><circle cx="14" cy="18" fill="#1570ef" r="14"/><circle cx="26" cy="30" fill="#53b1fd" r="14"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><circle cx="14" cy="18" opacity=".7" r="14"/><circle cx="26" cy="30" opacity=".7" r="14"/></g></svg>`
+  },
+  {
+    id: "constellation",
+    name: "Constellation",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 44 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m16 8 5.0912 10.9088 10.9088 5.0912-10.9088 5.0912-5.0912 10.9088-5.0912-10.9088-10.9088-5.0912 10.9088-5.0912z"/><path d="m20.0469 31.3286 6.3539-1.0932 3.6 9.7646 3.6-9.7646 10.2565 1.7646-6.6564-8 6.6564-8-10.2565 1.7646-3.6-9.7646-3.6 9.7646-6.3539-1.0932 1.0442 2.2374 10.9088 5.0912-10.9088 5.0912z" opacity=".5"/></g></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 44 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m16 8 5.0912 10.9088 10.9088 5.0912-10.9088 5.0912-5.0912 10.9088-5.0912-10.9088-10.9088-5.0912 10.9088-5.0912z"/><path d="m20.0469 31.3286 6.3539-1.0932 3.6 9.7646 3.6-9.7646 10.2565 1.7646-6.6564-8 6.6564-8-10.2565 1.7646-3.6-9.7646-3.6 9.7646-6.3539-1.0932 1.0442 2.2374 10.9088 5.0912-10.9088 5.0912z" opacity=".5"/></g></svg>`
+  },
+  {
+    id: "codecraft",
+    name: "Codecraft",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m0 9c0-2.76142 2.23858-5 5-5h10c2.7614 0 5 2.23858 5 5v9.8192c.0002.06.0003.1203.0003.1808 0 2.7575 2.2322 4.9936 4.9881 5h.0116 10c2.7614 0 5 2.2386 5 5v10c0 2.7614-2.2386 5-5 5h-10c-2.7614 0-5-2.2386-5-5v-10c0-.0139.0001-.0277.0002-.0416-.0224-2.7422-2.2523-4.9584-4.9999-4.9584-.0129 0-.0258 0-.0387 0h-9.9616c-2.76142 0-5-2.2386-5-5z" fill="#155eef"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m0 9c0-2.76142 2.23858-5 5-5h10c2.7614 0 5 2.23858 5 5v9.8192c.0002.06.0003.1203.0003.1808 0 2.7575 2.2322 4.9936 4.9881 5h.0116 10c2.7614 0 5 2.2386 5 5v10c0 2.7614-2.2386 5-5 5h-10c-2.7614 0-5-2.2386-5-5v-10c0-.0139.0001-.0277.0002-.0416-.0224-2.7422-2.2523-4.9584-4.9999-4.9584-.0129 0-.0258 0-.0387 0h-9.9616c-2.76142 0-5-2.2386-5-5z" fill="#155eef"/></svg>`
+  },
+  {
+    id: "command-r",
+    name: "Command+R",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 32 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m18.6667 30.6667c7.3638 0 13.3333-5.9696 13.3333-13.3334 0-7.36376-5.9695-13.3333-13.3333-13.3333h-18.6667v26.6667z" fill="#155eef"/><path d="m0 4 32 40h-21.3333l-10.6667-13.3333z" fill="#2e90fa"/><path d="m21.1488 30.436c-.8042.1515-1.6339.2307-2.4821.2307h-18.6667v-26.6667z" fill="#53b1fd"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 32 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m18.6667 30.6667c7.3638 0 13.3333-5.9696 13.3333-13.3334 0-7.36376-5.9695-13.3333-13.3333-13.3333h-18.6667v26.6667z" opacity=".7"/><path d="m0 4 32 40h-21.3333l-10.6667-13.3333z" opacity=".7"/><path d="m21.1488 30.436c-.8042.1515-1.6339.2307-2.4821.2307h-18.6667v-26.6667z" opacity=".7"/></g></svg>`
+  },
+  {
+    id: "contrast-ai",
+    name: "ContrastAI",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m20 4c11.0457 0 20 8.9543 20 20s-8.9543 20-20 20-20-8.9543-20-20 8.9543-20 20-20zm15 20c0 8.2843-6.7157 15-15 15v-30c8.2843 0 15 6.7157 15 15z" fill="#155eef" fill-rule="evenodd"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m20 4c11.0457 0 20 8.9543 20 20s-8.9543 20-20 20-20-8.9543-20-20 8.9543-20 20-20zm15 20c0 8.2843-6.7157 15-15 15v-30c8.2843 0 15 6.7157 15 15z" fill="#fff" fill-rule="evenodd"/></svg>`
+  },
+  {
+    id: "convergence",
+    name: "Convergence",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 42 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m22.1017 20.8596 9.8995-9.8994-2.1213-2.12137-7.3389 7.33887v-13.1777h-3v13.1777l-7.3388-7.33887-2.1213 2.12137 9.8995 9.8994 1.0606 1.0607zm2.1207 2.1214 9.8995-9.8995 2.1213 2.1213-7.3388 7.3388h13.0956v3h-13.0956l7.3388 7.3389-2.1213 2.1213-9.8995-9.8995-1.0607-1.0607zm-16.26224 12.0208 9.89944-9.8995 1.0607-1.0607-1.0607-1.0606-9.89944-9.8995-2.12133 2.1213 7.33887 7.3388h-13.17574688v3h13.17574688l-7.33887 7.3389zm12.02024-7.7782-9.8995 9.8995 2.1213 2.1213 7.3388-7.3388v13.0944h3v-13.0944l7.3389 7.3388 2.1213-2.1213-9.8995-9.8995-1.0607-1.0607z" fill="#155eef" fill-rule="evenodd"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 42 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m22.1017 20.8596 9.8995-9.8994-2.1213-2.12137-7.3389 7.33887v-13.1777h-3v13.1777l-7.3388-7.33887-2.1213 2.12137 9.8995 9.8994 1.0606 1.0607zm2.1207 2.1214 9.8995-9.8995 2.1213 2.1213-7.3388 7.3388h13.0956v3h-13.0956l7.3388 7.3389-2.1213 2.1213-9.8995-9.8995-1.0607-1.0607zm-16.26224 12.0208 9.89944-9.8995 1.0607-1.0607-1.0607-1.0606-9.89944-9.8995-2.12133 2.1213 7.33887 7.3388h-13.17574688v3h13.17574688l-7.33887 7.3389zm12.02024-7.7782-9.8995 9.8995 2.1213 2.1213 7.3388-7.3388v13.0944h3v-13.0944l7.3389 7.3388 2.1213-2.1213-9.8995-9.8995-1.0607-1.0607z" fill="#155eef" fill-rule="evenodd"/></svg>`
+  },
+  {
+    id: "core-os",
+    name: "CoreOS",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 42 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m15.2286 4.99951c-3.2154 0-6.18655 1.71539-7.79425 4.5l-5.7735 9.99999c-1.6076941 2.7846-1.607697 6.2154 0 9l5.7735 10c1.6077 2.7846 4.57885 4.5 7.79425 4.5h11.547c3.2154 0 6.1865-1.7154 7.7942-4.5l5.7735-10c1.6077-2.7846 1.6077-6.2154 0-9l-5.7735-9.99999c-1.6077-2.78461-4.5788-4.5-7.7942-4.5zm11.547 5.99999h-7.2169c-1.1547 0-1.8762 1.2499-1.298 2.2494 1.784 3.0838 3.5722 6.1653 5.3536 9.2506.5359.9282.5359 2.0718 0 3-1.7814 3.0854-3.5696 6.1668-5.3536 9.2506-.5782.9995.1433 2.2494 1.298 2.2494h7.2169c1.0718 0 2.0622-.5718 2.5981-1.5l5.7735-10c.5359-.9282.5359-2.0718 0-3l-5.7735-10c-.5359-.9282-1.5263-1.5-2.5981-1.5z" fill="#155eef" fill-rule="evenodd"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 42 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m15.2286 4.99951c-3.2154 0-6.18655 1.71539-7.79425 4.5l-5.7735 9.99999c-1.6076941 2.7846-1.607697 6.2154 0 9l5.7735 10c1.6077 2.7846 4.57885 4.5 7.79425 4.5h11.547c3.2154 0 6.1865-1.7154 7.7942-4.5l5.7735-10c1.6077-2.7846 1.6077-6.2154 0-9l-5.7735-9.99999c-1.6077-2.78461-4.5788-4.5-7.7942-4.5zm11.547 5.99999h-7.2169c-1.1547 0-1.8762 1.2499-1.298 2.2494 1.784 3.0838 3.5722 6.1653 5.3536 9.2506.5359.9282.5359 2.0718 0 3-1.7814 3.0854-3.5696 6.1668-5.3536 9.2506-.5782.9995.1433 2.2494 1.298 2.2494h7.2169c1.0718 0 2.0622-.5718 2.5981-1.5l5.7735-10c.5359-.9282.5359-2.0718 0-3l-5.7735-10c-.5359-.9282-1.5263-1.5-2.5981-1.5z" fill="#155eef" fill-rule="evenodd"/></svg>`
+  },
+  {
+    id: "cubekit",
+    name: "Cubekit",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m0 14.5264v18.9473l17.8947-12.2437v-18.94741z" fill="#155eef" opacity=".5"/><path d="m0 33.4737v-18.9474l17.8947 12.2438v18.9474z" fill="#1570ef" opacity=".5"/><path d="m40 14.5263v18.9474l-17.8947-12.2438v-18.94737z" fill="#155eef" opacity=".5"/><path d="m40 33.4737v-18.9474l-17.8947 12.2438v18.9474z" fill="#1570ef" opacity=".5"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m0 14.5264v18.9473l17.8947-12.2437v-18.94741z" opacity=".5"/><path d="m0 33.4737v-18.9474l17.8947 12.2438v18.9474z" opacity=".5"/><path d="m40 14.5263v18.9474l-17.8947-12.2438v-18.94737z" opacity=".5"/><path d="m40 33.4737v-18.9474l-17.8947 12.2438v18.9474z" opacity=".5"/></g></svg>`
+  },
+  {
+    id: "europa",
+    name: "Europa",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m28.6446 39.168c-.6032 1.3404-1.353 2.6531-2.2519 3.7888 7.4581-2.5137 12.9483-9.3054 13.5527-17.4568h-2.6549c-3.2399 0-5.8424 2.5861-6.369 5.7829-.4855 2.9468-1.2621 5.6301-2.2769 7.8851z"/><path d="m22.7724 25.5c3.3921 0 6.167 2.8299 5.5439 6.1643-1.3533 7.2424-4.5667 12.3357-8.3155 12.3357-4.7435 0-8.6299-8.1549-8.975-18.5z"/><path d="m30.9904 17.1502c.4961 3.2267 3.1106 5.8498 6.3752 5.8498h2.6107c-.4123-8.3729-5.9735-15.39183-13.5836-17.95683.8989 1.13575 1.6487 2.44843 2.2519 3.78878 1.0643 2.36505 1.8666 5.20115 2.3458 8.31825z"/><path d="m28.4165 16.8957c.5674 3.3176-2.1954 6.1043-5.5612 6.1043h-11.8434c.2344-10.5811 4.1693-19 8.9889-19 3.8447 0 7.1263 5.35721 8.4157 12.8957z"/><path d="m8.51131 23c.11359-5.4083 1.14536-10.3894 2.84579-14.16805.6031-1.34035 1.3529-2.65303 2.2519-3.78878-7.61011 2.565-13.171316 9.58393-13.5836094 17.95683z"/><path d="m.0562286 25.5c.6043994 8.1514 6.0946514 14.9431 13.5527714 17.4568-.899-1.1357-1.6488-2.4484-2.2519-3.7888-1.6479-3.6619-2.66781-8.4531-2.83264-13.668z"/></g></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m28.6446 39.168c-.6032 1.3404-1.353 2.6531-2.2519 3.7888 7.4581-2.5137 12.9483-9.3054 13.5527-17.4568h-2.6549c-3.2399 0-5.8424 2.5861-6.369 5.7829-.4855 2.9468-1.2621 5.6301-2.2769 7.8851z"/><path d="m22.7724 25.5c3.3921 0 6.167 2.8299 5.5439 6.1643-1.3533 7.2424-4.5667 12.3357-8.3155 12.3357-4.7435 0-8.6299-8.1549-8.975-18.5z"/><path d="m30.9904 17.1502c.4961 3.2267 3.1106 5.8498 6.3752 5.8498h2.6107c-.4123-8.3729-5.9735-15.39183-13.5836-17.95683.8989 1.13575 1.6487 2.44843 2.2519 3.78878 1.0643 2.36505 1.8666 5.20115 2.3458 8.31825z"/><path d="m28.4165 16.8957c.5674 3.3176-2.1954 6.1043-5.5612 6.1043h-11.8434c.2344-10.5811 4.1693-19 8.9889-19 3.8447 0 7.1263 5.35721 8.4157 12.8957z"/><path d="m8.51131 23c.11359-5.4083 1.14536-10.3894 2.84579-14.16805.6031-1.34035 1.3529-2.65303 2.2519-3.78878-7.61011 2.565-13.171316 9.58393-13.5836094 17.95683z"/><path d="m.0562286 25.5c.6043994 8.1514 6.0946514 14.9431 13.5527714 17.4568-.899-1.1357-1.6488-2.4484-2.2519-3.7888-1.6479-3.6619-2.66781-8.4531-2.83264-13.668z"/></g></svg>`
+  },
+  {
+    id: "feather-dev",
+    name: "FeatherDev",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 44 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m36.3068 11.4224c-.4322-.4323-.8644-.8645-1.2967-1.2967-1.2966-1.38311-2.6797-2.76621-4.4086-3.63065-1.9882-1.03733-4.1493-.778-6.3104-.778-3.2849 0-11.4971 0-16.33798 0l3.28488 4.40865h19.6228c1.8153 0 3.3713.3458 4.8409 1.2967.2593.0864.5186.0864.6051 0z" fill="#53b1fd"/><path d="m39.9368 18.511c-.4322-.4322-.8645-.8645-1.2967-1.2967-1.2967-1.3831-2.6797-2.7662-4.4086-3.6306-1.9882-1.0374-4.1494-.778-6.3105-.778-2.8526 0-9.6817 0-14.5226 0l3.2849 4.4086h17.8939c1.8154 0 3.3714.3458 4.8409 1.2967.1729.0864.3458.0864.5187 0z" fill="#2e90fa"/><path d="m44 25.4263c-.4322-.4323-.8645-.8645-1.2967-1.2967-1.2966-1.3831-2.6797-2.7662-4.4086-3.6307-1.9882-1.0373-4.1493-.7779-6.3104-.7779-2.6798 0-8.558 0-13.3124 0l3.2848 4.4086h16.5973c1.8153 0 3.3713.3458 4.8409 1.2967.2593.0864.4322.1729.6051 0z" fill="#1570ef"/><path d="m7.60742 37.0961c.43222.4322.86444.8644 1.29666 1.2966 1.29662 1.3831 2.67972 2.7662 4.40862 3.6307 1.9882 1.0373 4.1493.778 6.3104.778h16.338l-3.2849-4.4087c-5.9646 0-15.3006 0-19.6228 0-1.8153 0-3.37132-.3457-4.84087-1.2966-.25933-.0865-.43222-.0865-.60511 0z" fill="#53b1fd"/><path d="m3.97656 30.0079c.43222.4323.86444.8645 1.29666 1.2967 1.29667 1.3831 2.67976 2.7662 4.40864 3.6307 1.98824 1.0373 4.14934.778 6.31044.778h14.5226l-3.2849-4.4087c-5.8782 0-13.9175 0-17.89391 0-1.81532 0-3.37132-.3458-4.84087-1.2967-.17289-.0864-.34577-.0864-.51866 0z" fill="#2e90fa"/><path d="m0 23.0058c.43222.4322.864441.8644 1.29666 1.2966 1.29666 1.3831 2.67977 2.7662 4.40866 3.6307 1.98821 1.0373 4.1493.778 6.31038.778h13.3124l-3.2849-4.4087c-5.7053 0-12.96657 0-16.59722 0-1.81533 0-3.37132-.3458-4.840874-1.2966-.259332-.0865-.432218-.0865-.605106 0z" fill="#1570ef"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 44 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m36.3068 11.4224c-.4322-.4323-.8644-.8645-1.2967-1.2967-1.2966-1.38311-2.6797-2.76621-4.4086-3.63065-1.9882-1.03733-4.1493-.778-6.3104-.778-3.2849 0-11.4971 0-16.33798 0l3.28488 4.40865h19.6228c1.8153 0 3.3713.3458 4.8409 1.2967.2593.0864.5186.0864.6051 0z" opacity=".5"/><path d="m39.9368 18.511c-.4322-.4322-.8645-.8645-1.2967-1.2967-1.2967-1.3831-2.6797-2.7662-4.4086-3.6306-1.9882-1.0374-4.1494-.778-6.3105-.778-2.8526 0-9.6817 0-14.5226 0l3.2849 4.4086h17.8939c1.8154 0 3.3714.3458 4.8409 1.2967.1729.0864.3458.0864.5187 0z" opacity=".7"/><path d="m44 25.4263c-.4322-.4323-.8645-.8645-1.2967-1.2967-1.2966-1.3831-2.6797-2.7662-4.4086-3.6307-1.9882-1.0373-4.1493-.7779-6.3104-.7779-2.6798 0-8.558 0-13.3124 0l3.2848 4.4086h16.5973c1.8153 0 3.3713.3458 4.8409 1.2967.2593.0864.4322.1729.6051 0z"/><path d="m7.60742 37.0961c.43222.4322.86444.8644 1.29666 1.2966 1.29662 1.3832 2.67972 2.7662 4.40862 3.6307 1.9882 1.0373 4.1493.778 6.3104.778h16.338l-3.2849-4.4087c-5.9646 0-15.3006 0-19.6228 0-1.8153 0-3.37132-.3457-4.84087-1.2966-.25933-.0865-.43222-.0865-.60511 0z" opacity=".5"/><path d="m3.97656 30.0079c.43222.4323.86444.8645 1.29666 1.2967 1.29667 1.3831 2.67976 2.7662 4.40864 3.6307 1.98824 1.0373 4.14934.778 6.31044.778h14.5226l-3.2849-4.4087c-5.8782 0-13.9175 0-17.89391 0-1.81532 0-3.37132-.3458-4.84087-1.2967-.17289-.0864-.34577-.0864-.51866 0z" opacity=".7"/><path d="m0 23.0058c.43222.4322.864441.8644 1.29666 1.2966 1.29666 1.3831 2.67977 2.7662 4.40866 3.6307 1.98821 1.0373 4.1493.778 6.31038.778h13.3124l-3.2849-4.4087c-5.7053 0-12.96657 0-16.59722 0-1.81533 0-3.37132-.3458-4.840874-1.2966-.259332-.0865-.432218-.0865-.605106 0z"/></g></svg>`
+  },
+  {
+    id: "flora-fauna",
+    name: "Flora&Fauna",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m13.7146 4c-2.2564 0-4.4203.89634-6.01579 2.49183l-7.69881 7.69877v3.524c0 2.4897 1.06944 4.7296 2.77401 6.2854-1.70457 1.5558-2.77401 3.7957-2.77401 6.2854v3.524l7.69881 7.6988c1.59549 1.5955 3.75939 2.4918 6.01579 2.4918 2.4897 0 4.7296-1.0694 6.2854-2.774 1.5558 1.7046 3.7957 2.774 6.2854 2.774 2.2564 0 4.4203-.8963 6.0158-2.4918l7.6988-7.6988v-3.524c0-2.4897-1.0694-4.7296-2.774-6.2854 1.7046-1.5558 2.774-3.7957 2.774-6.2854v-3.524l-7.6988-7.69877c-1.5955-1.59549-3.7594-2.49183-6.0158-2.49183-2.4897 0-4.7296 1.06944-6.2854 2.77401-1.5558-1.70457-3.7957-2.77401-6.2854-2.77401zm12.0442 20c-.0959-.0875-.19-.1774-.2822-.2696l-5.4766-5.4766-5.4766 5.4766c-.0922.0922-.1863.1821-.2822.2696.0959.0875.19.1774.2822.2696l5.4766 5.4766 5.4766-5.4766c.0922-.0922.1863-.1821.2822-.2696zm-3.5366 9.8094v1.683c0 2.244 1.8192 4.0632 4.0632 4.0632 1.0776 0 2.1111-.4281 2.8731-1.1901l6.3971-6.3971v-1.683c0-2.244-1.8192-4.0632-4.0632-4.0632-1.0776 0-2.1111.4281-2.8731 1.1901zm-4.4444 0-6.3971-6.3971c-.762-.762-1.79546-1.1901-2.87308-1.1901-2.24403 0-4.06318 1.8192-4.06318 4.0632v1.683l6.39706 6.3971c.762.762 1.7955 1.1901 2.8731 1.1901 2.244 0 4.0632-1.8192 4.0632-4.0632zm0-21.3018v1.683l-6.3971 6.3971c-.762.762-1.79546 1.1901-2.87308 1.1901-2.24403 0-4.06318-1.8192-4.06318-4.0632v-1.683l6.39706-6.39708c.762-.76199 1.7955-1.19007 2.8731-1.19007 2.244 0 4.0632 1.81915 4.0632 4.06315zm10.8415 8.0801-6.3971-6.3971v-1.683c0-2.244 1.8192-4.06315 4.0632-4.06315 1.0776 0 2.1111.42808 2.8731 1.19007l6.3971 6.39708v1.683c0 2.244-1.8192 4.0632-4.0632 4.0632-1.0776 0-2.1111-.4281-2.8731-1.1901z" fill="#155eef" fill-rule="evenodd"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m13.7146 4c-2.2564 0-4.4203.89634-6.01579 2.49183l-7.69881 7.69877v3.524c0 2.4897 1.06944 4.7296 2.77401 6.2854-1.70457 1.5558-2.77401 3.7957-2.77401 6.2854v3.524l7.69881 7.6988c1.59549 1.5955 3.75939 2.4918 6.01579 2.4918 2.4897 0 4.7296-1.0694 6.2854-2.774 1.5558 1.7046 3.7957 2.774 6.2854 2.774 2.2564 0 4.4203-.8963 6.0158-2.4918l7.6988-7.6988v-3.524c0-2.4897-1.0694-4.7296-2.774-6.2854 1.7046-1.5558 2.774-3.7957 2.774-6.2854v-3.524l-7.6988-7.69877c-1.5955-1.59549-3.7594-2.49183-6.0158-2.49183-2.4897 0-4.7296 1.06944-6.2854 2.77401-1.5558-1.70457-3.7957-2.77401-6.2854-2.77401zm12.0442 20c-.0959-.0875-.19-.1774-.2822-.2696l-5.4766-5.4766-5.4766 5.4766c-.0922.0922-.1863.1821-.2822.2696.0959.0875.19.1774.2822.2696l5.4766 5.4766 5.4766-5.4766c.0922-.0922.1863-.1821.2822-.2696zm-3.5366 9.8094v1.683c0 2.244 1.8192 4.0632 4.0632 4.0632 1.0776 0 2.1111-.4281 2.8731-1.1901l6.3971-6.3971v-1.683c0-2.244-1.8192-4.0632-4.0632-4.0632-1.0776 0-2.1111.4281-2.8731 1.1901zm-4.4444 0-6.3971-6.3971c-.762-.762-1.79546-1.1901-2.87308-1.1901-2.24403 0-4.06318 1.8192-4.06318 4.0632v1.683l6.39706 6.3971c.762.762 1.7955 1.1901 2.8731 1.1901 2.244 0 4.0632-1.8192 4.0632-4.0632zm0-21.3018v1.683l-6.3971 6.3971c-.762.762-1.79546 1.1901-2.87308 1.1901-2.24403 0-4.06318-1.8192-4.06318-4.0632v-1.683l6.39706-6.39708c.762-.76199 1.7955-1.19007 2.8731-1.19007 2.244 0 4.0632 1.81915 4.0632 4.06315zm10.8415 8.0801-6.3971-6.3971v-1.683c0-2.244 1.8192-4.06315 4.0632-4.06315 1.0776 0 2.1111.42808 2.8731 1.19007l6.3971 6.39708v1.683c0 2.244-1.8192 4.0632-4.0632 4.0632-1.0776 0-2.1111-.4281-2.8731-1.1901z" fill="#fff" fill-rule="evenodd"/></svg>`
+  },
+  {
+    id: "focal-point",
+    name: "FocalPoint",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m10.7788 6.1817 4.6901 17.5036v-19.24382c.3719-.08679.7478-.16322 1.1273-.22897v19.47459l5.2752-19.6871c.3801.03442.7572.07945 1.1309.13479l-5.3176 19.84571 10.5701-18.30794c.3443.15492.6835.31927 1.0172.49274l-10.6095 18.3763 15.1464-15.1465c.2731.25824.5389.52407.7971.7972l-15.1486 15.1487 18.3784-10.6108c.1734.3337.3377.6729.4926 1.0173l-18.3034 10.5675 19.8403-5.3162c.0553.3737.1003.7508.1347 1.1309l-19.6869 5.2751h19.4741c-.0658.3796-.1422.7554-.229 1.1273h-19.2481l17.507 4.691c-.1798.3443-.3693.6827-.5681 1.0149l-17.2257-4.6156 14.3874 8.3066c-.2723.2801-.5528.5522-.8411.8161l-14.1087-8.1457 10.6759 10.6758c-.3377.1973-.6817.385-1.0316.5628l-10.4426-10.4426 6.8421 11.8508c-.3746.1059-.7537.2012-1.1368.2855l-6.6825-11.5744 3.2219 12.0243c-.2872.0122-.5759.0184-.8661.0184-.0991 0-.198-.0007-.2967-.0022l-3.1483-11.7497v11.4569c-.3795-.0657-.7554-.1421-1.1273-.2289v-11.2261l-2.7759 10.36c-.3541-.1396-.7033-.289-1.0471-.4478l2.7337-10.2024-5.13175 8.8884c-.3177-.2034-.62928-.4156-.9344-.6361l5.09135-8.8186-7.1301 7.1302c-.2731-.2583-.53893-.5241-.79717-.7971l7.12787-7.1279-8.81599 5.0899c-.22059-.3051-.4328-.6167-.6363-.9344l8.89259-5.1341-10.20737 2.735c-.15888-.3438-.3083-.693-.44793-1.047l10.3599-2.776h-11.226124c-.086806-.3719-.163256-.7477-.22903-1.1273h11.452154l-11.74511583-3.1471c-.00145443-.0995-.00218417-.1991-.00218417-.2989 0-.2894.00613487-.5774.0182816-.8639l12.0258184 3.2224-11.57621-6.6836c.084291-.3832.179549-.7623.285427-1.1369l11.855683 6.8449-10.44698-10.447c.17774-.3499.36544-.6939.56273-1.0315l10.68025 10.6802-8.14896-14.1144c.26387-.2882.53605-.56863.81617-.84096l8.30809 14.38996-4.61634-17.22828c.33214-.1988.67064-.38826 1.01484-.56802z" fill="#155eef"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m10.7788 6.1817 4.6901 17.5036v-19.24382c.3719-.08679.7478-.16322 1.1273-.22897v19.47459l5.2752-19.6871c.3801.03442.7572.07945 1.1309.13479l-5.3176 19.84571 10.5701-18.30794c.3443.15492.6835.31927 1.0172.49274l-10.6095 18.3763 15.1464-15.1465c.2731.25824.5389.52407.7971.7972l-15.1486 15.1487 18.3784-10.6108c.1734.3337.3377.6729.4926 1.0173l-18.3034 10.5675 19.8403-5.3162c.0553.3737.1003.7508.1347 1.1309l-19.6869 5.2751h19.4741c-.0658.3796-.1422.7554-.229 1.1273h-19.2481l17.507 4.691c-.1798.3443-.3693.6827-.5681 1.0149l-17.2257-4.6156 14.3874 8.3066c-.2723.2801-.5528.5522-.8411.8161l-14.1087-8.1457 10.6759 10.6758c-.3377.1973-.6817.385-1.0316.5628l-10.4426-10.4426 6.8421 11.8508c-.3746.1059-.7537.2012-1.1368.2855l-6.6825-11.5744 3.2219 12.0243c-.2872.0122-.5759.0184-.8661.0184-.0991 0-.198-.0007-.2967-.0022l-3.1483-11.7497v11.4569c-.3795-.0657-.7554-.1421-1.1273-.2289v-11.2261l-2.7759 10.36c-.3541-.1396-.7033-.289-1.0471-.4478l2.7337-10.2024-5.13174 8.8884c-.31771-.2034-.62929-.4156-.93441-.6361l5.09135-8.8186-7.1301 7.1302c-.2731-.2583-.53893-.5241-.79717-.7971l7.12787-7.1279-8.81599 5.0899c-.22059-.3051-.4328-.6167-.6363-.9344l8.89259-5.1341-10.20737 2.735c-.15888-.3438-.3083-.693-.44793-1.047l10.3599-2.776h-11.226124c-.086806-.3719-.163256-.7477-.22903-1.1273h11.452154l-11.74511583-3.1471c-.00145443-.0995-.00218417-.1991-.00218417-.2989 0-.2894.00613486-.5774.0182816-.8639l12.0258184 3.2224-11.57621-6.6836c.084291-.3832.179549-.7623.285427-1.1369l11.855683 6.8449-10.44698-10.447c.17774-.3499.36544-.6939.56273-1.0315l10.68025 10.6802-8.14896-14.1144c.26387-.2882.53605-.56863.81617-.84096l8.30809 14.38996-4.61634-17.22828c.33214-.1988.67064-.38826 1.01484-.56802z" fill="#fff"/></svg>`
+  },
+  {
+    id: "foresight",
+    name: "Foresight",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 31 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#444ce7"><path d="m-.00195312 17.8433 30.90545312-17.8433-.8189 12.6994-26.32058 15.1961z"/><path d="m3.76367 27.8951 21.73573-12.5492-.8189 12.6994-17.15086 9.902z" opacity=".5"/><path d="m7.52734 37.9477 12.56596-7.255-.8189 12.6994-7.9811 4.6079z" opacity=".25"/></g></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 31 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m-.00195312 17.8433 30.90545312-17.8433-.8189 12.6994-26.32058 15.1961z"/><path d="m3.76367 27.8951 21.73573-12.5492-.8189 12.6994-17.15086 9.902z" opacity=".5"/><path d="m7.52734 37.9477 12.56596-7.255-.8189 12.6994-7.9811 4.6079z" opacity=".25"/></g></svg>`
+  },
+  {
+    id: "galileo",
+    name: "Galileo",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m29.5411 6.41772c2.6913 5.27688 4.209 11.25228 4.209 17.58218s-1.5177 12.3054-4.2091 17.5823c6.2304-3.3881 10.4593-9.9914 10.4593-17.5823s-4.2289-14.19404-10.4592-17.58218z" fill="#6172f3"/><path d="m20.5481 5.99826c-.9047-1.28153-2.4457-1.9717-3.9913-1.70349-9.40496 1.63214-16.5568 9.83343-16.5568 19.70503 0 9.8717 7.1518 18.0729 16.5567 19.7051 1.5456.2682 3.0867-.4219 3.9913-1.7035 3.5923-5.0889 5.7025-11.2988 5.7025-18.0016 0-6.7027-2.1101-12.9126-5.7024-18.00154z" fill="#444ce7"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m29.5411 6.41772c2.6913 5.27688 4.209 11.25228 4.209 17.58218s-1.5177 12.3054-4.2091 17.5823c6.2304-3.3881 10.4593-9.9914 10.4593-17.5823s-4.2289-14.19404-10.4592-17.58218z" opacity=".7"/><path d="m20.5481 5.99826c-.9047-1.28153-2.4457-1.9717-3.9913-1.70349-9.40496 1.63214-16.5568 9.83343-16.5568 19.70503 0 9.8717 7.1518 18.0729 16.5567 19.7051 1.5456.2682 3.0867-.4219 3.9913-1.7035 3.5923-5.0889 5.7025-11.2988 5.7025-18.0016 0-6.7027-2.1101-12.9126-5.7024-18.00154z"/></g></svg>`
+  },
+  {
+    id: "global-bank",
+    name: "GlobalBank",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m27.6627 4h-15.3253l-12.3374 12.3373v15.3253l12.3374 12.3374h15.3253l12.3373-12.3374v-15.3253zm-13.2049 27.8554-7.90357-7.9036 7.90357-7.9036c2.988-2.988 7.9037-2.988 10.8916 0l7.9036 7.9036-7.9036 7.9036c-2.9879 2.988-7.8072 2.988-10.8916 0z" fill="#444ce7"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m27.6627 4h-15.3253l-12.3374 12.3373v15.3253l12.3374 12.3374h15.3253l12.3373-12.3374v-15.3253zm-13.2049 27.8554-7.90357-7.9036 7.90357-7.9036c2.988-2.988 7.9037-2.988 10.8916 0l7.9036 7.9036-7.9036 7.9036c-2.9879 2.988-7.8072 2.988-10.8916 0z" fill="#fff"/></svg>`
+  },
+  {
+    id: "hexsmith",
+    name: "Hexsmith",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m9.72461 41.7983h18.49589c1.2717 0 2.4469-.6785 3.0827-1.7798l4.1102-7.1191h-20.5481z" opacity=".7"/><path d="m25.1445 15.1015h-20.55661l4.11021-7.11909c.63585-1.10133 1.811-1.77977 3.0827-1.77977h18.4959z" opacity=".4"/><path d="m39.5272 25.7801c.6358-1.1014.6358-2.4582 0-3.5596l-4.1102-7.1191-5.1378 8.8989h-20.55068l5.13718 8.8989h20.5481l.0016-.0027.0016.0027z" opacity=".4"/><path d="m14.8634 32.8992-5.13775-8.8988-5.13776 8.8988 5.13776 8.8989z"/><path d="m25.1445 15.1014h-20.55593l-4.108166 7.1192c-.635516 1.1013-.635318 2.458.000521 3.5591l4.111125 7.1195 5.13775-8.8989h20.55l.0013-.0021z" opacity=".7"/><path d="m35.4181 15.1015-5.1378-8.89886-5.1377 8.89886 5.1377 8.8989z"/></g></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m9.72461 41.7983h18.49589c1.2717 0 2.4469-.6785 3.0827-1.7798l4.1102-7.1191h-20.5481z" opacity=".7"/><path d="m25.1445 15.1015h-20.55661l4.11021-7.11909c.63585-1.10133 1.811-1.77977 3.0827-1.77977h18.4959z" opacity=".4"/><path d="m39.5272 25.7801c.6358-1.1013.6358-2.4582 0-3.5596l-4.1102-7.1191-5.1378 8.8989h-20.55068l5.13718 8.8989h20.5481l.0016-.0027.0016.0027z" opacity=".4"/><path d="m14.8634 32.8992-5.13775-8.8988-5.13776 8.8988 5.13776 8.8989z"/><path d="m25.1445 15.1014h-20.55593l-4.108166 7.1192c-.635516 1.1013-.635318 2.458.000521 3.5591l4.111125 7.1195 5.13775-8.8989h20.55l.0013-.0022z" opacity=".7"/><path d="m35.4181 15.1015-5.1378-8.89886-5.1377 8.89886 5.1377 8.8989z"/></g></svg>`
+  },
+  {
+    id: "hourglass",
+    name: "Hourglass",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 30 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m0 41.2222c0 1.5341 1.24365 2.7778 2.77778 2.7778h24.44442c1.5341 0 2.7778-1.2437 2.7778-2.7778v-7.2222c0-8.2843-6.7157-15-15-15-8.28427 0-15 6.7157-15 15z" fill="#1570ef"/><path d="m0 6.77778c0-1.53413 1.24365-2.77778 2.77778-2.77778h24.44442c1.5341 0 2.7778 1.24365 2.7778 2.77778v7.22222c0 8.2843-6.7157 15-15 15-8.28427 0-15-6.7157-15-15z" fill="#53b1fd" opacity=".5"/></svg>`,
+    darkSvg: `<svg width="100%" height="100%" viewBox="0 0 30 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path opacity="0.7" d="M0 41.2222C0 42.7563 1.24365 44 2.77778 44H27.2222C28.7563 44 30 42.7563 30 41.2222V34C30 25.7157 23.2843 19 15 19C6.71573 19 0 25.7157 0 34V41.2222Z" fill="white"/><path opacity="0.7" d="M0 6.77778C0 5.24365 1.24365 4 2.77778 4H27.2222C28.7563 4 30 5.24365 30 6.77778V14C30 22.2843 23.2843 29 15 29C6.71573 29 0 22.2843 0 14V6.77778Z" fill="white"/></svg>`
+  },
+  {
+    id: "kintsugi",
+    name: "Kintsugi",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m20 4 4.2861 9.6525 9.856-3.79464-3.7946 9.85604 9.6525 4.2861-9.6525 4.2861 3.7946 9.856-9.856-3.7946-4.2861 9.6525-4.2861-9.6525-9.85604 3.7946 3.79469-9.856-9.65255-4.2861 9.65255-4.2861-3.79469-9.85604 9.85604 3.79464z" fill="#155eef"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m20 4 4.2861 9.6525 9.856-3.79464-3.7946 9.85604 9.6525 4.2861-9.6525 4.2861 3.7946 9.856-9.856-3.7946-4.2861 9.6525-4.2861-9.6525-9.85604 3.7946 3.79469-9.856-9.65255-4.2861 9.65255-4.2861-3.79469-9.85604 9.85604 3.79464z" fill="#155eef"/></svg>`
+  },
+  {
+    id: "layers",
+    name: "Layers",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m5.03741 15.4637c.7506-2.8008 3.62961-5.67985 6.43049-6.43044l17.4617-4.67957c2.8009-.7506 4.4629.91146 3.7123 3.71231l-4.6795 17.4617c-.7506 2.8009-3.6297 5.6799-6.4305 6.4305l-17.46175 4.6796c-2.80085.7505-4.462904-.9115-3.712306-3.7124z" opacity=".7"/><path d="m12.0355 22.4642c.7506-2.8008 3.6296-5.6799 6.4304-6.4305l17.4617-4.6795c2.8009-.7506 4.4629.9114 3.7123 3.7123l-4.6795 17.4617c-.7506 2.8009-3.6296 5.6799-6.4305 6.4305l-17.4617 4.6795c-2.80085.7506-4.46291-.9114-3.71231-3.7123z" opacity=".7"/></g></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m5.03741 15.4637c.7506-2.8008 3.62961-5.67985 6.43049-6.43044l17.4617-4.67957c2.8009-.7506 4.4629.91146 3.7123 3.71231l-4.6795 17.4617c-.7506 2.8009-3.6297 5.6799-6.4305 6.4305l-17.46175 4.6795c-2.80085.7506-4.462904-.9114-3.712306-3.7123z" opacity=".7"/><path d="m12.0355 22.4642c.7506-2.8008 3.6296-5.6799 6.4304-6.4305l17.4617-4.6795c2.8009-.7506 4.4629.9114 3.7123 3.7123l-4.6795 17.4617c-.7506 2.8009-3.6296 5.6799-6.4305 6.4305l-17.4617 4.6795c-2.80085.7506-4.46291-.9114-3.71231-3.7123z" opacity=".7"/></g></svg>`
+  },
+  {
+    id: "lightspeed",
+    name: "Lightspeed",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 48 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m0 24c0 6.6274 5.37258 12 12 12v-12c0 6.6274 5.3726 12 12 12v-12c0 6.6274 5.3726 12 12 12s12-5.3726 12-12-5.3726-12-12-12-12 5.3726-12 12v-12c-6.6274 0-12 5.3726-12 12v-12c-6.62742 0-12 5.3726-12 12z" fill="#155eef"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 48 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m0 24c0 6.6274 5.37258 12 12 12v-12c0 6.6274 5.3726 12 12 12v-12c0 6.6274 5.3726 12 12 12s12-5.3726 12-12-5.3726-12-12-12-12 5.3726-12 12v-12c-6.6274 0-12 5.3726-12 12v-12c-6.62742 0-12 5.3726-12 12z" fill="#155eef"/></svg>`
+  },
+  {
+    id: "luminescence",
+    name: "Luminescence",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m32.3008 36h-.1015c-.0261.0402-.0523.0804-.0787.1204-2.7604 1.8201-6.0668 2.8794-9.6206 2.8794-9.665 0-17.5-7.835-17.5-17.5 0-3.5538 1.05931-6.8602 2.87939-9.6206.04009-.0264.08029-.0527.12061-.0788v-.1017c-.04056.0599-.08077.1201-.12061.1805-4.7469 3.1299-7.87939 8.5094-7.87939 14.6206 0 9.665 7.83502 17.5 17.5 17.5 6.1112 0 11.4907-3.1325 14.6206-7.8794.0603-.0398.1204-.0799.1802-.1204z"/><g opacity=".5"><path d="m40.0003 21.5c0 6.1112-3.1325 11.4907-7.8794 14.6206 1.8201-2.7604 2.8794-6.0668 2.8794-9.6206 0-9.665-7.835-17.5-17.5-17.5-3.5538 0-6.8602 1.0593-9.6206 2.8794 3.1299-4.74691 8.5094-7.8794 14.6206-7.8794 9.665 0 17.5 7.835 17.5 17.5z"/><path d="m32.0003 36.1994c.0403-.0261.0805-.0524.1206-.0788-.0398.0604-.08.1206-.1206.1805z"/><path d="m7.80088 12c.02611-.0403.05238-.0805.07882-.1206-.06043.0398-.12059.08-.18048.1206z"/></g></g></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m32.3008 36h-.1015c-.0261.0402-.0523.0804-.0787.1204-2.7604 1.8201-6.0668 2.8794-9.6206 2.8794-9.665 0-17.5-7.835-17.5-17.5 0-3.5538 1.05931-6.8602 2.87939-9.6206.04009-.0264.08029-.0527.12061-.0788v-.1017c-.04056.0599-.08077.1201-.12061.1805-4.7469 3.1299-7.87939 8.5094-7.87939 14.6206 0 9.665 7.83502 17.5 17.5 17.5 6.1112 0 11.4907-3.1325 14.6206-7.8794.0603-.0398.1204-.0799.1802-.1204z"/><g opacity=".5"><path d="m40.0003 21.5c0 6.1112-3.1325 11.4907-7.8794 14.6206 1.8201-2.7604 2.8794-6.0668 2.8794-9.6206 0-9.665-7.835-17.5-17.5-17.5-3.5538 0-6.8602 1.0593-9.6206 2.8794 3.1299-4.74691 8.5094-7.8794 14.6206-7.8794 9.665 0 17.5 7.835 17.5 17.5z"/><path d="m32.0003 36.1994c.0403-.0261.0805-.0524.1206-.0788-.0398.0604-.08.1206-.1206.1805z"/><path d="m7.80088 12c.02611-.0403.05238-.0805.07882-.1206-.06043.0398-.12059.08-.18048.1206z"/></g></g></svg>`
+  },
+  {
+    id: "luminous",
+    name: "Luminous",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 42 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m14.1061 19.6565c5.499-2.6299 9.8025-7.0929 12.2731-12.67168-1.5939-1.67362-3.666-2.86907-5.8975-3.58634l-1.1954-.39848c-.0797.15939-.1594.39849-.1594.55788-1.9127 5.41936-5.8178 9.80262-11.07766 12.27322-3.66599 1.7533-6.37564 4.9412-7.650763 8.7666l-.398477 1.1955c.159391.0797.39848.1593.557871.1593 1.514209.5579 3.028419 1.2752 4.462939 2.1519 1.99238-3.5864 5.18019-6.6148 9.08529-8.4479z"/><path d="m37.2173 19.9753c-2.9487 4.463-7.0132 8.0494-12.034 10.4403-4.0645 1.9127-7.1726 5.499-8.6071 9.8026l-.3985 1.3549c1.5142 1.3548 3.3472 2.3909 5.3396 3.0284l1.1955.3985c.0796-.1594.1593-.3985.1593-.5579 1.9127-5.4193 5.8178-9.8026 11.0777-12.2732 3.666-1.7533 6.4553-4.9412 7.6507-8.7666l.3985-1.1954c-1.6736-.4782-3.2675-1.2752-4.7817-2.2316z" opacity=".6"/><path d="m12.9903 37.4284c1.9924-4.7818 5.6584-8.6869 10.3604-10.9184 4.3035-2.0721 7.8898-5.26 10.3604-9.1651-1.833-1.7533-3.3472-3.7458-4.463-6.1366-2.9487 5.4193-7.571 9.8026-13.2294 12.5123-3.2675 1.5142-5.8974 4.1442-7.49136 7.3321 1.75326 1.6736 3.18786 3.7457 4.30356 6.0569 0 0 .0797.1594.1594.3188z" opacity=".8"/></g></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 42 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m14.1061 19.6565c5.499-2.6299 9.8025-7.0929 12.2731-12.67168-1.5939-1.67362-3.666-2.86907-5.8975-3.58634l-1.1954-.39848c-.0797.15939-.1594.39849-.1594.55788-1.9127 5.41936-5.8178 9.80262-11.07766 12.27322-3.66599 1.7533-6.37564 4.9412-7.650763 8.7666l-.398477 1.1955c.159391.0797.39848.1593.557871.1593 1.514209.5579 3.028419 1.2752 4.462939 2.1519 1.99238-3.5864 5.18019-6.6148 9.08529-8.4479z"/><path d="m37.2173 19.9753c-2.9487 4.463-7.0132 8.0494-12.034 10.4403-4.0645 1.9127-7.1726 5.499-8.6071 9.8026l-.3985 1.3549c1.5142 1.3548 3.3472 2.3909 5.3396 3.0284l1.1955.3985c.0796-.1594.1593-.3985.1593-.5579 1.9127-5.4193 5.8178-9.8026 11.0777-12.2732 3.666-1.7533 6.4553-4.9412 7.6507-8.7666l.3985-1.1954c-1.6736-.4782-3.2675-1.2752-4.7817-2.2316z" opacity=".5"/><path d="m12.9903 37.4284c1.9924-4.7818 5.6584-8.6869 10.3604-10.9184 4.3035-2.0721 7.8898-5.26 10.3604-9.1651-1.833-1.7533-3.3472-3.7458-4.463-6.1366-2.9487 5.4193-7.571 9.8026-13.2294 12.5123-3.2675 1.5142-5.8974 4.1442-7.49136 7.3321 1.75326 1.6736 3.18786 3.7457 4.30356 6.0569 0 0 .0797.1594.1594.3188z" opacity=".7"/></g></svg>`
+  },
+  {
+    id: "pollinate",
+    name: "Pollinate",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 38 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m25.0008 24c0 3.3137-2.6863 6-6 6s-6-2.6863-6-6 2.6863-6 6-6 6 2.6863 6 6z"/><path d="m25.0008 10c0 3.3137-2.6863 6-6 6s-6-2.6863-6-6c0-3.31371 2.6863-6 6-6s6 2.68629 6 6z"/><path d="m37.125 31c0 3.3137-2.6863 6-6 6s-6-2.6863-6-6 2.6863-6 6-6 6 2.6863 6 6z"/><path d="m37.127 17.0002c0 3.3137-2.6863 6-6 6-3.3138 0-6-2.6863-6-6s2.6862-6 6-6c3.3137 0 6 2.6863 6 6z"/><path d="m25.0008 38c0 3.3137-2.6863 6-6 6s-6-2.6863-6-6 2.6863-6 6-6 6 2.6863 6 6z"/><path d="m12.877 17c0 3.3137-2.6863 6-6.00005 6-3.31371 0-5.999997-2.6863-5.999997-6s2.686287-6 5.999997-6c3.31375 0 6.00005 2.6863 6.00005 6z"/><path d="m12.875 30.9997c0 3.3137-2.6863 6-6 6-3.31371 0-6-2.6863-6-6s2.68629-6 6-6c3.3137 0 6 2.6863 6 6z"/></g></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 38 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m25.0008 24c0 3.3137-2.6863 6-6 6s-6-2.6863-6-6 2.6863-6 6-6 6 2.6863 6 6z"/><path d="m25.0008 10c0 3.3137-2.6863 6-6 6s-6-2.6863-6-6c0-3.31371 2.6863-6 6-6s6 2.68629 6 6z"/><path d="m37.125 31c0 3.3137-2.6863 6-6 6s-6-2.6863-6-6 2.6863-6 6-6 6 2.6863 6 6z"/><path d="m37.127 17.0002c0 3.3137-2.6863 6-6 6-3.3138 0-6-2.6863-6-6s2.6862-6 6-6c3.3137 0 6 2.6863 6 6z"/><path d="m25.0008 38c0 3.3137-2.6863 6-6 6s-6-2.6863-6-6 2.6863-6 6-6 6 2.6863 6 6z"/><path d="m12.877 17c0 3.3137-2.6863 6-6.00005 6-3.31371 0-5.999997-2.6863-5.999997-6s2.686287-6 5.999997-6c3.31375 0 6.00005 2.6863 6.00005 6z"/><path d="m12.875 30.9997c0 3.3137-2.6863 6-6 6-3.31371 0-6-2.6863-6-6s2.68629-6 6-6c3.3137 0 6 2.6863 6 6z"/></g></svg>`
+  },
+  {
+    id: "polymath",
+    name: "Polymath",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 38 48" width="100%" xmlns="http://www.w3.org/2000/svg"><circle cx="19" cy="24" r="16" stroke="#155eef" stroke-width="6"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 38 48" width="100%" xmlns="http://www.w3.org/2000/svg"><circle cx="19" cy="24" r="16" stroke="#fff" stroke-width="6"/></svg>`
+  },
+  {
+    id: "prometheus",
+    name: "Prometheus",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 44 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m10.4993 16.5h-7.29875c-1.76731 0-3.20055 1.4327-3.20055 3.2v2.8h11c2.7614 0 5-2.2386 5-5s2.2386-5 5-5h19c2.2091 0 4-1.7909 4-4v-3h-22.5c-3.0376 0-5.5 2.46243-5.5 5.5 0 3.0376-2.4631 5.5-5.5007 5.5z"/><path d="m10.4993 26.5h-7.29875c-1.76731 0-3.20055 1.4327-3.20055 3.2v2.8h11c2.7614 0 5-2.2386 5-5s2.2386-5 5-5h13c2.2091 0 4-1.7909 4-4v-3h-16.5c-3.0376 0-5.5 2.4624-5.5 5.5s-2.4631 5.5-5.5007 5.5z" opacity=".7"/><path d="m10.4993 36.5h-7.29875c-1.76731 0-3.20055 1.4327-3.20055 3.2v2.8h11c2.7614 0 5-2.2386 5-5s2.2386-5 5-5h7.8c1.7673 0 3.2-1.4327 3.2-3.2v-3.8h-10.5c-3.0376 0-5.5 2.4624-5.5 5.5s-2.4631 5.5-5.5007 5.5z" opacity=".5"/></g></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 44 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m10.4993 16.5h-7.29875c-1.76731 0-3.20055 1.4327-3.20055 3.2v2.8h11c2.7614 0 5-2.2386 5-5s2.2386-5 5-5h19c2.2091 0 4-1.7909 4-4v-3h-22.5c-3.0376 0-5.5 2.46243-5.5 5.5 0 3.0376-2.4631 5.5-5.5007 5.5z"/><path d="m10.4993 26.5h-7.29875c-1.76731 0-3.20055 1.4327-3.20055 3.2v2.8h11c2.7614 0 5-2.2386 5-5s2.2386-5 5-5h13c2.2091 0 4-1.7909 4-4v-3h-16.5c-3.0376 0-5.5 2.4624-5.5 5.5s-2.4631 5.5-5.5007 5.5z" opacity=".75"/><path d="m10.4993 36.5h-7.29875c-1.76731 0-3.20055 1.4327-3.20055 3.2v2.8h11c2.7614 0 5-2.2386 5-5s2.2386-5 5-5h7.8c1.7673 0 3.2-1.4327 3.2-3.2v-3.8h-10.5c-3.0376 0-5.5 2.4624-5.5 5.5s-2.4631 5.5-5.5007 5.5z" opacity=".5"/></g></svg>`
+  },
+  {
+    id: "quantum",
+    name: "Quantum",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 39 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m9 23c0-5.5228 4.4772-10 10-10 5.5229 0 10 4.4772 10 10h9c0-10.4934-8.5066-19-19-19-10.49341 0-18.99999908 8.5066-19 19s8.50659 19 19 19v-9c-5.5228 0-10-4.4771-10-10z"/><path d="m29 23c0 5.5228 4.4772 10 10 10v9c-10.4934 0-19-8.5066-19-19z" opacity=".5"/></g></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 39 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m9 23c0-5.5228 4.4772-10 10-10 5.5229 0 10 4.4772 10 10h9c0-10.4934-8.5066-19-19-19-10.49341 0-18.99999908 8.5066-19 19s8.50659 19 19 19v-9c-5.5228 0-10-4.4771-10-10z"/><path d="m29 23c0 5.5228 4.4772 10 10 10v9c-10.4934 0-19-8.5066-19-19z" opacity=".5"/></g></svg>`
+  },
+  {
+    id: "quartz-ai",
+    name: "QuartzAI",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 44 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m17.6264 6.5h14.8017l11.4661 18.6661-15.7786 15.9489-22.68835-4.0459-5.157719-19.2098zm.5273 4.9692-6.816 15.105 6.4504 5.3411 8.8246-3.7975zm12.3276 15.3 9.2139-2.7073-7.1983-11.7184zm-.6163-17.2692h-9.3468l7.3309 14.4284zm6.9795 18.5263-6.779 1.9919-.5448 5.4109zm-10.5005 9.008.5824-5.7856-6.0573 2.6067zm-6.8394-.5022-10.91261-1.9459 1.64741-5.0264 6.438 5.3308zm-11.69782-9.1824-2.7037-3.0571 1.66868 6.215zm-3.53432-8.5248 4.81433 5.4437 5.50351-12.1963z" fill="#155eef" fill-rule="evenodd"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 44 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m17.6264 6.5h14.8017l11.4661 18.6661-15.7786 15.9489-22.68835-4.0459-5.157719-19.2098zm.5273 4.9692-6.816 15.105 6.4504 5.3411 8.8246-3.7975zm12.3276 15.3 9.2139-2.7073-7.1983-11.7184zm-.6163-17.2692h-9.3468l7.3309 14.4284zm6.9795 18.5263-6.779 1.9919-.5448 5.4109zm-10.5005 9.008.5824-5.7856-6.0573 2.6067zm-6.8394-.5022-10.91261-1.9459 1.64741-5.0264 6.438 5.3308zm-11.69782-9.1824-2.7037-3.0571 1.66868 6.215zm-3.53432-8.5248 4.81433 5.4437 5.50351-12.1963z" fill="#fff" fill-rule="evenodd"/></svg>`
+  },
+  {
+    id: "radius",
+    name: "Radius",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g clip-rule="evenodd" fill="#155eef" fill-rule="evenodd"><path d="m18.5 19v-15h3v15z"/><path d="m18.5 44v-15h3v15z"/><path d="m22.4754 19.404 10.6066-10.60664 2.1214 2.12134-8.4853 8.4853z"/><path d="m4.79776 37.0816 10.60664-10.6066 2.1213 2.1214-10.60662 10.6066z"/><path d="m26.7178 28.5963 8.4853 8.4852-2.1213 2.1214-10.6066-10.6066z"/><path d="m6.91885 8.79727 10.60665 10.60663-2.1214 2.1213-10.60657-10.6066z"/><path d="m18.5 22.5h21.5v3h-21.5z"/><path d="m.00000026 22.5h14.99999974v3h-15z"/></g></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 40 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g clip-rule="evenodd" fill="#155eef" fill-rule="evenodd"><path d="m18.5 19v-15h3v15z"/><path d="m18.5 44v-15h3v15z"/><path d="m22.4754 19.404 10.6066-10.60664 2.1214 2.12134-8.4853 8.4853z"/><path d="m4.79776 37.0816 10.60664-10.6066 2.1213 2.1214-10.60662 10.6066z"/><path d="m26.7178 28.5963 8.4853 8.4852-2.1213 2.1214-10.6066-10.6066z"/><path d="m6.91885 8.79727 10.60665 10.60663-2.1214 2.1213-10.60657-10.6066z"/><path d="m18.5 22.5h21.5v3h-21.5z"/><path d="m.00000026 22.5h14.99999974v3h-15z"/></g></svg>`
+  },
+  {
+    id: "railspeed",
+    name: "Railspeed",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 36 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m0 7.5h28.8c2.5202 0 3.7804 0 4.743.49047.8467.43143 1.5351 1.11984 1.9665 1.96657.4905.96256.4905 2.22276.4905 4.74296v1.8h-28.8c-2.52024 0-3.78035 0-4.74296-.4905-.84673-.4314-1.535139-1.1198-1.966569-1.9665-.490471-.9626-.490471-2.2228-.490471-4.743z"/><path d="m0 28.5h28.8c2.5202 0 3.7804 0 4.743-.4905.8467-.4314 1.5351-1.1198 1.9665-1.9665.4905-.9626.4905-2.2228.4905-4.743v-1.8h-28.8c-2.52024 0-3.78035 0-4.74296.4905-.84673.4314-1.535139 1.1198-1.966569 1.9665-.490471.9626-.490471 2.2228-.490471 4.743z"/><path d="m14 31.5h14.8c2.5202 0 3.7804 0 4.743.4905.8467.4314 1.5351 1.1198 1.9665 1.9665.4905.9626.4905 2.2228.4905 4.743v1.8h-14.8c-2.5202 0-3.7804 0-4.743-.4905-.8467-.4314-1.5351-1.1198-1.9665-1.9665-.4905-.9626-.4905-2.2228-.4905-4.743z"/></g></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 36 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m0 7.5h28.8c2.5202 0 3.7804 0 4.743.49047.8467.43143 1.5351 1.11984 1.9665 1.96657.4905.96256.4905 2.22276.4905 4.74296v1.8h-28.8c-2.52024 0-3.78035 0-4.74296-.4905-.84673-.4314-1.535139-1.1198-1.966569-1.9665-.490471-.9626-.490471-2.2228-.490471-4.743z"/><path d="m0 28.5h28.8c2.5202 0 3.7804 0 4.743-.4905.8467-.4314 1.5351-1.1198 1.9665-1.9665.4905-.9626.4905-2.2228.4905-4.743v-1.8h-28.8c-2.52024 0-3.78035 0-4.74296.4905-.84673.4314-1.535139 1.1198-1.966569 1.9665-.490471.9626-.490471 2.2228-.490471 4.743z"/><path d="m14 31.5h14.8c2.5202 0 3.7804 0 4.743.4905.8467.4314 1.5351 1.1198 1.9665 1.9665.4905.9626.4905 2.2228.4905 4.743v1.8h-14.8c-2.5202 0-3.7804 0-4.743-.4905-.8467-.4314-1.5351-1.1198-1.9665-1.9665-.4905-.9626-.4905-2.2228-.4905-4.743z"/></g></svg>`
+  },
+  {
+    id: "refractional",
+    name: "Refractional",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 48 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path d="m48 11h-17.0775c-1.2151 0-2.3644.5524-3.1235 1.5012l-1.598 1.9976c-.7591.9488-1.9084 1.5012-3.1235 1.5012h-15.0775l-4 5h17.0775c1.2151 0 2.3644-.5524 3.1235-1.5012l1.598-1.9976c.7591-.9488 1.9084-1.5012 3.1235-1.5012h15.0775z" fill="#444ce7"/><path d="m46 19h-17.0775c-1.2151 0-2.3644.5524-3.1235 1.5012l-1.598 1.9976c-.7591.9488-1.9084 1.5012-3.1235 1.5012h-15.0775l-4 5h17.0775c1.2151 0 2.3644-.5524 3.1235-1.5012l1.598-1.9976c.7591-.9488 1.9084-1.5012 3.1235-1.5012h15.0775z" fill="#155eef"/><path d="m44 27h-17.0775c-1.2151 0-2.3644.5524-3.1235 1.5012l-1.598 1.9976c-.7591.9488-1.9084 1.5012-3.1235 1.5012h-15.0775l-4 5h17.0775c1.2151 0 2.3644-.5524 3.1235-1.5012l1.598-1.9976c.7591-.9488 1.9084-1.5012 3.1235-1.5012h15.0775z" fill="#8098f9"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 48 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="m48 11h-17.0775c-1.2151 0-2.3644.5524-3.1235 1.5012l-1.598 1.9976c-.7591.9488-1.9084 1.5012-3.1235 1.5012h-15.0775l-4 5h17.0775c1.2151 0 2.3644-.5524 3.1235-1.5012l1.598-1.9976c.7591-.9488 1.9084-1.5012 3.1235-1.5012h15.0775z"/><path d="m46 19h-17.0775c-1.2151 0-2.3644.5524-3.1235 1.5012l-1.598 1.9976c-.7591.9488-1.9084 1.5012-3.1235 1.5012h-15.0775l-4 5h17.0775c1.2151 0 2.3644-.5524 3.1235-1.5012l1.598-1.9976c.7591-.9488 1.9084-1.5012 3.1235-1.5012h15.0775z"/><path d="m44 27h-17.0775c-1.2151 0-2.3644.5524-3.1235 1.5012l-1.598 1.9976c-.7591.9488-1.9084 1.5012-3.1235 1.5012h-15.0775l-4 5h17.0775c1.2151 0 2.3644-.5524 3.1235-1.5012l1.598-1.9976c.7591-.9488 1.9084-1.5012 3.1235-1.5012h15.0775z"/></g></svg>`
+  },
+  {
+    id: "renaissance",
+    name: "Renaissance",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 35 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m12.7018 5c1.841 0 3.4172 1.31967 3.7408 3.13199l.4648 2.60271c.3236 1.8123 1.8998 3.132 3.7408 3.132h3.1518c4.8969 0 8.8667 3.9697 8.8667 8.8666 0 2.9333-1.4244 5.5339-3.6191 7.1479.92.3126 1.6466.809 2.1799 1.461.549.7191.9411 1.7411 1.1764 3.028.0392.3406.0883.6718.1373 1.003s.098.6624.1372 1.003c.0408.3538.0709.6566.096.9083.0232.233.042.4223.0609.5679.0784 1.0598.1961 1.9303.3529 2.5738.1655.9048.4994 1.7867.9727 2.5738h-6.6982c-.3137-.6056-.5098-1.3248-.6666-2.1196-.1349-.6836-.2408-1.5352-.3676-2.5548-.0207-.1659-.0418-.3362-.0638-.5111l-.2353-1.7411c-.1961-1.3247-.4314-2.271-.6667-2.8766-.2745-.5677-.7058-.9841-1.2941-1.2112-.6274-.2271-1.5686-.3856-2.9019-.3856h-.3018c-1.841 0-3.4172-1.3197-3.7408-3.132l-.4648-2.6027c-.3236-1.8123-1.8998-3.132-3.7408-3.132h-5.68517v10.1334h-6.33333v-27.8667zm13.6315 17.7333c0 1.3992-1.1342 2.5334-2.5333 2.5334h-3.1518c-1.841 0-3.4172-1.3197-3.7408-3.132l-.4648-2.6027c-.3236-1.8123-1.8998-3.132-3.7408-3.132h-5.36847v-5.0667h5.68517c1.841 0 3.4172 1.3197 3.7408 3.132l.4647 2.6027c.3237 1.8123 1.8999 3.132 3.7409 3.132h2.8351c1.3991 0 2.5333 1.1342 2.5333 2.5333z" fill="#1849a9" fill-rule="evenodd"/></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 35 48" width="100%" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="m12.7018 5c1.841 0 3.4172 1.31967 3.7408 3.13199l.4648 2.60271c.3236 1.8123 1.8998 3.132 3.7408 3.132h3.1518c4.8969 0 8.8667 3.9697 8.8667 8.8666 0 2.9333-1.4244 5.5339-3.6191 7.1479.92.3126 1.6466.809 2.1799 1.461.549.7191.9411 1.7411 1.1764 3.028.0392.3406.0883.6718.1373 1.003s.098.6624.1372 1.003c.0408.3538.0709.6566.096.9083.0232.233.042.4223.0609.5679.0784 1.0598.1961 1.9303.3529 2.5738.1655.9048.4994 1.7867.9727 2.5738h-6.6982c-.3137-.6056-.5098-1.3247-.6666-2.1196-.1349-.6836-.2408-1.5352-.3676-2.5548-.0207-.1659-.0418-.3362-.0638-.5111l-.2353-1.7411c-.1961-1.3247-.4314-2.271-.6667-2.8766-.2745-.5677-.7058-.9841-1.2941-1.2112-.6274-.2271-1.5686-.3856-2.9019-.3856h-.3018c-1.841 0-3.4172-1.3197-3.7408-3.132l-.4648-2.6027c-.3236-1.8123-1.8998-3.132-3.7408-3.132h-5.68517v10.1334h-6.33333v-27.8667zm13.6315 17.7333c0 1.3992-1.1342 2.5334-2.5333 2.5334h-3.1518c-1.841 0-3.4172-1.3197-3.7408-3.132l-.4648-2.6027c-.3236-1.8123-1.8998-3.132-3.7408-3.132h-5.36847v-5.0667h5.68517c1.841 0 3.4172 1.3197 3.7408 3.132l.4647 2.6027c.3237 1.8123 1.8999 3.132 3.7409 3.132h2.8351c1.3991 0 2.5333 1.1342 2.5333 2.5333z" fill="#fff" fill-rule="evenodd"/></svg>`
+  },
+  {
+    id: "sisyphus",
+    name: "Sisyphus",
+    lightSvg: `<svg fill="none" height="100%" viewBox="0 0 32 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m.599609 19.2002h9.59998v9.59999h-9.59998z"/><path d="m31.4004 28.7998h9.6v9.59999h-9.6z" transform="matrix(-1 0 -0 -1 62.8008 57.5996)"/><path d="m10.1992 19.2001 11.6-9.6v9.6l-11.6 9.6z" opacity=".2"/><path d="m21.7988 28.7999-11.6 9.6v-9.6l11.6-9.6z" opacity=".5"/><path d="m.599609 19.2 21.199991-19.2v9.59999l-11.6 9.60001z" opacity=".6"/><path d="m31.4004 28.8-21.2 19.2v-9.6l11.6-9.6z" opacity=".7"/></g></svg>`,
+    darkSvg: `<svg fill="none" height="100%" viewBox="0 0 32 48" width="100%" xmlns="http://www.w3.org/2000/svg"><g fill="#155eef"><path d="m.599609 19.2002h9.59998v9.59999h-9.59998z"/><path d="m31.4004 28.7998h9.6v9.59999h-9.6z" transform="matrix(-1 0 -0 -1 62.8008 57.5996)"/><path d="m10.1992 19.2001 11.6-9.6v9.6l-11.6 9.6z" opacity=".2"/><path d="m21.7988 28.7999-11.6 9.6v-9.6l11.6-9.6z" opacity=".5"/><path d="m.599609 19.2 21.199991-19.2v9.59999l-11.6 9.60001z" opacity=".6"/><path d="m31.4004 28.8-21.2 19.2v-9.6l11.6-9.6z" opacity=".7"/></g></svg>`
+  },
+  {
+    id: "solaris-energy",
+    name: "Solaris Energy",
+    lightSvg: `<svg width="100%" height="100%" viewBox="0 0 40 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 4V16.3604C20 19.087 16.6569 20.3998 14.8016 18.4017L7 10M40 24H27.6396C24.913 24 23.6002 20.6569 25.5983 18.8016L34 11M20 44V31.6396C20 28.913 23.3431 27.6002 25.1984 29.5983L33 38M0 24L12.3604 24C15.087 24 16.3998 27.3431 14.4017 29.1984L6 37" stroke="#175CD3" stroke-width="4"/></svg>`,
+    darkSvg: `<svg width="100%" height="100%" viewBox="0 0 40 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 4V16.3604C20 19.087 16.6569 20.3998 14.8016 18.4017L7 10M40 24H27.6396C24.913 24 23.6002 20.6569 25.5983 18.8016L34 11M20 44V31.6396C20 28.913 23.3431 27.6002 25.1984 29.5983L33 38M0 24L12.3604 24C15.087 24 16.3998 27.3431 14.4017 29.1984L6 37" stroke="white" stroke-width="4"/></svg>`
+  }
+];
+
 // features/lib/store-logo.ts
-var DEFAULT_STORE_LOGO_ICON = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" height="100%" width="100%" viewBox="0 0 42 48"><path fill="#155eef" fill-rule="evenodd" d="m22.102 20.86 9.9-9.9L29.88 8.84l-7.339 7.339V3h-3v13.178l-7.339-7.34-2.121 2.122 9.9 9.9 1.06 1.06zm2.12 2.121 9.9-9.9 2.121 2.122-7.339 7.339H42v3H28.904l7.34 7.339L34.121 35l-9.9-9.899-1.06-1.06zM7.96 35.001l9.9-9.899 1.06-1.06-1.06-1.061-9.9-9.9-2.121 2.122 7.339 7.339H.002v3h13.176l-7.34 7.339zm12.02-7.777-9.9 9.9 2.122 2.12 7.339-7.338V45h3V31.906l7.339 7.338L32 37.124l-9.9-9.9-1.06-1.061z" clip-rule="evenodd"/></svg>';
-var DEFAULT_STORE_LOGO_COLOR = "0";
+var DEFAULT_STORE_LOGO_ICON = LOGO_ICONS.find((icon) => icon.id === "lightspeed").lightSvg;
+var DEFAULT_STORE_LOGO_COLOR = "180";
 function normalizeStoreLogoColor(value) {
   const numeric = Number.parseFloat(String(value ?? DEFAULT_STORE_LOGO_COLOR));
   if (!Number.isFinite(numeric)) return DEFAULT_STORE_LOGO_COLOR;
@@ -6235,7 +6721,8 @@ var PaymentTransaction = (0, import_core62.list)({
   hooks: {
     validate: (args) => validateRooftopRecord(args, [
       { field: "deal", listKey: "Deal" },
-      { field: "serviceOrder", listKey: "ServiceOrder" }
+      { field: "serviceOrder", listKey: "ServiceOrder" },
+      { field: "lead", listKey: "Lead" }
     ])
   },
   ui: { hideCreate: true, hideDelete: true, listView: { initialColumns: ["sourceType", "amountCents", "status", "providerKey", "updatedAt"] } },
@@ -6244,7 +6731,9 @@ var PaymentTransaction = (0, import_core62.list)({
     rooftop: rooftopField(),
     deal: (0, import_fields67.relationship)({ ref: "Deal.paymentTransactions" }),
     serviceOrder: (0, import_fields67.relationship)({ ref: "ServiceOrder.paymentTransactions" }),
-    sourceType: (0, import_fields67.select)({ type: "string", options: ["deal", "service"].map((value) => ({ label: value, value })), validation: { isRequired: true } }),
+    // A storefront vehicle reservation: the shopper's refundable deposit, tied to the lead it created.
+    lead: (0, import_fields67.relationship)({ ref: "Lead.paymentTransactions" }),
+    sourceType: (0, import_fields67.select)({ type: "string", options: ["deal", "service", "reservation"].map((value) => ({ label: value, value })), validation: { isRequired: true } }),
     amountCents: (0, import_fields67.integer)({ validation: { isRequired: true, min: 1 } }),
     currency: (0, import_fields67.text)({ validation: { isRequired: true }, defaultValue: "usd" }),
     providerKey: (0, import_fields67.text)({ validation: { isRequired: true } }),
@@ -6427,7 +6916,8 @@ var ReportRun = (0, import_core67.list)({
     savedReport: (0, import_fields72.relationship)({ ref: "SavedReport", db: requiredRelationshipDb("savedReport") }),
     status: (0, import_fields72.select)({ type: "string", options: ["queued", "completed", "failed", "expired"].map((value) => ({ label: value, value })), validation: { isRequired: true } }),
     exportFormat: (0, import_fields72.select)({ type: "string", options: ["json", "csv"].map((value) => ({ label: value, value })), validation: { isRequired: true } }),
-    resultSnapshot: (0, import_fields72.json)({ defaultValue: {} }),
+    // Runs keep their result for 30 days (expiresAt); after that the snapshot is no longer served.
+    resultSnapshot: (0, import_fields72.json)({ defaultValue: {}, access: { read: ({ item }) => !item?.expiresAt || new Date(item.expiresAt).getTime() > Date.now() } }),
     resultDigest: (0, import_fields72.text)(),
     errorCode: (0, import_fields72.text)(),
     completedAt: (0, import_fields72.timestamp)(),
@@ -6682,6 +7172,140 @@ var models = {
   ApiKey
 };
 
+// features/keystone/ui-create-access.ts
+function createRule(access) {
+  if (typeof access === "function") return access;
+  const operation = access?.operation;
+  if (typeof operation === "function") return operation;
+  if (typeof operation?.create === "function") return operation.create;
+  return void 0;
+}
+async function createAllowed(listKey, list71, args) {
+  const rule = createRule(list71.access);
+  if (!rule) return true;
+  try {
+    return Boolean(await rule({ session: args.session, context: args.context, listKey, operation: "create" }));
+  } catch {
+    return false;
+  }
+}
+function withCreateAwareUi(lists) {
+  const out = {};
+  for (const [listKey, list71] of Object.entries(lists)) {
+    if (list71.ui?.hideCreate !== void 0 || !createRule(list71.access)) {
+      out[listKey] = list71;
+      continue;
+    }
+    out[listKey] = {
+      ...list71,
+      ui: {
+        ...list71.ui,
+        hideCreate: async (args) => !await createAllowed(listKey, list71, args)
+      }
+    };
+  }
+  return out;
+}
+function updateOperationRule(access) {
+  if (typeof access === "function") return access;
+  const rules2 = access?.operation;
+  if (typeof rules2 === "function") return rules2;
+  if (typeof rules2?.update === "function") return rules2.update;
+  return void 0;
+}
+function updateFilterRule(access) {
+  const filter = access?.filter;
+  return typeof filter?.update === "function" ? filter.update : void 0;
+}
+var itemModeCache = /* @__PURE__ */ new WeakMap();
+async function itemUpdateAllowed(listKey, list71, args) {
+  const operation = updateOperationRule(list71.access);
+  if (operation) {
+    try {
+      if (!await operation({ session: args.session, context: args.context, listKey, operation: "update" })) return false;
+    } catch {
+      return false;
+    }
+  }
+  const filterRule = updateFilterRule(list71.access);
+  if (!filterRule || args.item?.id == null) return true;
+  try {
+    const filter = await filterRule({ session: args.session, context: args.context, listKey, operation: "update" });
+    if (filter === true) return true;
+    if (filter === false) return false;
+    if (!filter || typeof filter !== "object") return true;
+    const count = await args.context.sudo().db[listKey].count({ where: { AND: [{ id: { equals: String(args.item.id) } }, filter] } });
+    return count > 0;
+  } catch {
+    return true;
+  }
+}
+function withItemViewAwareUi(lists) {
+  const out = {};
+  for (const [listKey, list71] of Object.entries(lists)) {
+    const itemView = list71.ui?.itemView ?? {};
+    if (itemView.defaultFieldMode !== void 0 || !updateOperationRule(list71.access) && !updateFilterRule(list71.access)) {
+      out[listKey] = list71;
+      continue;
+    }
+    out[listKey] = {
+      ...list71,
+      ui: {
+        ...list71.ui,
+        itemView: {
+          ...itemView,
+          // Called once per field; one decision per request and item.
+          defaultFieldMode: (args) => {
+            const decide = () => itemUpdateAllowed(listKey, list71, args).then((ok) => ok ? "edit" : "read");
+            if (!args.context || typeof args.context !== "object") return decide();
+            const key7 = JSON.stringify([listKey, String(args.item?.id), String(args.session?.itemId ?? ""), String(args.session?.listKey ?? "")]);
+            const scope = args.context;
+            let cache = itemModeCache.get(scope);
+            if (!cache) itemModeCache.set(scope, cache = /* @__PURE__ */ new Map());
+            let decision = cache.get(key7);
+            if (!decision) cache.set(key7, decision = decide());
+            return decision;
+          }
+        }
+      }
+    };
+  }
+  return out;
+}
+function deleteRule(access) {
+  if (typeof access === "function") return access;
+  const operation = access?.operation;
+  if (typeof operation === "function") return operation;
+  if (typeof operation?.delete === "function") return operation.delete;
+  return void 0;
+}
+async function deleteAllowed(listKey, list71, args) {
+  const rule = deleteRule(list71.access);
+  if (!rule) return true;
+  try {
+    return Boolean(await rule({ session: args.session, context: args.context, listKey, operation: "delete" }));
+  } catch {
+    return false;
+  }
+}
+function withDeleteAwareUi(lists) {
+  const out = {};
+  for (const [listKey, list71] of Object.entries(lists)) {
+    if (list71.ui?.hideDelete !== void 0 || !deleteRule(list71.access)) {
+      out[listKey] = list71;
+      continue;
+    }
+    out[listKey] = {
+      ...list71,
+      ui: {
+        ...list71.ui,
+        hideDelete: async (args) => !await deleteAllowed(listKey, list71, args)
+      }
+    };
+  }
+  return out;
+}
+
 // features/keystone/mutations/index.ts
 var import_schema9 = require("@graphql-tools/schema");
 
@@ -6725,12 +7349,12 @@ function localScheduleIso(date4, hours, minutes, timezone) {
     second: "2-digit",
     hourCycle: "h23"
   });
-  const parts = (timestamp53) => Object.fromEntries(format.formatToParts(timestamp53).filter((p) => p.type !== "literal").map((p) => [p.type, Number(p.value)]));
+  const parts = (timestamp53) => Object.fromEntries(format.formatToParts(timestamp53).filter((p2) => p2.type !== "literal").map((p2) => [p2.type, Number(p2.value)]));
   const candidates = /* @__PURE__ */ new Set();
   for (const delta of [-36, -24, -12, 0, 12, 24, 36]) {
     const sample = civil + delta * 36e5;
-    const p = parts(sample);
-    const offset = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - sample;
+    const p2 = parts(sample);
+    const offset = Date.UTC(p2.year, p2.month - 1, p2.day, p2.hour, p2.minute, p2.second) - sample;
     const candidate = civil - offset;
     const c = parts(candidate);
     if (c.year === year && c.month === month && c.day === day && c.hour === hours && c.minute === minutes) candidates.add(candidate);
@@ -7618,16 +8242,23 @@ async function customerPayments(_root, _args, context) {
   const prisma = context.prisma;
   const ownership = await customerOwnership(prisma, accountId);
   const [dealIds, orderIds] = await Promise.all([ownedDealIds(prisma, ownership), ownedServiceOrderIds(prisma, ownership)]);
-  if (!dealIds.length && !orderIds.length) return [];
+  const leadIds = ownership.leadIds;
+  if (!dealIds.length && !orderIds.length && !leadIds.length) return [];
   const payments = await prisma.paymentTransaction.findMany({
-    where: { OR: [...dealIds.length ? [{ dealId: { in: dealIds } }] : [], ...orderIds.length ? [{ serviceOrderId: { in: orderIds } }] : []] },
+    where: { OR: [
+      ...dealIds.length ? [{ dealId: { in: dealIds } }] : [],
+      ...orderIds.length ? [{ serviceOrderId: { in: orderIds } }] : [],
+      ...leadIds.length ? [{ sourceType: "reservation", leadId: { in: leadIds }, status: { in: ["authorized", "captured", "partially-refunded", "refunded"] } }] : []
+    ] },
     take: PAGE,
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    select: { ...paymentSelect, deal: { select: { vehicle: vehicleSelect } }, serviceOrder: { select: { invoiceNumber: true } } }
+    select: { ...paymentSelect, rooftopId: true, deal: { select: { vehicle: vehicleSelect } }, serviceOrder: { select: { invoiceNumber: true } }, lead: { select: { interestedVehicle: vehicleSelect } } }
   });
+  const timezone = await rooftopTimezones(prisma, payments);
   return payments.map((payment) => ({
     ...paymentRow(payment),
-    label: payment.sourceType === "service" ? `Service invoice ${payment.serviceOrder?.invoiceNumber || ""}`.trim() : vehicleLabel(payment.deal?.vehicle) || "Vehicle purchase"
+    timezone: timezone(payment),
+    label: payment.sourceType === "service" ? `Service invoice ${payment.serviceOrder?.invoiceNumber || ""}`.trim() : payment.sourceType === "reservation" ? `Reservation deposit \xB7 ${vehicleLabel(payment.lead?.interestedVehicle) || "Vehicle"}` : vehicleLabel(payment.deal?.vehicle) || "Vehicle purchase"
   }));
 }
 
@@ -7738,8 +8369,7 @@ async function cancelCustomerBooking(_root, { kind, id, idempotencyKey: idempote
     aggregateId: record.id,
     action: bookingType === "service" ? "transitioned:cancelled" : "customer-cancelled",
     actorId: accountId,
-    afterSnapshot: { id: record.id, cancelledBy: "customer" },
-    payload: { id: record.id, rooftopId: record.rooftopId, status: "cancelled", source: "storefront-account" }
+    afterSnapshot: { id: record.id, cancelledBy: "customer" }
   };
   await context.transaction(async (tx) => {
     if (await replayOrLock(tx, event2)) return;
@@ -7774,8 +8404,7 @@ async function rescheduleCustomerBooking(_root, { kind, id, date: date4, time, i
     aggregateId: record.id,
     action: "customer-rescheduled",
     actorId: accountId,
-    afterSnapshot: { id: record.id, scheduledAt: scheduled.iso },
-    payload: { id: record.id, rooftopId: record.rooftopId, scheduledAt: scheduled.iso, source: "storefront-account" }
+    afterSnapshot: { id: record.id, scheduledAt: scheduled.iso }
   };
   await context.transaction(async (tx) => {
     if (await replayOrLock(tx, event2)) return;
@@ -7807,6 +8436,7 @@ var import_node_crypto3 = require("node:crypto");
 
 // features/keystone/lib/customerVerificationMail.ts
 var import_nodemailer = require("nodemailer");
+init_email_layout();
 function transport() {
   return (0, import_nodemailer.createTransport)({
     host: process.env.SMTP_HOST,
@@ -7814,27 +8444,21 @@ function transport() {
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD }
   });
 }
-function escapeHtml(value) {
-  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
-}
 function storefrontBaseUrl() {
   return process.env.SMTP_STORE_LINK || "";
 }
 async function sendCustomerEmailVerification(to, url) {
-  const safeUrl = escapeHtml(url);
   await transport().sendMail({
     to,
     from: process.env.SMTP_FROM,
     subject: "Confirm your email to link your requests",
-    html: `
-      <body style="background:#f9f9f9;">
-        <table width="100%" border="0" cellspacing="20" cellpadding="0" style="background:#ffffff;max-width:600px;margin:auto;border-radius:10px;">
-          <tr><td align="center" style="font-size:18px;font-family:Helvetica,Arial,sans-serif;color:#444444;">Confirm this email address to link requests made with it to your account.</td></tr>
-          <tr><td align="center" style="padding:20px 0;"><a href="${safeUrl}" target="_blank" style="font-size:18px;font-family:Helvetica,Arial,sans-serif;color:#ffffff;background:#346df1;text-decoration:none;border-radius:5px;padding:10px 20px;display:inline-block;font-weight:bold;">Confirm email</a></td></tr>
-          <tr><td align="center" style="font-size:16px;font-family:Helvetica,Arial,sans-serif;color:#444444;">If you did not request this email you can safely ignore it.</td></tr>
-        </table>
-      </body>
-    `
+    html: emailLayout({
+      preheader: "Confirm this email address.",
+      title: "Confirm your email",
+      body: `${emailParagraph("Confirm this email address to link requests made with it to your account.")}
+${emailButton("Confirm email", url)}
+${emailMuted("If you did not request this email you can safely ignore it.")}`
+    })
   });
 }
 
@@ -7924,8 +8548,7 @@ async function confirmCustomerEmailVerification(_root, { token }, context) {
         aggregateId: customer.id,
         action: "account-linked",
         actorId: accountId,
-        afterSnapshot: { customerId: customer.id, accountId, previousAccountId: customer.accountId ?? null, evidence: "email-verification" },
-        payload: { customerId: customer.id, rooftopId: customer.rooftopId, accountId }
+        afterSnapshot: { customerId: customer.id, accountId, previousAccountId: customer.accountId ?? null, evidence: "email-verification" }
       });
     }
     const linked = await tx.prisma.customer.count({ where: { accountId, status: "active", normalizedEmail: email } });
@@ -8014,7 +8637,7 @@ async function runPublicSubmission(options) {
     // Prevent an idempotency-key replay from transferring another account's request.
     requestingAccountId: options.context.session?.listKey === "User" ? options.context.session.itemId : null
   });
-  return options.context.transaction(async (transactionContext) => {
+  const outcome = await options.context.transaction(async (transactionContext) => {
     await transactionContext.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${eventKey}, 0))`;
     const existing = await transactionContext.prisma.domainAuditEvent.findUnique({
       where: { eventKey },
@@ -8047,11 +8670,18 @@ async function runPublicSubmission(options) {
       // Binds the submission to the signed-in customer for account request history.
       actorId: options.context.session?.listKey === "User" ? options.context.session.itemId : null,
       afterSnapshot: { workflow: options.workflow, accepted: true, response },
-      metadata: { submissionRequestHash, response },
-      payload: { workflow: options.workflow, rooftopId, response }
+      metadata: { submissionRequestHash, response }
     });
     return { ...result2, reused: false };
   }, { timeout: 3e4 });
+  if (!outcome.reused && options.afterCommit) {
+    try {
+      await options.afterCommit(outcome, rooftopId);
+    } catch (error) {
+      console.error("Post-submission step failed:", error instanceof Error ? error.message : "Unknown error");
+    }
+  }
+  return outcome;
 }
 
 // features/keystone/mutations/submitInquiry.ts
@@ -8146,6 +8776,419 @@ async function submitInquiry(_root, { data }, context) {
   });
 }
 
+// features/integrations/payment/index.ts
+var paymentProviderAdapters = {
+  stripe: () => Promise.resolve().then(() => (init_stripe(), stripe_exports)),
+  manual: () => Promise.resolve().then(() => (init_manual(), manual_exports))
+};
+
+// features/keystone/utils/paymentProviderAdapter.ts
+var ADAPTER_OPERATIONS = /* @__PURE__ */ new Set([
+  "createPaymentFunction",
+  "capturePaymentFunction",
+  "refundPaymentFunction",
+  "getPaymentStatusFunction",
+  "generatePaymentLinkFunction",
+  "handleWebhookFunction",
+  "cancelPaymentFunction"
+]);
+var FORWARDED_HEADERS = (key7) => {
+  const k = key7.toLowerCase();
+  return k === "stripe-signature" || k === "__rawbody" || k.startsWith("paypal-");
+};
+function paymentAdapterPayload(provider, args) {
+  const projectedProvider = { id: provider.id, code: provider.code, credentials: provider.credentials || {}, metadata: provider.metadata || {} };
+  const input2 = { ...args };
+  if (input2.headers && typeof input2.headers === "object") {
+    input2.headers = Object.fromEntries(Object.entries(input2.headers).filter(([key7]) => FORWARDED_HEADERS(key7)));
+  }
+  return { ...input2, provider: projectedProvider };
+}
+async function executeAdapterFunction({ provider, functionName, args }) {
+  if (!ADAPTER_OPERATIONS.has(functionName)) throw new Error("Unknown payment adapter operation");
+  const functionPath = provider?.[functionName];
+  if (typeof functionPath !== "string" || !functionPath) throw new Error("Payment adapter is not configured");
+  const payload = paymentAdapterPayload(provider, args);
+  if (/^https:\/\//i.test(functionPath)) {
+    try {
+      const response = await fetch(functionPath, {
+        method: "POST",
+        redirect: "error",
+        signal: AbortSignal.timeout(3e4),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) throw new Error(`status ${response.status}`);
+      return await response.json();
+    } catch {
+      throw new Error("External payment adapter request failed; reconcile the original attempt before retrying");
+    }
+  }
+  if (/^[a-z]+:/i.test(functionPath)) throw new Error("External payment adapters must use HTTPS");
+  const loader = paymentProviderAdapters[functionPath];
+  if (!loader) throw new Error("Unknown registered payment adapter");
+  const adapter = await loader();
+  const fn = adapter[functionName];
+  if (typeof fn !== "function") throw new Error(`Function ${functionName} not found in adapter ${functionPath}`);
+  try {
+    return await fn(payload);
+  } catch (error) {
+    throw new Error(
+      `Error executing ${functionName} for provider ${functionPath}: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+async function handleWebhook({ provider, event: event2, headers }) {
+  return executeAdapterFunction({
+    provider,
+    functionName: "handleWebhookFunction",
+    args: { event: event2, headers }
+  });
+}
+
+// features/keystone/lifecycle/paymentState.ts
+var REFUND_TRANSITIONS = {
+  creating: ["pending", "succeeded", "failed", "canceled"],
+  pending: ["succeeded", "failed", "canceled"],
+  failed: [],
+  canceled: [],
+  succeeded: []
+};
+var CHECKOUT_STARTABLE = ["creating", "pending", "failed"];
+var CHECKOUT_FAILABLE = ["creating", "pending"];
+function canMove(map, from, to) {
+  return from === to || Boolean(map[from]?.includes(to));
+}
+
+// features/keystone/lib/paymentReturn.ts
+var import_node_crypto4 = require("node:crypto");
+var PURPOSE2 = "payment-return";
+var PAYMENT_RETURN_PATHS = { success: "/payment/received", cancel: "/payment/not-completed" };
+function sign2(transactionId, secret2) {
+  return (0, import_node_crypto4.createHmac)("sha256", secret2).update(`${PURPOSE2}:${transactionId}`).digest("base64url").slice(0, 32);
+}
+function paymentReturnReference(transactionId, secret2) {
+  if (!transactionId || !secret2 || secret2.length < 32) throw new Error("Payment return reference is unavailable");
+  return `${Buffer.from(transactionId).toString("base64url")}.${sign2(transactionId, secret2)}`;
+}
+function readPaymentReturnReference(reference2, secret2) {
+  const [payload, signature, extra] = String(reference2 || "").trim().split(".");
+  if (!payload || !signature || extra !== void 0 || !secret2 || secret2.length < 32) return null;
+  let transactionId = "";
+  try {
+    transactionId = Buffer.from(payload, "base64url").toString("utf8");
+  } catch {
+    return null;
+  }
+  if (!/^[a-z0-9]{10,64}$/i.test(transactionId)) return null;
+  const expected = Buffer.from(sign2(transactionId, secret2));
+  const actual = Buffer.from(signature);
+  if (expected.length !== actual.length || !(0, import_node_crypto4.timingSafeEqual)(expected, actual)) return null;
+  return transactionId;
+}
+function paymentReturnUrls(origin, transactionId, secret2) {
+  const base = String(origin || "").replace(/\/+$/, "");
+  if (!/^https?:\/\/[^/]+$/i.test(base)) throw new Error("Payment return origin is invalid");
+  const ref = encodeURIComponent(paymentReturnReference(transactionId, secret2));
+  return {
+    successUrl: `${base}${PAYMENT_RETURN_PATHS.success}?ref=${ref}`,
+    cancelUrl: `${base}${PAYMENT_RETURN_PATHS.cancel}?ref=${ref}`
+  };
+}
+function paymentReturnState(status, checkoutUrl) {
+  if (["captured", "authorized"].includes(status)) return { state: "received", retryUrl: null };
+  if (["partially-refunded", "refunded"].includes(status)) return { state: "refunded", retryUrl: null };
+  if (["creating", "pending"].includes(status) || status === "failed" && checkoutUrl) return { state: "pending", retryUrl: checkoutUrl && /^https:\/\//.test(checkoutUrl) ? checkoutUrl : null };
+  return { state: "closed", retryUrl: null };
+}
+
+// features/keystone/mutations/reservationHold.ts
+var RESERVATION_CHECKOUT_HOLD_MS = 35 * 60 * 1e3;
+function activeReservationWhere(vehicleId, now = /* @__PURE__ */ new Date()) {
+  return {
+    sourceType: "reservation",
+    lead: { is: { interestedVehicleId: vehicleId } },
+    OR: [
+      { status: { in: ["captured", "authorized", "partially-refunded"] } },
+      { status: { in: ["creating", "pending"] }, createdAt: { gt: new Date(now.getTime() - RESERVATION_CHECKOUT_HOLD_MS) } }
+    ]
+  };
+}
+
+// features/keystone/mutations/reserveVehicle.ts
+var RESERVATION_DEPOSIT_CENTS = 5e4;
+var paymentReturnSecret = () => process.env.SESSION_SECRET || "";
+function reservationDepositCents(vehiclePriceCents) {
+  const price = Number(vehiclePriceCents);
+  if (!Number.isSafeInteger(price) || price <= 0) return RESERVATION_DEPOSIT_CENTS;
+  return Math.min(RESERVATION_DEPOSIT_CENTS, price);
+}
+async function cardProvider(context) {
+  const providers = await context.sudo().query.PaymentProvider.findMany({
+    where: { isInstalled: { equals: true }, createPaymentFunction: { equals: "stripe" } },
+    orderBy: [{ createdAt: "asc" }],
+    take: 1,
+    query: "id code isInstalled createPaymentFunction refundPaymentFunction credentials"
+  });
+  return providers[0] || null;
+}
+async function reserveVehicle(_root, { data }, context) {
+  const firstName = requiredText(data.firstName, "First name", 100);
+  const lastName = requiredText(data.lastName, "Last name", 100);
+  const email = validEmail(data.email);
+  const phone = validPhone(data.phone, true);
+  const message = optionalText(data.message, 4e3, "Message");
+  const vehicleId = requiredText(data.vehicleId, "Vehicle", 100);
+  const provider = await cardProvider(context);
+  if (!provider) {
+    throw new SubmissionError("Online reservations are unavailable right now. Please call the dealership.", 503, "PAYMENTS_UNAVAILABLE");
+  }
+  const result2 = await runPublicSubmission({
+    context,
+    workflow: "reservation",
+    rooftopSlug: data.rooftopSlug,
+    idempotencyKey: data.idempotencyKey,
+    honeypot: data.website,
+    requestEvidence: { firstName, lastName, email, phone, message, vehicleId, providerKey: provider.code },
+    aggregateType: "Lead",
+    aggregateId: (response) => String(response.leadId),
+    handler: async (transactionContext, { rooftopId }) => {
+      const vehicle2 = await resolveAvailableVehicle(transactionContext, vehicleId, rooftopId);
+      if (!vehicle2) throw new SubmissionError("This vehicle is no longer available.", 409, "VEHICLE_UNAVAILABLE");
+      await transactionContext.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`vehicle-reservation:${vehicle2.id}`}, 0))`;
+      const held = await transactionContext.prisma.paymentTransaction.count({ where: { rooftopId, ...activeReservationWhere(vehicle2.id) } });
+      if (held > 0) throw new SubmissionError("Another shopper has already reserved this vehicle. Ask about it or browse similar vehicles.", 409, "VEHICLE_RESERVED");
+      const rooftop = await transactionContext.sudo().prisma.rooftop.findUnique({ where: { id: rooftopId }, select: { currencyCode: true } });
+      const amountCents = reservationDepositCents(vehicle2.priceCents ?? vehicle2.listPriceCents);
+      const { customer } = await resolveCustomerInTransaction(transactionContext, { rooftopId, firstName, lastName, email, phone });
+      const lead = await transactionContext.sudo().query.Lead.createOne({
+        data: {
+          rooftop: { connect: { id: rooftopId } },
+          customer: { connect: { id: customer.id } },
+          firstName,
+          lastName,
+          email,
+          phone,
+          source: "website",
+          status: "new",
+          timeframe: "immediately",
+          interestedVehicle: { connect: { id: vehicle2.id } },
+          notes: [
+            "Vehicle reservation with an online deposit, submitted from the storefront.",
+            `Vehicle: ${vehicle2.year} ${vehicle2.make} ${vehicle2.model} (stock ${vehicle2.stockNumber}, VIN ${vehicle2.vin}).`,
+            `Deposit: ${(amountCents / 100).toFixed(2)} ${String(rooftop?.currencyCode || "USD").toUpperCase()}, refundable from Payments.`,
+            message ? `Customer message: ${message}` : "Customer did not include an additional message."
+          ].join("\n")
+        },
+        query: "id"
+      });
+      const transaction = await transactionContext.prisma.paymentTransaction.create({
+        data: {
+          rooftopId,
+          leadId: lead.id,
+          sourceType: "reservation",
+          amountCents,
+          currency: String(rooftop?.currencyCode || "USD").toLowerCase(),
+          providerKey: provider.code,
+          paymentProviderId: provider.id,
+          status: "creating",
+          idempotencyKey: `reservation:${String(data.idempotencyKey).trim()}`
+        },
+        select: { id: true }
+      });
+      return {
+        leadId: lead.id,
+        transactionId: transaction.id,
+        amountCents,
+        selectedVehicle: vehicle2
+      };
+    }
+  });
+  const transactionId = String(result2.transactionId);
+  const current = await context.sudo().prisma.paymentTransaction.findUnique({ where: { id: transactionId } });
+  if (!current) throw new Error("Reservation payment is missing");
+  if (current.checkoutUrl && current.providerSessionId) {
+    return { ...result2, checkoutUrl: current.checkoutUrl };
+  }
+  if (!["creating", "failed"].includes(current.status)) {
+    throw new SubmissionError("This reservation was already paid or closed.", 409, "RESERVATION_CLOSED");
+  }
+  const vehicle = result2.selectedVehicle || {};
+  try {
+    const headers = context.req?.headers || {};
+    const origin = `${headers["x-forwarded-proto"] || "https"}://${headers["x-forwarded-host"] || headers.host}`;
+    const { successUrl, cancelUrl } = paymentReturnUrls(origin, transactionId, paymentReturnSecret());
+    const response = await executeAdapterFunction({
+      provider,
+      functionName: "createPaymentFunction",
+      args: {
+        amount: current.amountCents,
+        currency: current.currency,
+        description: `Reservation deposit: ${[vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ")}`.trim(),
+        metadata: { openfront_transaction_id: transactionId },
+        idempotencyKey: current.idempotencyKey,
+        successUrl,
+        cancelUrl,
+        customerEmail: email
+      }
+    });
+    await context.sudo().prisma.paymentTransaction.updateMany({
+      where: { id: transactionId, status: { in: [...CHECKOUT_STARTABLE] } },
+      data: {
+        status: "pending",
+        checkoutUrl: response?.checkoutUrl,
+        providerSessionId: response?.providerSessionId,
+        providerTransactionId: response?.providerTransactionId || "",
+        version: { increment: 1 }
+      }
+    });
+    if (!response?.checkoutUrl) throw new Error("Provider returned no checkout link");
+    return { ...result2, checkoutUrl: response.checkoutUrl };
+  } catch (error) {
+    await context.sudo().prisma.paymentTransaction.updateMany({
+      where: { id: transactionId, status: { in: [...CHECKOUT_FAILABLE] } },
+      data: { status: "failed", failureCode: String(error?.code || error?.message || "PROVIDER_ERROR").slice(0, 100), version: { increment: 1 } }
+    });
+    console.error("Reservation checkout failed:", error?.message || error);
+    throw new SubmissionError("Card checkout could not be started. Please try again.", 502, "PAYMENT_START_FAILED");
+  }
+}
+
+// features/keystone/mutations/payServiceInvoice.ts
+var paymentReturnSecret2 = () => process.env.SESSION_SECRET || "";
+var SETTLED = ["captured", "partially-refunded", "refunded"];
+var OPEN = ["creating", "pending", "authorized"];
+var OPEN_CHECKOUT_MS = 30 * 60 * 1e3;
+async function cardProvider2(context) {
+  const providers = await context.sudo().query.PaymentProvider.findMany({
+    where: { isInstalled: { equals: true }, createPaymentFunction: { equals: "stripe" } },
+    orderBy: [{ createdAt: "asc" }],
+    take: 1,
+    query: "id code isInstalled createPaymentFunction refundPaymentFunction credentials"
+  });
+  return providers[0] || null;
+}
+function serviceBalanceCents(grandTotalCents, payments) {
+  const settled = payments.filter((p2) => SETTLED.includes(p2.status)).reduce((sum, p2) => sum + Number(p2.capturedCents || 0) - Number(p2.refundedCents || 0), 0);
+  return Math.max(0, Number(grandTotalCents || 0) - settled);
+}
+async function payServiceInvoice(_root, { serviceOrderId }, context) {
+  const accountId = requireCustomerAccount(context);
+  const orderId = String(serviceOrderId || "");
+  const ownership = await customerOwnership(context.prisma, accountId);
+  if (!(await ownedServiceOrderIds(context.prisma, ownership)).includes(orderId)) throw new Error("Repair order not found");
+  const provider = await cardProvider2(context);
+  if (!provider) throw new Error("Online payment is unavailable right now. Please call the service department.");
+  const sudo = context.sudo();
+  const now = Date.now();
+  const transactionId = await sudo.transaction(async (tx) => {
+    await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`customer-service-pay:${orderId}`}, 0))`;
+    const order2 = await tx.prisma.serviceOrder.findUnique({ where: { id: orderId }, select: { id: true, rooftopId: true, status: true, grandTotalCents: true, invoiceNumber: true } });
+    if (!order2 || order2.status !== "invoiced") throw new Error("This repair order has no open invoice to pay");
+    const payments = await tx.prisma.paymentTransaction.findMany({ where: { serviceOrderId: orderId }, orderBy: [{ createdAt: "desc" }], select: { id: true, status: true, amountCents: true, capturedCents: true, refundedCents: true, checkoutUrl: true, createdAt: true, providerKey: true } });
+    const balance = serviceBalanceCents(order2.grandTotalCents, payments);
+    if (balance <= 0) throw new Error("This invoice is already paid");
+    const open = payments.find((p2) => OPEN.includes(p2.status) && p2.providerKey === provider.code && p2.amountCents === balance && now - new Date(p2.createdAt).getTime() < OPEN_CHECKOUT_MS);
+    if (open) return open.id;
+    const pendingCents = payments.filter((p2) => OPEN.includes(p2.status) && now - new Date(p2.createdAt).getTime() < OPEN_CHECKOUT_MS).reduce((s, p2) => s + Number(p2.amountCents || 0), 0);
+    if (pendingCents > 0) throw new Error("A payment for this invoice is already in progress. Try again in a few minutes.");
+    const created = await tx.prisma.paymentTransaction.create({
+      data: { rooftopId: order2.rooftopId, serviceOrderId: orderId, sourceType: "service", amountCents: balance, currency: "usd", providerKey: provider.code, paymentProviderId: provider.id, status: "creating", idempotencyKey: `customer-service-pay:${orderId}:${now}` },
+      select: { id: true }
+    });
+    await tx.prisma.domainAuditEvent.create({ data: { rooftopId: order2.rooftopId, eventKey: `customer-service-pay:${created.id}`, aggregateType: "ServiceOrder", aggregateId: orderId, action: "customer-checkout-requested", actorId: accountId, afterSnapshot: { transactionId: created.id, amountCents: balance, invoiceNumber: order2.invoiceNumber }, metadata: {} }, select: { id: true } });
+    return created.id;
+  }, { timeout: 3e4 });
+  const account = await sudo.prisma.user.findUnique({ where: { id: accountId }, select: { email: true } });
+  const current = await sudo.prisma.paymentTransaction.findUnique({ where: { id: transactionId }, include: { serviceOrder: { select: { invoiceNumber: true } } } });
+  if (current.checkoutUrl && current.providerSessionId && ["pending", "creating"].includes(current.status)) return { checkoutUrl: current.checkoutUrl };
+  try {
+    const headers = context.req?.headers || {};
+    const origin = `${headers["x-forwarded-proto"] || "https"}://${headers["x-forwarded-host"] || headers.host}`;
+    const { successUrl, cancelUrl } = paymentReturnUrls(origin, transactionId, paymentReturnSecret2());
+    const response = await executeAdapterFunction({
+      provider,
+      functionName: "createPaymentFunction",
+      args: { amount: current.amountCents, currency: current.currency, description: `Service invoice ${current.serviceOrder?.invoiceNumber || ""}`.trim(), metadata: { openfront_transaction_id: transactionId }, idempotencyKey: current.idempotencyKey, successUrl, cancelUrl, customerEmail: account?.email || void 0 }
+    });
+    await sudo.prisma.paymentTransaction.updateMany({ where: { id: transactionId, status: { in: [...CHECKOUT_STARTABLE] } }, data: { status: "pending", checkoutUrl: response?.checkoutUrl, providerSessionId: response?.providerSessionId, providerTransactionId: response?.providerTransactionId || "", version: { increment: 1 } } });
+    if (!response?.checkoutUrl) throw new Error("Provider returned no checkout link");
+    return { checkoutUrl: response.checkoutUrl };
+  } catch (error) {
+    await sudo.prisma.paymentTransaction.updateMany({ where: { id: transactionId, status: { in: [...CHECKOUT_FAILABLE] } }, data: { status: "failed", failureCode: String(error?.code || error?.message || "PROVIDER_ERROR").slice(0, 100), version: { increment: 1 } } });
+    console.error("Service invoice checkout failed:", error?.message || error);
+    throw new Error("Card checkout could not be started. Please try again.");
+  }
+}
+
+// features/keystone/lib/requestReceiptEmail.ts
+function formatRequestedTime(iso, timeZone) {
+  const zone = timeZone || "UTC";
+  const text77 = new Intl.DateTimeFormat("en-US", { timeZone: zone, dateStyle: "full", timeStyle: "short" }).format(new Date(iso));
+  const label2 = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "short" }).formatToParts(new Date(iso)).find((part) => part.type === "timeZoneName")?.value || zone;
+  return `${text77} ${label2}`;
+}
+function publicBaseUrl(context) {
+  const configured = process.env.SMTP_STORE_LINK;
+  if (configured) return configured.replace(/\/+$/, "");
+  const headers = context?.req?.headers || {};
+  const first = (value) => String(Array.isArray(value) ? value[0] : value || "").split(",")[0].trim();
+  const host = first(headers["x-forwarded-host"]) || first(headers.host);
+  if (!host || !/^[a-z0-9.-]+(?::\d+)?$/i.test(host)) return "";
+  const proto = first(headers["x-forwarded-proto"]) || (/^(localhost|127\.)/.test(host) ? "http" : "https");
+  return `${proto}://${host}`;
+}
+async function deliverRequestReceipt(context, receipt) {
+  const sudo = context.sudo();
+  const eventKey = `request-receipt-email:${receipt.kind}:${receipt.requestId}`;
+  try {
+    await sudo.prisma.domainAuditEvent.create({
+      data: {
+        rooftopId: receipt.rooftopId,
+        eventKey,
+        aggregateType: receipt.kind === "test_drive" ? "TestDrive" : "ServiceAppointment",
+        aggregateId: receipt.requestId,
+        action: "receipt_email",
+        metadata: { status: "sending" }
+      },
+      select: { id: true }
+    });
+  } catch {
+    return;
+  }
+  const mark = async (status, extra = {}) => {
+    try {
+      await sudo.prisma.domainAuditEvent.update({ where: { eventKey }, data: { metadata: { status, ...extra } } });
+    } catch {
+    }
+  };
+  try {
+    if (!process.env.SMTP_HOST || !process.env.SMTP_FROM) {
+      console.warn("Request receipt email skipped: SMTP is not configured", receipt.requestId);
+      await mark("skipped_not_configured");
+      return;
+    }
+    const rooftop = await sudo.prisma.rooftop.findUnique({ where: { id: receipt.rooftopId }, select: { name: true, timezone: true } });
+    const base = publicBaseUrl(context);
+    const path = receipt.kind === "test_drive" && receipt.vehicleId ? `/inventory/${receipt.vehicleId}` : receipt.kind === "service" ? "/service" : "/inventory";
+    const { sendRequestReceiptEmail: sendRequestReceiptEmail2 } = await Promise.resolve().then(() => (init_mail(), mail_exports));
+    const result2 = await sendRequestReceiptEmail2(receipt.to, {
+      dealershipName: rooftop?.name || "Our dealership",
+      kind: receipt.kind,
+      what: receipt.what,
+      whenLabel: formatRequestedTime(receipt.scheduledTime, rooftop?.timezone || "UTC"),
+      requestNumber: receipt.requestId,
+      customerName: receipt.customerName,
+      url: base ? `${base}${path}` : ""
+    });
+    if (result2.sent) await mark("sent", { sentAt: (/* @__PURE__ */ new Date()).toISOString(), messageId: result2.messageId || "" });
+    else await mark("failed", { error: result2.error || "send_failed" });
+  } catch (error) {
+    console.error("Request receipt email failed:", error instanceof Error ? error.message : "Unknown error");
+    await mark("failed", { error: error instanceof Error ? error.message : "send_failed" });
+  }
+}
+
 // features/keystone/mutations/submitTestDrive.ts
 async function submitTestDrive(_root, { data }, context) {
   const customerName = requiredText(data.customerName, "Customer name", 200);
@@ -8172,6 +9215,16 @@ async function submitTestDrive(_root, { data }, context) {
     },
     aggregateType: "TestDrive",
     aggregateId: (result2) => String(result2.testDriveId),
+    afterCommit: (r, rooftopId) => deliverRequestReceipt(context, ((result2) => ({
+      kind: "test_drive",
+      requestId: String(result2.testDriveId),
+      rooftopId,
+      to: email,
+      customerName,
+      what: result2.vehicle ? [result2.vehicle.year, result2.vehicle.make, result2.vehicle.model].filter(Boolean).join(" ") : "Test drive",
+      scheduledTime: new Date(result2.scheduledTime).toISOString(),
+      vehicleId: result2.vehicle?.id || ""
+    }))(r)),
     handler: async (transactionContext, { rooftopId }) => {
       const location = await transactionContext.prisma.rooftop.findUnique({ where: { id: rooftopId }, select: { timezone: true } });
       const scheduled = parseScheduledTime(requestedDate, requestedTime, "Preferred", location?.timezone || "UTC");
@@ -8670,6 +9723,16 @@ async function submitServiceBooking(_root, { data }, context) {
     },
     aggregateType: "ServiceAppointment",
     aggregateId: (result2) => String(result2.serviceAppointmentId),
+    afterCommit: (r, rooftopId) => deliverRequestReceipt(context, ((result2) => ({
+      kind: "service",
+      requestId: String(result2.serviceAppointmentId),
+      rooftopId,
+      to: email,
+      customerName,
+      what: String(result2.requestedServiceLabel || "Service appointment"),
+      scheduledTime: new Date(result2.appointmentDate).toISOString(),
+      vehicleId: ""
+    }))(r)),
     handler: async (transactionContext, { rooftopId }) => {
       const location = await transactionContext.prisma.rooftop.findUnique({ where: { id: rooftopId }, select: { timezone: true } });
       const scheduled = parseScheduledTime(requestedDate, requestedTime, "Appointment", location?.timezone || "UTC");
@@ -9127,9 +10190,22 @@ function dealPaymentMethod(value) {
 }
 
 // features/keystone/lifecycle/cashPayment.ts
+var SETTLED2 = ["captured", "partially-refunded", "refunded"];
+function dealPaymentsWhere(deal) {
+  const leadId = typeof deal.leadId === "string" && deal.leadId ? deal.leadId : null;
+  const vehicleId = typeof deal.vehicleId === "string" && deal.vehicleId ? deal.vehicleId : null;
+  return {
+    rooftopId: deal.rooftopId,
+    status: { in: SETTLED2 },
+    OR: [
+      { dealId: deal.id },
+      ...leadId && vehicleId ? [{ sourceType: "reservation", leadId, lead: { is: { interestedVehicleId: vehicleId } } }] : []
+    ]
+  };
+}
 async function dealReceivedCents(tx, deal) {
   const payments = await tx.prisma.paymentTransaction.findMany({
-    where: { dealId: deal.id, rooftopId: deal.rooftopId, status: { in: ["captured", "partially-refunded", "refunded"] } },
+    where: dealPaymentsWhere(deal),
     select: { capturedCents: true, refundedCents: true },
     take: 200
   });
@@ -9157,8 +10233,8 @@ async function cashPaymentState(tx, deal) {
 }
 async function dealPaymentLedger(tx, deal) {
   const rows = await tx.prisma.paymentTransaction.findMany({
-    where: { dealId: deal.id, rooftopId: deal.rooftopId, status: { in: ["captured", "partially-refunded", "refunded"] } },
-    select: { id: true, capturedCents: true, refundedCents: true, paymentMethod: true, providerKey: true, providerTransactionId: true, status: true, createdAt: true },
+    where: dealPaymentsWhere(deal),
+    select: { id: true, capturedCents: true, refundedCents: true, paymentMethod: true, providerKey: true, providerTransactionId: true, status: true, createdAt: true, sourceType: true },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     take: 200
   });
@@ -9168,7 +10244,7 @@ async function dealPaymentLedger(tx, deal) {
     netCents: Number(row.capturedCents || 0) - Number(row.refundedCents || 0),
     capturedCents: Number(row.capturedCents || 0),
     refundedCents: Number(row.refundedCents || 0),
-    method: row.paymentMethod || "",
+    method: row.paymentMethod || (row.sourceType === "reservation" ? "reservation-deposit" : ""),
     providerKey: row.providerKey,
     reference: row.providerTransactionId || null,
     status: row.status,
@@ -9422,14 +10498,7 @@ async function transitionDealCommand(_root, { id, toStatus, notes, idempotencyKe
         aggregateId: id,
         action: `transitioned:${toStatus}`,
         actorId: context.session.itemId,
-        afterSnapshot: requestEvidence,
-        payload: {
-          dealId: id,
-          rooftopId: deal.rooftop.id,
-          status: toStatus,
-          vehicleId: deal.vehicle?.id ?? null,
-          vehicleStatus: toStatus === "submitted" ? "pending" : toStatus === "cancelled" && deal.status !== "pencil" ? "available" : null
-        }
+        afterSnapshot: requestEvidence
       });
       return sessionContext.db.Deal.findOne({ where: { id } });
     }
@@ -9443,6 +10512,7 @@ async function transitionDealCommand(_root, { id, toStatus, notes, idempotencyKe
       if (!deal.vehicle?.id) throw new Error("A vehicle is required before deal submission");
       if (!deal.acceptedAt || !deal.acceptedSnapshot || Object.keys(deal.acceptedSnapshot).length === 0) throw new Error("Accepted worksheet evidence is required before submission");
       if (Number(deal.acceptedSnapshot.worksheetVersion || 0) !== Number(deal.worksheetVersion || 0)) throw new Error("The current worksheet version must be presented and accepted before submission");
+      await transactionContext.prisma.$queryRaw`SELECT "id" FROM "Vehicle" WHERE "id" = ${deal.vehicle.id} FOR UPDATE`;
       const vehicleState = await transactionContext.prisma.vehicle.findUnique({ where: { id: deal.vehicle.id }, select: { status: true } });
       if (vehicleState?.status === "available") {
         const reserved = await transactionContext.prisma.vehicle.updateMany({ where: { id: deal.vehicle.id, status: "available" }, data: { status: "pending" } });
@@ -9494,8 +10564,7 @@ async function transitionDealCommand(_root, { id, toStatus, notes, idempotencyKe
           aggregateId: id,
           action: "cancel",
           actorId: context.session.itemId,
-          afterSnapshot: caseEvidence,
-          payload: { rooftopId: deal.rooftop.id, dealId: id, status: "cancelled" }
+          afterSnapshot: caseEvidence
         });
       }
       if (rawDeal.tradeInVehicleId) {
@@ -9507,8 +10576,7 @@ async function transitionDealCommand(_root, { id, toStatus, notes, idempotencyKe
           aggregateId: rawDeal.tradeInVehicleId,
           action: "released-from-deal",
           actorId: context.session.itemId,
-          afterSnapshot: { tradeInId: rawDeal.tradeInVehicleId, dealId: id, reason },
-          payload: { rooftopId: deal.rooftop.id, dealId: id, tradeInId: rawDeal.tradeInVehicleId }
+          afterSnapshot: { tradeInId: rawDeal.tradeInVehicleId, dealId: id, reason }
         });
       }
     }
@@ -9519,14 +10587,7 @@ async function transitionDealCommand(_root, { id, toStatus, notes, idempotencyKe
       aggregateId: id,
       action: `transitioned:${toStatus}`,
       actorId: context.session.itemId,
-      afterSnapshot: requestEvidence,
-      payload: {
-        dealId: id,
-        rooftopId: deal.rooftop.id,
-        status: toStatus,
-        vehicleId: deal.vehicle?.id ?? null,
-        vehicleStatus: toStatus === "submitted" ? "pending" : toStatus === "cancelled" && deal.status !== "pencil" ? "available" : null
-      }
+      afterSnapshot: requestEvidence
     });
     return sessionContext.db.Deal.findOne({ where: { id } });
   }, { timeout: 3e4, isolationLevel: "Serializable" });
@@ -9605,8 +10666,7 @@ async function transitionServiceOrder(_root, { id, toStatus, idempotencyKey: ide
         action: `transitioned:${toStatus}`,
         actorId: context.session.itemId,
         afterSnapshot: requestEvidence,
-        metadata: replay.metadata,
-        payload: { serviceOrderId: id, rooftopId: order2.rooftop.id, status: toStatus }
+        metadata: replay.metadata
       });
       return sessionContext.db.ServiceOrder.findOne({ where: { id } });
     }
@@ -9641,8 +10701,7 @@ async function transitionServiceOrder(_root, { id, toStatus, idempotencyKey: ide
       action: `transitioned:${toStatus}`,
       actorId: context.session.itemId,
       afterSnapshot: requestEvidence,
-      metadata: settlement ? { settlement } : {},
-      payload: { serviceOrderId: id, rooftopId: order2.rooftop.id, status: toStatus }
+      metadata: settlement ? { settlement } : {}
     });
     return sessionContext.db.ServiceOrder.findOne({ where: { id } });
   }, { timeout: 3e4 });
@@ -9788,7 +10847,7 @@ async function manageAccountingBatch(_r, { data }, c) {
 }
 
 // features/keystone/mutations/crmIdentityWorkflows.ts
-var import_node_crypto4 = require("node:crypto");
+var import_node_crypto5 = require("node:crypto");
 
 // features/keystone/mutations/operatorProjections.ts
 function date2(value) {
@@ -10135,8 +11194,7 @@ async function mergeCustomers(_root, { data }, context) {
       action: "duplicate-merged",
       actorId: context.session.itemId,
       afterSnapshot: { survivorId, duplicateId, movedLeadIds, movedSalesVisitIds, reason, survivorExpectedUpdatedAt: survivorExpected.toISOString(), duplicateExpectedUpdatedAt: duplicateExpected.toISOString(), preferences: mergedPreferences },
-      metadata: { duplicateId, movedLeadCount: movedLeadIds.length, movedSalesVisitCount: movedSalesVisitIds.length },
-      payload: { rooftopId, survivorId, duplicateId, movedLeadCount: movedLeadIds.length, movedSalesVisitCount: movedSalesVisitIds.length }
+      metadata: { duplicateId, movedLeadCount: movedLeadIds.length, movedSalesVisitCount: movedSalesVisitIds.length }
     });
     return { id: survivorId, duplicateId, movedLeadCount: movedLeadIds.length, movedSalesVisitCount: movedSalesVisitIds.length, reused: false };
   }, { timeout: 3e4 });
@@ -10158,7 +11216,7 @@ async function configureLeadRoutingRule(_root, { data }, context) {
   const eventKey = `lead-route-rule:${commandKey(data.idempotencyKey)}`;
   const active = data.active !== false;
   const existingRuleId = data.ruleId ? String(data.ruleId) : null;
-  const ruleId = existingRuleId || (0, import_node_crypto4.randomUUID)();
+  const ruleId = existingRuleId || (0, import_node_crypto5.randomUUID)();
   return context.transaction(async (tx) => {
     await tx.prisma.$queryRaw`SELECT 1 AS "locked" FROM pg_advisory_xact_lock(hashtextextended(${`command:${eventKey}`}, 0))`;
     const replay = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { metadata: true, afterSnapshot: true } });
@@ -10191,8 +11249,7 @@ async function configureLeadRoutingRule(_root, { data }, context) {
       action: "configured",
       actorId: context.session.itemId,
       afterSnapshot: { ruleId: rule.id, routeKey, source, priority, firstResponseMinutes, assigneeId, active: rule.active },
-      metadata: { ruleId: rule.id },
-      payload: { rooftopId, ruleId: rule.id, source, assigneeId }
+      metadata: { ruleId: rule.id }
     });
     return { id: rule.id, status: rule.active ? "active" : "inactive", updatedAt: rule.updatedAt, reused: false };
   }, { timeout: 3e4 });
@@ -10240,8 +11297,7 @@ async function routeLead(_root, { data }, context) {
       action: "routed",
       actorId: context.session.itemId,
       afterSnapshot: { leadId, ruleId: rule.id, routeKey: rule.routeKey, assigneeId: rule.assigneeId, assignedAt, firstResponseDueAt, requestExpectedUpdatedAt: expectedUpdatedAt.toISOString() },
-      metadata: { ruleId: rule.id },
-      payload: { rooftopId: lead.rooftop.id, leadId, assigneeId: rule.assigneeId, firstResponseDueAt }
+      metadata: { ruleId: rule.id }
     });
     return { id: leadId, status: lead.status, updatedAt: assignedAt, reused: false };
   }, { timeout: 3e4 });
@@ -10252,6 +11308,28 @@ function commandDate(value, label2 = "expectedUpdatedAt") {
   const date4 = value instanceof Date ? new Date(value.getTime()) : new Date(String(value ?? ""));
   if (Number.isNaN(date4.getTime())) throw new Error(`${label2} is invalid`);
   return date4;
+}
+
+// features/keystone/lifecycle/contractPackageLifecycle.ts
+var CONTRACT_PROVIDER_TRANSITIONS = {
+  preparing: [],
+  ready: [],
+  "awaiting-external-handoff": ["sent", "viewed", "signed", "declined", "void"],
+  sent: ["viewed", "signed", "declined", "void"],
+  viewed: ["signed", "declined", "void"],
+  signed: ["void"],
+  declined: ["void"],
+  void: []
+};
+var REPREPARABLE = ["preparing", "ready", "awaiting-external-handoff", "sent", "viewed", "declined", "void"];
+function assertContractAction(current, action, nextProviderStatus) {
+  const from = current || "preparing";
+  if (action === "prepare" && !REPREPARABLE.includes(from)) throw new Error("A signed contract package must be voided before it is prepared again");
+  if (action === "mark-ready" && ["signed", "sent", "viewed", "void"].includes(from)) throw new Error(`A ${from} contract package cannot be marked ready`);
+  if (action === "record-provider-status") {
+    if (!nextProviderStatus || nextProviderStatus === from) return;
+    if (!CONTRACT_PROVIDER_TRANSITIONS[from]?.includes(nextProviderStatus)) throw new Error(`Contract package cannot move from ${from} to ${nextProviderStatus}`);
+  }
 }
 
 // features/keystone/mutations/financeOperations.ts
@@ -10306,8 +11384,7 @@ async function artifactCommand(context, data, action, execute) {
       aggregateId: deal.id,
       action: `artifact:${action}`,
       actorId,
-      afterSnapshot: { version: 2, request, binding, result: result2, ...detail },
-      payload: { rooftopId: deal.rooftopId, dealId: deal.id, action }
+      afterSnapshot: { version: 2, request, binding, result: result2, ...detail }
     });
     return result2;
   }, { timeout: 3e4, isolationLevel: "Serializable" });
@@ -10332,7 +11409,7 @@ async function configureFinanceProductCommand(_r, { data }, context) {
   if (data.expectNew === true && existing) throw new Error(`Product code ${code} already exists at this rooftop`);
   const evidence = { rooftopId: rooftop.id, code, name: required2(data.name, "Name", 200), category, providerKey, retailPriceCents, costCents, active: data.active !== false };
   const eventKey = `finance-product:${key2(data.idempotencyKey)}`;
-  const id = await eventTx(context, { eventKey, rooftopId: rooftop.id, aggregateType: "FinanceProduct", aggregateId: `${rooftop.id}:${evidence.code}`, action: "configured", actorId: context.session.itemId, afterSnapshot: evidence, payload: evidence }, async (tx, reused) => {
+  const id = await eventTx(context, { eventKey, rooftopId: rooftop.id, aggregateType: "FinanceProduct", aggregateId: `${rooftop.id}:${evidence.code}`, action: "configured", actorId: context.session.itemId, afterSnapshot: evidence }, async (tx, reused) => {
     if (reused) {
       const found = await tx.prisma.financeProduct.findFirst({ where: { rooftopId: rooftop.id, code: evidence.code }, select: { id: true } });
       if (!found) throw new Error("Finance product replay record is missing");
@@ -10349,16 +11426,16 @@ async function presentFinanceMenuCommand(_r, { data }, context) {
     const productCodes = codes(data.productCodes, "Product codes");
     const products = await scoped.query.FinanceProduct.findMany({ where: { rooftop: { id: { equals: deal.rooftopId } }, code: { in: productCodes }, active: { equals: true } }, take: 50, query: "id code name category providerKey retailPriceCents" });
     if (products.length !== productCodes.length) throw new Error("Every menu product must be active at this rooftop");
-    const quotes = await tx.prisma.financeProductQuote.findMany({ where: { dealId: deal.id, rooftopId: deal.rooftopId, productId: { in: products.map((p) => p.id) }, status: "quoted" }, orderBy: [{ completedAt: "desc" }, { id: "desc" }], take: 101 });
+    const quotes = await tx.prisma.financeProductQuote.findMany({ where: { dealId: deal.id, rooftopId: deal.rooftopId, productId: { in: products.map((p2) => p2.id) }, status: "quoted" }, orderBy: [{ completedAt: "desc" }, { id: "desc" }], take: 101 });
     if (quotes.length > 100) throw new Error("Quote review exceeds bounded projection");
     const latest = /* @__PURE__ */ new Map();
     for (const quote of quotes) if (!latest.has(quote.productId)) latest.set(quote.productId, quote);
-    const snapshot2 = products.map((p) => {
-      const quote = latest.get(p.id);
+    const snapshot2 = products.map((p2) => {
+      const quote = latest.get(p2.id);
       if (!quote || !quote.evidenceReference) throw new Error("Every menu product requires current operator/provider quote evidence");
       const result3 = quote.resultSnapshot && typeof quote.resultSnapshot === "object" ? quote.resultSnapshot : {};
       const termMonths = Number.isInteger(result3.termMonths) ? Number(result3.termMonths) : null;
-      return { code: p.code, name: p.name, category: p.category, providerKey: p.providerKey, retailPriceCents: quote.retailPriceCents, termMonths, quoteId: quote.id, quoteEvidenceReference: quote.evidenceReference };
+      return { code: p2.code, name: p2.name, category: p2.category, providerKey: p2.providerKey, retailPriceCents: quote.retailPriceCents, termMonths, quoteId: quote.id, quoteEvidenceReference: quote.evidenceReference };
     });
     const previous = await tx.prisma.financeMenuVersion.findFirst({ where: { dealId: deal.id, rooftopId: deal.rooftopId }, orderBy: { version: "desc" } });
     const version = (previous?.version || 0) + 1;
@@ -10430,6 +11507,7 @@ async function manageFinanceContractPackageCommand(_r, { data }, context) {
     let status = existing?.status || "preparing";
     const envelopeReference = String(data.envelopeReference || existing?.envelopeReference || "").trim();
     let sentAt = existing?.sentAt || null, signedAt = existing?.signedAt || null;
+    assertContractAction(existing?.status, action, action === "record-provider-status" ? String(data.providerStatus || "").trim() : void 0);
     if (action === "prepare") {
       status = "preparing";
       sentAt = null;
@@ -10569,7 +11647,7 @@ async function manageFinanceFundingCaseCommand(_root, { data }, context) {
       }, select: { id: true } });
       if (!payment?.id || payment instanceof Error) throw new Error("Nothing was saved: the payment could not be recorded");
     }
-    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: "FinanceFundingCase", aggregateId: deal.id, action: `status:${status}`, actorId: context.session.itemId, beforeSnapshot: void 0, afterSnapshot: evidence, payload: { rooftopId: deal.rooftopId, dealId: deal.id, status } });
+    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: "FinanceFundingCase", aggregateId: deal.id, action: `status:${status}`, actorId: context.session.itemId, beforeSnapshot: void 0, afterSnapshot: evidence });
     return authority.context.db.FinanceFundingCase.findOne({ where: { id } });
   }, { timeout: 3e4, isolationLevel: "Serializable" });
 }
@@ -10620,8 +11698,7 @@ async function recordCashSalePrerequisites(tx, deal, input2) {
       ...policy,
       capability: financingPrerequisiteCapability("operator-recorded"),
       acceptedTermsHash: domainEventRequestHash(deal.acceptedSnapshot)
-    },
-    payload: { dealId: deal.id, rooftopId: deal.rooftopId, worksheetVersion: deal.worksheetVersion }
+    }
   });
   return {
     amountCents: input2.paymentAmountCents,
@@ -10643,7 +11720,7 @@ async function recordFinanceProductQuoteCommand(_r, { data }, context) {
   if (termMonths != null && (!Number.isInteger(termMonths) || termMonths < 1 || termMonths > 240)) throw new Error("Term must be 1 to 240 months");
   if (status === "quoted" && (!Number.isInteger(retailPriceCents) || Number(retailPriceCents) < 0 || !Number.isInteger(costCents) || Number(costCents) < 0 || !evidenceReference)) throw new Error("Quoted products require integer prices and provider/operator evidence");
   const now = /* @__PURE__ */ new Date(), eventKey = `finance-product-quote:${key2(data.idempotencyKey)}`, evidence = { dealId: deal.id, productId: product.id, productCode: product.code, providerKey, status, retailPriceCents, costCents, evidenceReference: evidenceReference || null, termMonths, externalRateGuaranteed: false, recordedAt: now.toISOString() };
-  const id = await eventTx(context, { eventKey, rooftopId: deal.rooftop.id, aggregateType: "FinanceProductQuote", aggregateId: deal.id, action: `recorded:${status}`, actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: deal.rooftop.id, dealId: deal.id, productId: product.id, status } }, async (tx, reused) => {
+  const id = await eventTx(context, { eventKey, rooftopId: deal.rooftop.id, aggregateType: "FinanceProductQuote", aggregateId: deal.id, action: `recorded:${status}`, actorId: context.session.itemId, afterSnapshot: evidence }, async (tx, reused) => {
     if (reused) {
       const found = await tx.prisma.financeProductQuote.findUnique({ where: { idempotencyKey: key2(data.idempotencyKey) }, select: { id: true } });
       if (!found) throw new Error("Quote replay record missing");
@@ -10668,7 +11745,7 @@ function cancellationRefundBasis(value) {
 }
 async function recordFinanceProductCancellationCommand(_r, { data }, context) {
   const deal = await dealForFinance(context, data.dealId);
-  const menu = await context.query.FinanceMenuVersion.findOne({ where: { id: String(data.menuId || "") }, query: "id status selectedProductCodes deal { id } rooftop { id }" });
+  const menu = await context.query.FinanceMenuVersion.findOne({ where: { id: String(data.menuId || "") }, query: "id status selectedProductCodes optionsSnapshot deal { id } rooftop { id }" });
   const productCode = required2(data.productCode, "Product code", 80);
   if (!menu || menu.deal?.id !== deal.id || menu.status !== "accepted" || !Array.isArray(menu.selectedProductCodes) || !menu.selectedProductCodes.includes(productCode)) throw new Error("Cancellation must reference an accepted menu product");
   const status = required2(data.status, "Cancellation status", 30);
@@ -10676,12 +11753,19 @@ async function recordFinanceProductCancellationCommand(_r, { data }, context) {
   const reason = required2(data.reason, "Cancellation reason", 1e3), refundCents = data.refundCents == null ? 0 : Number(data.refundCents);
   if (!Number.isInteger(refundCents) || refundCents < 0 || status === "completed" && !required2(data.evidenceReference, "Cancellation evidence reference", 200)) throw new Error("Invalid cancellation evidence");
   const refundBasis = cancellationRefundBasis(data.refundBasis);
+  const option = (Array.isArray(menu.optionsSnapshot) ? menu.optionsSnapshot : []).find((item) => item?.code === productCode);
+  const retailCents = Number(option?.retailPriceCents);
+  if (Number.isInteger(retailCents) && retailCents >= 0 && refundCents > retailCents) throw new Error("The refund cannot be more than the product price");
   const now = /* @__PURE__ */ new Date(), eventKey = `finance-product-cancellation:${key2(data.idempotencyKey)}`, evidence = { dealId: deal.id, menuId: menu.id, productCode, status, reason, refundCents, refundBasis, evidenceReference: String(data.evidenceReference || "").trim() || null, recordedAt: now.toISOString() };
-  const id = await eventTx(context, { eventKey, rooftopId: deal.rooftop.id, aggregateType: "FinanceProductCancellation", aggregateId: deal.id, action: `recorded:${status}`, actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: deal.rooftop.id, dealId: deal.id, productCode, status, refundCents } }, async (tx, reused) => {
+  const id = await eventTx(context, { eventKey, rooftopId: deal.rooftop.id, aggregateType: "FinanceProductCancellation", aggregateId: deal.id, action: `recorded:${status}`, actorId: context.session.itemId, afterSnapshot: evidence }, async (tx, reused) => {
     if (reused) {
       const found = await tx.prisma.financeProductCancellation.findUnique({ where: { idempotencyKey: key2(data.idempotencyKey) }, select: { id: true } });
       if (!found) throw new Error("Cancellation replay record missing");
       return found.id;
+    }
+    if (status === "completed") {
+      await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`finance-product-cancellation:${menu.id}:${productCode}`}, 0))`;
+      if (await tx.prisma.financeProductCancellation.count({ where: { menuId: menu.id, productCode, status: "completed" } })) throw new Error("This product has already been cancelled and refunded");
     }
     return (await tx.prisma.financeProductCancellation.create({ data: { rooftopId: deal.rooftop.id, dealId: deal.id, menuId: menu.id, productCode, status, reason, refundCents, evidence: { evidenceReference: evidence.evidenceReference, refundBasis }, requestedAt: now, completedAt: status === "requested" ? null : now, idempotencyKey: key2(data.idempotencyKey) }, select: { id: true } })).id;
   });
@@ -10849,8 +11933,7 @@ async function configurePart(_root, { data }, context) {
       aggregateId: partId || `${rooftop.id}:${partNumber}`,
       action: partId ? "edited" : "configured",
       actorId: context.session.itemId,
-      afterSnapshot: evidence,
-      payload: evidence
+      afterSnapshot: evidence
     });
     const byNumber = await tx.prisma.partsInventory.findFirst({ where: { rooftopId: rooftop.id, partNumber }, select: { id: true } });
     if (event2.reused) {
@@ -10917,8 +12000,7 @@ async function recordPartsMovement(_root, { data }, context) {
       aggregateId: part.id,
       action: type,
       actorId: context.session.itemId,
-      afterSnapshot: request,
-      payload: { rooftopId, partId: part.id, movementType: type, serviceOrderId }
+      afterSnapshot: request
     });
     if (event2.reused) {
       const found = await tx.prisma.partsMovement.findUnique({ where: { idempotencyKey: idempotencyKey6 }, select: { id: true } });
@@ -11142,8 +12224,7 @@ async function managePartsPurchaseOrder(_root, { data }, context) {
       aggregateId: savedId,
       action,
       actorId,
-      afterSnapshot: { request, status, movements },
-      payload: { rooftopId, purchaseOrderId: savedId, reference: poReference, status, movementCount: movements.length }
+      afterSnapshot: { request, status, movements }
     });
     return savedId;
   }, { timeout: 3e4 });
@@ -11239,8 +12320,7 @@ async function manageLaborOperation(_root, { data }, context) {
       aggregateId: saved.id,
       action,
       actorId: context.session.itemId,
-      afterSnapshot: { version: 2, request, status: saved.status },
-      payload: { rooftopId: authority.rooftopId, serviceOrderId, operationId: saved.id, status: saved.status }
+      afterSnapshot: { version: 2, request, status: saved.status }
     });
     return scoped.db.ServiceLaborOperation.findOne({ where: { id: saved.id } });
   }, { timeout: 3e4 });
@@ -11475,8 +12555,7 @@ async function intakeInventoryVehicleInTransaction(transactionContext, rawInput,
       action: "vehicle-intake",
       actorId: options.actorId,
       afterSnapshot: evidence,
-      metadata: metadata2,
-      payload: { rooftopId: input2.rooftopId, ...metadata2 }
+      metadata: metadata2
     });
     return {
       vehicleId: String(metadata2.vehicleId || ""),
@@ -11559,6 +12638,7 @@ async function intakeInventoryVehicleInTransaction(transactionContext, rawInput,
       sortOrder: 0,
       isPrimary: true
     };
+    await prisma.vehicleImage.updateMany({ where: { vehicleId: vehicle.id, isPrimary: true, ...existingImage ? { id: { not: existingImage.id } } : {} }, data: { isPrimary: false } });
     if (existingImage) await prisma.vehicleImage.update({ where: { id: existingImage.id }, data: imageValues });
     else {
       await prisma.vehicleImage.create({ data: imageValues });
@@ -11721,8 +12801,7 @@ async function intakeInventoryVehicleInTransaction(transactionContext, rawInput,
     action: "vehicle-intake",
     actorId: options.actorId,
     afterSnapshot: evidence,
-    metadata,
-    payload: { rooftopId: input2.rooftopId, ...metadata }
+    metadata
   });
   return {
     ...metadata,
@@ -12274,8 +13353,7 @@ async function queueFinancingApplication(_root, { applicationId, providerKey, id
       aggregateId: replay.id,
       action: "queued",
       actorId: context.session.itemId,
-      afterSnapshot: { applicationId: replay.applicationId, providerKey: adapter.key, status: replay.status },
-      payload: { submissionId: replay.id, applicationId: replay.applicationId, rooftopId: replay.rooftopId, status: replay.status }
+      afterSnapshot: { applicationId: replay.applicationId, providerKey: adapter.key, status: replay.status }
     });
     return context.db.LenderSubmission.findOne({ where: { id: replay.id } });
   }
@@ -12330,8 +13408,7 @@ async function queueFinancingApplication(_root, { applicationId, providerKey, id
       aggregateId: created.id,
       action: "queued",
       actorId: context.session.itemId,
-      afterSnapshot: { applicationId: application.id, providerKey: adapter.key, status: providerResult.status },
-      payload: { submissionId: created.id, applicationId: application.id, rooftopId: application.rooftop.id, status: providerResult.status }
+      afterSnapshot: { applicationId: application.id, providerKey: adapter.key, status: providerResult.status }
     });
     return created.id;
   }, { timeout: 3e4 });
@@ -12393,8 +13470,7 @@ async function recordLenderDecision(_root, { data }, context) {
         aggregateId: existing.id,
         action: `recorded:${decision}`,
         actorId: context.session.itemId,
-        afterSnapshot: eventEvidence2,
-        payload: { decisionId: existing.id, applicationId: existing.applicationId, rooftopId: existing.rooftopId, decision }
+        afterSnapshot: eventEvidence2
       });
       return existing.id;
     }
@@ -12457,8 +13533,7 @@ async function recordLenderDecision(_root, { data }, context) {
       aggregateId: created.id,
       action: `recorded:${decision}`,
       actorId: context.session.itemId,
-      afterSnapshot: eventEvidence2,
-      payload: { decisionId: created.id, applicationId: application.id, rooftopId: application.rooftopId, decision }
+      afterSnapshot: eventEvidence2
     });
     return created.id;
   }, { timeout: 3e4 });
@@ -12715,8 +13790,7 @@ async function configureRetentionPolicy(_root, { data }, context) {
       action,
       actorId,
       beforeSnapshot: before,
-      afterSnapshot: after,
-      payload: { rooftopId, policyId: id, category, retentionDays, legalHold }
+      afterSnapshot: after
     });
     return id;
   }, { timeout: 3e4 });
@@ -12821,8 +13895,7 @@ async function startInventoryAcquisitionCommand(_root, { data }, context) {
         aggregateId: replay.id,
         action: "started",
         actorId: context.session.itemId,
-        afterSnapshot: domainEvidence,
-        payload: { acquisitionId: replay.id, rooftopId: replay.rooftopId, status: replay.status }
+        afterSnapshot: domainEvidence
       });
       return replay.id;
     }
@@ -12868,8 +13941,7 @@ async function startInventoryAcquisitionCommand(_root, { data }, context) {
       aggregateId: acquisition.id,
       action: "started",
       actorId: context.session.itemId,
-      afterSnapshot: domainEvidence,
-      payload: { acquisitionId: acquisition.id, rooftopId, status: "appraised" }
+      afterSnapshot: domainEvidence
     });
     return acquisition.id;
   }, { timeout: 3e4 });
@@ -12918,8 +13990,7 @@ async function transitionInventoryAcquisitionCommand(_root, { id, toStatus, expe
     aggregateId: id,
     action: `transitioned:${toStatus}`,
     actorId: context.session.itemId,
-    afterSnapshot: requestEvidence,
-    payload: { acquisitionId: id, rooftopId: acquisition.rooftop.id, status: toStatus }
+    afterSnapshot: requestEvidence
   };
   const replay = await context.sudo().prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { aggregateId: true } });
   if (replay) {
@@ -13097,8 +14168,7 @@ async function createDealPencil(_root, { data }, context) {
         aggregateId: replay.aggregateId,
         action: "pencil-created",
         actorId: context.session.itemId,
-        afterSnapshot: evidence,
-        payload: { dealId: replay.aggregateId, rooftopId, status: "pencil" }
+        afterSnapshot: evidence
       });
       return replay.aggregateId;
     }
@@ -13122,8 +14192,7 @@ async function createDealPencil(_root, { data }, context) {
       aggregateId: deal.id,
       action: "pencil-created",
       actorId: context.session.itemId,
-      afterSnapshot: evidence,
-      payload: { dealId: deal.id, rooftopId, status: "pencil" }
+      afterSnapshot: evidence
     });
     return deal.id;
   }, { timeout: 3e4 });
@@ -13166,6 +14235,9 @@ async function openServiceOrder(_root, { data }, context) {
     taxCents: cents3(data.taxCents, "Tax"),
     grandTotalCents: cents3(data.grandTotalCents, "Grand total")
   };
+  if (evidence.grandTotalCents !== evidence.laborTotalCents + evidence.partsTotalCents + evidence.taxCents) {
+    throw new Error("Grand total must equal labor plus parts plus tax");
+  }
   const orderId = await context.transaction(async (tx) => {
     await tx.prisma.$queryRaw`SELECT 1 AS "locked" FROM pg_advisory_xact_lock(hashtextextended(${`command:${eventKey}`}, 0))`;
     const replay = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { aggregateId: true } });
@@ -13177,8 +14249,7 @@ async function openServiceOrder(_root, { data }, context) {
         aggregateId: replay.aggregateId,
         action: "opened",
         actorId: context.session.itemId,
-        afterSnapshot: evidence,
-        payload: { serviceOrderId: replay.aggregateId, rooftopId, status: "estimate" }
+        afterSnapshot: evidence
       });
       return replay.aggregateId;
     }
@@ -13208,8 +14279,7 @@ async function openServiceOrder(_root, { data }, context) {
       aggregateId: order2.id,
       action: "opened",
       actorId: context.session.itemId,
-      afterSnapshot: evidence,
-      payload: { serviceOrderId: order2.id, rooftopId, status: "estimate" }
+      afterSnapshot: evidence
     });
     return order2.id;
   }, { timeout: 3e4 });
@@ -13290,8 +14360,7 @@ async function updateServiceOrderLineItem(_root, { data }, context) {
     aggregateId: order2.id,
     action: "line-item-updated",
     actorId: context.session.itemId,
-    afterSnapshot: evidence,
-    payload: { rooftopId: order2.rooftop.id, serviceOrderId: order2.id, lineItemId, priceCents }
+    afterSnapshot: evidence
   }, async (tx, current) => {
     const line = await tx.prisma.repairOrderLineItem.findFirst({ where: { id: lineItemId, serviceOrderId: order2.id, rooftopId: order2.rooftop.id }, select: { id: true, itemType: true, description: true, partNumber: true, quantity: true, unitPriceCents: true, priceCents: true } });
     if (!line) throw new Error("Line item not found on this service order");
@@ -13313,8 +14382,7 @@ async function removeServiceOrderLineItem(_root, { data }, context) {
     aggregateId: order2.id,
     action: "line-item-removed",
     actorId: context.session.itemId,
-    afterSnapshot: evidence,
-    payload: { rooftopId: order2.rooftop.id, serviceOrderId: order2.id, lineItemId }
+    afterSnapshot: evidence
   }, async (tx, current) => {
     const line = await tx.prisma.repairOrderLineItem.findFirst({ where: { id: lineItemId, serviceOrderId: order2.id, rooftopId: order2.rooftop.id }, select: { id: true, itemType: true, description: true, partNumber: true, quantity: true, unitPriceCents: true, priceCents: true } });
     if (!line) throw new Error("Line item not found on this service order");
@@ -13337,8 +14405,7 @@ async function setServiceOrderTax(_root, { data }, context) {
     aggregateId: order2.id,
     action: "tax-set",
     actorId: context.session.itemId,
-    afterSnapshot: evidence,
-    payload: { rooftopId: order2.rooftop.id, serviceOrderId: order2.id, taxCents }
+    afterSnapshot: evidence
   }, async (tx, current) => {
     const totals = await recomputeServiceOrderTotals(tx, order2.id, taxCents);
     return { previousTaxCents: current.taxCents, totals };
@@ -13386,8 +14453,7 @@ async function transitionLead(_root, { id, toStatus, lostReasonCode, lostReasonD
     aggregateId: id,
     action: `transitioned:${toStatus}`,
     actorId: context.session.itemId,
-    afterSnapshot: { leadId: id, toStatus, lostReasonCode: normalizedLostReason || null, lostReasonDetails: normalizedLostDetails || null },
-    payload: { leadId: id, rooftopId: lead.rooftop.id, status: toStatus, lostReasonCode: normalizedLostReason || null }
+    afterSnapshot: { leadId: id, toStatus, lostReasonCode: normalizedLostReason || null, lostReasonDetails: normalizedLostDetails || null }
   };
   await context.transaction(async (tx) => {
     if (await replayOrLock2(tx, event2)) return;
@@ -13428,8 +14494,7 @@ async function recordLeadInteraction(_root, { data }, context) {
       notesHash: domainEventRequestHash(notes),
       requestedDate: data.date ? occurredAt.toISOString() : null,
       followUpDate: followUpDate?.toISOString() ?? null
-    },
-    payload: { leadId, rooftopId: lead.rooftop.id, interactionType, outcome }
+    }
   };
   let interactionId = "";
   await context.transaction(async (tx) => {
@@ -13479,8 +14544,7 @@ async function cancelTestDriveByStaff(context, rooftopId, id, idempotencyKey6) {
     aggregateId: id,
     action: "staff-cancelled",
     actorId: context.session.itemId,
-    afterSnapshot: { id, cancelledBy: "staff" },
-    payload: { id, rooftopId, status: "cancelled", source: "operator-desk" }
+    afterSnapshot: { id, cancelledBy: "staff" }
   };
   await context.transaction(async (tx) => {
     if (await replayOrLock2(tx, event2)) return;
@@ -13514,8 +14578,7 @@ async function updateTestDriveWorkflow(_root, { data }, context) {
     aggregateId: id,
     action,
     actorId: context.session.itemId,
-    afterSnapshot: { testDriveId: id, action, interestedLevel: action === "complete" ? interestedLevel : null },
-    payload: { testDriveId: id, rooftopId: drive.rooftop.id, action }
+    afterSnapshot: { testDriveId: id, action, interestedLevel: action === "complete" ? interestedLevel : null }
   };
   await context.transaction(async (tx) => {
     if (await replayOrLock2(tx, event2)) return;
@@ -13550,14 +14613,49 @@ async function transitionServiceAppointment(_root, { id, toStatus, idempotencyKe
     aggregateId: id,
     action: `transitioned:${toStatus}`,
     actorId: context.session.itemId,
-    afterSnapshot: { appointmentId: id, toStatus },
-    payload: { appointmentId: id, rooftopId: appointment.rooftop.id, status: toStatus }
+    afterSnapshot: { appointmentId: id, toStatus }
   };
   await context.transaction(async (tx) => {
     if (await replayOrLock2(tx, event2)) return;
     const changed = await tx.prisma.serviceAppointment.updateMany({
       where: { id, status: appointment.status, updatedAt: new Date(appointment.updatedAt) },
       data: { status: toStatus }
+    });
+    if (changed.count !== 1) throw new Error("Service appointment changed concurrently; reload and retry");
+    await recordDomainEventInTransaction(tx, event2);
+  }, { timeout: 3e4 });
+  return context.db.ServiceAppointment.findOne({ where: { id } });
+}
+async function rescheduleServiceAppointment(_root, { id, appointmentDate, idempotencyKey: idempotencyKey6 }, context) {
+  if (!context.session?.itemId || !permissions.canManageService({ session: context.session })) throw new Error("Service management permission is required");
+  const appointment = await context.query.ServiceAppointment.findOne({ where: { id }, query: "id status appointmentDate rooftop { id } updatedAt" });
+  if (!appointment?.rooftop?.id) throw new Error("Service appointment not found or not accessible");
+  await assertSessionRooftopPermission(context, appointment.rooftop.id, "canManageService");
+  if (!["scheduled", "checked-in"].includes(appointment.status)) throw new Error("Only scheduled or checked-in appointments can be rescheduled");
+  const at = new Date(String(appointmentDate || ""));
+  if (Number.isNaN(at.getTime())) throw new Error("Choose a valid date and time");
+  if (at.getTime() < Date.now() - 5 * 60 * 1e3) throw new Error("Choose a future time.");
+  if (at.getTime() > Date.now() + 366 * 24 * 60 * 60 * 1e3) throw new Error("Appointments can be scheduled up to a year ahead");
+  const event2 = {
+    eventKey: `service-appointment-reschedule:${commandKey2(idempotencyKey6)}`,
+    rooftopId: appointment.rooftop.id,
+    aggregateType: "ServiceAppointment",
+    aggregateId: id,
+    action: "rescheduled",
+    actorId: context.session.itemId,
+    afterSnapshot: { appointmentId: id, from: appointment.appointmentDate, to: at.toISOString() }
+  };
+  await context.transaction(async (tx) => {
+    if (await replayOrLock2(tx, event2)) return;
+    let capacitySlot;
+    try {
+      capacitySlot = await assertServiceSlotCapacity(tx, appointment.rooftop.id, at.toISOString(), id);
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : "That service capacity slot is full. Choose another time.");
+    }
+    const changed = await tx.prisma.serviceAppointment.updateMany({
+      where: { id, status: appointment.status, updatedAt: new Date(appointment.updatedAt) },
+      data: { appointmentDate: at, capacitySlot }
     });
     if (changed.count !== 1) throw new Error("Service appointment changed concurrently; reload and retry");
     await recordDomainEventInTransaction(tx, event2);
@@ -13581,8 +14679,7 @@ async function recordTradeInAppraisal(_root, { data }, context) {
     aggregateId: id,
     action: "appraised",
     actorId: context.session.itemId,
-    afterSnapshot: { tradeInId: id, referenceValueCents, offerAmountCents, valuationSource: "operator-recorded" },
-    payload: { tradeInId: id, rooftopId: tradeIn.rooftop.id, referenceValueCents, offerAmountCents, valuationSource: "operator-recorded" }
+    afterSnapshot: { tradeInId: id, referenceValueCents, offerAmountCents, valuationSource: "operator-recorded" }
   };
   await context.transaction(async (tx) => {
     if (await replayOrLock2(tx, event2)) return;
@@ -13623,8 +14720,7 @@ async function createLeadTask(_root, { data }, context) {
     aggregateId: leadId,
     action: "task-created",
     actorId: context.session.itemId,
-    afterSnapshot: { leadId, title, descriptionHash: domainEventRequestHash(description), priority, communicationChannel, dueDate: dueDate?.toISOString() ?? null, assignedToId },
-    payload: { leadId, rooftopId: lead.rooftop.id, title, priority, communicationChannel, dueDate: dueDate?.toISOString() ?? null, assignedToId }
+    afterSnapshot: { leadId, title, descriptionHash: domainEventRequestHash(description), priority, communicationChannel, dueDate: dueDate?.toISOString() ?? null, assignedToId }
   };
   let taskId = "";
   await context.transaction(async (tx) => {
@@ -13659,8 +14755,7 @@ async function completeTask(_root, { id, idempotencyKey: idempotencyKey6 }, cont
     aggregateId: id,
     action: "completed",
     actorId: context.session.itemId,
-    afterSnapshot: { taskId: id, completed: true },
-    payload: { taskId: id, rooftopId: task.rooftop.id, completed: true }
+    afterSnapshot: { taskId: id, completed: true }
   };
   await context.transaction(async (tx) => {
     if (await replayOrLock2(tx, event2)) return;
@@ -13845,7 +14940,7 @@ async function inventoryWorkspace(_root, args, context) {
 }
 
 // features/keystone/mutations/inventoryStockCommands.ts
-var import_node_crypto5 = require("node:crypto");
+var import_node_crypto6 = require("node:crypto");
 
 // features/keystone/mutations/inventoryActiveStatus.ts
 var INACTIVE_INVENTORY_MESSAGES = {
@@ -13938,12 +15033,12 @@ async function establishInventoryStockCommand(_root, { data }, context) {
     await tx.prisma.$queryRaw`SELECT 1 AS "locked" FROM pg_advisory_xact_lock(hashtextextended(${`command:${eventKey}`}, 0))`;
     const replay = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { aggregateId: true } });
     if (replay) {
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: "InventoryStock", aggregateId: replay.aggregateId, action: "established", actorId: context.session.itemId, afterSnapshot: evidence, payload: { stockId: replay.aggregateId, rooftopId, ...evidence } });
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: "InventoryStock", aggregateId: replay.aggregateId, action: "established", actorId: context.session.itemId, afterSnapshot: evidence });
       return { id: replay.aggregateId, reused: true };
     }
     const existing = await tx.prisma.inventoryStock.findFirst({ where: { OR: [{ stockKey }, { vehicleId }] }, select: { id: true } });
     if (existing) throw new Error("Vehicle or rooftop stock number already has an inventory stock record");
-    const id = (0, import_node_crypto5.randomUUID)();
+    const id = (0, import_node_crypto6.randomUUID)();
     const stockedAt = vehicle.acquisition?.arrivedAt ? new Date(vehicle.acquisition.arrivedAt) : /* @__PURE__ */ new Date();
     await tx.prisma.inventoryStock.create({ data: { id, rooftopId, vehicleId, stockNumber, stockKey, locationCode, locationLabel, stockedAt, frontlineAt: vehicle.acquisition?.frontlineAt ? new Date(vehicle.acquisition.frontlineAt) : null, purchaseCostCents, totalCostCents: purchaseCostCents } });
     await tx.prisma.vehicle.update({ where: { id: vehicleId }, data: { stockNumber } });
@@ -13951,7 +15046,7 @@ async function establishInventoryStockCommand(_root, { data }, context) {
       const attached = await tx.prisma.inventoryAcquisition.updateMany({ where: { id: acquisitionId, rooftopId, vehicleId, stockId: null }, data: { stockId: id } });
       if (attached.count !== 1) throw new Error("Acquisition changed concurrently or is already stocked");
     }
-    const event2 = { eventKey, rooftopId, aggregateType: "InventoryStock", aggregateId: id, action: "established", actorId: context.session.itemId, afterSnapshot: evidence, payload: { stockId: id, rooftopId, ...evidence } };
+    const event2 = { eventKey, rooftopId, aggregateType: "InventoryStock", aggregateId: id, action: "established", actorId: context.session.itemId, afterSnapshot: evidence };
     await recordDomainEventInTransaction(tx, event2);
     await stockEvent(tx, event2, "established", reason, purchaseCostCents, evidence);
     return { id, reused: false };
@@ -13982,7 +15077,7 @@ async function receiveAcquisitionIntoStock(data, context) {
     await tx.prisma.$queryRaw`SELECT 1 AS "locked" FROM pg_advisory_xact_lock(hashtextextended(${`command:${eventKey}`}, 0))`;
     const replay = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { aggregateId: true } });
     if (replay) {
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: "InventoryStock", aggregateId: replay.aggregateId, action: "established", actorId: context.session.itemId, afterSnapshot: evidence, payload: { stockId: replay.aggregateId, rooftopId, ...evidence } });
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: "InventoryStock", aggregateId: replay.aggregateId, action: "established", actorId: context.session.itemId, afterSnapshot: evidence });
       return { id: replay.aggregateId, reused: true };
     }
     const current = await tx.prisma.inventoryAcquisition.findUnique({ where: { id: acquisitionId }, select: { status: true, vin: true, year: true, make: true, model: true, odometer: true, vehicleId: true, stockId: true, arrivedAt: true } });
@@ -14017,13 +15112,13 @@ async function receiveAcquisitionIntoStock(data, context) {
       },
       select: { id: true }
     });
-    const id = (0, import_node_crypto5.randomUUID)();
+    const id = (0, import_node_crypto6.randomUUID)();
     const stockedAt = current.arrivedAt ? new Date(current.arrivedAt) : /* @__PURE__ */ new Date();
     await tx.prisma.inventoryStock.create({ data: { id, rooftopId, vehicleId: vehicle.id, stockNumber, stockKey, locationCode, locationLabel, stockedAt, purchaseCostCents, totalCostCents: purchaseCostCents } });
     const attached = await tx.prisma.inventoryAcquisition.updateMany({ where: { id: acquisitionId, rooftopId, vehicleId: null, stockId: null }, data: { vehicleId: vehicle.id, stockId: id } });
     if (attached.count !== 1) throw new Error("Acquisition changed concurrently or is already stocked");
     const stockEvidence = { ...evidence, vehicleId: vehicle.id };
-    const event2 = { eventKey, rooftopId, aggregateType: "InventoryStock", aggregateId: id, action: "established", actorId: context.session.itemId, afterSnapshot: evidence, payload: { stockId: id, rooftopId, ...evidence } };
+    const event2 = { eventKey, rooftopId, aggregateType: "InventoryStock", aggregateId: id, action: "established", actorId: context.session.itemId, afterSnapshot: evidence };
     await recordDomainEventInTransaction(tx, event2);
     await stockEvent(tx, event2, "established", reason, purchaseCostCents, stockEvidence);
     return { id, reused: false };
@@ -14040,7 +15135,7 @@ async function moveInventoryStockCommand(_root, { data }, context) {
   const eventKey = `inventory-stock-move:${commandKey3(data.idempotencyKey)}`;
   const evidence = { stockId: stock.id, toLocationCode: locationCode, locationLabel, expectedUpdatedAt: expectedUpdatedAt.toISOString(), reason };
   const reused = await context.transaction(async (tx) => {
-    const event2 = { eventKey, rooftopId: stock.rooftop.id, aggregateType: "InventoryStock", aggregateId: stock.id, action: "moved", actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: stock.rooftop.id, ...evidence } };
+    const event2 = { eventKey, rooftopId: stock.rooftop.id, aggregateType: "InventoryStock", aggregateId: stock.id, action: "moved", actorId: context.session.itemId, afterSnapshot: evidence };
     if (await commandEvent(tx, event2)) return true;
     const changed = await tx.prisma.inventoryStock.updateMany({ where: { id: stock.id, rooftopId: stock.rooftop.id, updatedAt: expectedUpdatedAt }, data: { locationCode, locationLabel } });
     if (changed.count !== 1) throw new Error("Inventory stock changed concurrently; reload and retry");
@@ -14060,7 +15155,7 @@ async function recordInventoryCostCommand(_root, { data }, context) {
   const eventKey = `inventory-stock-cost:${commandKey3(data.idempotencyKey)}`;
   const evidence = { stockId: stock.id, costType, amountCents, reference: String(data.reference || "").trim().slice(0, 200) || null, reason };
   const reused = await context.transaction(async (tx) => {
-    const event2 = { eventKey, rooftopId: stock.rooftop.id, aggregateType: "InventoryStock", aggregateId: stock.id, action: `cost-recorded:${costType}`, actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: stock.rooftop.id, ...evidence } };
+    const event2 = { eventKey, rooftopId: stock.rooftop.id, aggregateType: "InventoryStock", aggregateId: stock.id, action: `cost-recorded:${costType}`, actorId: context.session.itemId, afterSnapshot: evidence };
     if (await commandEvent(tx, event2)) return true;
     await tx.prisma.inventoryStock.update({
       where: { id: stock.id },
@@ -14086,7 +15181,7 @@ async function openInventoryReconWorkItemCommand(_root, { data }, context) {
   if (dueAt && Number.isNaN(dueAt.getTime())) throw new Error("dueAt is invalid");
   const idempotencyKey6 = commandKey3(data.idempotencyKey);
   const eventKey = `inventory-recon-create:${idempotencyKey6}`;
-  const itemId = (0, import_node_crypto5.randomUUID)();
+  const itemId = (0, import_node_crypto6.randomUUID)();
   const reason = text74(data.reason, "Audit reason");
   const evidence = { stockId: stock.id, title, category, estimatedCostCents, vendorName, assignedToId, dueAt: dueAt?.toISOString() ?? null, reason };
   const resolvedId = await context.transaction(async (tx) => {
@@ -14094,12 +15189,12 @@ async function openInventoryReconWorkItemCommand(_root, { data }, context) {
     const replay = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { aggregateId: true, metadata: true } });
     if (replay) {
       const priorItemId = String(replay.metadata?.workItemId || "");
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: stock.rooftop.id, aggregateType: "InventoryStock", aggregateId: stock.id, action: "recon-work-created", actorId: context.session.itemId, afterSnapshot: evidence, metadata: { workItemId: priorItemId }, payload: { rooftopId: stock.rooftop.id, ...evidence, workItemId: priorItemId } });
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: stock.rooftop.id, aggregateType: "InventoryStock", aggregateId: stock.id, action: "recon-work-created", actorId: context.session.itemId, afterSnapshot: evidence, metadata: { workItemId: priorItemId } });
       return priorItemId;
     }
     await tx.prisma.inventoryReconWorkItem.create({ data: { id: itemId, rooftopId: stock.rooftop.id, stockId: stock.id, title, category, status: "open", estimatedCostCents, vendorName, assignedToId, dueAt } });
     await tx.prisma.inventoryStock.update({ where: { id: stock.id }, data: { reconStatus: "in-progress" } });
-    const event2 = { eventKey, rooftopId: stock.rooftop.id, aggregateType: "InventoryStock", aggregateId: stock.id, action: "recon-work-created", actorId: context.session.itemId, afterSnapshot: evidence, metadata: { workItemId: itemId }, payload: { rooftopId: stock.rooftop.id, ...evidence, workItemId: itemId } };
+    const event2 = { eventKey, rooftopId: stock.rooftop.id, aggregateType: "InventoryStock", aggregateId: stock.id, action: "recon-work-created", actorId: context.session.itemId, afterSnapshot: evidence, metadata: { workItemId: itemId } };
     await recordDomainEventInTransaction(tx, event2);
     await stockEvent(tx, event2, "recon-work-created", reason, estimatedCostCents ?? void 0, { ...evidence, workItemId: itemId });
     return itemId;
@@ -14122,7 +15217,7 @@ async function transitionInventoryReconWorkItemCommand(_root, { data }, context)
   const priorEvent2 = await context.sudo().prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { id: true } });
   if (!priorEvent2) assertReconTransition(item.status, toStatus);
   const reused = await context.transaction(async (tx) => {
-    const event2 = { eventKey, rooftopId: item.stock.rooftop.id, aggregateType: "InventoryStock", aggregateId: item.stock.id, action: `recon-work:${toStatus}`, actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: item.stock.rooftop.id, ...evidence } };
+    const event2 = { eventKey, rooftopId: item.stock.rooftop.id, aggregateType: "InventoryStock", aggregateId: item.stock.id, action: `recon-work:${toStatus}`, actorId: context.session.itemId, afterSnapshot: evidence };
     if (await commandEvent(tx, event2)) return true;
     const changed = await tx.prisma.inventoryReconWorkItem.updateMany({ where: { id: item.id, status: item.status, updatedAt: expectedUpdatedAt }, data: { status: toStatus, actualCostCents, completedAt: toStatus === "completed" ? /* @__PURE__ */ new Date() : null } });
     if (changed.count !== 1) throw new Error("Reconditioning work changed concurrently; reload and retry");
@@ -14142,7 +15237,7 @@ var openInventoryReconWorkItem = inventoryCommand(openInventoryReconWorkItemComm
 var transitionInventoryReconWorkItem = inventoryCommand(transitionInventoryReconWorkItemCommand);
 
 // features/keystone/mutations/inventoryPublishingCommands.ts
-var import_node_crypto6 = require("node:crypto");
+var import_node_crypto7 = require("node:crypto");
 
 // features/keystone/lifecycle/inventoryPriceHistory.ts
 async function appendInventoryPriceHistory(tx, input2) {
@@ -14220,7 +15315,7 @@ async function updateInventoryMerchandisingDraftCommand(_root, { data }, context
   };
   const reused = await context.transaction(async (tx) => {
     await lockInventoryStock(tx, stock.id);
-    const event2 = { eventKey, rooftopId: stock.rooftop.id, aggregateType: "InventoryStock", aggregateId: stock.id, action: "merchandising-draft-updated", actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: stock.rooftop.id, ...evidence } };
+    const event2 = { eventKey, rooftopId: stock.rooftop.id, aggregateType: "InventoryStock", aggregateId: stock.id, action: "merchandising-draft-updated", actorId: context.session.itemId, afterSnapshot: evidence };
     const recorded = await recordDomainEventInTransaction(tx, event2);
     if (recorded.reused) return true;
     const current = await loadInventoryPublication(tx, stock.id);
@@ -14261,7 +15356,7 @@ async function submitInventoryMerchandisingCommand(_root, { data }, context) {
       const eventEvidence3 = { snapshot: replay.afterSnapshot?.snapshot, reason };
       const versionId2 = String(replay.metadata?.versionId || "");
       const version2 = await tx.prisma.inventoryMerchandisingVersion.findUnique({ where: { id: versionId2 }, select: { version: true } });
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: stock.rooftop.id, aggregateType: "InventoryStock", aggregateId: stock.id, action: "merchandising-submitted", actorId: context.session.itemId, afterSnapshot: eventEvidence3, metadata: { versionId: versionId2, version: version2?.version }, payload: { stockId: stock.id, rooftopId: stock.rooftop.id, versionId: versionId2, version: version2?.version } });
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: stock.rooftop.id, aggregateType: "InventoryStock", aggregateId: stock.id, action: "merchandising-submitted", actorId: context.session.itemId, afterSnapshot: eventEvidence3, metadata: { versionId: versionId2, version: version2?.version } });
       return { id: versionId2, reused: true };
     }
     const current = await loadInventoryPublication(tx, stock.id);
@@ -14271,10 +15366,10 @@ async function submitInventoryMerchandisingCommand(_root, { data }, context) {
     const snapshot2 = assertMerchandisingContent(current);
     const eventEvidence2 = { snapshot: snapshot2, reason };
     const version = (current.merchandisingVersions[0]?.version ?? 0) + 1;
-    const versionId = (0, import_node_crypto6.randomUUID)();
+    const versionId = (0, import_node_crypto7.randomUUID)();
     await tx.prisma.inventoryMerchandisingVersion.create({ data: { id: versionId, rooftopId: stock.rooftop.id, stockId: stock.id, version, versionKey: `${stock.id}:${version}`, status: "submitted", snapshot: snapshot2, submittedById: context.session.itemId, submittedAt: /* @__PURE__ */ new Date() } });
     await tx.prisma.inventoryStock.update({ where: { id: stock.id }, data: { merchandisingStatus: "submitted", approvedRevisionHash: "", feedStatus: "not-published" } });
-    const event2 = { eventKey, rooftopId: stock.rooftop.id, aggregateType: "InventoryStock", aggregateId: stock.id, action: "merchandising-submitted", actorId: context.session.itemId, afterSnapshot: eventEvidence2, metadata: { versionId, version }, payload: { stockId: stock.id, rooftopId: stock.rooftop.id, versionId, version } };
+    const event2 = { eventKey, rooftopId: stock.rooftop.id, aggregateType: "InventoryStock", aggregateId: stock.id, action: "merchandising-submitted", actorId: context.session.itemId, afterSnapshot: eventEvidence2, metadata: { versionId, version } };
     await recordDomainEventInTransaction(tx, event2);
     await tx.prisma.inventoryStockEvent.create({ data: { rooftopId: stock.rooftop.id, stockId: stock.id, eventKey, eventType: "merchandising-submitted", reason, evidence: { versionId, version }, actorId: context.session.itemId } });
     return { id: versionId, reused: false };
@@ -14297,7 +15392,7 @@ async function decideInventoryMerchandisingCommand(_root, { data }, context) {
   if (!priorEvent2 && decision === "approved") assertActiveInventory(version.stock.vehicle?.status);
   const reused = await context.transaction(async (tx) => {
     await lockInventoryStock(tx, version.stock.id);
-    const event2 = { eventKey, rooftopId: version.stock.rooftop.id, aggregateType: "InventoryStock", aggregateId: version.stock.id, action: reapproval ? "merchandising-reapproved" : `merchandising-${decision}`, actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: version.stock.rooftop.id, ...evidence } };
+    const event2 = { eventKey, rooftopId: version.stock.rooftop.id, aggregateType: "InventoryStock", aggregateId: version.stock.id, action: reapproval ? "merchandising-reapproved" : `merchandising-${decision}`, actorId: context.session.itemId, afterSnapshot: evidence };
     const recorded = await recordDomainEventInTransaction(tx, event2);
     if (recorded.reused) return true;
     const current = await loadInventoryPublication(tx, version.stock.id);
@@ -14384,7 +15479,7 @@ async function recordInventoryFeedRunCommand(_root, { data }, context) {
     const replay = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { metadata: true } });
     if (replay) {
       const runId2 = String(replay.metadata?.runId || "");
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: "InventoryFeedRun", aggregateId: runId2, action: "recorded", actorId: context.session.itemId, afterSnapshot: evidence, metadata: { runId: runId2 }, payload: { rooftopId, runId: runId2, ...evidence } });
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: "InventoryFeedRun", aggregateId: runId2, action: "recorded", actorId: context.session.itemId, afterSnapshot: evidence, metadata: { runId: runId2 } });
       return { id: runId2, reused: true };
     }
     const revisions = [];
@@ -14393,14 +15488,14 @@ async function recordInventoryFeedRunCommand(_root, { data }, context) {
       if (current.rooftopId !== rooftopId) throw new Error("Inventory rooftop changed");
       if (channel.key === "public-inventory-feed") revisions.push({ stockId, ...assertPublishableInventory(current) });
     }
-    const runId = (0, import_node_crypto6.randomUUID)();
+    const runId = (0, import_node_crypto7.randomUUID)();
     await tx.prisma.inventoryFeedRun.create({ data: { id: runId, rooftopId, runKey: eventKey, channelKey: channel.key, status, attemptedCount: stockIds.length, succeededCount, failedCount, requestSnapshot: { stockIds, revisions }, responseSummary: { mode: channel.mode, externalRequestSent: channel.externalRequestSent }, startedAt, completedAt, recordedById: context.session.itemId } });
     if (errors.length) await tx.prisma.inventoryFeedError.createMany({ data: errors.map((error) => ({ rooftopId, runId, stockId: error.stockId, errorCode: error.errorCode, message: error.message, rowReference: error.rowReference, evidence: { source: "operator-recorded" } })) });
     const failedIds = [...failedStockIds];
     const succeededIds = stockIds.filter((id) => !failedStockIds.has(id));
     if (failedIds.length) await tx.prisma.inventoryStock.updateMany({ where: { id: { in: failedIds }, rooftopId }, data: { feedStatus: "failed" } });
     if (succeededIds.length) await tx.prisma.inventoryStock.updateMany({ where: { id: { in: succeededIds }, rooftopId }, data: { feedStatus: "succeeded" } });
-    await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: "InventoryFeedRun", aggregateId: runId, action: "recorded", actorId: context.session.itemId, afterSnapshot: evidence, metadata: { runId }, payload: { rooftopId, runId, ...evidence } });
+    await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: "InventoryFeedRun", aggregateId: runId, action: "recorded", actorId: context.session.itemId, afterSnapshot: evidence, metadata: { runId } });
     return { id: runId, reused: false };
   }, { timeout: 3e4 });
   return { id: command.id, rooftopId, channelKey: channel.key, status, attemptedCount: stockIds.length, succeededCount, failedCount, errorCount: errors.length, completedAt, reused: command.reused };
@@ -14449,7 +15544,7 @@ async function returnListingToDraft(tx, stock, actorId) {
   await tx.prisma.inventoryMerchandisingVersion.updateMany({ where: { stockId: stock.id, status: "submitted" }, data: { status: "rejected", decisionReason: "Superseded by photo change", decidedById: actorId, decidedAt: /* @__PURE__ */ new Date() } });
 }
 async function recordPhotoEvent(tx, stock, context, eventKey, action, reason, evidence) {
-  const event2 = { eventKey, rooftopId: stock.rooftop.id, aggregateType: "InventoryStock", aggregateId: stock.id, action, actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: stock.rooftop.id, ...evidence } };
+  const event2 = { eventKey, rooftopId: stock.rooftop.id, aggregateType: "InventoryStock", aggregateId: stock.id, action, actorId: context.session.itemId, afterSnapshot: evidence };
   const recorded = await recordDomainEventInTransaction(tx, event2);
   if (recorded.reused) return true;
   await tx.prisma.inventoryStockEvent.create({ data: { rooftopId: stock.rooftop.id, stockId: stock.id, eventKey, eventType: action, reason, evidence, actorId: context.session.itemId } });
@@ -14541,6 +15636,7 @@ async function arrangeInventoryVehiclePhotosCommand(_root, { data }, context) {
     const currentIds = new Set(current.map((image5) => image5.id));
     if (current.length !== imageIds.length || imageIds.some((id) => !currentIds.has(id))) throw new Error("Photos changed; reload and try again");
     if (photoArrangementUnchanged(current, imageIds)) return false;
+    await tx.prisma.vehicleImage.updateMany({ where: { vehicleId: stock.vehicle.id, isPrimary: true, id: { not: imageIds[0] } }, data: { isPrimary: false } });
     for (const [index, id] of imageIds.entries()) {
       await tx.prisma.vehicleImage.update({ where: { id }, data: { sortOrder: index, isPrimary: index === 0 } });
     }
@@ -14658,8 +15754,7 @@ async function updateInventoryVehicleDetailsCommand(_root, { data }, context) {
     aggregateId: stock.id,
     action: "vehicle-details-updated",
     actorId,
-    afterSnapshot: request,
-    payload: { rooftopId, ...request }
+    afterSnapshot: request
   };
   const reused = await context.transaction(async (tx) => {
     await lockInventoryStock(tx, stock.id);
@@ -14875,7 +15970,7 @@ async function fixedOpsWorkspace(_root, args, context) {
 }
 
 // features/keystone/mutations/operatorCommands.ts
-var import_node_crypto7 = require("node:crypto");
+var import_node_crypto8 = require("node:crypto");
 
 // features/keystone/lifecycle/leadClosure.ts
 var DELIVERY_CLOSE_WON_FROM = ["new", "contacted", "test-drive-scheduled", "negotiating", "closed-lost"];
@@ -14906,8 +16001,7 @@ async function closeLeadWonOnDelivery(tx, input2) {
     action: "transitioned:closed-won",
     actorId: input2.actorId,
     occurredAt: input2.occurredAt,
-    afterSnapshot: { leadId: lead.id, fromStatus, toStatus: "closed-won", source: "deal-delivery", dealId: input2.dealId },
-    payload: { leadId: lead.id, rooftopId: input2.rooftopId, status: "closed-won", dealId: input2.dealId }
+    afterSnapshot: { leadId: lead.id, fromStatus, toStatus: "closed-won", source: "deal-delivery", dealId: input2.dealId }
   });
   return fromStatus;
 }
@@ -14938,7 +16032,7 @@ async function transferLeadOwnership(_root, { data }, context) {
   const firstResponseDueAt = new Date(assignedAt.getTime() + 30 * 6e4);
   const evidence = { leadId: lead.id, assignedToId, expectedUpdatedAt: expectedUpdatedAt.toISOString(), reason, assignedAt, firstResponseDueAt };
   const reused = await context.transaction(async (tx) => {
-    const event2 = { eventKey, rooftopId: lead.rooftop.id, aggregateType: "Lead", aggregateId: lead.id, action: "ownership-transferred", actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: lead.rooftop.id, leadId: lead.id, assignedToId } };
+    const event2 = { eventKey, rooftopId: lead.rooftop.id, aggregateType: "Lead", aggregateId: lead.id, action: "ownership-transferred", actorId: context.session.itemId, afterSnapshot: evidence };
     const recorded = await recordDomainEventInTransaction(tx, event2);
     if (recorded.reused) return true;
     const changed = await tx.prisma.lead.updateMany({ where: { id: lead.id, rooftopId: lead.rooftop.id, updatedAt: expectedUpdatedAt }, data: { assignedSalespersonId: assignedToId, assignedAt, firstResponseDueAt } });
@@ -15026,7 +16120,7 @@ async function saveDealWorksheet(_root, { data }, context) {
   const reused = await context.transaction(async (tx) => {
     await lockDeal(tx, deal.id);
     await currentDealAuthority(tx, context.session, deal.id, ["canManageDeals"]);
-    const event2 = { eventKey, rooftopId: deal.rooftop.id, aggregateType: "Deal", aggregateId: deal.id, action: "worksheet-saved", actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: deal.rooftop.id, dealId: deal.id, terms } };
+    const event2 = { eventKey, rooftopId: deal.rooftop.id, aggregateType: "Deal", aggregateId: deal.id, action: "worksheet-saved", actorId: context.session.itemId, afterSnapshot: evidence };
     const recorded = await recordDomainEventInTransaction(tx, event2);
     if (recorded.reused) return true;
     const changed = await tx.prisma.deal.updateMany({
@@ -15051,7 +16145,7 @@ async function presentDealWorksheet(_root, { data }, context) {
   const reused = await context.transaction(async (tx) => {
     await lockDeal(tx, deal.id);
     await currentDealAuthority(tx, context.session, deal.id, ["canManageDeals"]);
-    const event2 = { eventKey, rooftopId: deal.rooftop.id, aggregateType: "Deal", aggregateId: deal.id, action: "worksheet-presented", actorId: context.session.itemId, afterSnapshot: snapshot2, payload: { rooftopId: deal.rooftop.id, dealId: deal.id, worksheetVersion: deal.worksheetVersion } };
+    const event2 = { eventKey, rooftopId: deal.rooftop.id, aggregateType: "Deal", aggregateId: deal.id, action: "worksheet-presented", actorId: context.session.itemId, afterSnapshot: snapshot2 };
     const recorded = await recordDomainEventInTransaction(tx, event2);
     if (recorded.reused) return true;
     const changed = await tx.prisma.deal.updateMany({ where: { id: deal.id, status: "pencil", updatedAt: expectedUpdatedAt }, data: { presentedSnapshot: snapshot2, presentedAt: /* @__PURE__ */ new Date() } });
@@ -15074,7 +16168,7 @@ async function acceptDealWorksheet(_root, { data }, context) {
   const reused = await context.transaction(async (tx) => {
     await lockDeal(tx, deal.id);
     await currentDealAuthority(tx, context.session, deal.id, ["canManageDeals"]);
-    const event2 = { eventKey, rooftopId: deal.rooftop.id, aggregateType: "Deal", aggregateId: deal.id, action: "worksheet-accepted", actorId: context.session.itemId, afterSnapshot: snapshot2, payload: { rooftopId: deal.rooftop.id, dealId: deal.id, worksheetVersion: deal.worksheetVersion } };
+    const event2 = { eventKey, rooftopId: deal.rooftop.id, aggregateType: "Deal", aggregateId: deal.id, action: "worksheet-accepted", actorId: context.session.itemId, afterSnapshot: snapshot2 };
     const recorded = await recordDomainEventInTransaction(tx, event2);
     if (recorded.reused) return true;
     const changed = await tx.prisma.deal.updateMany({ where: { id: deal.id, status: "pencil", updatedAt: expectedUpdatedAt }, data: { acceptedSnapshot: snapshot2, acceptedAt: /* @__PURE__ */ new Date() } });
@@ -15106,7 +16200,7 @@ async function selectDealLenderOffer(_root, { data }, context) {
     const evidence = { request, dealId: deal.id, lenderDecisionId: decision.id, binding, offer: { providerKey: decision.providerKey, decision: decision.decision, approvedAmountCents: decision.approvedAmountCents, aprBasisPoints: decision.aprBasisPoints, termMonths: decision.termMonths, monthlyPaymentCents: decision.monthlyPaymentCents } };
     const prior = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey } });
     if (!prior && deal.status !== "pencil") throw new Error("Only pencil finance or lease deals can select lender offers");
-    const recorded = await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: "Deal", aggregateId: deal.id, action: "lender-offer-selected", actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: deal.rooftopId, dealId: deal.id, lenderDecisionId: decision.id } });
+    const recorded = await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: "Deal", aggregateId: deal.id, action: "lender-offer-selected", actorId: context.session.itemId, afterSnapshot: evidence });
     if (recorded.reused) {
       if (deal.selectedLenderDecisionId !== decision.id) throw new Error("Lender selection was superseded; select with a new request");
     } else {
@@ -15135,7 +16229,7 @@ async function reopenDealWorksheet(_root, { data }, context) {
     await currentDealAuthority(tx, context.session, deal.id, ["canManageDeals", "canApproveDeals"]);
     const currentVehicle = await tx.prisma.vehicle.findUnique({ where: { id: rawDeal.vehicleId } });
     if (currentVehicle?.status !== "pending" || currentVehicle.rooftopId !== deal.rooftop.id) throw new Error("Reserved vehicle is required to reopen a deal");
-    const event2 = { eventKey, rooftopId: deal.rooftop.id, aggregateType: "Deal", aggregateId: deal.id, action: "worksheet-reopened", actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: deal.rooftop.id, dealId: deal.id, priorStatus: deal.status, status: "pencil" } };
+    const event2 = { eventKey, rooftopId: deal.rooftop.id, aggregateType: "Deal", aggregateId: deal.id, action: "worksheet-reopened", actorId: context.session.itemId, afterSnapshot: evidence };
     const recorded = await recordDomainEventInTransaction(tx, event2);
     if (recorded.reused) return true;
     const changed = await tx.prisma.deal.updateMany({ where: { id: deal.id, status: deal.status, updatedAt: expectedUpdatedAt }, data: { status: "pencil", lockedAt: null, evidenceSnapshot: {}, presentedAt: null, presentedSnapshot: {}, acceptedAt: null, acceptedSnapshot: {}, selectedLenderDecisionId: null } });
@@ -15191,7 +16285,6 @@ async function completeDealDelivery(_root, { data }, context) {
     const required11 = ["identity", "insurance", "registration", "title-handoff", "funding"];
     if (!required11.every((code) => checklist.some((item) => item.code === code && ["complete", "waived"].includes(item.status) && String(item.evidenceReference || "").trim()))) throw new Error("Server-verified delivery checklist is incomplete");
     if (stableJson(deliveryCase.deliverySnapshot?.checklist) !== stableJson(checklist) || deliveryCase.deliverySnapshot?.customerAcknowledgment !== deliveryCase.customerAcknowledgment || deliveryCase.deliverySnapshot?.acknowledgedAt !== deliveryCase.acknowledgedAt.toISOString()) throw new Error("Delivery acknowledgment no longer matches its recorded checklist evidence");
-    const payload = { rooftopId: deal.rooftopId, dealId: deal.id, vehicleId: deal.vehicleId, status: "delivered" };
     if (deal.status !== "financed") throw new Error("Only financed deals can be delivered");
     if (deliveryCase.status !== "ready") throw new Error("Ready customer-acknowledged delivery case is required");
     if (stableJson(deliveryCase.deliverySnapshot?.binding) !== stableJson({ ...worksheetBinding(deal), acceptedHash: domainEventRequestHash(deal.acceptedSnapshot) })) throw new Error("Delivery acknowledgment is unbound or stale; record it for the current worksheet");
@@ -15216,7 +16309,7 @@ async function completeDealDelivery(_root, { data }, context) {
     const completedCase = await tx.prisma.deliveryCase.updateMany({ where: { id: deliveryCase.id, dealId: deal.id, rooftopId: deal.rooftopId, status: "ready", updatedAt: expectedDeliveryCaseUpdatedAt }, data: { status: "delivered", deliverySnapshot: evidence } });
     if (completedCase.count !== 1) throw new Error("Delivery case changed concurrently");
     await closeLeadWonOnDelivery(tx, { dealId: deal.id, leadId: deal.leadId, rooftopId: deal.rooftopId, actorId: context.session.itemId, deliveryEventKey: eventKey, occurredAt: /* @__PURE__ */ new Date() });
-    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: "Deal", aggregateId: deal.id, action: "delivery-completed", actorId: context.session.itemId, afterSnapshot: evidence, payload });
+    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: "Deal", aggregateId: deal.id, action: "delivery-completed", actorId: context.session.itemId, afterSnapshot: evidence });
     const current = await authority.context.query.Deal.findOne({ where: { id: deal.id }, query: "id status updatedAt" });
     return { ...current, reused: false };
   }, { timeout: 3e4, isolationLevel: "Serializable" });
@@ -15228,23 +16321,23 @@ async function openFinanceFollowUp(_root, { data }, context) {
   await assertSessionRooftopPermission(context, lead.rooftop.id, "canManageFinancing");
   const eventKey = `finance-follow-up:${idempotencyKey3(data.idempotencyKey)}`;
   const evidence = { leadId: lead.id, priority: "high", reason: required8(data.reason, "Follow-up reason") };
-  const taskId = (0, import_node_crypto7.randomUUID)();
+  const taskId = (0, import_node_crypto8.randomUUID)();
   const resolved = await context.transaction(async (tx) => {
     await tx.prisma.$queryRaw`SELECT 1 AS "locked" FROM pg_advisory_xact_lock(hashtextextended(${`command:${eventKey}`}, 0))`;
     const replay = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { metadata: true } });
     if (replay) {
       const priorTaskId = String(replay.metadata?.taskId || "");
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: lead.rooftop.id, aggregateType: "Lead", aggregateId: lead.id, action: "finance-follow-up-opened", actorId: context.session.itemId, afterSnapshot: evidence, metadata: { taskId: priorTaskId }, payload: { rooftopId: lead.rooftop.id, leadId: lead.id, taskId: priorTaskId } });
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: lead.rooftop.id, aggregateType: "Lead", aggregateId: lead.id, action: "finance-follow-up-opened", actorId: context.session.itemId, afterSnapshot: evidence, metadata: { taskId: priorTaskId } });
       return { id: priorTaskId, reused: true };
     }
     if (lead.tasks.length) {
       const existingTaskId = lead.tasks[0].id;
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: lead.rooftop.id, aggregateType: "Lead", aggregateId: lead.id, action: "finance-follow-up-opened", actorId: context.session.itemId, afterSnapshot: evidence, metadata: { taskId: existingTaskId }, payload: { rooftopId: lead.rooftop.id, leadId: lead.id, taskId: existingTaskId } });
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: lead.rooftop.id, aggregateType: "Lead", aggregateId: lead.id, action: "finance-follow-up-opened", actorId: context.session.itemId, afterSnapshot: evidence, metadata: { taskId: existingTaskId } });
       return { id: existingTaskId, reused: true };
     }
     const dueDate = new Date(Date.now() + 864e5);
     await tx.prisma.task.create({ data: { id: taskId, rooftopId: lead.rooftop.id, leadId: lead.id, title: `F&I follow-up: ${`${lead.firstName || ""} ${lead.lastName || ""}`.trim() || "Finance applicant"}`, description: evidence.reason, priority: "high", completed: false, dueDate } });
-    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: lead.rooftop.id, aggregateType: "Lead", aggregateId: lead.id, action: "finance-follow-up-opened", actorId: context.session.itemId, afterSnapshot: evidence, metadata: { taskId }, payload: { rooftopId: lead.rooftop.id, leadId: lead.id, taskId } });
+    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: lead.rooftop.id, aggregateType: "Lead", aggregateId: lead.id, action: "finance-follow-up-opened", actorId: context.session.itemId, afterSnapshot: evidence, metadata: { taskId } });
     return { id: taskId, reused: false };
   }, { timeout: 3e4 });
   return { id: resolved.id, status: "open", updatedAt: /* @__PURE__ */ new Date(), reused: resolved.reused };
@@ -15266,13 +16359,13 @@ async function addServiceOrderLineItem(_root, { data }, context) {
   const expectedUpdatedAt = commandDate(data.expectedUpdatedAt);
   const eventKey = `service-line-add:${idempotencyKey3(data.idempotencyKey)}`;
   const evidence = { serviceOrderId: order2.id, itemType, description, partNumber: String(data.partNumber || "").trim().slice(0, 100), quantity, unitPriceCents, priceCents, costCents, expectedUpdatedAt: expectedUpdatedAt.toISOString() };
-  const lineId = (0, import_node_crypto7.randomUUID)();
+  const lineId = (0, import_node_crypto8.randomUUID)();
   const resolved = await context.transaction(async (tx) => {
     await tx.prisma.$queryRaw`SELECT 1 AS "locked" FROM pg_advisory_xact_lock(hashtextextended(${`command:${eventKey}`}, 0))`;
     const replay = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { metadata: true } });
     if (replay) {
       const priorLineId = String(replay.metadata?.lineItemId || "");
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: order2.rooftop.id, aggregateType: "ServiceOrder", aggregateId: order2.id, action: "line-item-added", actorId: context.session.itemId, afterSnapshot: evidence, metadata: { lineItemId: priorLineId }, payload: { rooftopId: order2.rooftop.id, serviceOrderId: order2.id, lineItemId: priorLineId, priceCents } });
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: order2.rooftop.id, aggregateType: "ServiceOrder", aggregateId: order2.id, action: "line-item-added", actorId: context.session.itemId, afterSnapshot: evidence, metadata: { lineItemId: priorLineId } });
       return { id: priorLineId, reused: true };
     }
     if (!["estimate", "approved", "in-progress"].includes(order2.status)) throw new Error("Service order lines are locked at completion");
@@ -15280,7 +16373,7 @@ async function addServiceOrderLineItem(_root, { data }, context) {
     if (!current2 || current2.updatedAt.getTime() !== expectedUpdatedAt.getTime()) throw new Error("Service order changed concurrently; reload and retry");
     await tx.prisma.repairOrderLineItem.create({ data: { id: lineId, rooftopId: order2.rooftop.id, serviceOrderId: order2.id, itemType, description, partNumber: evidence.partNumber, quantity, unitPriceCents, priceCents, costCents } });
     await recomputeServiceOrderTotals(tx, order2.id, current2.taxCents ?? 0);
-    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: order2.rooftop.id, aggregateType: "ServiceOrder", aggregateId: order2.id, action: "line-item-added", actorId: context.session.itemId, afterSnapshot: evidence, metadata: { lineItemId: lineId }, payload: { rooftopId: order2.rooftop.id, serviceOrderId: order2.id, lineItemId: lineId, priceCents } });
+    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: order2.rooftop.id, aggregateType: "ServiceOrder", aggregateId: order2.id, action: "line-item-added", actorId: context.session.itemId, afterSnapshot: evidence, metadata: { lineItemId: lineId } });
     return { id: lineId, reused: false };
   }, { timeout: 3e4 });
   const current = await context.query.ServiceOrder.findOne({ where: { id: order2.id }, query: "id status updatedAt" });
@@ -15288,7 +16381,7 @@ async function addServiceOrderLineItem(_root, { data }, context) {
 }
 
 // features/keystone/mutations/crmEngagementWorkflows.ts
-var import_node_crypto8 = require("node:crypto");
+var import_node_crypto9 = require("node:crypto");
 var CADENCES = {
   "internet-lead-first-response": [
     { step: "initial-response", channel: "email", delayMinutes: 0, taskTitle: "Respond to internet lead" },
@@ -15362,8 +16455,7 @@ async function updateCustomerCommunicationPreferences(_root, { data }, context) 
         action: "contact-preferences-updated",
         actorId: context.session.itemId,
         afterSnapshot: { customerId, expectedUpdatedAt: expectedUpdatedAt.toISOString(), ...snapshot2 },
-        metadata: replay.metadata,
-        payload: { customerId, rooftopId: visible.rooftop.id, preferredChannel }
+        metadata: replay.metadata
       });
       return { id: customerId, status: preferredChannel, updatedAt: /* @__PURE__ */ new Date(), reused: true };
     }
@@ -15396,8 +16488,7 @@ async function updateCustomerCommunicationPreferences(_root, { data }, context) 
       action: "contact-preferences-updated",
       actorId: context.session.itemId,
       afterSnapshot: { customerId, expectedUpdatedAt: expectedUpdatedAt.toISOString(), ...snapshot2 },
-      metadata: { preferenceEventId: preferenceEvent.id },
-      payload: { customerId, rooftopId: visible.rooftop.id, preferredChannel }
+      metadata: { preferenceEventId: preferenceEvent.id }
     });
     return { id: customerId, status: preferredChannel, updatedAt: now, reused: false };
   }, { timeout: 3e4 });
@@ -15433,8 +16524,7 @@ async function enrollLeadCadence(_root, { data }, context) {
         action: "cadence-enrolled",
         actorId: context.session.itemId,
         afterSnapshot,
-        metadata: replay.metadata,
-        payload: { leadId, rooftopId: lead.rooftop.id, cadenceKey, campaignKey, cadenceStatus, taskId: replay.metadata?.taskId ?? null }
+        metadata: replay.metadata
       });
       return { id: leadId, status: cadenceStatus, updatedAt: /* @__PURE__ */ new Date(), reused: true };
     }
@@ -15460,8 +16550,7 @@ async function enrollLeadCadence(_root, { data }, context) {
       action: "cadence-enrolled",
       actorId: context.session.itemId,
       afterSnapshot,
-      metadata: { taskId },
-      payload: { leadId, rooftopId: lead.rooftop.id, cadenceKey, campaignKey, cadenceStatus, taskId }
+      metadata: { taskId }
     });
     return { id: leadId, status: cadenceStatus, updatedAt: dueAt, reused: false };
   }, { timeout: 3e4 });
@@ -15488,8 +16577,7 @@ async function advanceLeadCadence(_root, { data }, context) {
         action: "cadence-advanced",
         actorId: context.session.itemId,
         afterSnapshot: prior,
-        metadata: replay.metadata,
-        payload: { leadId, rooftopId: visible.rooftop.id, cadenceKey: prior.cadenceKey, cadenceStatus: prior.cadenceStatus, cadenceStep: prior.cadenceStep, taskId: replay.metadata?.taskId ?? null }
+        metadata: replay.metadata
       });
       return { id: leadId, status: String(prior.cadenceStatus), updatedAt: /* @__PURE__ */ new Date(), reused: true };
     }
@@ -15528,8 +16616,7 @@ async function advanceLeadCadence(_root, { data }, context) {
       action: "cadence-advanced",
       actorId: context.session.itemId,
       afterSnapshot,
-      metadata: { taskId },
-      payload: { leadId, rooftopId: visible.rooftop.id, cadenceKey: lead.cadenceKey, cadenceStatus, cadenceStep: afterSnapshot.cadenceStep, taskId }
+      metadata: { taskId }
     });
     return { id: leadId, status: cadenceStatus, updatedAt: /* @__PURE__ */ new Date(), reused: false };
   }, { timeout: 3e4 });
@@ -15558,8 +16645,7 @@ async function linkCustomerHousehold(_root, { data }, context) {
         action: "members-linked",
         actorId: context.session.itemId,
         afterSnapshot: { customerIds: [...customerIds].sort(), displayName, expectedUpdatedAt: expected.map((value) => value.toISOString()) },
-        metadata: replay.metadata,
-        payload: { rooftopId, householdId: replay.aggregateId, customerIds }
+        metadata: replay.metadata
       });
       return { id: replay.aggregateId, status: "active", updatedAt: /* @__PURE__ */ new Date(), reused: true };
     }
@@ -15567,7 +16653,7 @@ async function linkCustomerHousehold(_root, { data }, context) {
     if (rows.length !== 2 || rows.some((row, index) => row.updatedAt.getTime() !== expected[customerIds.indexOf(row.id)].getTime())) throw new Error("Customer changed concurrently; reload and retry");
     const existingHouseholds = [...new Set(rows.map((row) => row.householdId).filter(Boolean))];
     if (existingHouseholds.length > 1) throw new Error("Customers already belong to different households");
-    const household = existingHouseholds.length === 1 ? await tx.prisma.customerHousehold.update({ where: { id: existingHouseholds[0] }, data: { displayName } }) : await tx.prisma.customerHousehold.create({ data: { id: (0, import_node_crypto8.randomUUID)(), rooftopId, householdKey, displayName } });
+    const household = existingHouseholds.length === 1 ? await tx.prisma.customerHousehold.update({ where: { id: existingHouseholds[0] }, data: { displayName } }) : await tx.prisma.customerHousehold.create({ data: { id: (0, import_node_crypto9.randomUUID)(), rooftopId, householdKey, displayName } });
     await tx.prisma.customer.updateMany({ where: { id: { in: customerIds }, rooftopId }, data: { householdId: household.id } });
     await recordDomainEventInTransaction(tx, {
       eventKey,
@@ -15577,8 +16663,7 @@ async function linkCustomerHousehold(_root, { data }, context) {
       action: "members-linked",
       actorId: context.session.itemId,
       afterSnapshot: { customerIds: [...customerIds].sort(), displayName, expectedUpdatedAt: expected.map((value) => value.toISOString()) },
-      metadata: { householdId: household.id },
-      payload: { rooftopId, householdId: household.id, customerIds }
+      metadata: { householdId: household.id }
     });
     return { id: household.id, status: "active", updatedAt: household.updatedAt, reused: false };
   }, { timeout: 3e4 });
@@ -15635,8 +16720,7 @@ async function manageSalesVisit(_root, { data }, context) {
         action,
         actorId: context.session.itemId,
         afterSnapshot: prior,
-        metadata: replay.metadata,
-        payload: { rooftopId, visitId: replay.aggregateId, action }
+        metadata: replay.metadata
       });
       return { id: replay.aggregateId, status: String(prior?.status || action), updatedAt: /* @__PURE__ */ new Date(), reused: true };
     }
@@ -15648,7 +16732,7 @@ async function manageSalesVisit(_root, { data }, context) {
       if (!["appointment", "showroom"].includes(kind)) throw new Error("Sales visit kind is invalid");
       const scheduledAt = date3(data.scheduledAt || now, "Scheduled time");
       visit = await tx.prisma.salesVisit.create({
-        data: { id: (0, import_node_crypto8.randomUUID)(), rooftopId, leadId, customerId: lead.customer.id, vehicleId: String(data.vehicleId || lead.interestedVehicle?.id || "") || null, assignedSalespersonId: lead.assignedSalesperson?.id || context.session.itemId, kind, status: kind === "showroom" ? "arrived" : "scheduled", scheduledAt, arrivedAt: kind === "showroom" ? now : null, notes: String(data.notes || "").trim().slice(0, 4e3) }
+        data: { id: (0, import_node_crypto9.randomUUID)(), rooftopId, leadId, customerId: lead.customer.id, vehicleId: String(data.vehicleId || lead.interestedVehicle?.id || "") || null, assignedSalespersonId: lead.assignedSalesperson?.id || context.session.itemId, kind, status: kind === "showroom" ? "arrived" : "scheduled", scheduledAt, arrivedAt: kind === "showroom" ? now : null, notes: String(data.notes || "").trim().slice(0, 4e3) }
       });
     } else {
       if (!visibleVisit || !expectedUpdatedAt) throw new Error("Sales visit is required");
@@ -15670,8 +16754,7 @@ async function manageSalesVisit(_root, { data }, context) {
       action,
       actorId: context.session.itemId,
       afterSnapshot,
-      metadata: { visitId: visit.id },
-      payload: { rooftopId, visitId: visit.id, leadId: visit.leadId, status: visit.status }
+      metadata: { visitId: visit.id }
     });
     return { id: visit.id, status: visit.status, updatedAt: visit.updatedAt, reused: false };
   }, { timeout: 3e4 });
@@ -15793,8 +16876,7 @@ async function createLead(_root, { data }, context) {
       action: "created",
       actorId: context.session.itemId,
       afterSnapshot: { requestEvidence, customerId: customer.id, assigneeId: assignment.assigneeId, routeKey: assignment.routeKey, firstResponseDueAt: assignment.firstResponseDueAt.toISOString() },
-      metadata: { leadId: lead.id, customerId: customer.id },
-      payload: { rooftopId, leadId: lead.id, customerId: customer.id, source, assigneeId: assignment.assigneeId, routeKey: assignment.routeKey }
+      metadata: { leadId: lead.id, customerId: customer.id }
     });
     return { id: lead.id, customerId: customer.id, assignedToId: assignment.assigneeId, routeKey: assignment.routeKey, firstResponseDueAt: assignment.firstResponseDueAt, reused: false };
   }, { timeout: 3e4 });
@@ -15845,8 +16927,7 @@ async function updateLeadDetails(_root, { data }, context) {
       action: "details-updated",
       actorId: context.session.itemId,
       beforeSnapshot: before,
-      afterSnapshot: { requestEvidence, status: updated.status, changedFields },
-      payload: { rooftopId, leadId, changedFields }
+      afterSnapshot: { requestEvidence, status: updated.status, changedFields }
     });
     return { id: leadId, status: updated.status, updatedAt: updated.updatedAt, reused: false };
   }, { timeout: 3e4 });
@@ -15943,8 +17024,7 @@ async function updateCustomerContact(_root, { data }, context) {
       action: "contact-updated",
       actorId: context.session.itemId,
       beforeSnapshot: before,
-      afterSnapshot: { requestEvidence, normalizedEmail, normalizedPhone, accountUnlinked },
-      payload: { rooftopId, customerId }
+      afterSnapshot: { requestEvidence, normalizedEmail, normalizedPhone, accountUnlinked }
     });
     return { id: customerId, status: "active", updatedAt: updated.updatedAt, reused: false };
   }, { timeout: 3e4 });
@@ -15979,8 +17059,7 @@ async function unlinkCustomerHousehold(_root, { data }, context) {
       aggregateId: current.householdId,
       action: "member-unlinked",
       actorId: context.session.itemId,
-      afterSnapshot: { requestEvidence, householdId: current.householdId },
-      payload: { rooftopId, householdId: current.householdId, customerId }
+      afterSnapshot: { requestEvidence, householdId: current.householdId }
     });
     return { id: customerId, status: "unlinked", updatedAt: updated.updatedAt, reused: false };
   }, { timeout: 3e4 });
@@ -16013,120 +17092,147 @@ async function accountingWorkspace(_root, { limit = 50 }, context) {
   return { mappings, batches, payments, refunds };
 }
 
-// features/integrations/payment/index.ts
-var paymentProviderAdapters = {
-  stripe: () => Promise.resolve().then(() => (init_stripe(), stripe_exports)),
-  manual: () => Promise.resolve().then(() => (init_manual(), manual_exports))
-};
-
-// features/keystone/utils/paymentProviderAdapter.ts
-var ADAPTER_OPERATIONS = /* @__PURE__ */ new Set([
-  "createPaymentFunction",
-  "capturePaymentFunction",
-  "refundPaymentFunction",
-  "getPaymentStatusFunction",
-  "generatePaymentLinkFunction",
-  "handleWebhookFunction",
-  "cancelPaymentFunction"
-]);
-var FORWARDED_HEADERS = (key7) => {
-  const k = key7.toLowerCase();
-  return k === "stripe-signature" || k === "__rawbody" || k.startsWith("paypal-");
-};
-function paymentAdapterPayload(provider, args) {
-  const projectedProvider = { id: provider.id, code: provider.code, credentials: provider.credentials || {}, metadata: provider.metadata || {} };
-  const input2 = { ...args };
-  if (input2.headers && typeof input2.headers === "object") {
-    input2.headers = Object.fromEntries(Object.entries(input2.headers).filter(([key7]) => FORWARDED_HEADERS(key7)));
-  }
-  return { ...input2, provider: projectedProvider };
+// features/keystone/lib/reservationFollowUp.ts
+var RESERVATION_CALLBACK_MINUTES = 15;
+function vehicleTitle(vehicle) {
+  if (!vehicle) return "your vehicle";
+  return [vehicle.year, vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(" ") || "your vehicle";
 }
-async function executeAdapterFunction({ provider, functionName, args }) {
-  if (!ADAPTER_OPERATIONS.has(functionName)) throw new Error("Unknown payment adapter operation");
-  const functionPath = provider?.[functionName];
-  if (typeof functionPath !== "string" || !functionPath) throw new Error("Payment adapter is not configured");
-  const payload = paymentAdapterPayload(provider, args);
-  if (/^https:\/\//i.test(functionPath)) {
-    try {
-      const response = await fetch(functionPath, {
-        method: "POST",
-        redirect: "error",
-        signal: AbortSignal.timeout(3e4),
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (!response.ok) throw new Error(`status ${response.status}`);
-      return await response.json();
-    } catch {
-      throw new Error("External payment adapter request failed; reconcile the original attempt before retrying");
+function usd(cents6) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(cents6 || 0) / 100);
+}
+async function fallbackSalesperson(tx, rooftopId) {
+  const direct = await tx.prisma.rooftopMembership.findFirst({
+    where: { rooftopId, status: "active", userId: { not: null }, OR: [{ role: { is: { canManageLeads: true } } }, { user: { is: { role: { is: { canManageLeads: true } } } } }] },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { userId: true }
+  });
+  if (direct?.userId) return String(direct.userId);
+  const group = await tx.prisma.dealerGroupMembership.findFirst({
+    where: { status: "active", accessAllRooftops: true, userId: { not: null }, dealerGroup: { rooftops: { some: { id: rooftopId } } }, OR: [{ role: { is: { canManageLeads: true } } }, { user: { is: { role: { is: { canManageLeads: true } } } } }] },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { userId: true }
+  });
+  return group?.userId ? String(group.userId) : null;
+}
+async function applyPaidReservationInTransaction(tx, transaction, now = /* @__PURE__ */ new Date()) {
+  if (!transaction.leadId) return null;
+  const eventKey = `reservation-paid:${transaction.id}`;
+  const prior = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { id: true } });
+  if (prior) return null;
+  const lead = await tx.prisma.lead.findUnique({
+    where: { id: transaction.leadId },
+    select: { id: true, rooftopId: true, firstName: true, lastName: true, phone: true, email: true, assignedSalespersonId: true, interestedVehicle: { select: { id: true, year: true, make: true, model: true, trim: true, stockNumber: true } } }
+  });
+  if (!lead || lead.rooftopId !== transaction.rooftopId) return null;
+  let assigneeId = lead.assignedSalespersonId || null;
+  let routeKey = "existing-owner";
+  let reason = "Lead already owned";
+  if (!assigneeId) {
+    const rule = await findMatchingRoutingRule(tx, lead.rooftopId, "website");
+    if (rule && await userHasActiveRooftopAccess(tx, rule.assigneeId, lead.rooftopId)) {
+      assigneeId = String(rule.assigneeId);
+      routeKey = String(rule.routeKey);
+      reason = "Paid reservation deposit: matched active routing rule";
+    } else {
+      assigneeId = await fallbackSalesperson(tx, lead.rooftopId);
+      routeKey = "reservation-fallback";
+      reason = "Paid reservation deposit: no routing rule matched; first salesperson on the rooftop";
     }
   }
-  if (/^[a-z]+:/i.test(functionPath)) throw new Error("External payment adapters must use HTTPS");
-  const loader = paymentProviderAdapters[functionPath];
-  if (!loader) throw new Error("Unknown registered payment adapter");
-  const adapter = await loader();
-  const fn = adapter[functionName];
-  if (typeof fn !== "function") throw new Error(`Function ${functionName} not found in adapter ${functionPath}`);
-  try {
-    return await fn(payload);
-  } catch (error) {
-    throw new Error(
-      `Error executing ${functionName} for provider ${functionPath}: ${error instanceof Error ? error.message : String(error)}`
-    );
+  const dueAt = new Date(now.getTime() + RESERVATION_CALLBACK_MINUTES * 6e4);
+  const car = vehicleTitle(lead.interestedVehicle);
+  const stock = lead.interestedVehicle?.stockNumber ? ` (stock ${lead.interestedVehicle.stockNumber})` : "";
+  if (assigneeId && !lead.assignedSalespersonId) {
+    await tx.prisma.lead.update({ where: { id: lead.id }, data: { assignedSalespersonId: assigneeId, assignedAt: now, firstResponseDueAt: dueAt } });
+    await tx.prisma.leadAssignmentEvent.create({ data: { rooftopId: lead.rooftopId, leadId: lead.id, fromUserId: null, toUserId: assigneeId, actorId: assigneeId, reason, routeKey, assignedAt: now, firstResponseDueAt: dueAt } });
+  } else if (lead.assignedSalespersonId) {
+    await tx.prisma.lead.update({ where: { id: lead.id }, data: { firstResponseDueAt: dueAt } });
   }
-}
-async function handleWebhook({ provider, event: event2, headers }) {
-  return executeAdapterFunction({
-    provider,
-    functionName: "handleWebhookFunction",
-    args: { event: event2, headers }
+  const task = await tx.prisma.task.create({
+    data: {
+      rooftopId: lead.rooftopId,
+      leadId: lead.id,
+      assignedToId: assigneeId,
+      title: `Call ${[lead.firstName, lead.lastName].filter(Boolean).join(" ")}: paid ${usd(transaction.capturedCents)} deposit on ${car}`.slice(0, 200),
+      description: [
+        `${lead.firstName} paid a ${usd(transaction.capturedCents)} refundable deposit online to hold the ${car}${stock}.`,
+        "Call within 15 minutes, confirm the unit is held, and book the visit to sign and take delivery.",
+        [lead.phone, lead.email].filter(Boolean).join(" \xB7 ")
+      ].filter(Boolean).join("\n"),
+      priority: "urgent",
+      completed: false,
+      dueDate: dueAt
+    },
+    select: { id: true }
   });
+  await recordDomainEventInTransaction(tx, {
+    eventKey,
+    rooftopId: lead.rooftopId,
+    aggregateType: "Lead",
+    aggregateId: lead.id,
+    action: "reservation-paid",
+    actorId: null,
+    afterSnapshot: { transactionId: transaction.id, assigneeId, routeKey, taskId: task.id, dueAt: dueAt.toISOString(), capturedCents: transaction.capturedCents },
+    metadata: { taskId: task.id }
+  });
+  return { leadId: lead.id, assigneeId, taskId: task.id };
 }
-
-// features/keystone/lib/paymentReturn.ts
-var import_node_crypto9 = require("node:crypto");
-var PURPOSE2 = "payment-return";
-var PAYMENT_RETURN_PATHS = { success: "/payment/received", cancel: "/payment/not-completed" };
-function sign2(transactionId, secret2) {
-  return (0, import_node_crypto9.createHmac)("sha256", secret2).update(`${PURPOSE2}:${transactionId}`).digest("base64url").slice(0, 32);
-}
-function paymentReturnReference(transactionId, secret2) {
-  if (!transactionId || !secret2 || secret2.length < 32) throw new Error("Payment return reference is unavailable");
-  return `${Buffer.from(transactionId).toString("base64url")}.${sign2(transactionId, secret2)}`;
-}
-function readPaymentReturnReference(reference2, secret2) {
-  const [payload, signature, extra] = String(reference2 || "").trim().split(".");
-  if (!payload || !signature || extra !== void 0 || !secret2 || secret2.length < 32) return null;
-  let transactionId = "";
+async function deliverReservationConfirmation(context, transactionId) {
+  const prisma = context.sudo().prisma;
+  const eventKey = `reservation-confirmation-email:${transactionId}`;
+  let rooftopId = "";
   try {
-    transactionId = Buffer.from(payload, "base64url").toString("utf8");
-  } catch {
-    return null;
+    const transaction = await prisma.paymentTransaction.findUnique({
+      where: { id: transactionId },
+      select: { id: true, rooftopId: true, status: true, sourceType: true, capturedCents: true, lead: { select: { id: true, firstName: true, email: true, assignedSalesperson: { select: { name: true } }, interestedVehicle: { select: { id: true, year: true, make: true, model: true, trim: true, stockNumber: true } } } } }
+    });
+    if (!transaction || transaction.sourceType !== "reservation" || transaction.status !== "captured" || !transaction.lead?.email) return;
+    rooftopId = transaction.rooftopId;
+    try {
+      await prisma.domainAuditEvent.create({ data: { rooftopId, eventKey, aggregateType: "PaymentTransaction", aggregateId: transactionId, action: "confirmation_email", metadata: { status: "sending" } }, select: { id: true } });
+    } catch {
+      return;
+    }
+    const mark = async (status, extra = {}) => {
+      try {
+        await prisma.domainAuditEvent.update({ where: { eventKey }, data: { metadata: { status, ...extra } } });
+      } catch {
+      }
+    };
+    if (!process.env.SMTP_HOST || !process.env.SMTP_FROM) {
+      await mark("skipped_not_configured");
+      return;
+    }
+    const [rooftop, profile] = await Promise.all([
+      prisma.rooftop.findUnique({ where: { id: rooftopId }, select: { name: true } }),
+      prisma.dealershipProfile.findFirst({ select: { name: true, phone: true, addressLine1: true, city: true, state: true } })
+    ]);
+    const base = String(process.env.SMTP_STORE_LINK || "").replace(/\/+$/, "");
+    const vehicle = transaction.lead.interestedVehicle;
+    const { sendReservationConfirmationEmail: sendReservationConfirmationEmail2 } = await Promise.resolve().then(() => (init_mail(), mail_exports));
+    const result2 = await sendReservationConfirmationEmail2(transaction.lead.email, {
+      dealershipName: rooftop?.name || profile?.name || "Our dealership",
+      customerName: transaction.lead.firstName || "there",
+      vehicle: vehicleTitle(vehicle),
+      stockNumber: vehicle?.stockNumber || "",
+      depositLabel: usd(transaction.capturedCents),
+      salesperson: transaction.lead.assignedSalesperson?.name || "",
+      phone: profile?.phone || "",
+      address: [profile?.addressLine1, [profile?.city, profile?.state].filter(Boolean).join(", ")].filter(Boolean).join(", "),
+      reference: transactionId,
+      vehicleUrl: base && vehicle?.id ? `${base}/inventory/${vehicle.id}` : "",
+      accountUrl: base ? `${base}/account/vehicles` : ""
+    });
+    if (result2.sent) await mark("sent", { sentAt: (/* @__PURE__ */ new Date()).toISOString(), messageId: result2.messageId || "" });
+    else await mark("failed", { error: result2.error || "send_failed" });
+  } catch (error) {
+    console.error("Reservation confirmation email failed:", error instanceof Error ? error.message : "Unknown error");
   }
-  if (!/^[a-z0-9]{10,64}$/i.test(transactionId)) return null;
-  const expected = Buffer.from(sign2(transactionId, secret2));
-  const actual = Buffer.from(signature);
-  if (expected.length !== actual.length || !(0, import_node_crypto9.timingSafeEqual)(expected, actual)) return null;
-  return transactionId;
-}
-function paymentReturnUrls(origin, transactionId, secret2) {
-  const base = String(origin || "").replace(/\/+$/, "");
-  if (!/^https?:\/\/[^/]+$/i.test(base)) throw new Error("Payment return origin is invalid");
-  const ref = encodeURIComponent(paymentReturnReference(transactionId, secret2));
-  return {
-    successUrl: `${base}${PAYMENT_RETURN_PATHS.success}?ref=${ref}`,
-    cancelUrl: `${base}${PAYMENT_RETURN_PATHS.cancel}?ref=${ref}`
-  };
-}
-function paymentReturnState(status, checkoutUrl) {
-  if (["captured", "authorized"].includes(status)) return { state: "received", retryUrl: null };
-  if (["partially-refunded", "refunded"].includes(status)) return { state: "refunded", retryUrl: null };
-  if (["creating", "pending"].includes(status) || status === "failed" && checkoutUrl) return { state: "pending", retryUrl: checkoutUrl && /^https:\/\//.test(checkoutUrl) ? checkoutUrl : null };
-  return { state: "closed", retryUrl: null };
 }
 
 // features/keystone/mutations/paymentOperations.ts
-var paymentReturnSecret = () => process.env.SESSION_SECRET || "";
+var paymentReturnSecret3 = () => process.env.SESSION_SECRET || "";
 var required9 = (value, name, max = 500) => {
   const text77 = String(value || "").trim();
   if (!text77 || text77.length > max) throw new Error(`${name} is required`);
@@ -16163,7 +17269,9 @@ async function payableSource(context, sourceType, sourceId) {
     const deal = await context.sudo().prisma.deal.findUnique({ where: { id: sourceId }, include: { vehicle: { select: { year: true, make: true, model: true } } } });
     const rooftop = deal && await canManageSourcePayments(context, deal.rooftopId) ? await context.query.Rooftop.findOne({ where: { id: deal.rooftopId }, query: "id currencyCode" }) : null;
     if (!deal || !rooftop?.id || !["approved", "financed", "delivered"].includes(deal.status)) throw new Error("Accessible approved deal source required");
-    const total = calculateDealPrice(deal).cashPayableCents;
+    const deposits = await context.sudo().prisma.paymentTransaction.findMany({ where: { rooftopId: deal.rooftopId, sourceType: "reservation", status: { in: ["captured", "partially-refunded", "refunded"] }, ...deal.leadId ? { leadId: deal.leadId, lead: { is: { interestedVehicleId: deal.vehicleId } } } : { id: "__none__" } }, select: { capturedCents: true, refundedCents: true }, take: 50 });
+    const depositCents = deposits.reduce((sum, row) => sum + Number(row.capturedCents || 0) - Number(row.refundedCents || 0), 0);
+    const total = calculateDealPrice(deal).cashPayableCents - depositCents;
     return { rooftopId: rooftop.id, currency: String(rooftop.currencyCode || "USD").toLowerCase(), maximumCents: Math.max(0, total), description: `${deal.vehicle?.year || ""} ${deal.vehicle?.make || ""} ${deal.vehicle?.model || ""} deal payment`.trim(), relation: { dealId: deal.id } };
   }
   if (sourceType === "service") {
@@ -16188,7 +17296,7 @@ async function createPaymentCheckout(_root, { data }, context) {
   const transactionId = await context.transaction(async (tx) => {
     await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${source.rooftopId}:${sourceType}:${sourceId}`}, 0))`;
     const existing = await tx.prisma.paymentTransaction.findUnique({ where: { idempotencyKey: idempotencyKey6 } });
-    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: source.rooftopId, aggregateType: "PaymentTransaction", aggregateId: sourceId, action: "checkout-requested", actorId: context.session.itemId, afterSnapshot: { sourceType, sourceId, amountCents, currency, providerKey }, payload: { rooftopId: source.rooftopId, sourceType, sourceId, amountCents, providerKey } });
+    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: source.rooftopId, aggregateType: "PaymentTransaction", aggregateId: sourceId, action: "checkout-requested", actorId: context.session.itemId, afterSnapshot: { sourceType, sourceId, amountCents, currency, providerKey } });
     if (existing) {
       if (existing.sourceType !== sourceType || existing.amountCents !== amountCents || existing.providerKey !== providerKey || existing.dealId !== (source.relation.dealId || null) || existing.serviceOrderId !== (source.relation.serviceOrderId || null)) throw new Error("Payment idempotency key was reused with different evidence");
       return existing.id;
@@ -16203,17 +17311,17 @@ async function createPaymentCheckout(_root, { data }, context) {
   try {
     const requestHeaders = context.req?.headers || {};
     const origin = `${requestHeaders["x-forwarded-proto"] || "https"}://${requestHeaders["x-forwarded-host"] || requestHeaders.host}`;
-    const { successUrl, cancelUrl } = paymentReturnUrls(origin, transactionId, paymentReturnSecret());
+    const { successUrl, cancelUrl } = paymentReturnUrls(origin, transactionId, paymentReturnSecret3());
     const response = await executeAdapterFunction({ provider, functionName: "createPaymentFunction", args: { amount: amountCents, currency, description: source.description, metadata: { openfront_transaction_id: transactionId }, idempotencyKey: idempotencyKey6, successUrl, cancelUrl } });
-    await context.sudo().prisma.paymentTransaction.update({ where: { id: transactionId }, data: { status: "pending", checkoutUrl: response?.checkoutUrl, providerSessionId: response?.providerSessionId, providerTransactionId: response?.providerTransactionId, version: { increment: 1 } } });
+    await context.sudo().prisma.paymentTransaction.updateMany({ where: { id: transactionId, status: { in: [...CHECKOUT_STARTABLE] } }, data: { status: "pending", checkoutUrl: response?.checkoutUrl, providerSessionId: response?.providerSessionId, providerTransactionId: response?.providerTransactionId, version: { increment: 1 } } });
   } catch (error) {
-    await context.sudo().prisma.paymentTransaction.update({ where: { id: transactionId }, data: { status: "failed", failureCode: String(error?.code || error?.message || "PROVIDER_ERROR").slice(0, 100), version: { increment: 1 } } });
+    await context.sudo().prisma.paymentTransaction.updateMany({ where: { id: transactionId, status: { in: [...CHECKOUT_FAILABLE] } }, data: { status: "failed", failureCode: String(error?.code || error?.message || "PROVIDER_ERROR").slice(0, 100), version: { increment: 1 } } });
     throw error;
   }
   return context.db.PaymentTransaction.findOne({ where: { id: transactionId } });
 }
 async function paymentReturnStatus(_root, { reference: reference2 }, context) {
-  const transactionId = readPaymentReturnReference(reference2, paymentReturnSecret());
+  const transactionId = readPaymentReturnReference(reference2, paymentReturnSecret3());
   if (!transactionId) return null;
   const tx = await context.sudo().prisma.paymentTransaction.findUnique({
     where: { id: transactionId },
@@ -16224,19 +17332,20 @@ async function paymentReturnStatus(_root, { reference: reference2 }, context) {
       checkoutUrl: true,
       sourceType: true,
       deal: { select: { vehicle: { select: { year: true, make: true, model: true, trim: true, stockNumber: true } } } },
-      serviceOrder: { select: { invoiceNumber: true } }
+      serviceOrder: { select: { invoiceNumber: true } },
+      lead: { select: { interestedVehicle: { select: { year: true, make: true, model: true, trim: true, stockNumber: true } } } }
     }
   });
   if (!tx) return null;
   const { state, retryUrl } = paymentReturnState(tx.status, tx.checkoutUrl);
-  const vehicle = tx.deal?.vehicle;
+  const vehicle = tx.deal?.vehicle || tx.lead?.interestedVehicle;
   return {
     state,
     retryUrl,
     amountCents: tx.amountCents,
     currency: String(tx.currency || "usd").toUpperCase(),
     reference: `PAY-${transactionId.slice(-8).toUpperCase()}`,
-    purpose: tx.sourceType === "deal" ? "Vehicle payment" : "Service payment",
+    purpose: tx.sourceType === "deal" ? "Vehicle payment" : tx.sourceType === "reservation" ? "Reservation deposit" : "Service payment",
     item: vehicle ? [vehicle.year, vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(" ") : tx.serviceOrder?.invoiceNumber ? `Invoice ${tx.serviceOrder.invoiceNumber}` : null,
     stockNumber: vehicle?.stockNumber || null
   };
@@ -16254,7 +17363,7 @@ async function requestPaymentRefund(_root, { data }, context) {
   const refundId = await context.transaction(async (tx) => {
     await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`payment-refund:${transactionId}`}, 0))`;
     const existing2 = await tx.prisma.paymentRefund.findUnique({ where: { idempotencyKey: idempotencyKey6 } });
-    await recordDomainEventInTransaction(tx, { eventKey: `payment-refund:${idempotencyKey6}`, rooftopId: transaction.rooftop.id, aggregateType: "PaymentRefund", aggregateId: transactionId, action: "requested", actorId: context.session.itemId, afterSnapshot: { transactionId, amountCents, reason }, payload: { rooftopId: transaction.rooftop.id, transactionId, amountCents } });
+    await recordDomainEventInTransaction(tx, { eventKey: `payment-refund:${idempotencyKey6}`, rooftopId: transaction.rooftop.id, aggregateType: "PaymentRefund", aggregateId: transactionId, action: "requested", actorId: context.session.itemId, afterSnapshot: { transactionId, amountCents, reason } });
     if (existing2) {
       if (existing2.transactionId !== transactionId || existing2.amountCents !== amountCents || existing2.reason !== reason) throw new Error("Refund idempotency key was reused with different evidence");
       return existing2.id;
@@ -16285,7 +17394,7 @@ async function reconcilePaymentTransaction(_root, { data }, context) {
     const transaction = await session.query.PaymentTransaction.findOne({ where: { id: transactionId }, query: "id status reconciliationReference rooftop { id }" });
     if (!transaction?.rooftop?.id || !["captured", "partially-refunded", "refunded"].includes(transaction.status)) throw new Error("Settled payment required for reconciliation");
     await assertSessionRooftopPermission(context, transaction.rooftop.id, "canManagePayments");
-    await recordDomainEventInTransaction(tx, { eventKey: `payment-reconcile:${idempotencyKey6}`, rooftopId: transaction.rooftop.id, aggregateType: "PaymentTransaction", aggregateId: transactionId, action: "reconciled", actorId: context.session.itemId, afterSnapshot: { transactionId, reference: reference2 }, payload: { rooftopId: transaction.rooftop.id, transactionId, reference: reference2 } });
+    await recordDomainEventInTransaction(tx, { eventKey: `payment-reconcile:${idempotencyKey6}`, rooftopId: transaction.rooftop.id, aggregateType: "PaymentTransaction", aggregateId: transactionId, action: "reconciled", actorId: context.session.itemId, afterSnapshot: { transactionId, reference: reference2 } });
     if (transaction.reconciliationReference && transaction.reconciliationReference !== reference2) throw new Error("Payment is already reconciled with different evidence");
     await tx.prisma.paymentTransaction.updateMany({ where: { id: transactionId, reconciliationReference: "" }, data: { reconciliationReference: reference2, reconciledAt: /* @__PURE__ */ new Date(), version: { increment: 1 } } });
     return session.db.PaymentTransaction.findOne({ where: { id: transactionId } });
@@ -16294,7 +17403,7 @@ async function reconcilePaymentTransaction(_root, { data }, context) {
 async function processVerifiedPaymentWebhook(event2, context) {
   const supportedEvents = ["checkout.session.completed", "checkout.session.expired", "payment_intent.succeeded", "payment_intent.payment_failed", "payment_intent.canceled", "refund.created", "refund.updated"];
   if (!supportedEvents.includes(event2.type)) throw new Error("Unsupported payment webhook event type");
-  return context.transaction(async (tx) => {
+  const result2 = await context.transaction(async (tx) => {
     await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`payment-webhook:${event2.transactionId}`}, 0))`;
     const duplicate = await tx.prisma.paymentProviderEvent.findUnique({ where: { providerEventId: event2.id } });
     if (duplicate) return { duplicate: true, transactionId: duplicate.transactionId };
@@ -16317,7 +17426,7 @@ async function processVerifiedPaymentWebhook(event2, context) {
       const refund2 = await tx.prisma.paymentRefund.findFirst({ where: { providerRefundId: event2.providerRefundId } });
       if (!refund2 || refund2.transactionId !== transaction.id || !["captured", "partially-refunded", "refunded"].includes(transaction.status)) throw new Error("Payment refund webhook does not match a captured transaction");
       if (event2.providerStatus === "succeeded") await tx.prisma.paymentRefund.update({ where: { id: refund2.id }, data: { status: "succeeded", failureCode: "" } });
-      else if (["failed", "canceled"].includes(event2.providerStatus || "")) await tx.prisma.paymentRefund.update({ where: { id: refund2.id }, data: { status: event2.providerStatus, failureCode: "PROVIDER_REFUND_FAILED" } });
+      else if (["failed", "canceled"].includes(event2.providerStatus || "") && canMove(REFUND_TRANSITIONS, refund2.status, event2.providerStatus)) await tx.prisma.paymentRefund.update({ where: { id: refund2.id }, data: { status: event2.providerStatus, failureCode: "PROVIDER_REFUND_FAILED" } });
       if (event2.providerStatus === "succeeded") {
         const succeeded = await tx.prisma.paymentRefund.aggregate({ where: { transactionId: transaction.id, status: "succeeded" }, _sum: { amountCents: true } });
         refundedCents = Math.min(capturedCents, Number(succeeded._sum.amountCents || 0));
@@ -16327,14 +17436,27 @@ async function processVerifiedPaymentWebhook(event2, context) {
     await tx.prisma.paymentTransaction.update({ where: { id: transaction.id }, data: { status, capturedCents, refundedCents, failureCode, providerTransactionId: event2.providerTransactionId || transaction.providerTransactionId, providerSessionId: event2.providerSessionId || transaction.providerSessionId, version: { increment: 1 } } });
     const refund = event2.providerRefundId ? await tx.prisma.paymentRefund.findFirst({ where: { providerRefundId: event2.providerRefundId }, select: { id: true } }) : null;
     await tx.prisma.paymentProviderEvent.create({ data: { rooftopId: transaction.rooftopId, transactionId: transaction.id, refundId: refund?.id, providerKey: transaction.providerKey, providerEventId: event2.id, eventType: event2.type, payloadDigest: event2.rawDigest, signatureTimestamp: event2.signatureTimestamp, receivedAt: /* @__PURE__ */ new Date() } });
-    await recordDomainEventInTransaction(tx, { eventKey: `payment-webhook:${event2.id}`, rooftopId: transaction.rooftopId, aggregateType: "PaymentTransaction", aggregateId: transaction.id, action: event2.type, actorId: null, afterSnapshot: { transactionId: transaction.id, status, capturedCents, refundedCents, payloadDigest: event2.rawDigest }, payload: { rooftopId: transaction.rooftopId, transactionId: transaction.id, status, providerEventId: event2.id } });
+    await recordDomainEventInTransaction(tx, { eventKey: `payment-webhook:${event2.id}`, rooftopId: transaction.rooftopId, aggregateType: "PaymentTransaction", aggregateId: transaction.id, action: event2.type, actorId: null, afterSnapshot: { transactionId: transaction.id, status, capturedCents, refundedCents, payloadDigest: event2.rawDigest } });
     if (status === "captured" && transaction.serviceOrderId) {
       const order2 = await tx.prisma.serviceOrder.findUnique({ where: { id: transaction.serviceOrderId }, select: { status: true, grandTotalCents: true } });
       const totals = await tx.prisma.paymentTransaction.aggregate({ where: { serviceOrderId: transaction.serviceOrderId, status: { in: ["captured", "partially-refunded", "refunded"] } }, _sum: { capturedCents: true, refundedCents: true } });
       if (order2?.status === "invoiced" && Number(totals._sum.capturedCents || 0) - Number(totals._sum.refundedCents || 0) >= Number(order2.grandTotalCents || 0)) await tx.prisma.serviceOrder.update({ where: { id: transaction.serviceOrderId }, data: { status: "paid", settledAt: /* @__PURE__ */ new Date() } });
     }
-    return { duplicate: false, transactionId: transaction.id, status };
+    if (["refunded", "partially-refunded"].includes(status) && transaction.serviceOrderId) {
+      const order2 = await tx.prisma.serviceOrder.findUnique({ where: { id: transaction.serviceOrderId }, select: { status: true } });
+      if (order2 && ["invoiced", "paid"].includes(order2.status)) {
+        const totals = await tx.prisma.paymentTransaction.aggregate({ where: { serviceOrderId: transaction.serviceOrderId, status: { in: ["captured", "partially-refunded", "refunded"] } }, _sum: { capturedCents: true, refundedCents: true } });
+        const captured = Number(totals._sum.capturedCents || 0);
+        if (captured > 0 && Number(totals._sum.refundedCents || 0) >= captured) await tx.prisma.serviceOrder.updateMany({ where: { id: transaction.serviceOrderId, status: order2.status }, data: { status: "cancelled" } });
+      }
+    }
+    if (status === "captured" && transaction.sourceType === "reservation" && transaction.leadId) {
+      await applyPaidReservationInTransaction(tx, { id: transaction.id, rooftopId: transaction.rooftopId, leadId: transaction.leadId, capturedCents });
+    }
+    return { duplicate: false, transactionId: transaction.id, status, sourceType: transaction.sourceType };
   }, { timeout: 3e4 });
+  if (!result2.duplicate && result2.status === "captured" && result2.sourceType === "reservation") await deliverReservationConfirmation(context, result2.transactionId);
+  return result2;
 }
 
 // features/keystone/mutations/handlePaymentProviderWebhook.ts
@@ -16629,7 +17751,7 @@ async function saveOperationalReport(_root, { data }, context) {
       if (!current) throw new Error("Saved report inaccessible");
       const replay = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { id: true } });
       if (!replay && data.expectedUpdatedAt && new Date(data.expectedUpdatedAt).getTime() !== new Date(current.updatedAt).getTime()) throw new Error("This report changed since you opened it. Reload and try again.");
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: "SavedReport", aggregateId: reportId, action: "updated", actorId: context.session.itemId, afterSnapshot: { reportId, name, reportType, filters, exportFormat, schedule, active }, payload: { rooftopId, reportId, reportType, schedule, active } });
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: "SavedReport", aggregateId: reportId, action: "updated", actorId: context.session.itemId, afterSnapshot: { reportId, name, reportType, filters, exportFormat, schedule, active } });
       if (replay) return reportId;
       const rescheduled = schedule !== current.schedule || active && !current.active;
       await tx.prisma.savedReport.update({ where: { id: reportId }, data: { name, reportType, filters, exportFormat, schedule, active, ...rescheduled ? { nextRunAt: nextRun(schedule) } : {} } });
@@ -16640,7 +17762,7 @@ async function saveOperationalReport(_root, { data }, context) {
   const id = await context.transaction(async (tx) => {
     await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${eventKey}, 0))`;
     const existing = await tx.prisma.savedReport.findUnique({ where: { idempotencyKey: idempotencyKey6 } });
-    await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: "SavedReport", aggregateId: rooftopId, action: "configured", actorId: context.session.itemId, afterSnapshot: { name, reportType, filters, exportFormat, schedule }, payload: { rooftopId, reportType, schedule } });
+    await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: "SavedReport", aggregateId: rooftopId, action: "configured", actorId: context.session.itemId, afterSnapshot: { name, reportType, filters, exportFormat, schedule } });
     if (existing) return existing.id;
     return (await tx.prisma.savedReport.create({ data: { rooftopId, ownerId: context.session.itemId, name, reportType, filters, exportFormat, schedule, active: true, nextRunAt: nextRun(schedule), idempotencyKey: idempotencyKey6 }, select: { id: true } })).id;
   });
@@ -16697,7 +17819,7 @@ async function runSavedReport(_root, { data }, context) {
       await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${eventKey}, 0))`;
       const current = await tx.prisma.reportRun.findUnique({ where: { id: runId }, select: { status: true } });
       if (current?.status !== "queued") return runId;
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: saved.rooftop.id, aggregateType: "ReportRun", aggregateId: saved.id, action: "completed", actorId: context.session.itemId, afterSnapshot: { reportId: saved.id, runId, digest: digest2, exportFormat: saved.exportFormat, expiresAt: expiresAt2 }, payload: { rooftopId: saved.rooftop.id, reportId: saved.id, runId, digest: digest2 } });
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: saved.rooftop.id, aggregateType: "ReportRun", aggregateId: saved.id, action: "completed", actorId: context.session.itemId, afterSnapshot: { reportId: saved.id, runId, digest: digest2, exportFormat: saved.exportFormat, expiresAt: expiresAt2 } });
       await tx.prisma.reportRun.update({ where: { id: runId }, data: { status: "completed", resultSnapshot: snapshot3, resultDigest: digest2, completedAt: /* @__PURE__ */ new Date(), expiresAt: expiresAt2 } });
       return runId;
     });
@@ -16714,7 +17836,7 @@ async function runSavedReport(_root, { data }, context) {
     await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${eventKey}, 0))`;
     const existing = await tx.prisma.reportRun.findUnique({ where: { idempotencyKey: idempotencyKey6 } });
     if (existing) return existing.id;
-    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: saved.rooftop.id, aggregateType: "ReportRun", aggregateId: saved.id, action: "completed", actorId: context.session.itemId, afterSnapshot: { reportId: saved.id, digest, exportFormat: saved.exportFormat, expiresAt }, payload: { rooftopId: saved.rooftop.id, reportId: saved.id, digest } });
+    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: saved.rooftop.id, aggregateType: "ReportRun", aggregateId: saved.id, action: "completed", actorId: context.session.itemId, afterSnapshot: { reportId: saved.id, digest, exportFormat: saved.exportFormat, expiresAt } });
     const run = await tx.prisma.reportRun.create({ data: { rooftopId: saved.rooftop.id, savedReportId: saved.id, status: "completed", exportFormat: saved.exportFormat, resultSnapshot: snapshot2, resultDigest: digest, completedAt: /* @__PURE__ */ new Date(), expiresAt, idempotencyKey: idempotencyKey6 }, select: { id: true } });
     if (saved.schedule !== "manual") await tx.prisma.savedReport.update({ where: { id: saved.id }, data: { nextRunAt: nextRun(saved.schedule) } });
     return run.id;
@@ -16733,7 +17855,7 @@ async function queueDueSavedReports(_root, _args, context) {
     const runId = await context.transaction(async (tx) => {
       await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${idempotencyKey6}, 0))`;
       const existing = await tx.prisma.reportRun.findUnique({ where: { idempotencyKey: idempotencyKey6 } });
-      await recordDomainEventInTransaction(tx, { eventKey: `report-scheduled:${idempotencyKey6}`, rooftopId: saved.rooftopId, aggregateType: "ReportRun", aggregateId: saved.id, action: "queued", actorId: context.session.itemId, afterSnapshot: { reportId: saved.id, scheduledFor, exportFormat: saved.exportFormat }, payload: { rooftopId: saved.rooftopId, reportId: saved.id, scheduledFor } });
+      await recordDomainEventInTransaction(tx, { eventKey: `report-scheduled:${idempotencyKey6}`, rooftopId: saved.rooftopId, aggregateType: "ReportRun", aggregateId: saved.id, action: "queued", actorId: context.session.itemId, afterSnapshot: { reportId: saved.id, scheduledFor, exportFormat: saved.exportFormat } });
       if (existing) return existing.id;
       const run = await tx.prisma.reportRun.create({ data: { rooftopId: saved.rooftopId, savedReportId: saved.id, status: "queued", exportFormat: saved.exportFormat, idempotencyKey: idempotencyKey6 }, select: { id: true } });
       await tx.prisma.savedReport.update({ where: { id: saved.id }, data: { nextRunAt: nextRun(saved.schedule, scheduledFor) } });
@@ -16819,8 +17941,7 @@ async function reviewFinancePrerequisitesCommand(_root, { data }, context) {
       action: "prerequisites-reviewed",
       actorId,
       afterSnapshot,
-      occurredAt,
-      payload: { dealId: deal.id, rooftopId: deal.rooftopId, worksheetVersion: deal.worksheetVersion }
+      occurredAt
     });
     return { id: deal.id, status: "review-recorded", reused: false, updatedAt: occurredAt };
   }, { timeout: 3e4, isolationLevel: "Serializable" });
@@ -16875,11 +17996,10 @@ async function manageDeliveryCaseCommand(_r, { data }, context) {
     if (!deal || deal.rooftopId !== authority.rooftopId) throw new Error("Deal authority changed");
     const binding = { ...worksheetBinding(deal), acceptedHash: domainEventRequestHash(deal.acceptedSnapshot) };
     const existing = await tx.prisma.deliveryCase.findFirst({ where: { dealId: deal.id, rooftopId: deal.rooftopId } });
-    const payload = (status2) => ({ rooftopId: deal.rooftopId, dealId: deal.id, status: status2 });
     const prior = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey } });
     if (prior) {
       if (!existing || stableJson(prior.afterSnapshot?.request) !== stableJson(request) || stableJson(prior.afterSnapshot?.binding) !== stableJson(binding)) throw new Error("Delivery case retry is changed or superseded");
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: "DeliveryCase", aggregateId: deal.id, action, actorId: context.session.itemId, afterSnapshot: prior.afterSnapshot, payload: payload(prior.afterSnapshot.status) });
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: "DeliveryCase", aggregateId: deal.id, action, actorId: context.session.itemId, afterSnapshot: prior.afterSnapshot });
       return authority.context.db.DeliveryCase.findOne({ where: { id: existing.id } });
     }
     if (deal.status !== "financed" || existing?.status === "delivered") throw new Error("Only active financed delivery cases can be changed");
@@ -16947,7 +18067,7 @@ async function manageDeliveryCaseCommand(_r, { data }, context) {
     };
     const values = { status, appointmentAt, arrivedAt, checklist, customerAcknowledgment, acknowledgedAt, deliverySnapshot: evidence };
     const saved = existing ? await tx.prisma.deliveryCase.update({ where: { id: existing.id }, data: values, select: { id: true } }) : await tx.prisma.deliveryCase.create({ data: { ...values, rooftopId: deal.rooftopId, dealId: deal.id, idempotencyKey: ik2(data.idempotencyKey) }, select: { id: true } });
-    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: "DeliveryCase", aggregateId: deal.id, action, actorId: context.session.itemId, afterSnapshot: evidence, payload: payload(status) });
+    await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: "DeliveryCase", aggregateId: deal.id, action, actorId: context.session.itemId, afterSnapshot: evidence });
     return authority.context.db.DeliveryCase.findOne({ where: { id: saved.id } });
   }, { timeout: 3e4, isolationLevel: "Serializable" });
 }
@@ -17005,7 +18125,7 @@ async function manageWeOweItemCommand(_r, { data }, context) {
   const evidence = { dealId: deal.id, deliveryCaseId: delivery.id, itemId: existing?.id || null, action, status, description, promisedAt: promisedAt?.toISOString(), ownerId, estimatedCostCents, fulfillmentEvidence: fulfillmentEvidence || null, customerAcknowledgment: customerAcknowledgment || null, fulfilledAt: fulfilledAt?.toISOString() || null };
   const id = await context.transaction(async (tx) => {
     await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${eventKey},0))`;
-    const recorded = await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftop.id, aggregateType: "WeOweItem", aggregateId: existing?.id || deal.id, action, actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: deal.rooftop.id, dealId: deal.id, status } });
+    const recorded = await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftop.id, aggregateType: "WeOweItem", aggregateId: existing?.id || deal.id, action, actorId: context.session.itemId, afterSnapshot: evidence });
     if (recorded.reused) {
       const found = await tx.prisma.weOweItem.findUnique({ where: { idempotencyKey: ik2(data.idempotencyKey) }, select: { id: true } });
       if (found) return found.id;
@@ -17087,11 +18207,11 @@ async function createWalkInTradeInCommand(_root, { data }, context) {
     await tx.prisma.$queryRaw`SELECT 1 AS "locked" FROM pg_advisory_xact_lock(hashtextextended(${`command:${eventKey}`}, 0))`;
     const prior = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { aggregateId: true } });
     if (prior) {
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: "TradeIn", aggregateId: prior.aggregateId, action: "created", actorId: context.session.itemId, afterSnapshot: evidence, payload: { tradeInId: prior.aggregateId, rooftopId, leadId } });
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: "TradeIn", aggregateId: prior.aggregateId, action: "created", actorId: context.session.itemId, afterSnapshot: evidence });
       return { id: prior.aggregateId, reused: true };
     }
     const tradeIn = await tx.prisma.tradeIn.create({ data: { ...values, rooftopId, leadId }, select: { id: true } });
-    await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: "TradeIn", aggregateId: tradeIn.id, action: "created", actorId: context.session.itemId, afterSnapshot: evidence, payload: { tradeInId: tradeIn.id, rooftopId, leadId } });
+    await recordDomainEventInTransaction(tx, { eventKey, rooftopId, aggregateType: "TradeIn", aggregateId: tradeIn.id, action: "created", actorId: context.session.itemId, afterSnapshot: evidence });
     return { id: tradeIn.id, reused: false };
   }, { timeout: 3e4 });
   const row = await context.sudo().prisma.tradeIn.findUnique({ where: { id: result2.id }, select: { id: true, updatedAt: true } });
@@ -17181,8 +18301,8 @@ async function setDealTradeInCommand(_root, { data }, context) {
         }
       });
       if (changed.count !== 1) throw new Error("Deal changed concurrently; reload and retry");
-      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: "Deal", aggregateId: dealId, action, actorId: context.session.itemId, afterSnapshot: evidence, payload: { rooftopId: deal.rooftopId, dealId, tradeInId: affectedTradeInId, tradeInValueCents } });
-      await recordDomainEventInTransaction(tx, { eventKey: `${eventKey}:trade-in`, rooftopId: deal.rooftopId, aggregateType: "TradeIn", aggregateId: affectedTradeInId, action: tradeIn ? "attached-to-deal" : "detached-from-deal", actorId: context.session.itemId, afterSnapshot: { tradeInId: affectedTradeInId, dealId, reason: reason || null, tradeInValueCents }, payload: { rooftopId: deal.rooftopId, dealId, tradeInId: affectedTradeInId } });
+      await recordDomainEventInTransaction(tx, { eventKey, rooftopId: deal.rooftopId, aggregateType: "Deal", aggregateId: dealId, action, actorId: context.session.itemId, afterSnapshot: evidence });
+      await recordDomainEventInTransaction(tx, { eventKey: `${eventKey}:trade-in`, rooftopId: deal.rooftopId, aggregateType: "TradeIn", aggregateId: affectedTradeInId, action: tradeIn ? "attached-to-deal" : "detached-from-deal", actorId: context.session.itemId, afterSnapshot: { tradeInId: affectedTradeInId, dealId, reason: reason || null, tradeInValueCents } });
       const current = await tx.prisma.deal.findUnique({ where: { id: dealId }, select: { id: true, status: true, updatedAt: true } });
       return { id: current.id, status: current.status, updatedAt: current.updatedAt, reused: false };
     }, { timeout: 3e4, isolationLevel: "Serializable" });
@@ -17299,8 +18419,7 @@ async function recordCashDealDepositCommand(_root, { data }, context) {
         remainingCents,
         cashReceivedCents,
         form8300Required
-      },
-      payload: { rooftopId: deal.rooftopId, dealId: deal.id, paymentId: payment.id, amountCents, paymentMethod, remainingCents, form8300Required }
+      }
     });
     return { id: payment.id, dealId: deal.id, amountCents, paymentMethod, receiptReference, remainingCents, form8300Required, reused: false };
   }, { timeout: 3e4, isolationLevel: "Serializable" });
@@ -17348,8 +18467,7 @@ async function recordLenderSubmissionStatusCommand(_root, { data }, context) {
       aggregateId: submission.id,
       action: status,
       actorId: context.session.itemId,
-      afterSnapshot: { applicationId: submission.applicationId, status, externalReference: externalReference || null, errorCode: errorCode || null, recordedAt: now.toISOString() },
-      payload: { submissionId: submission.id, applicationId: submission.applicationId, rooftopId: submission.rooftopId, status }
+      afterSnapshot: { applicationId: submission.applicationId, status, externalReference: externalReference || null, errorCode: errorCode || null, recordedAt: now.toISOString() }
     });
     return submission.id;
   }, { timeout: 3e4 });
@@ -17489,6 +18607,10 @@ async function queryPublicInventory(context, options = {}) {
     const take = Math.max(0, Math.min(100, Number.isSafeInteger(options.take) ? Number(options.take) : 50));
     const page2 = matching.slice(skip, skip + take);
     if (!page2.length) return { items: [], totalCount: matching.length };
+    const reserved = new Set((await tx.paymentTransaction.findMany({
+      where: { rooftopId, OR: page2.map((vehicle) => activeReservationWhere(vehicle.id)) },
+      select: { lead: { select: { interestedVehicleId: true } } }
+    })).map((row) => row.lead?.interestedVehicleId).filter(Boolean));
     const imageIds = page2.flatMap((vehicle) => (vehicle.images || []).map((image5) => image5.id));
     const imageUrlById = await loadPublicInventoryImageUrls(sudo, imageIds);
     return {
@@ -17504,7 +18626,7 @@ async function queryPublicInventory(context, options = {}) {
         exteriorColor: vehicle.exteriorColor,
         mileage: vehicle.mileage,
         price: vehicle.priceCents == null ? null : vehicle.priceCents / 100,
-        status: vehicle.status,
+        status: reserved.has(vehicle.id) ? "reserved" : vehicle.status,
         condition: vehicle.condition,
         features: vehicle.features,
         description: vehicle.description,
@@ -17867,6 +18989,29 @@ function extendGraphqlSchema(baseSchema) {
         rooftopSlug: String
         idempotencyKey: String!
         website: String
+      }
+
+      input ReserveVehicleInput {
+        firstName: String!
+        lastName: String!
+        email: String!
+        phone: String!
+        message: String
+        vehicleId: ID!
+        rooftopSlug: String
+        idempotencyKey: String!
+        website: String
+      }
+
+      type ReserveVehiclePayload {
+        ok: Boolean!
+        errorCode: String
+        errorMessage: String
+        leadId: ID
+        amountCents: Int
+        checkoutUrl: String
+        selectedVehicle: PublicSubmissionVehicle
+        reused: Boolean
       }
 
       type SubmitInquiryPayload {
@@ -18360,9 +19505,11 @@ function extendGraphqlSchema(baseSchema) {
         requestCustomerEmailVerification: CustomerEmailVerificationRequest!
         confirmCustomerEmailVerification(token: String!): CustomerEmailLinkResult!
         cancelCustomerBooking(kind: String!, id: ID!, idempotencyKey: String!): CustomerBookingResult!
+        payServiceInvoice(serviceOrderId: ID!): JSON!
         rescheduleCustomerBooking(kind: String!, id: ID!, date: String!, time: String!, idempotencyKey: String!): CustomerBookingResult!
         updateActiveUser(data: UserUpdateProfileInput!): ActiveUserProfile
         submitInquiry(data: SubmitInquiryInput!): SubmitInquiryPayload!
+        reserveVehicle(data: ReserveVehicleInput!): ReserveVehiclePayload!
         submitTestDrive(data: SubmitTestDriveInput!): SubmitTestDrivePayload!
         submitTradeIn(data: SubmitTradeInInput!): SubmitTradeInPayload!
         submitFinancing(data: SubmitFinancingInput!): SubmitFinancingPayload!
@@ -18380,6 +19527,7 @@ function extendGraphqlSchema(baseSchema) {
         recordLeadInteraction(data: RecordLeadInteractionInput!): LeadInteractionResult!
         updateTestDriveWorkflow(data: TestDriveWorkflowInput!): TestDrive
         transitionServiceAppointment(id: ID!, toStatus: String!, idempotencyKey: String!): ServiceAppointment
+        rescheduleServiceAppointment(id: ID!, appointmentDate: DateTime!, idempotencyKey: String!): ServiceAppointment
         recordTradeInAppraisal(data: RecordTradeInAppraisalInput!): TradeIn
         createLeadTask(data: CreateLeadTaskInput!): Task
         completeTask(id: ID!, idempotencyKey: String!): Task
@@ -18504,9 +19652,11 @@ function extendGraphqlSchema(baseSchema) {
         requestCustomerEmailVerification: operatorCommand(requestCustomerEmailVerification),
         confirmCustomerEmailVerification: operatorCommand(confirmCustomerEmailVerification),
         cancelCustomerBooking: operatorCommand(cancelCustomerBooking),
+        payServiceInvoice: operatorCommand(payServiceInvoice),
         rescheduleCustomerBooking: operatorCommand(rescheduleCustomerBooking),
         updateActiveUser,
         submitInquiry: publicSubmissionResolver(submitInquiry),
+        reserveVehicle: publicSubmissionResolver(reserveVehicle),
         submitTestDrive: publicSubmissionResolver(submitTestDrive),
         submitTradeIn: publicSubmissionResolver(submitTradeIn),
         submitFinancing: publicSubmissionResolver(submitFinancing),
@@ -18526,6 +19676,7 @@ function extendGraphqlSchema(baseSchema) {
         recordLeadInteraction: operatorCommand(recordLeadInteraction),
         updateTestDriveWorkflow,
         transitionServiceAppointment: operatorCommand(transitionServiceAppointment),
+        rescheduleServiceAppointment: operatorCommand(rescheduleServiceAppointment),
         recordTradeInAppraisal: operatorCommand(recordTradeInAppraisal),
         createLeadTask: operatorCommand(createLeadTask),
         completeTask: operatorCommand(completeTask),
@@ -18602,70 +19753,8 @@ function extendGraphqlSchema(baseSchema) {
   });
 }
 
-// features/keystone/lib/mail.ts
-var import_nodemailer2 = require("nodemailer");
-function getBaseUrlForEmails() {
-  if (process.env.SMTP_STORE_LINK) {
-    return process.env.SMTP_STORE_LINK;
-  }
-  console.warn("SMTP_STORE_LINK not set. Please add SMTP_STORE_LINK to your environment variables for email links to work properly.");
-  return "";
-}
-var transport2 = (0, import_nodemailer2.createTransport)({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT) || void 0,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASSWORD
-  }
-});
-function passwordResetEmail({ url }) {
-  const backgroundColor = "#f9f9f9";
-  const textColor = "#444444";
-  const mainBackgroundColor = "#ffffff";
-  const buttonBackgroundColor = "#346df1";
-  const buttonBorderColor = "#346df1";
-  const buttonTextColor = "#ffffff";
-  return `
-    <body style="background: ${backgroundColor};">
-      <table width="100%" border="0" cellspacing="20" cellpadding="0" style="background: ${mainBackgroundColor}; max-width: 600px; margin: auto; border-radius: 10px;">
-        <tr>
-          <td align="center" style="padding: 10px 0px 0px 0px; font-size: 18px; font-family: Helvetica, Arial, sans-serif; color: ${textColor};">
-            Please click below to reset your password
-          </td>
-        </tr>
-        <tr>
-          <td align="center" style="padding: 20px 0;">
-            <table border="0" cellspacing="0" cellpadding="0">
-              <tr>
-                <td align="center" style="border-radius: 5px;" bgcolor="${buttonBackgroundColor}"><a href="${url}" target="_blank" style="font-size: 18px; font-family: Helvetica, Arial, sans-serif; color: ${buttonTextColor}; text-decoration: none; border-radius: 5px; padding: 10px 20px; border: 1px solid ${buttonBorderColor}; display: inline-block; font-weight: bold;">Reset Password</a></td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-        <tr>
-          <td align="center" style="padding: 0px 0px 10px 0px; font-size: 16px; line-height: 22px; font-family: Helvetica, Arial, sans-serif; color: ${textColor};">
-            If you did not request this email you can safely ignore it.
-          </td>
-        </tr>
-      </table>
-    </body>
-  `;
-}
-async function sendPasswordResetEmail(resetToken, to, baseUrl, resetPath = "/account/reset") {
-  const frontendUrl = baseUrl || getBaseUrlForEmails();
-  const info = await transport2.sendMail({
-    to,
-    from: process.env.SMTP_FROM,
-    subject: "Your password reset token!",
-    html: passwordResetEmail({
-      url: `${frontendUrl}${resetPath}?token=${encodeURIComponent(resetToken)}`
-    })
-  });
-  if (process.env.MAIL_USER?.includes("ethereal.email")) {
-    console.log(`\u{1F4E7} Message Sent!  Preview it at ${(0, import_nodemailer2.getTestMessageUrl)(info)}`);
-  }
-}
+// features/keystone/index.ts
+init_mail();
 
 // features/keystone/lib/passwordResetPath.ts
 function passwordResetPath(account) {
@@ -18709,6 +19798,86 @@ function s3ForcePathStyle(endpoint2) {
   } catch {
   }
   return !(hostname === "storageapi.dev" || hostname.endsWith(".storageapi.dev"));
+}
+
+// features/keystone/database-url.ts
+var POOL_SIZES = { web: 15, worker: 5 };
+var OVERRIDE_ENV = {
+  web: "DATABASE_CONNECTION_LIMIT",
+  worker: "DATABASE_CONNECTION_LIMIT_WORKER"
+};
+function pooledDatabaseUrl(url, role = "web") {
+  if (!url || !/^postgres(ql)?:\/\//.test(url)) return url;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return url;
+  }
+  if (parsed.searchParams.has("connection_limit")) return url;
+  const override = Number(process.env[OVERRIDE_ENV[role]]);
+  parsed.searchParams.set("connection_limit", String(Number.isInteger(override) && override > 0 ? override : POOL_SIZES[role]));
+  return parsed.toString();
+}
+
+// features/keystone/lib/keystonePrismaErrors.ts
+var RAW_METHOD = /^\$(queryRaw|executeRaw|queryRawUnsafe|executeRawUnsafe|queryRawTyped|runCommandRaw)$/;
+var clients = /* @__PURE__ */ new WeakMap();
+var delegates = /* @__PURE__ */ new WeakMap();
+function isKeystonePrismaError(value) {
+  return value instanceof Error && value.extensions?.code === "KS_PRISMA_ERROR";
+}
+function rethrowKeystonePrismaError(value) {
+  if (!isKeystonePrismaError(value)) return value;
+  const prisma = value.extensions.prisma ?? {};
+  throw Object.assign(value, { code: prisma.code, meta: prisma.meta, clientVersion: prisma.clientVersion });
+}
+function throwing(result2) {
+  if (!result2 || typeof result2.then !== "function") return rethrowKeystonePrismaError(result2);
+  const settled = () => result2.then(rethrowKeystonePrismaError);
+  return new Proxy(result2, {
+    get(target, key7) {
+      if (key7 === "then") return (ok, fail) => settled().then(ok, fail);
+      if (key7 === "catch") return (fail) => settled().catch(fail);
+      if (key7 === "finally") return (done) => settled().finally(done);
+      const value = Reflect.get(target, key7, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    }
+  });
+}
+function throwingDelegate(delegate) {
+  const cached = delegates.get(delegate);
+  if (cached) return cached;
+  const wrapped = new Proxy(delegate, {
+    get(target, key7) {
+      const value = Reflect.get(target, key7, target);
+      return typeof value === "function" ? (...args) => throwing(value.apply(target, args)) : value;
+    }
+  });
+  delegates.set(delegate, wrapped);
+  return wrapped;
+}
+function throwKeystonePrismaErrors(client) {
+  const cached = clients.get(client);
+  if (cached) return cached;
+  const wrapped = new Proxy(client, {
+    get(target, key7) {
+      const value = Reflect.get(target, key7, target);
+      if (key7 === "$transaction" && typeof value === "function") {
+        return (work, ...options) => {
+          if (typeof work === "function") return value.call(target, (tx) => work(throwKeystonePrismaErrors(tx)), ...options);
+          return Promise.resolve(value.call(target, work, ...options)).then((results) => Array.isArray(results) ? results.map(rethrowKeystonePrismaError) : results);
+        };
+      }
+      if (key7 === "$extends" && typeof value === "function") return (...args) => throwKeystonePrismaErrors(value.apply(target, args));
+      if (typeof key7 === "string" && RAW_METHOD.test(key7) && typeof value === "function") return (...args) => throwing(value.apply(target, args));
+      if (typeof value === "function") return value.bind(target);
+      if (typeof key7 === "string" && !key7.startsWith("$") && value && typeof value === "object" && typeof value.findFirst === "function") return throwingDelegate(value);
+      return value;
+    }
+  });
+  clients.set(client, wrapped);
+  return wrapped;
 }
 
 // features/keystone/index.ts
@@ -18910,9 +20079,11 @@ var keystone_default = withAuth(
   (0, import_core71.config)({
     db: {
       provider: "postgresql",
-      url: databaseURL
+      url: pooledDatabaseUrl(databaseURL),
+      // Keystone returns failed queries as values; this makes them throw so transactions roll back.
+      extendPrismaClient: throwKeystonePrismaErrors
     },
-    lists: models,
+    lists: withItemViewAwareUi(withDeleteAwareUi(withCreateAwareUi(models))),
     storage: {
       my_images: {
         kind: "s3",

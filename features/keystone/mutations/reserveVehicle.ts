@@ -52,7 +52,6 @@ export async function reserveVehicle(_root: unknown, { data }: { data: any }, co
     honeypot: data.website,
     requestEvidence: { firstName, lastName, email, phone, message, vehicleId, providerKey: provider.code },
     aggregateType: 'Lead',
-    topic: 'public-reservation.submitted',
     aggregateId: (response) => String(response.leadId),
     handler: async (transactionContext, { rooftopId }) => {
       const vehicle = await resolveAvailableVehicle(transactionContext, vehicleId, rooftopId)

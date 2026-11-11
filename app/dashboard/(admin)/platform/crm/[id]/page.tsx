@@ -1,3 +1,4 @@
+import { gatePlatformPage } from '@/features/dashboard/lib/platformGate'
 import { LeadDetailPage } from '@/features/platform/crm/screens/LeadDetailPage'
 
-export default LeadDetailPage
+export default gatePlatformPage('crm', LeadDetailPage)

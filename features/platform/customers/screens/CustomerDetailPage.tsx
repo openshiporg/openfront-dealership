@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation'
 import { getCrmViewer } from '@/features/platform/crm/actions'
 import { getCustomer, getDuplicateCandidates } from '../actions'
 import { CustomerDetailPageClient } from './CustomerDetailPageClient'
@@ -7,6 +8,8 @@ export async function CustomerDetailPage({ params }: { params: Promise<{ id: str
   const { id } = await params
   const [response, viewer, timeZone] = await Promise.all([getCustomer(id), getCrmViewer(), getDealershipTimeZone()])
   const customer = response.success ? response.data.customer : null
+  // An unreadable or missing record is a 404, never a 200 or a 500.
+  if (!customer) notFound()
   const duplicates = customer?.status === 'active' ? await getDuplicateCandidates(customer.id) : null
 
   return (

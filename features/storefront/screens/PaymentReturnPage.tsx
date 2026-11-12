@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 
 import { getCustomer } from '../actions/account'
 import { Container } from '../components/Container'
@@ -28,6 +29,7 @@ function copyFor(outcome: Outcome, payment: PaymentReturn | null) {
 
 export async function PaymentReturnPage({ outcome, reference }: { outcome: Outcome; reference: string | null }) {
   const [payment, settings, customer] = await Promise.all([loadPaymentReturn(reference), loadStorefrontBusiness(), getCustomer()])
+  if (!payment) notFound()
   const business = settings.status === 'ready' ? settings.business : null
   const copy = copyFor(outcome, payment)
   const retryUrl = outcome === 'cancel' && payment?.state === 'pending' ? payment.retryUrl : null

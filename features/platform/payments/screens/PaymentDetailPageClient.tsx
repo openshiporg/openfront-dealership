@@ -286,10 +286,8 @@ export function PaymentDetailPageClient({
               payment.rooftop ? { label: 'Rooftop', value: payment.rooftop.name } : null,
               { label: 'Provider', value: payment.paymentProvider?.name || payment.providerKey },
               payment.providerTransactionId ? { label: 'Transaction ID', value: payment.providerTransactionId, mono: true } : null,
-              payment.providerSessionId ? { label: 'Session ID', value: payment.providerSessionId, mono: true } : null,
               { label: 'Created', value: dateTime(payment.createdAt, timeZone) },
               { label: 'Updated', value: dateTime(payment.updatedAt, timeZone) },
-              { label: 'Version', value: payment.version, mono: true },
             ]}
           />
         </Panel>
@@ -340,8 +338,6 @@ export function PaymentDetailPageClient({
                 <tr>
                   <Th>Event</Th>
                   <Th priority={2}>Received</Th>
-                  <Th priority={3}>Event ID</Th>
-                  <Th priority={3}>Digest</Th>
                 </tr>
               </thead>
               <tbody>
@@ -356,8 +352,6 @@ export function PaymentDetailPageClient({
                       {dateTime(event.receivedAt, timeZone)}
                       <p className="text-xs">Signed {dateTime(event.signatureTimestamp, timeZone)}</p>
                     </Td>
-                    <Td priority={3}><p className="truncate font-mono text-[12px] text-muted-foreground" title={event.providerEventId}>{event.providerEventId}</p></Td>
-                    <Td priority={3}><p className="truncate font-mono text-[12px] text-muted-foreground" title={event.payloadDigest}>{event.payloadDigest}</p></Td>
                   </Tr>
                 ))}
               </tbody>

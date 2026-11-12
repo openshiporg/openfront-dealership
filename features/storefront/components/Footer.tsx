@@ -46,12 +46,12 @@ export function Footer({ branding = true }: { branding?: boolean }) {
             {(business.phoneDisplay || business.directionsHref) && (
               <div className="mt-5 flex flex-wrap gap-2">
                 {business.phoneHref && business.phoneDisplay && (
-                  <a href={business.phoneHref} className="sf-btn sf-btn-primary sf-btn-sm">
+                  <a href={business.phoneHref} className="sf-btn sf-btn-primary sf-btn-sm min-h-11">
                     <span className="sf-figure">{business.phoneDisplay}</span>
                   </a>
                 )}
                 {business.directionsHref && (
-                  <a href={business.directionsHref} target="_blank" rel="noreferrer" className="sf-btn sf-btn-ghost sf-btn-sm">
+                  <a href={business.directionsHref} target="_blank" rel="noreferrer" className="sf-btn sf-btn-ghost sf-btn-sm min-h-11">
                     Directions
                     <ArrowUpRight className="size-4" aria-hidden="true" />
                   </a>
@@ -65,7 +65,7 @@ export function Footer({ branding = true }: { branding?: boolean }) {
             <ul className="text-[length:var(--sf-text-sm)] md:space-y-2.5">
               {SHOP.map((link) => (
                 <li key={link.href}>
-                  <Link href={link.href} className="inline-flex min-h-10 items-center transition-opacity hover:opacity-70 md:min-h-0">{link.label}</Link>
+                  <Link href={link.href} className="inline-flex min-h-11 items-center transition-opacity hover:opacity-70 md:min-h-0">{link.label}</Link>
                 </li>
               ))}
             </ul>
@@ -76,7 +76,7 @@ export function Footer({ branding = true }: { branding?: boolean }) {
             <ul className="text-[length:var(--sf-text-sm)] md:space-y-2.5">
               {VISIT.map((link) => (
                 <li key={link.href}>
-                  <Link href={link.href} className="inline-flex min-h-10 items-center transition-opacity hover:opacity-70 md:min-h-0">{link.label}</Link>
+                  <Link href={link.href} className="inline-flex min-h-11 items-center transition-opacity hover:opacity-70 md:min-h-0">{link.label}</Link>
                 </li>
               ))}
             </ul>
@@ -97,7 +97,7 @@ export function Footer({ branding = true }: { branding?: boolean }) {
               <p className="text-[length:var(--sf-text-sm)]" style={{ color: 'var(--sf-on-dark-2)' }}>Hours not listed</p>
             )}
             {business.salesEmail && (
-              <a href={`mailto:${business.salesEmail}`} className="mt-4 block break-all text-[length:var(--sf-text-sm)] underline-offset-4 hover:underline">
+              <a href={`mailto:${business.salesEmail}`} className="mt-4 flex min-h-11 items-center break-all text-[length:var(--sf-text-sm)] underline-offset-4 hover:underline">
                 {business.salesEmail}
               </a>
             )}

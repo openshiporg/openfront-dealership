@@ -187,7 +187,7 @@ export async function HomePage() {
               <h2 className="sf-display whitespace-nowrap text-[1.1875rem] leading-none" style={{ fontStretch: '80%' }}>Real cars. Real deals.</h2>
             </div>
             <span className="mb-1 h-px min-w-4 flex-1" style={{ background: 'var(--sf-accent)' }} aria-hidden="true" />
-            <Link href="/inventory" className="sf-caps inline-flex shrink-0 items-center gap-1 text-[0.8125rem] font-medium" style={{ color: 'var(--sf-accent)' }}>
+            <Link href="/inventory" className="sf-caps inline-flex min-h-11 shrink-0 items-center gap-1 text-[0.8125rem] font-medium" style={{ color: 'var(--sf-accent)' }}>
               View all
               <ChevronRight className="size-4" aria-hidden="true" />
             </Link>

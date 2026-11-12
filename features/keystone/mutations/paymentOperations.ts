@@ -5,7 +5,7 @@ import { executeAdapterFunction } from '../utils/paymentProviderAdapter'
 import { recordDomainEventInTransaction } from '../lifecycle/domainEvents'
 import { assertSessionRooftopPermission } from '../tenantRecords'
 import { paymentReturnState, paymentReturnUrls, readPaymentReturnReference } from '../lib/paymentReturn'
-import { applyPaidReservationInTransaction, deliverReservationConfirmation } from '../lib/reservationFollowUp'
+import { applyPaidReservationInTransaction, deliverReservationConfirmation, recordReservationRefundInTransaction } from '../lib/reservationFollowUp'
 
 const paymentReturnSecret = () => process.env.SESSION_SECRET || ''
 
@@ -168,6 +168,7 @@ async function settleSucceededRefunds(tx: any, transactionId: string) {
     await tx.prisma.paymentTransaction.update({ where: { id: transactionId }, data: { status, refundedCents, version: { increment: 1 } } })
   }
   if (transaction.serviceOrderId) await cancelServiceOrderIfFullyRefunded(tx, transaction.serviceOrderId)
+  await recordReservationRefundInTransaction(tx, transactionId)
 }
 
 export async function requestPaymentRefund(_root: unknown, { data }: any, context: any) {
@@ -264,6 +265,7 @@ export async function processVerifiedPaymentWebhook(event: VerifiedPaymentEvent,
       if (order?.status === 'invoiced' && Number(totals._sum.capturedCents || 0) - Number(totals._sum.refundedCents || 0) >= Number(order.grandTotalCents || 0)) await tx.prisma.serviceOrder.update({ where: { id: transaction.serviceOrderId }, data: { status: 'paid', settledAt: new Date() } })
     }
     if (['refunded', 'partially-refunded'].includes(status) && transaction.serviceOrderId) await cancelServiceOrderIfFullyRefunded(tx, transaction.serviceOrderId)
+    if (['refunded', 'partially-refunded'].includes(status)) await recordReservationRefundInTransaction(tx, transaction.id)
     if (status === 'captured' && transaction.sourceType === 'reservation' && transaction.leadId) {
       await applyPaidReservationInTransaction(tx, { id: transaction.id, rooftopId: transaction.rooftopId, leadId: transaction.leadId, capturedCents })
     }

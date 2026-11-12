@@ -960,7 +960,7 @@ textarea.sf-input {
 .sf-dock-clear {
   --sf-dock-h: 3.5rem;
   --sf-dock-gap: max(1rem, env(safe-area-inset-bottom));
-  padding-bottom: calc(var(--sf-dock-h) + var(--sf-dock-gap) + 1rem);
+  padding-bottom: calc(var(--sf-dock-h) + var(--sf-dock-gap) + 2rem);
 }
 
 .sf-dock {

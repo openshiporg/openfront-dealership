@@ -145,3 +145,28 @@ export async function deliverReservationConfirmation(context: any, transactionId
     console.error('Reservation confirmation email failed:', error instanceof Error ? error.message : 'Unknown error')
   }
 }
+
+/**
+ * A refunded reservation deposit is a lead event: the lead records it (audit event + a note line) so
+ * staff do not read "deposit paid" as the current state. Keyed per payment and refunded total, so replays do nothing.
+ */
+export async function recordReservationRefundInTransaction(tx: any, transactionId: string) {
+  const transaction = await tx.prisma.paymentTransaction.findUnique({
+    where: { id: transactionId },
+    select: { id: true, rooftopId: true, leadId: true, sourceType: true, status: true, capturedCents: true, refundedCents: true },
+  })
+  if (!transaction || transaction.sourceType !== 'reservation' || !transaction.leadId || !(transaction.refundedCents > 0)) return null
+  const eventKey = `reservation-refunded:${transaction.id}:${transaction.refundedCents}`
+  const prior = await tx.prisma.domainAuditEvent.findUnique({ where: { eventKey }, select: { id: true } })
+  if (prior) return null
+  const lead = await tx.prisma.lead.findUnique({ where: { id: transaction.leadId }, select: { id: true, rooftopId: true, notes: true } })
+  if (!lead || lead.rooftopId !== transaction.rooftopId) return null
+  const full = transaction.refundedCents >= transaction.capturedCents
+  const line = `Deposit ${full ? 'refunded in full' : 'partly refunded'}: ${usd(transaction.refundedCents)} of ${usd(transaction.capturedCents)}. The vehicle is no longer held by this deposit.`
+  await tx.prisma.lead.update({ where: { id: lead.id }, data: { notes: [String(lead.notes || '').trim(), line].filter(Boolean).join('\n') } })
+  await recordDomainEventInTransaction(tx, {
+    eventKey, rooftopId: transaction.rooftopId, aggregateType: 'Lead', aggregateId: lead.id, action: full ? 'deposit-refunded' : 'deposit-partly-refunded',
+    actorId: null, afterSnapshot: { transactionId: transaction.id, refundedCents: transaction.refundedCents, capturedCents: transaction.capturedCents },
+  })
+  return lead.id
+}

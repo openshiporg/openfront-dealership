@@ -58,7 +58,9 @@ export async function resolveCustomerInTransaction(
 
   const identities = [
     ...(normalizedEmail ? [{ normalizedEmail }] : []),
-    ...(normalizedPhone.length >= 7 ? [{ normalizedPhone }] : []),
+    // A phone match alone never joins a different person: when this submission has an email, only
+    // customers without an email of their own can be matched by phone.
+    ...(normalizedPhone.length >= 7 ? [normalizedEmail ? { normalizedPhone, normalizedEmail: '' } : { normalizedPhone }] : []),
   ]
   const matches = await tx.prisma.customer.findMany({
     where: {

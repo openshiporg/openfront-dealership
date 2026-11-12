@@ -32,6 +32,8 @@ export type ApiKeysData = {
   keys: ApiKey[]
   /** Scopes the signed-in owner can grant; others are shown disabled. */
   grantableScopes: string[]
+  /** The role holds the key-management flag; without it the page is read-only. */
+  canManageKeys?: boolean
   error: string | null
 }
 

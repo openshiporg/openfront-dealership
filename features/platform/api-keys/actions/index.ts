@@ -9,7 +9,7 @@ import { API_KEY_SCOPES, type ApiKey, type ApiKeyStatus, type ApiKeysData } from
 
 const API_KEYS_PATH = '/dashboard/platform/api-keys'
 const KEY_FIELDS = 'id name tokenPreview scopes status expiresAt lastUsedAt usageCount restrictedToIPs createdAt updatedAt'
-const SCOPE_PERMISSIONS = [...new Set(API_KEY_SCOPES.flatMap(scope => scope.permissions))]
+const SCOPE_PERMISSIONS = [...new Set([...API_KEY_SCOPES.flatMap(scope => scope.permissions), 'canManageKeys'])]
 const ROLE_FLAGS = SCOPE_PERMISSIONS.join(' ')
 
 type RoleFlags = Record<string, boolean> | null
@@ -35,12 +35,13 @@ export async function getApiKeys(): Promise<ApiKeysData> {
       }
     }
   `)
-  if (!response.success) return { keys: [], grantableScopes: [], error: response.error }
+  if (!response.success) return { keys: [], grantableScopes: [], canManageKeys: false, error: response.error }
   const owner = response.data.authenticatedItem
   const roles = [owner?.role, ...(owner?.dealerGroupMemberships || []).map(row => row.role), ...(owner?.rooftopMemberships || []).map(row => row.role)].filter(Boolean) as Array<Record<string, boolean>>
   const held = new Set(SCOPE_PERMISSIONS.filter(permission => roles.some(role => role[permission] === true)))
   return {
     keys: response.data.apiKeys,
+    canManageKeys: roles.some(role => role.canManageKeys === true),
     grantableScopes: API_KEY_SCOPES.filter(scope => scope.permissions.every(permission => held.has(permission))).map(scope => scope.value),
     error: null,
   }

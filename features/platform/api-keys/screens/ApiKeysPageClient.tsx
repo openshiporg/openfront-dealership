@@ -158,7 +158,7 @@ export function ApiKeysPageClient({ data, timeZone }: { data: ApiKeysData; timeZ
             <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
             Refresh
           </Pill>
-          {data.grantableScopes.length > 0 && <Pill variant="primary" className="h-11 sm:h-8" onClick={() => openForm(null)} disabled={Boolean(data.error) || !data.grantableScopes.length} title={!data.grantableScopes.length ? 'Your permissions allow no API scopes' : undefined}>
+          {data.canManageKeys !== false && data.grantableScopes.length > 0 && <Pill variant="primary" className="h-11 sm:h-8" onClick={() => openForm(null)} disabled={Boolean(data.error) || !data.grantableScopes.length} title={!data.grantableScopes.length ? 'Your permissions allow no API scopes' : undefined}>
             <Plus />
             New key
           </Pill>}

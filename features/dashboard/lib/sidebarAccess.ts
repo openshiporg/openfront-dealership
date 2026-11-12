@@ -5,7 +5,7 @@
  */
 
 type SidebarList = { path: string; isHidden?: boolean | null }
-type SidebarUser = { role?: { canAccessDashboard?: boolean | null } | null } | null | undefined
+type SidebarUser = { role?: { canAccessDashboard?: boolean | null; canManageSettings?: boolean | null; canManageOnboarding?: boolean | null; canManageDealerships?: boolean | null } | null } | null | undefined
 
 /** Only an explicit false hides navigation; an unknown user is left to the middleware. */
 export function canUseDashboardNav(user: SidebarUser) {
@@ -18,6 +18,11 @@ export function visibleSidebarLists<T extends SidebarList>(lists: T[], user: Sid
 }
 
 /** Platform pages whose data lives in a list with a different path; the page follows that list's visibility. */
+export function canEditStoreSettings(user: SidebarUser) {
+  const role = user?.role
+  return role?.canManageSettings === true || role?.canManageOnboarding === true || role?.canManageDealerships === true
+}
+
 export const PLATFORM_PAGE_LIST: Record<string, string> = {
   crm: 'leads',
   finance: 'financing-applications',
@@ -43,6 +48,8 @@ export function visiblePlatformItems<T extends { href: string }>(
   return items.filter((item) => {
     const slug = item.href.split('/platform/')[1]?.split(/[/?#]/)[0]
     if (!slug) return true
+    // Store Settings is saved by roles that manage settings, onboarding or dealerships only; an unknown user is left to the page.
+    if (slug === 'store-settings' && user?.role && !canEditStoreSettings(user)) return false
     return !hiddenPaths.has(slug) && !hiddenPaths.has(PLATFORM_PAGE_LIST[slug] ?? slug)
   })
 }

@@ -169,12 +169,12 @@ export function UserListPageClient({
     <DeskHeader
       title="Staff"
       meta={statusCounts ? `${statusCounts.all} ${statusCounts.all === 1 ? 'member' : 'members'} · ${statusCounts.sales} sales · ${statusCounts.service} service · ${statusCounts.finance} finance` : undefined}
-      actions={
+      actions={list?.hideCreate ? undefined : (
         <Pill variant="primary" onClick={() => setIsCreateDrawerOpen(true)} aria-label="Add staff member">
           <CirclePlus />
           Add staff member
         </Pill>
-      }
+      )}
     />
   )
 

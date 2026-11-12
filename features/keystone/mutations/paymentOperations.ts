@@ -147,6 +147,29 @@ export async function paymentReturnStatus(_root: unknown, { reference }: { refer
   }
 }
 
+// House rule: a full refund of the service invoice cancels the order (no automatic restock or release).
+async function cancelServiceOrderIfFullyRefunded(tx: any, serviceOrderId: string) {
+  const order = await tx.prisma.serviceOrder.findUnique({ where: { id: serviceOrderId }, select: { status: true } })
+  if (!order || !['invoiced', 'paid'].includes(order.status)) return
+  const totals = await tx.prisma.paymentTransaction.aggregate({ where: { serviceOrderId, status: { in: ['captured', 'partially-refunded', 'refunded'] } }, _sum: { capturedCents: true, refundedCents: true } })
+  const captured = Number(totals._sum.capturedCents || 0)
+  if (captured > 0 && Number(totals._sum.refundedCents || 0) >= captured) await tx.prisma.serviceOrder.updateMany({ where: { id: serviceOrderId, status: order.status }, data: { status: 'cancelled' } })
+}
+
+// A refund the provider reports as succeeded when requested must move the payment and its order now,
+// not only when a later webhook arrives.
+async function settleSucceededRefunds(tx: any, transactionId: string) {
+  const transaction = await tx.prisma.paymentTransaction.findUnique({ where: { id: transactionId } })
+  if (!transaction || !['captured', 'partially-refunded', 'refunded'].includes(transaction.status)) return
+  const succeeded = await tx.prisma.paymentRefund.aggregate({ where: { transactionId, status: 'succeeded' }, _sum: { amountCents: true } })
+  const refundedCents = Math.min(transaction.capturedCents, Number(succeeded._sum.amountCents || 0))
+  if (refundedCents > transaction.refundedCents) {
+    const status = refundedCents >= transaction.capturedCents ? 'refunded' : 'partially-refunded'
+    await tx.prisma.paymentTransaction.update({ where: { id: transactionId }, data: { status, refundedCents, version: { increment: 1 } } })
+  }
+  if (transaction.serviceOrderId) await cancelServiceOrderIfFullyRefunded(tx, transaction.serviceOrderId)
+}
+
 export async function requestPaymentRefund(_root: unknown, { data }: any, context: any) {
   assertPaymentAdmin(context)
   const transactionId = required(data.transactionId, 'Transaction ID', 100)
@@ -174,6 +197,7 @@ export async function requestPaymentRefund(_root: unknown, { data }: any, contex
     try {
       const result = await executeAdapterFunction({ provider, functionName: 'refundPaymentFunction', args: { paymentId: transaction.providerTransactionId, amount: amountCents, currency: transaction.currency, idempotencyKey, metadata: { openfront_refund_id: refundId, openfront_transaction_id: transactionId, openfront_reason: reason.slice(0, 200) } } })
       await context.sudo().prisma.paymentRefund.update({ where: { id: refundId }, data: { providerRefundId: result?.providerRefundId ? String(result.providerRefundId) : undefined, status: result?.status === 'succeeded' ? 'succeeded' : 'pending' } })
+      if (result?.status === 'succeeded') await context.sudo().transaction(async (tx: any) => { await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`payment-webhook:${transactionId}`}, 0))`; await settleSucceededRefunds(tx, transactionId) }, { timeout: 30_000 })
     } catch (error: any) {
       await context.sudo().prisma.paymentRefund.update({ where: { id: refundId }, data: { status: 'failed', failureCode: String(error?.code || error?.message || 'PROVIDER_ERROR').slice(0, 100) } })
       throw error
@@ -194,6 +218,7 @@ export async function reconcilePaymentTransaction(_root: unknown, { data }: any,
     await assertSessionRooftopPermission(context, transaction.rooftop.id, 'canManagePayments')
     await recordDomainEventInTransaction(tx, { eventKey: `payment-reconcile:${idempotencyKey}`, rooftopId: transaction.rooftop.id, aggregateType: 'PaymentTransaction', aggregateId: transactionId, action: 'reconciled', actorId: context.session.itemId, afterSnapshot: { transactionId, reference }, })
     if (transaction.reconciliationReference && transaction.reconciliationReference !== reference) throw new Error('Payment is already reconciled with different evidence')
+    await settleSucceededRefunds(tx, transactionId)
     await tx.prisma.paymentTransaction.updateMany({ where: { id: transactionId, reconciliationReference: '' }, data: { reconciliationReference: reference, reconciledAt: new Date(), version: { increment: 1 } } })
     return session.db.PaymentTransaction.findOne({ where: { id: transactionId } })
   }, { timeout: 30_000 })
@@ -238,15 +263,7 @@ export async function processVerifiedPaymentWebhook(event: VerifiedPaymentEvent,
       const totals = await tx.prisma.paymentTransaction.aggregate({ where: { serviceOrderId: transaction.serviceOrderId, status: { in: ['captured', 'partially-refunded', 'refunded'] } }, _sum: { capturedCents: true, refundedCents: true } })
       if (order?.status === 'invoiced' && Number(totals._sum.capturedCents || 0) - Number(totals._sum.refundedCents || 0) >= Number(order.grandTotalCents || 0)) await tx.prisma.serviceOrder.update({ where: { id: transaction.serviceOrderId }, data: { status: 'paid', settledAt: new Date() } })
     }
-    if (['refunded', 'partially-refunded'].includes(status) && transaction.serviceOrderId) {
-      // House rule: a full refund of the service invoice cancels the order (no automatic restock or release).
-      const order = await tx.prisma.serviceOrder.findUnique({ where: { id: transaction.serviceOrderId }, select: { status: true } })
-      if (order && ['invoiced', 'paid'].includes(order.status)) {
-        const totals = await tx.prisma.paymentTransaction.aggregate({ where: { serviceOrderId: transaction.serviceOrderId, status: { in: ['captured', 'partially-refunded', 'refunded'] } }, _sum: { capturedCents: true, refundedCents: true } })
-        const captured = Number(totals._sum.capturedCents || 0)
-        if (captured > 0 && Number(totals._sum.refundedCents || 0) >= captured) await tx.prisma.serviceOrder.updateMany({ where: { id: transaction.serviceOrderId, status: order.status }, data: { status: 'cancelled' } })
-      }
-    }
+    if (['refunded', 'partially-refunded'].includes(status) && transaction.serviceOrderId) await cancelServiceOrderIfFullyRefunded(tx, transaction.serviceOrderId)
     if (status === 'captured' && transaction.sourceType === 'reservation' && transaction.leadId) {
       await applyPaidReservationInTransaction(tx, { id: transaction.id, rooftopId: transaction.rooftopId, leadId: transaction.leadId, capturedCents })
     }

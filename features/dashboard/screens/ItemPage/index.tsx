@@ -23,7 +23,8 @@ export async function ItemPage({ params }: ItemPageParams) {
 
   const list = await getListByPath(listKey)
 
-  if (!list) {
+  // A list hidden for this session (no query access) has no page: 404, not an empty 200.
+  if (!list || list.isHidden) {
     notFound()
   }
 

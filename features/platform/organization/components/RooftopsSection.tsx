@@ -137,12 +137,12 @@ export function RooftopsSection({
             { value: 'archived', label: 'Archived', count: counts.archived, tone: 'idle' },
           ]}
         />
-        <Track>
-          <Pill variant="primary" className="h-11 sm:h-8" disabled={!canManage || !groups.length} title={!groups.length ? 'No dealer group' : lockedReason} onClick={openCreate}>
+        {canManage && <Track>
+          <Pill variant="primary" className="h-11 sm:h-8" disabled={!groups.length} title={!groups.length ? 'No dealer group' : lockedReason} onClick={openCreate}>
             <Plus />
             New rooftop
           </Pill>
-        </Track>
+        </Track>}
       </div>
       {!canManage && <p className="text-xs text-muted-foreground">{lockedReason}</p>}
       <div className="relative min-w-0 sm:max-w-sm">
@@ -186,7 +186,7 @@ export function RooftopsSection({
                   <Td><Status tone={state.tone}>{state.label}</Status></Td>
                   <Td align="right" priority={2}>{rooftop.membershipsCount ?? 0}</Td>
                   <Td align="right" className="w-px whitespace-nowrap">
-                    <div className="inline-flex flex-wrap justify-end gap-1">
+                    {canManage && <div className="inline-flex flex-wrap justify-end gap-1">
                       {transitions.map(status => (
                         <Pill key={status} size="sm" className="h-11 sm:h-7" disabled={!canManage} title={lockedReason} onClick={() => { setError(null); setStatusChange({ rooftop, status }) }}>
                           {verb(status)}
@@ -196,7 +196,7 @@ export function RooftopsSection({
                         <Pencil />
                         Edit
                       </Pill>
-                    </div>
+                    </div>}
                   </Td>
                 </Tr>
               )

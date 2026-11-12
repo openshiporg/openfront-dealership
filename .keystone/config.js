@@ -7099,7 +7099,7 @@ var ApiKey = (0, import_core70.list)({
 });
 
 // features/keystone/models/index.ts
-var models = {
+var rawModels = {
   User,
   Role,
   Make,
@@ -7171,6 +7171,18 @@ var models = {
   AuthenticationThrottle,
   ApiKey
 };
+var models = Object.fromEntries(Object.entries(rawModels).map(([key7, config2]) => {
+  const operationQuery = config2?.access?.operation?.query;
+  const filterQuery = config2?.access?.filter?.query;
+  if (typeof operationQuery !== "function" && typeof filterQuery !== "function") return [key7, config2];
+  const existing = config2?.ui?.isHidden;
+  const isHidden = (args) => {
+    if (existing === true || typeof existing === "function" && existing(args)) return true;
+    if (typeof operationQuery === "function" && !operationQuery(args)) return true;
+    return typeof filterQuery === "function" && filterQuery(args) === false;
+  };
+  return [key7, { ...config2, ui: { ...config2.ui ?? {}, isHidden } }];
+}));
 
 // features/keystone/ui-create-access.ts
 function createRule(access) {
@@ -17350,6 +17362,24 @@ async function paymentReturnStatus(_root, { reference: reference2 }, context) {
     stockNumber: vehicle?.stockNumber || null
   };
 }
+async function cancelServiceOrderIfFullyRefunded(tx, serviceOrderId) {
+  const order2 = await tx.prisma.serviceOrder.findUnique({ where: { id: serviceOrderId }, select: { status: true } });
+  if (!order2 || !["invoiced", "paid"].includes(order2.status)) return;
+  const totals = await tx.prisma.paymentTransaction.aggregate({ where: { serviceOrderId, status: { in: ["captured", "partially-refunded", "refunded"] } }, _sum: { capturedCents: true, refundedCents: true } });
+  const captured = Number(totals._sum.capturedCents || 0);
+  if (captured > 0 && Number(totals._sum.refundedCents || 0) >= captured) await tx.prisma.serviceOrder.updateMany({ where: { id: serviceOrderId, status: order2.status }, data: { status: "cancelled" } });
+}
+async function settleSucceededRefunds(tx, transactionId) {
+  const transaction = await tx.prisma.paymentTransaction.findUnique({ where: { id: transactionId } });
+  if (!transaction || !["captured", "partially-refunded", "refunded"].includes(transaction.status)) return;
+  const succeeded = await tx.prisma.paymentRefund.aggregate({ where: { transactionId, status: "succeeded" }, _sum: { amountCents: true } });
+  const refundedCents = Math.min(transaction.capturedCents, Number(succeeded._sum.amountCents || 0));
+  if (refundedCents > transaction.refundedCents) {
+    const status = refundedCents >= transaction.capturedCents ? "refunded" : "partially-refunded";
+    await tx.prisma.paymentTransaction.update({ where: { id: transactionId }, data: { status, refundedCents, version: { increment: 1 } } });
+  }
+  if (transaction.serviceOrderId) await cancelServiceOrderIfFullyRefunded(tx, transaction.serviceOrderId);
+}
 async function requestPaymentRefund(_root, { data }, context) {
   assertPaymentAdmin(context);
   const transactionId = required9(data.transactionId, "Transaction ID", 100);
@@ -17377,6 +17407,10 @@ async function requestPaymentRefund(_root, { data }, context) {
     try {
       const result2 = await executeAdapterFunction({ provider, functionName: "refundPaymentFunction", args: { paymentId: transaction.providerTransactionId, amount: amountCents, currency: transaction.currency, idempotencyKey: idempotencyKey6, metadata: { openfront_refund_id: refundId, openfront_transaction_id: transactionId, openfront_reason: reason.slice(0, 200) } } });
       await context.sudo().prisma.paymentRefund.update({ where: { id: refundId }, data: { providerRefundId: result2?.providerRefundId ? String(result2.providerRefundId) : void 0, status: result2?.status === "succeeded" ? "succeeded" : "pending" } });
+      if (result2?.status === "succeeded") await context.sudo().transaction(async (tx) => {
+        await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`payment-webhook:${transactionId}`}, 0))`;
+        await settleSucceededRefunds(tx, transactionId);
+      }, { timeout: 3e4 });
     } catch (error) {
       await context.sudo().prisma.paymentRefund.update({ where: { id: refundId }, data: { status: "failed", failureCode: String(error?.code || error?.message || "PROVIDER_ERROR").slice(0, 100) } });
       throw error;
@@ -17396,6 +17430,7 @@ async function reconcilePaymentTransaction(_root, { data }, context) {
     await assertSessionRooftopPermission(context, transaction.rooftop.id, "canManagePayments");
     await recordDomainEventInTransaction(tx, { eventKey: `payment-reconcile:${idempotencyKey6}`, rooftopId: transaction.rooftop.id, aggregateType: "PaymentTransaction", aggregateId: transactionId, action: "reconciled", actorId: context.session.itemId, afterSnapshot: { transactionId, reference: reference2 } });
     if (transaction.reconciliationReference && transaction.reconciliationReference !== reference2) throw new Error("Payment is already reconciled with different evidence");
+    await settleSucceededRefunds(tx, transactionId);
     await tx.prisma.paymentTransaction.updateMany({ where: { id: transactionId, reconciliationReference: "" }, data: { reconciliationReference: reference2, reconciledAt: /* @__PURE__ */ new Date(), version: { increment: 1 } } });
     return session.db.PaymentTransaction.findOne({ where: { id: transactionId } });
   }, { timeout: 3e4 });
@@ -17442,14 +17477,7 @@ async function processVerifiedPaymentWebhook(event2, context) {
       const totals = await tx.prisma.paymentTransaction.aggregate({ where: { serviceOrderId: transaction.serviceOrderId, status: { in: ["captured", "partially-refunded", "refunded"] } }, _sum: { capturedCents: true, refundedCents: true } });
       if (order2?.status === "invoiced" && Number(totals._sum.capturedCents || 0) - Number(totals._sum.refundedCents || 0) >= Number(order2.grandTotalCents || 0)) await tx.prisma.serviceOrder.update({ where: { id: transaction.serviceOrderId }, data: { status: "paid", settledAt: /* @__PURE__ */ new Date() } });
     }
-    if (["refunded", "partially-refunded"].includes(status) && transaction.serviceOrderId) {
-      const order2 = await tx.prisma.serviceOrder.findUnique({ where: { id: transaction.serviceOrderId }, select: { status: true } });
-      if (order2 && ["invoiced", "paid"].includes(order2.status)) {
-        const totals = await tx.prisma.paymentTransaction.aggregate({ where: { serviceOrderId: transaction.serviceOrderId, status: { in: ["captured", "partially-refunded", "refunded"] } }, _sum: { capturedCents: true, refundedCents: true } });
-        const captured = Number(totals._sum.capturedCents || 0);
-        if (captured > 0 && Number(totals._sum.refundedCents || 0) >= captured) await tx.prisma.serviceOrder.updateMany({ where: { id: transaction.serviceOrderId, status: order2.status }, data: { status: "cancelled" } });
-      }
-    }
+    if (["refunded", "partially-refunded"].includes(status) && transaction.serviceOrderId) await cancelServiceOrderIfFullyRefunded(tx, transaction.serviceOrderId);
     if (status === "captured" && transaction.sourceType === "reservation" && transaction.leadId) {
       await applyPaidReservationInTransaction(tx, { id: transaction.id, rooftopId: transaction.rooftopId, leadId: transaction.leadId, capturedCents });
     }
@@ -17607,7 +17635,7 @@ async function operationalReport(_root, args, context) {
     prisma.financeMenuVersion.findMany({ where: { ...where, status: "accepted" }, select: { dealId: true, selectedProductCodes: true } }),
     prisma.serviceLaborOperation.findMany({ where, select: { soldHours: true, actualMinutes: true, status: true } }),
     prisma.partsInventory.findMany({ where, select: { quantity: true, committedQuantity: true, onOrderQuantity: true, minimumQuantity: true, updatedAt: true } }),
-    prisma.serviceOrder.findMany({ where, select: { status: true, laborTotalCents: true, grandTotalCents: true, settledAt: true } }),
+    prisma.serviceOrder.findMany({ where, select: { status: true, laborTotalCents: true, grandTotalCents: true, settledAt: true, paymentTransactions: { where: { status: { in: ["captured", "partially-refunded", "refunded"] } }, select: { capturedCents: true, refundedCents: true } } } }),
     prisma.serviceAppointment.count({ where: { AND: [todayWhere("appointmentDate"), { status: { not: "cancelled" } }] } }),
     prisma.testDrive.count({ where: todayWhere("scheduledTime") }),
     prisma.accountingBatch.count({ where: { ...where, status: { in: ["failed", "posting"] } } }),
@@ -17627,7 +17655,12 @@ async function operationalReport(_root, args, context) {
     const value = new Date(item.createdAt).getTime();
     return value >= previousStart.getTime() && value < currentStart.getTime();
   });
-  const settledService = serviceOrders.filter((item) => item.status === "paid" && item.settledAt);
+  const fullyRefunded = (item) => {
+    const paid = (item.paymentTransactions || []).reduce((sum, p2) => sum + Number(p2.capturedCents || 0), 0);
+    const back = (item.paymentTransactions || []).reduce((sum, p2) => sum + Number(p2.refundedCents || 0), 0);
+    return paid > 0 && back >= paid;
+  };
+  const settledService = serviceOrders.filter((item) => item.status === "paid" && item.settledAt && !fullyRefunded(item));
   const currentService = settledService.filter((item) => new Date(item.settledAt).getTime() >= currentStart.getTime());
   const previousService = settledService.filter((item) => {
     const value = new Date(item.settledAt).getTime();

@@ -20,7 +20,7 @@ export async function CreatePage({ params }: CreatePageParams) {
   const list = await getListByPath(listKey)
 
   // A list whose create access is denied for this session has no create page.
-  if (!list || list.hideCreate) {
+  if (!list || list.isHidden || list.hideCreate) {
     notFound()
   }
 

@@ -71,7 +71,7 @@ export async function operationalReport(_root: unknown, args: { rooftopId?: stri
     prisma.financeMenuVersion.findMany({ where: { ...where, status: 'accepted' }, select: { dealId: true, selectedProductCodes: true } }),
     prisma.serviceLaborOperation.findMany({ where, select: { soldHours: true, actualMinutes: true, status: true } }),
     prisma.partsInventory.findMany({ where, select: { quantity: true, committedQuantity: true, onOrderQuantity: true, minimumQuantity: true, updatedAt: true } }),
-    prisma.serviceOrder.findMany({ where, select: { status: true, laborTotalCents: true, grandTotalCents: true, settledAt: true } }),
+    prisma.serviceOrder.findMany({ where, select: { status: true, laborTotalCents: true, grandTotalCents: true, settledAt: true, paymentTransactions: { where: { status: { in: ['captured', 'partially-refunded', 'refunded'] } }, select: { capturedCents: true, refundedCents: true } } } }),
     prisma.serviceAppointment.count({ where: { AND: [todayWhere('appointmentDate'), { status: { not: 'cancelled' } }] } }),
     prisma.testDrive.count({ where: todayWhere('scheduledTime') }),
     prisma.accountingBatch.count({ where: { ...where, status: { in: ['failed', 'posting'] } } }),
@@ -85,7 +85,9 @@ export async function operationalReport(_root: unknown, args: { rooftopId?: stri
   const previousDelivered = delivered.filter((item: any) => { const value = new Date(item.saleDate).getTime(); return value >= previousStart.getTime() && value < currentStart.getTime() })
   const currentLeads = leads.filter((item: any) => new Date(item.createdAt).getTime() >= currentStart.getTime())
   const previousLeads = leads.filter((item: any) => { const value = new Date(item.createdAt).getTime(); return value >= previousStart.getTime() && value < currentStart.getTime() })
-  const settledService = serviceOrders.filter((item: any) => item.status === 'paid' && item.settledAt)
+  // A paid order whose payments were all refunded is not revenue.
+  const fullyRefunded = (item: any) => { const paid = (item.paymentTransactions || []).reduce((sum: number, p: any) => sum + Number(p.capturedCents || 0), 0); const back = (item.paymentTransactions || []).reduce((sum: number, p: any) => sum + Number(p.refundedCents || 0), 0); return paid > 0 && back >= paid }
+  const settledService = serviceOrders.filter((item: any) => item.status === 'paid' && item.settledAt && !fullyRefunded(item))
   const currentService = settledService.filter((item: any) => new Date(item.settledAt).getTime() >= currentStart.getTime())
   const previousService = settledService.filter((item: any) => { const value = new Date(item.settledAt).getTime(); return value >= previousStart.getTime() && value < currentStart.getTime() })
   const now = reportNow.getTime()

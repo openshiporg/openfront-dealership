@@ -206,9 +206,11 @@ export function LeadListPageClient({
           <Pill asChild variant="plain" className="max-md:h-10">
             <Link href={`${basePath}/platform/crm/tasks`}><ListChecks />My tasks</Link>
           </Pill>
-          <Pill variant="primary" onClick={openCreate} disabled={!canCreate} title={canCreate ? undefined : 'Requires lead management permission'} className="max-md:h-10">
-            <Plus />New lead
-          </Pill>
+          {canCreate && (
+            <Pill variant="primary" onClick={openCreate} className="max-md:h-10">
+              <Plus />New lead
+            </Pill>
+          )}
         </>
       }
     />
@@ -219,7 +221,6 @@ export function LeadListPageClient({
   return (
     <PageContainer title="CRM" header={header} breadcrumbs={breadcrumbs}>
       <div className="min-w-0 max-w-full space-y-8 px-4 pb-24 md:px-6">
-        {!canCreate && viewer && <p className="text-xs text-muted-foreground">New lead requires lead management permission</p>}
 
         <DeskSection
           id="crm-waiting"

@@ -104,7 +104,7 @@ export function DealerGroupSection({
             key={group.id}
             title={<span className="flex min-w-0 flex-wrap items-baseline gap-x-3">{group.name}<Status tone={state.tone}>{state.label}</Status></span>}
             actions={
-              <Track>
+              canManage ? <Track>
                 {transitions.map(transition => (
                   <Pill key={transition.status} size="sm" className="h-11 sm:h-7" disabled={!canManage} title={lockedReason} onClick={() => { setError(null); setStatusChange({ group, status: transition.status }) }}>
                     {transition.label}
@@ -114,7 +114,7 @@ export function DealerGroupSection({
                   <Pencil />
                   Edit
                 </Pill>
-              </Track>
+              </Track> : undefined
             }
           >
             <Panel className="px-4">

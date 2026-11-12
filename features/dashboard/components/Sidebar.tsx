@@ -53,6 +53,8 @@ interface User {
   role?: {
     canAccessDashboard?: boolean;
     canManageOnboarding?: boolean;
+    canManageSettings?: boolean;
+    canManageDealerships?: boolean;
   };
 }
 

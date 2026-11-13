@@ -69,7 +69,7 @@ function slugify(value: string) {
   return value.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
 }
 
-// Basic and Complete setups use the merchant's own dealership details, never the sample dealership's.
+// Basic and Complete setups use the merchant's own dealership details, never another dealership's.
 function withDealershipDetails(data: any, details: DealershipDetails) {
   if (!data?.dealership) return data;
   const name = details.name.trim();

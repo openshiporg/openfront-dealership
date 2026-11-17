@@ -175,6 +175,13 @@ async function transitionDealCommand(
       })
       if (released.count !== 1) throw new Error('Reserved vehicle could not be released')
     }
+    // A pencil reopened from submitted or approved still holds its car "pending"; cancelling it gives the car back,
+    // unless another active deal on the same car holds it.
+    if (toStatus === 'cancelled' && deal.status === 'pencil' && deal.vehicle?.id) {
+      await transactionContext.prisma.$queryRaw`SELECT "id" FROM "Vehicle" WHERE "id" = ${deal.vehicle.id} FOR UPDATE`
+      const holding = await transactionContext.prisma.deal.count({ where: { id: { not: deal.id }, vehicleId: deal.vehicle.id, status: { in: ['submitted', 'approved', 'financed'] } } })
+      if (!holding) await transactionContext.prisma.vehicle.updateMany({ where: { id: deal.vehicle.id, status: 'pending' }, data: { status: 'available' } })
+    }
 
     if (toStatus === 'cancelled') {
       const reason = String(notes || '').trim()

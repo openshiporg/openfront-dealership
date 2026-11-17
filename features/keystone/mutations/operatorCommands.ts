@@ -1,3 +1,4 @@
+import { lockServiceOrder } from '../lifecycle/serviceOrderAuthority'
 import { randomUUID } from 'node:crypto'
 
 import { permissions } from '../access'
@@ -376,9 +377,11 @@ export async function addServiceOrderLineItem(_root: unknown, { data }: any, con
       await recordDomainEventInTransaction(tx, { eventKey, rooftopId: order.rooftop.id, aggregateType: 'ServiceOrder', aggregateId: order.id, action: 'line-item-added', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { lineItemId: priorLineId }, })
       return { id: priorLineId, reused: true }
     }
-    if (!['estimate', 'approved', 'in-progress'].includes(order.status)) throw new Error('Service order lines are locked at completion')
-    const current = await tx.prisma.serviceOrder.findUnique({ where: { id: order.id }, select: { updatedAt: true, taxCents: true } })
-    if (!current || current.updatedAt.getTime() !== expectedUpdatedAt.getTime()) throw new Error('Service order changed concurrently; reload and retry')
+    // Same row lock as completion, and the status read after it, so a line can't land on an order being completed.
+    await lockServiceOrder(tx, order.id)
+    const current = await tx.prisma.serviceOrder.findUnique({ where: { id: order.id }, select: { status: true, updatedAt: true, taxCents: true } })
+    if (!current || !['estimate', 'approved', 'in-progress'].includes(current.status)) throw new Error('Service order lines are locked at completion')
+    if (current.updatedAt.getTime() !== expectedUpdatedAt.getTime()) throw new Error('Service order changed concurrently; reload and retry')
     await tx.prisma.repairOrderLineItem.create({ data: { id: lineId, rooftopId: order.rooftop.id, serviceOrderId: order.id, itemType, description, partNumber: evidence.partNumber, quantity, unitPriceCents, priceCents, costCents } })
     await recomputeServiceOrderTotals(tx, order.id, current.taxCents ?? 0)
     await recordDomainEventInTransaction(tx, { eventKey, rooftopId: order.rooftop.id, aggregateType: 'ServiceOrder', aggregateId: order.id, action: 'line-item-added', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { lineItemId: lineId }, })

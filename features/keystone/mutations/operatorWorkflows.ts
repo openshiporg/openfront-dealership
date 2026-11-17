@@ -1,7 +1,7 @@
 import { SERVICE_APPOINTMENT_TRANSITIONS } from '../lifecycle/serviceAppointmentTransitions'
 import { permissions } from '../access'
 import { domainEventRequestHash, recordDomainEventInTransaction, type DomainEventInput } from '../lifecycle/domainEvents'
-import { assertSessionRooftopPermission } from '../tenantRecords'
+import { assertSessionRooftopPermission, assertUserRooftopAccess } from '../tenantRecords'
 import { cancelTestDriveInTransaction, TEST_DRIVE_CANCEL_SELECT } from './customerBookings'
 import { assertServiceSlotCapacity } from './bookingCapacity'
 
@@ -326,11 +326,8 @@ export async function createLeadTask(_root: unknown, { data }: any, context: any
       if (!taskId) throw new Error('Task replay evidence is incomplete')
       return
     }
-    const [groupAccess, directAccess] = await Promise.all([
-      tx.prisma.dealerGroupMembership.count({ where: { userId: assignedToId, status: 'active', accessAllRooftops: true, dealerGroup: { rooftops: { some: { id: lead.rooftop.id } } } } }),
-      tx.prisma.rooftopMembership.count({ where: { userId: assignedToId, status: 'active', rooftopId: lead.rooftop.id } }),
-    ])
-    if (groupAccess === 0 && directAccess === 0) throw new Error('Task assignee must have active rooftop access')
+    // Same rule as every other staff relationship: a role with dashboard access first, then a membership.
+    await assertUserRooftopAccess(context, assignedToId, lead.rooftop.id).catch(() => { throw new Error('Task assignee must have active rooftop access') })
     const task = await tx.prisma.task.create({ data: { rooftopId: lead.rooftop.id, leadId, assignedToId, title, description, priority, completed: false, dueDate }, select: { id: true } })
     taskId = task.id
     await recordDomainEventInTransaction(tx, { ...event, metadata: { taskId } })

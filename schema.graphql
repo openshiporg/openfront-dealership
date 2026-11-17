@@ -8822,6 +8822,7 @@ type Mutation {
   reviewFinancePrerequisites(data: ReviewFinancePrerequisitesInput!): OperatorCommandResult!
   manageFinanceFundingCase(data: ManageFinanceFundingInput!): FinanceFundingCase!
   recordCashDealDeposit(data: RecordCashDealDepositInput!): CashDealDepositResult!
+  recordServiceCounterPayment(data: RecordServiceCounterPaymentInput!): ServiceCounterPaymentResult!
   recordFinanceProductCancellation(data: RecordFinanceProductCancellationInput!): FinanceProductCancellation!
   intakeInventoryVehicle(data: IntakeInventoryVehicleInput!): InventoryIntakeResult!
   establishInventoryStock(data: EstablishInventoryStockInput!): InventoryCommandResult!
@@ -10767,6 +10768,22 @@ input RecordCashDealDepositInput {
   paymentMethod: String!
   receiptReference: String!
   idempotencyKey: String!
+}
+
+input RecordServiceCounterPaymentInput {
+  serviceOrderId: ID!
+  amountCents: Int!
+  paymentMethod: String!
+  receiptReference: String!
+  idempotencyKey: String!
+}
+
+type ServiceCounterPaymentResult {
+  id: ID!
+  serviceOrderId: ID!
+  amountCents: Int!
+  remainingCents: Int!
+  reused: Boolean!
 }
 
 type CashDealDepositResult {

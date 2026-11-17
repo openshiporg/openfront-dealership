@@ -43,7 +43,7 @@ type StockAfter = { onHand: number; committed: number; onOrder: number; delta: n
  * Stock math for one movement. `quantity` is the positive movement size; for `count` it is the counted
  * on-hand (zero allowed); for `adjustment` the signed `quantityDelta` is used.
  */
-export function computePartsMovement(stock: Stock, type: string, quantity: number, quantityDelta?: number): StockAfter {
+export function computePartsMovement(stock: Stock, type: string, quantity: number, quantityDelta?: number, heldForOrder?: number): StockAfter {
   let onHand = Number(stock.quantity || 0)
   let committed = Number(stock.committedQuantity || 0)
   let onOrder = Number(stock.onOrderQuantity || 0)
@@ -54,7 +54,8 @@ export function computePartsMovement(stock: Stock, type: string, quantity: numbe
     delta = quantity
   } else if (type === 'issue') {
     onHand -= quantity
-    committed = Math.max(0, committed - quantity)
+    // Only parts held for this same repair order are used up from the held count; another order's hold stays.
+    committed = Math.max(0, committed - Math.min(quantity, heldForOrder ?? quantity))
     delta = -quantity
   } else if (type === 'return') {
     onHand += quantity
@@ -67,7 +68,10 @@ export function computePartsMovement(stock: Stock, type: string, quantity: numbe
     delta = quantity - onHand
     onHand = quantity
   } else if (type === 'commit') committed += quantity
-  else if (type === 'release') committed -= quantity
+  else if (type === 'release') {
+    if (heldForOrder !== undefined && quantity > heldForOrder) throw new Error(`Only ${heldForOrder} held for this repair order`)
+    committed -= quantity
+  }
   else if (type === 'po-order') onOrder += quantity
   else if (type === 'po-cancel') onOrder -= quantity
   else throw new Error('Invalid parts movement')
@@ -76,6 +80,23 @@ export function computePartsMovement(stock: Stock, type: string, quantity: numbe
   if (onOrder < 0) throw new Error('Cannot cancel more than is on order')
   if (committed > onHand) throw new Error('Committed quantity would exceed stock on hand')
   return { onHand, committed, onOrder, delta }
+}
+
+/** How many of this part are still held for one repair order: its commits, less its releases and the held parts it used. */
+async function heldForServiceOrder(tx: any, partId: string, serviceOrderId: string): Promise<number | undefined> {
+  const rows = await tx.prisma.partsMovement.findMany({ where: { partId, serviceOrderId, movementType: { in: ['commit', 'release', 'issue'] } }, select: { movementType: true, evidence: true } })
+  let held = 0
+  for (const row of rows) {
+    const evidence = (row.evidence || {}) as Record<string, unknown>
+    // A movement recorded without stock evidence can't be attributed; keep the store-wide count for that part.
+    if (evidence.quantity === undefined || evidence.committedBefore === undefined) return undefined
+    const used = Math.max(0, Number(evidence.committedBefore ?? 0) - Number(evidence.committedAfter ?? 0))
+    const size = Math.abs(Number(evidence.quantity ?? 0))
+    if (row.movementType === 'commit') held += size
+    else if (row.movementType === 'release') held -= size
+    else held -= used
+  }
+  return Math.max(0, held)
 }
 
 /**
@@ -100,7 +121,8 @@ async function applyMovementInTransaction(tx: any, input: {
     select: { id: true, partNumber: true, quantity: true, committedQuantity: true, onOrderQuantity: true },
   })
   if (!part) throw new Error('Part not found in this rooftop')
-  const after = computePartsMovement(part, input.type, input.quantity, input.quantityDelta)
+  const heldForOrder = input.serviceOrderId && ['issue', 'release'].includes(input.type) ? await heldForServiceOrder(tx, part.id, input.serviceOrderId) : undefined
+  const after = computePartsMovement(part, input.type, input.quantity, input.quantityDelta, heldForOrder)
   const changed = await tx.prisma.partsInventory.updateMany({
     where: { id: part.id, quantity: part.quantity, committedQuantity: part.committedQuantity, onOrderQuantity: part.onOrderQuantity },
     data: { quantity: after.onHand, committedQuantity: after.committed, onOrderQuantity: after.onOrder },
@@ -254,7 +276,8 @@ export async function recordPartsMovement(_root: unknown, { data }: any, context
   if (SERVICE_LINKED_TYPES.has(type) && !serviceOrderId) throw new Error('A repair order is required for this parts movement')
   if (serviceOrderId) {
     const serviceOrder = await context.query.ServiceOrder.findOne({ where: { id: serviceOrderId }, query: 'id status rooftop { id }' })
-    if (!serviceOrder || serviceOrder.rooftop?.id !== rooftopId || !OPEN_ORDER_STATUSES.includes(serviceOrder.status)) {
+    // Parts still held when an order closes can be released against that same order.
+    if (!serviceOrder || serviceOrder.rooftop?.id !== rooftopId || (type !== 'release' && !OPEN_ORDER_STATUSES.includes(serviceOrder.status))) {
       throw new Error('Repair order not found, inaccessible, or closed to parts movements')
     }
   }
@@ -290,7 +313,7 @@ export async function recordPartsMovement(_root: unknown, { data }: any, context
     }
     if (serviceOrderId) {
       const scopedOrder = await tx.prisma.serviceOrder.findFirst({
-        where: { id: serviceOrderId, rooftopId, status: { in: OPEN_ORDER_STATUSES } },
+        where: { id: serviceOrderId, rooftopId, ...(type === 'release' ? {} : { status: { in: OPEN_ORDER_STATUSES } }) },
         select: { id: true },
       })
       if (!scopedOrder) throw new Error('Repair order changed or is outside the parts rooftop')

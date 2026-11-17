@@ -324,7 +324,7 @@ export async function completeDealDelivery(_root: unknown, { data }: any, contex
 
 export async function openFinanceFollowUp(_root: unknown, { data }: any, context: any) {
   if (!context.session?.itemId || !permissions.canManageFinancing({ session: context.session })) throw new Error('Financing management permission is required')
-  const lead = await context.query.Lead.findOne({ where: { id: String(data.leadId || '') }, query: 'id firstName lastName rooftop { id } tasks(where: { completed: { equals: false } }) { id }' })
+  const lead = await context.query.Lead.findOne({ where: { id: String(data.leadId || '') }, query: 'id firstName lastName rooftop { id } tasks(where: { completed: { equals: false }, title: { startsWith: "F&I follow-up" } }) { id }' })
   if (!lead?.rooftop?.id) throw new Error('Lead not found or not accessible')
   await assertSessionRooftopPermission(context, lead.rooftop.id, 'canManageFinancing')
   const eventKey = `finance-follow-up:${idempotencyKey(data.idempotencyKey)}`
@@ -338,6 +338,7 @@ export async function openFinanceFollowUp(_root: unknown, { data }: any, context
       await recordDomainEventInTransaction(tx, { eventKey, rooftopId: lead.rooftop.id, aggregateType: 'Lead', aggregateId: lead.id, action: 'finance-follow-up-opened', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { taskId: priorTaskId }, })
       return { id: priorTaskId, reused: true }
     }
+    // Only an open F&I follow-up is the follow-up; a test-drive call-back or other task on the lead is not.
     if (lead.tasks.length) {
       const existingTaskId = lead.tasks[0].id
       await recordDomainEventInTransaction(tx, { eventKey, rooftopId: lead.rooftop.id, aggregateType: 'Lead', aggregateId: lead.id, action: 'finance-follow-up-opened', actorId: context.session.itemId, afterSnapshot: evidence, metadata: { taskId: existingTaskId }, })

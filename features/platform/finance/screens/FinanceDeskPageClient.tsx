@@ -337,9 +337,9 @@ export function FinanceDeskPageClient({
   }
 
   const startFinanceFollowUp = async (lead: FinanceLead) => {
-    const openTask = lead.tasks?.find(task => !task.completed)
+    const openTask = lead.tasks?.find(task => !task.completed && String(task.title || '').startsWith('F&I follow-up'))
     if (openTask) {
-      setNotice('This request already has an open follow-up task.')
+      setNotice('This request already has an open F&I follow-up task.')
       return
     }
 

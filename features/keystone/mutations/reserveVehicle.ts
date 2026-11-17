@@ -59,8 +59,21 @@ export async function reserveVehicle(_root: unknown, { data }: { data: any }, co
       // One deposit holds one vehicle. The vehicle row is share-locked above; take an advisory lock so
       // two shoppers paying at once can't both reserve it.
       await transactionContext.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`vehicle-reservation:${vehicle.id}`}, 0))`
-      const held = await transactionContext.prisma.paymentTransaction.count({ where: { rooftopId, ...activeReservationWhere(vehicle.id) } })
-      if (held > 0) throw new SubmissionError('Another shopper has already reserved this vehicle. Ask about it or browse similar vehicles.', 409, 'VEHICLE_RESERVED')
+      const holds = await transactionContext.prisma.paymentTransaction.findMany({
+        where: { rooftopId, ...activeReservationWhere(vehicle.id) },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, status: true, leadId: true, checkoutUrl: true, createdAt: true, lead: { select: { email: true } } },
+      })
+      if (holds.length > 0) {
+        // The same shopper coming back to an unpaid checkout of theirs is not "another shopper": they get their own
+        // open page back while it can still be paid, or a new one once it has closed (pages close after 31 minutes).
+        const ownUnpaid = holds.every((hold: any) => ['creating', 'pending'].includes(hold.status) && String(hold.lead?.email || '').trim().toLowerCase() === email.toLowerCase())
+        if (!ownUnpaid) throw new SubmissionError('Another shopper has already reserved this vehicle. Ask about it or browse similar vehicles.', 409, 'VEHICLE_RESERVED')
+        const latest = holds[0]
+        if (latest.checkoutUrl && Date.now() - new Date(latest.createdAt).getTime() < 31 * 60 * 1000) {
+          return { leadId: latest.leadId, transactionId: latest.id, amountCents: reservationDepositCents(vehicle.priceCents ?? vehicle.listPriceCents), selectedVehicle: vehicle }
+        }
+      }
       const rooftop = await transactionContext.sudo().prisma.rooftop.findUnique({ where: { id: rooftopId }, select: { currencyCode: true } })
       const amountCents = reservationDepositCents(vehicle.priceCents ?? vehicle.listPriceCents)
       const { customer } = await resolveCustomerInTransaction(transactionContext, { rooftopId, firstName, lastName, email, phone })

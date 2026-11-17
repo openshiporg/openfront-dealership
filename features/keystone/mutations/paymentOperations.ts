@@ -180,7 +180,10 @@ export async function requestPaymentRefund(_root: unknown, { data }: any, contex
   const transaction = await context.query.PaymentTransaction.findOne({ where: { id: transactionId }, query: 'id status amountCents currency capturedCents refundedCents providerKey providerTransactionId rooftop { id }' })
   if (!transaction?.rooftop?.id || !['captured', 'partially-refunded'].includes(transaction.status) || !transaction.providerTransactionId) throw new Error('Captured payment transaction required')
   await assertSessionRooftopPermission(context, transaction.rooftop.id, 'canManagePayments')
-  const provider = await installedPaymentProvider(context, transaction.providerKey)
+  // Cash, check or terminal payments staff recorded by hand are given back by hand: no provider is called, and the
+  // refund is recorded as done at once, the same way the payment was recorded.
+  const handRecorded = transaction.providerKey === 'operator-recorded'
+  const provider = handRecorded ? null : await installedPaymentProvider(context, transaction.providerKey)
   const refundId = await context.transaction(async (tx: any) => {
     await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`payment-refund:${transactionId}`}, 0))`
     const existing = await tx.prisma.paymentRefund.findUnique({ where: { idempotencyKey } })
@@ -191,6 +194,12 @@ export async function requestPaymentRefund(_root: unknown, { data }: any, contex
     }
     const reserved = await tx.prisma.paymentRefund.aggregate({ where: { transactionId, status: { in: ['creating', 'pending', 'succeeded'] } }, _sum: { amountCents: true } })
     if (amountCents > transaction.capturedCents - Number(reserved._sum.amountCents || 0)) throw new Error('Refund exceeds remaining captured amount')
+    if (handRecorded) {
+      const created = await tx.prisma.paymentRefund.create({ data: { rooftopId: transaction.rooftop.id, transactionId, amountCents, reason, status: 'succeeded', idempotencyKey, providerRefundId: `hand:${idempotencyKey}`.slice(0, 200) }, select: { id: true } })
+      await tx.prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`payment-webhook:${transactionId}`}, 0))`
+      await settleSucceededRefunds(tx, transactionId)
+      return created.id
+    }
     return (await tx.prisma.paymentRefund.create({ data: { rooftopId: transaction.rooftop.id, transactionId, amountCents, reason, status: 'creating', idempotencyKey }, select: { id: true } })).id
   }, { timeout: 30_000 })
   const existing = await context.sudo().prisma.paymentRefund.findUnique({ where: { id: refundId } })

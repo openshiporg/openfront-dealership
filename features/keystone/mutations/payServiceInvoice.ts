@@ -11,7 +11,8 @@ import { customerOwnership, ownedServiceOrderIds, requireCustomerAccount } from 
 const paymentReturnSecret = () => process.env.SESSION_SECRET || ''
 const SETTLED = ['captured', 'partially-refunded', 'refunded']
 const OPEN = ['creating', 'pending', 'authorized']
-const OPEN_CHECKOUT_MS = 30 * 60 * 1000
+// Longer than the Stripe page lives (31 minutes), so a second checkout starts only after the first can't be paid.
+const OPEN_CHECKOUT_MS = 35 * 60 * 1000
 
 async function cardProvider(context: any) {
   const providers = await context.sudo().query.PaymentProvider.findMany({

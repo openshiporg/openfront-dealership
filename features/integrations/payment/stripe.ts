@@ -32,6 +32,9 @@ const getStripeClient = () => {
   return new Stripe(stripeKey);
 };
 
+// Stripe Checkout pages close after this; every hold that waits on an open page lasts longer (35 minutes).
+const CHECKOUT_PAGE_LIFETIME_SECONDS = 31 * 60
+
 export async function createPaymentFunction({ amount, currency, description, metadata, successUrl, cancelUrl, idempotencyKey, customerEmail }: CreatePaymentInput) {
   const stripe = getStripeClient();
 
@@ -51,6 +54,9 @@ export async function createPaymentFunction({ amount, currency, description, met
     ],
     metadata,
     payment_intent_data: { metadata },
+    // The page closes before a held car or open invoice is released (35 minutes), so an old page can never be paid
+    // after a second checkout has started. Stripe's minimum is 30 minutes.
+    expires_at: Math.floor(Date.now() / 1000) + CHECKOUT_PAGE_LIFETIME_SECONDS,
     // Prefill the email we already have so the buyer is not asked for it again.
     ...(customerEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail) ? { customer_email: customerEmail } : {}),
   }, idempotencyKey ? { idempotencyKey } : undefined);

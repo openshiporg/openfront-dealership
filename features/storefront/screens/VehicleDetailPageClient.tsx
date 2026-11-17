@@ -339,9 +339,20 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
                     Get price quote
                   </button>
                   {vehicle.status === 'reserved' ? (
-                    <Link href={similarHref} className="sf-btn sf-btn-ghost px-3">
-                      See similar
-                    </Link>
+                    <>
+                      <Link href={similarHref} className="sf-btn sf-btn-ghost px-3">
+                        See similar
+                      </Link>
+                      {/* The shopper whose unpaid checkout holds the car gets it back; anyone else is told it is taken. */}
+                      <button
+                        ref={reserveOpenerRef}
+                        type="button"
+                        onClick={() => openLead('reserve', reserveOpenerRef)}
+                        className="sf-btn sf-btn-ghost col-span-2 px-3"
+                      >
+                        Finish my reservation
+                      </button>
+                    </>
                   ) : (
                     <button
                       ref={reserveOpenerRef}

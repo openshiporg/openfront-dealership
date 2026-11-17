@@ -131,6 +131,14 @@ export async function transitionServiceOrder(input: { id: string; toStatus: stri
   `, input)
 }
 
+export async function recordServiceCounterPayment(data: { serviceOrderId: string; amountCents: number; paymentMethod: string; receiptReference: string; idempotencyKey: string }) {
+  return command<{ recordServiceCounterPayment: { id: string; remainingCents: number; reused: boolean } }>(`
+    mutation RecordServiceCounterPayment($data: RecordServiceCounterPaymentInput!) {
+      recordServiceCounterPayment(data: $data) { id remainingCents reused }
+    }
+  `, { data })
+}
+
 export async function openServiceOrder(data: {
   appointmentId: string
   idempotencyKey: string

@@ -73,7 +73,7 @@ import { manageDeliveryCase, manageWeOweItem } from './deliveryOperations';
 import { createWalkInTradeIn, setDealTradeIn } from './tradeInDealCommands';
 import { keystoneItemResult } from './keystoneItemResult';
 import { configureFinanceProduct, decideFinanceMenu, manageFinanceContractPackage, manageFinanceFundingCase, presentFinanceMenu, recordFinanceComplianceCheck, recordFinanceProductCancellation, recordFinanceProductQuote } from './financeOperations';
-import { recordCashDealDeposit } from './cashDealDeposits';
+import { recordCashDealDeposit, recordServiceCounterPayment } from './cashDealDeposits';
 import { recordLenderSubmissionStatus } from './lenderSubmissionOperations';
 import { intakeInventoryVehicle } from './intakeInventoryVehicle';
 import { publicInventoryCount, publicInventoryVehicle, publicInventoryVehicleRecord, publicInventoryVehicles } from '../integrations/inventory/publicStorefrontInventory';;
@@ -545,6 +545,8 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
       input ReviewFinancePrerequisitesInput { dealId: ID!, worksheetVersion: Int!, expectedUpdatedAt: DateTime!, expectedPrerequisiteDigest: String!, providerKey: String!, reviewReference: String!, policyReference: String!, policyVersion: String!, reviewerAuthorityReference: String!, idempotencyKey: String! }
       input ManageFinanceFundingInput { dealId: ID!, worksheetVersion: Int!, expectedUpdatedAt: DateTime!, expectedFundingUpdatedAt: DateTime, status: String!, checklist: JSON!, exceptions: JSON!, fundingReference: String, paymentAmountCents: Int, paymentMethod: String, idempotencyKey: String! }
       input RecordCashDealDepositInput { dealId: ID!, amountCents: Int!, paymentMethod: String!, receiptReference: String!, idempotencyKey: String! }
+      input RecordServiceCounterPaymentInput { serviceOrderId: ID!, amountCents: Int!, paymentMethod: String!, receiptReference: String!, idempotencyKey: String! }
+      type ServiceCounterPaymentResult { id: ID!, serviceOrderId: ID!, amountCents: Int!, remainingCents: Int!, reused: Boolean! }
       type CashDealDepositResult { id: ID!, dealId: ID!, amountCents: Int!, paymentMethod: String!, receiptReference: String!, remainingCents: Int!, form8300Required: Boolean!, reused: Boolean! }
       input RecordFinanceProductCancellationInput { dealId: ID!, menuId: ID!, productCode: String!, status: String!, reason: String!, refundCents: Int, refundBasis: JSON, evidenceReference: String, idempotencyKey: String! }
 
@@ -737,6 +739,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         reviewFinancePrerequisites(data: ReviewFinancePrerequisitesInput!): OperatorCommandResult!
         manageFinanceFundingCase(data: ManageFinanceFundingInput!): FinanceFundingCase!
         recordCashDealDeposit(data: RecordCashDealDepositInput!): CashDealDepositResult!
+        recordServiceCounterPayment(data: RecordServiceCounterPaymentInput!): ServiceCounterPaymentResult!
         recordFinanceProductCancellation(data: RecordFinanceProductCancellationInput!): FinanceProductCancellation!
         intakeInventoryVehicle(data: IntakeInventoryVehicleInput!): InventoryIntakeResult!
         establishInventoryStock(data: EstablishInventoryStockInput!): InventoryCommandResult!
@@ -875,6 +878,7 @@ export function extendGraphqlSchema(baseSchema: GraphQLSchema) {
         reviewFinancePrerequisites,
         manageFinanceFundingCase,
         recordCashDealDeposit,
+        recordServiceCounterPayment,
         recordFinanceProductCancellation,
         intakeInventoryVehicle,
         establishInventoryStock,

@@ -111,6 +111,8 @@ export async function createPaymentCheckout(_root: unknown, { data }: any, conte
     // The customer pays, so they return to the storefront, never to the dashboard that staff used.
     const { successUrl, cancelUrl } = paymentReturnUrls(origin, transactionId, paymentReturnSecret())
     const response = await executeAdapterFunction({ provider, functionName: 'createPaymentFunction', args: { amount: amountCents, currency, description: source.description, metadata: { openfront_transaction_id: transactionId }, idempotencyKey, successUrl, cancelUrl } })
+    // A provider with no hosted page (Manual) would leave a pending row nothing can ever capture or cancel.
+    if (!response?.checkoutUrl) throw new Error('This provider has no online checkout. Record a counter payment instead.')
     await context.sudo().prisma.paymentTransaction.updateMany({ where: { id: transactionId, status: { in: [...CHECKOUT_STARTABLE] } }, data: { status: 'pending', checkoutUrl: response?.checkoutUrl, providerSessionId: response?.providerSessionId, providerTransactionId: response?.providerTransactionId, version: { increment: 1 } } })
   } catch (error: any) {
     await context.sudo().prisma.paymentTransaction.updateMany({ where: { id: transactionId, status: { in: [...CHECKOUT_FAILABLE] } }, data: { status: 'failed', failureCode: String(error?.code || error?.message || 'PROVIDER_ERROR').slice(0, 100), version: { increment: 1 } } })

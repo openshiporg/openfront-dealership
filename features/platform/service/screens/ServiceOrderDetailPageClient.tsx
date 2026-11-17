@@ -21,6 +21,7 @@ import {
   Track,
 } from '@/features/platform/components/desk'
 import { formatCentsForInput, parseDollarsToCents } from '@/features/platform/deals/lib/moneyInput'
+import { DEAL_PAYMENT_METHODS, DEAL_PAYMENT_METHOD_LABELS } from '@/features/keystone/lifecycle/paymentMethods'
 import { formatPhone } from '@/features/platform/lib/format'
 import {
   addServiceOrderLineItem,
@@ -28,6 +29,7 @@ import {
   getServiceOrderDetail,
   getServicePartOptions,
   manageLaborOperation,
+  recordServiceCounterPayment,
   recordServiceOrderEvidence,
   removeServiceOrderLineItem,
   setServiceOrderTax,
@@ -69,6 +71,7 @@ type FormKind =
   | 'labor-cancel'
   | 'invoice'
   | 'confirm-transition'
+  | 'counter-payment'
 
 type FormState = {
   kind: FormKind
@@ -85,6 +88,8 @@ type FormState = {
 }
 
 type CommandResponse = { success: boolean; error?: string; rejected?: boolean }
+
+const COUNTER_PAYMENT_METHODS = DEAL_PAYMENT_METHODS.map(value => ({ value, label: DEAL_PAYMENT_METHOD_LABELS[value] }))
 
 const PAY_TYPES = [
   { value: 'customer', label: 'Customer' },
@@ -310,6 +315,12 @@ export function ServiceOrderDetailPageClient({
         return [{ name: 'actualMinutes', label: 'Actual minutes', inputMode: 'numeric' }]
       case 'invoice':
         return [{ name: 'invoiceNumber', label: 'Invoice number' }]
+      case 'counter-payment':
+        return [
+          { name: 'amount', label: 'Amount', type: 'money', placeholder: '$0.00' },
+          { name: 'paymentMethod', label: 'Paid by', type: 'select', options: COUNTER_PAYMENT_METHODS, placeholder: 'Select' },
+          { name: 'receiptReference', label: 'Receipt reference', placeholder: 'Receipt, check or terminal number', wide: true },
+        ]
       default:
         return []
     }
@@ -383,6 +394,13 @@ export function ServiceOrderDetailPageClient({
       if (actualMinutes === null) errors.actualMinutes = 'Enter whole minutes'
       return { errors, data: { actualMinutes } }
     }
+    if (state.kind === 'counter-payment') {
+      const amountCents = parseDollarsToCents(values.amount || '')
+      if (amountCents === null || amountCents <= 0) errors.amount = 'Enter an amount'
+      if (!text('paymentMethod')) errors.paymentMethod = 'Choose how it was paid'
+      if (!text('receiptReference')) errors.receiptReference = 'Receipt reference is required'
+      return { errors, data: { amountCents, paymentMethod: text('paymentMethod'), receiptReference: text('receiptReference') } }
+    }
     if (state.kind === 'invoice') {
       if (!text('invoiceNumber')) errors.invoiceNumber = 'Invoice number is required'
       else if (text('invoiceNumber').length > 100) errors.invoiceNumber = 'At most 100 characters'
@@ -442,6 +460,10 @@ export function ServiceOrderDetailPageClient({
       case 'invoice':
         response = await transition('invoiced', String(data.invoiceNumber))
         success = 'Invoiced'
+        break
+      case 'counter-payment':
+        response = await recordServiceCounterPayment({ serviceOrderId: order.id, idempotencyKey: form.key, amountCents: Number(data.amountCents), paymentMethod: String(data.paymentMethod), receiptReference: String(data.receiptReference) })
+        success = 'Payment recorded'
         break
       case 'confirm-transition':
         response = await transition(form.toStatus || '')
@@ -860,9 +882,21 @@ export function ServiceOrderDetailPageClient({
               title="Payments"
               count={order.payments?.length}
               actions={
-                <Pill size="sm" variant="plain" className="max-sm:h-11" asChild>
-                  <Link href={`${basePath}/platform/payments`}>Payments</Link>
-                </Pill>
+                <Track>
+                  {status === 'invoiced' && settledNetCents(order.payments || []) < Number(order.grandTotalCents || 0) && (
+                    <Pill
+                      size="sm"
+                      className="max-sm:h-11"
+                      disabled={Boolean(busy)}
+                      onClick={() => openForm({ kind: 'counter-payment', title: 'Record counter payment', submitLabel: 'Record payment', values: { amount: formatCentsForInput(Math.max(0, Number(order.grandTotalCents || 0) - settledNetCents(order.payments || []))), paymentMethod: '', receiptReference: '' } })}
+                    >
+                      Record payment
+                    </Pill>
+                  )}
+                  <Pill size="sm" variant="plain" className="max-sm:h-11" asChild>
+                    <Link href={`${basePath}/platform/payments`}>Payments</Link>
+                  </Pill>
+                </Track>
               }
             >
               {order.payments === null ? (

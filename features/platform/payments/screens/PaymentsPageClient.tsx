@@ -230,7 +230,7 @@ export function PaymentsPageClient({
   }, [])
 
   const openCheckout = () => {
-    setCheckoutValues({ sourceType: 'service', sourceId: '', providerKey: installed[0]?.code || '', amount: '' })
+    setCheckoutValues({ sourceType: 'service', sourceId: '', providerKey: (installed.find(p => p.createPaymentFunction !== 'manual') || installed[0])?.code || '', amount: '' })
     setCheckoutFieldErrors({})
     setCheckoutError(null)
     setCheckoutOpen(true)

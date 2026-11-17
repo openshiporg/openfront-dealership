@@ -31,6 +31,7 @@ function harness({ owned = ['so1'], status = 'invoiced', payments = [] } = {}) {
       async create({ data }) { const row = { id: `p${created.length + 1}`, ...data, createdAt: new Date(), capturedCents: 0, refundedCents: 0, checkoutUrl: null }; created.push(row); store.payments.unshift(row); return { id: row.id } },
       async findUnique({ where }) { return { ...store.payments.find(p => p.id === where.id), serviceOrder: { invoiceNumber: 'INV-7' } } },
       async update({ where, data }) { Object.assign(store.payments.find(p => p.id === where.id), data); return {} },
+      async updateMany({ where, data }) { const row = store.payments.find(p => p.id === where.id && (!where.status?.in || where.status.in.includes(p.status))); if (row) Object.assign(row, data); return { count: row ? 1 : 0 } },
     },
     domainAuditEvent: { async create() { return { id: 'e' } } },
     user: { async findUnique() { return { email: 'buyer@example.com' } } },
@@ -40,6 +41,7 @@ function harness({ owned = ['so1'], status = 'invoiced', payments = [] } = {}) {
   const mocks = {
     '../utils/paymentProviderAdapter': { async executeAdapterFunction({ args }) { charges.push(args); return { checkoutUrl: 'https://checkout.stripe.test/s1', providerSessionId: 'cs_1' } } },
     '../lib/paymentReturn': { paymentReturnUrls: () => ({ successUrl: 's', cancelUrl: 'c' }) },
+    '../lifecycle/paymentState': require('../features/keystone/lifecycle/paymentState.ts'),
     './customerOwnership': { requireCustomerAccount: (c) => c.session.itemId, async customerOwnership() { return {} }, async ownedServiceOrderIds() { return owned } },
   };
   return { mod: load(mocks), context, created, charges, store }

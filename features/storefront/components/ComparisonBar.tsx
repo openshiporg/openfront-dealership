@@ -34,10 +34,10 @@ export function ComparisonBar() {
             <span style={{ color: 'var(--sf-on-dark-2)' }}> of 4 selected</span>
           </p>
           <div className="flex shrink-0 gap-1.5">
-            <button type="button" onClick={() => clearComparison()} className="sf-btn sf-btn-ghost sf-btn-sm min-h-10">
+            <button type="button" onClick={() => clearComparison()} className="sf-btn sf-btn-ghost sf-btn-sm min-h-11 md:min-h-10">
               Clear
             </button>
-            <Link href="/compare" className="sf-btn sf-btn-primary sf-btn-sm min-h-10">
+            <Link href="/compare" className="sf-btn sf-btn-primary sf-btn-sm min-h-11 md:min-h-10">
               Compare
             </Link>
           </div>

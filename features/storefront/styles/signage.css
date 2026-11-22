@@ -893,7 +893,8 @@ textarea.sf-input {
   background: transparent;
   border: 0;
   padding: 0;
-  font-size: 0.9375rem;
+  /* 16px: iOS zooms the page when a smaller field takes focus. */
+  font-size: 1rem;
   color: var(--sf-ink-2);
   appearance: none;
   text-overflow: ellipsis;
@@ -957,56 +958,6 @@ textarea.sf-input {
   background: linear-gradient(90deg, oklch(0.14 0.004 60 / 0.92) 0%, oklch(0.14 0.004 60 / 0.6) 38%, transparent 62%);
 }
 
-.sf-dock-clear {
-  --sf-dock-h: 3.5rem;
-  --sf-dock-gap: max(1rem, env(safe-area-inset-bottom));
-  padding-bottom: calc(var(--sf-dock-h) + var(--sf-dock-gap) + 2rem);
-}
-
-.sf-dock {
-  position: fixed;
-  left: 50%;
-  bottom: max(1rem, env(safe-area-inset-bottom));
-  z-index: 40;
-  /* 0.25rem padding x2 + 2.75rem items + 1.5px border x2 = 3.5rem (--sf-dock-h) */
-  box-sizing: border-box;
-  height: 3.5rem;
-  align-items: center;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  width: min(13.75rem, calc(100% - 2rem));
-  transform: translateX(-50%);
-  padding: 0.25rem 0.75rem;
-  border: 1.5px solid var(--sf-accent);
-  border-radius: 999px;
-  /* Solid near-black pill: nothing behind it may read through. */
-  background: oklch(0.14 0.003 60);
-  isolation: isolate;
-  box-shadow: 0 0 22px -4px oklch(0.665 0.205 38 / 0.55);
-}
-
-.sf-dock-item {
-  display: flex;
-  min-height: 2.75rem;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.1rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--sf-ink);
-}
-
-.sf-dock-item[data-active="true"] {
-  color: var(--sf-accent);
-}
-
-body:has(.sf-dock) .sf-compare-bar {
-  bottom: calc(3.5rem + max(1rem, env(safe-area-inset-bottom)) + 0.75rem);
-}
-
 /* VDP phone action bar: four equal buttons must fit their labels at 402. */
 .sf-bar-btn {
   font-size: 0.75rem;
@@ -1055,15 +1006,10 @@ body:has(.sf-dock) .sf-compare-bar {
   color: var(--sf-ink-2);
 }
 
+.sf-line-field-input.sf-line-trigger { font-size: 1rem; }
+
 .sf-hero-field-input.sf-hero-trigger:hover,
 .sf-line-field-input.sf-line-trigger:hover { background: transparent; }
 .sf-hero-field-input.sf-hero-trigger:focus-visible,
 .sf-line-field-input.sf-line-trigger:focus-visible { box-shadow: none; }
 .sf-line-field-input.sf-line-trigger svg { display: none; }
-
-/* The floating dock (phone home) must not cover the end of the page: clear it below the footer. */
-@media (max-width: 767px) {
-  .storefront:has(.sf-dock) > footer {
-    padding-bottom: calc(3.5rem + max(1rem, env(safe-area-inset-bottom)) + 1rem);
-  }
-}

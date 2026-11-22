@@ -126,7 +126,7 @@ export function ComparePage() {
             <span className="sf-dot" aria-hidden="true" />
             <span className="truncate">Vehicle no longer available</span>
           </span>
-          <button type="button" onClick={() => removeFromComparison(id)} className="sf-btn sf-btn-ghost sf-btn-sm min-h-10 shrink-0">
+          <button type="button" onClick={() => removeFromComparison(id)} className="sf-btn sf-btn-ghost sf-btn-sm min-h-11 md:min-h-10 shrink-0">
             <X className="size-4" aria-hidden="true" />
             Remove
           </button>
@@ -290,7 +290,7 @@ export function ComparePage() {
                         <button
                           type="button"
                           onClick={() => removeFromComparison(vehicle.id)}
-                          className="sf-btn sf-btn-ghost sf-btn-sm min-h-10"
+                          className="sf-btn sf-btn-ghost sf-btn-sm min-h-11 md:min-h-10"
                           aria-label={`Remove ${vehicleTitle(vehicle)} from compare`}
                         >
                           <X className="size-4" aria-hidden="true" />
@@ -341,10 +341,10 @@ export function ComparePage() {
                 {vehicles.map((vehicle) => (
                   <td key={vehicle.id} className="px-3 py-4 sm:px-4">
                     <div className="flex flex-wrap gap-2">
-                      <Link href={`/inventory/${vehicle.id}`} className="sf-btn sf-btn-primary sf-btn-sm min-h-10">
+                      <Link href={`/inventory/${vehicle.id}`} className="sf-btn sf-btn-primary sf-btn-sm min-h-11 md:min-h-10">
                         View
                       </Link>
-                      <Link href={`/test-drive?vehicleId=${vehicle.id}`} className="sf-btn sf-btn-ghost sf-btn-sm min-h-10">
+                      <Link href={`/test-drive?vehicleId=${vehicle.id}`} className="sf-btn sf-btn-ghost sf-btn-sm min-h-11 md:min-h-10">
                         Test drive
                       </Link>
                     </div>

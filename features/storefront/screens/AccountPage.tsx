@@ -98,7 +98,7 @@ export async function AccountPage() {
             <Link
               key={link.href}
               href={link.href}
-              className="sf-btn sf-btn-ghost sf-btn-sm min-h-10"
+              className="sf-btn sf-btn-ghost sf-btn-sm min-h-11 md:min-h-10"
             >
               {link.label}
             </Link>

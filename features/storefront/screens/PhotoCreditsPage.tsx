@@ -41,7 +41,7 @@ export async function PhotoCreditsPage() {
               <span className="sf-dot" aria-hidden="true" />
               No attributed photos listed
             </p>
-            <Link href="/inventory" className="sf-btn sf-btn-ghost sf-btn-sm min-h-10">Inventory</Link>
+            <Link href="/inventory" className="sf-btn sf-btn-ghost sf-btn-sm min-h-11 md:min-h-10">Inventory</Link>
           </div>
         </Container>
       </>

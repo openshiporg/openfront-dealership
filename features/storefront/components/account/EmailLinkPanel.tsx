@@ -36,7 +36,7 @@ export function EmailLinkPanel({ link }: { link: CustomerEmailLink | null }) {
         {link.verified ? ' are linked to this account.' : ' to link requests made with it before you signed in.'}
       </p>
       {result && <Notice tone={result.tone}>{result.text}</Notice>}
-      <button type="button" onClick={send} disabled={pending} className={`sf-btn sf-btn-sm min-h-10 ${link.verified ? 'sf-btn-ghost' : 'sf-btn-primary'}`}>
+      <button type="button" onClick={send} disabled={pending} className={`sf-btn sf-btn-sm min-h-11 md:min-h-10 ${link.verified ? 'sf-btn-ghost' : 'sf-btn-primary'}`}>
         <MailCheck className="size-4" aria-hidden="true" />
         {pending ? 'Sending' : link.verified ? 'Link new requests' : 'Send verification email'}
       </button>

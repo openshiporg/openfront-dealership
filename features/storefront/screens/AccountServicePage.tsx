@@ -62,7 +62,7 @@ export async function AccountServicePage() {
         <>
           <AccountSection
             title="Upcoming"
-            action={<Link href="/service" className="sf-btn sf-btn-primary sf-btn-sm min-h-10 self-start">Book service</Link>}
+            action={<Link href="/service" className="sf-btn sf-btn-primary sf-btn-sm min-h-11 md:min-h-10 self-start">Book service</Link>}
           >
             {upcoming.length === 0 ? <AccountEmpty>No upcoming appointments.</AccountEmpty> : list(upcoming)}
           </AccountSection>

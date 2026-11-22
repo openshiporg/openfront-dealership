@@ -13,6 +13,7 @@ import {
 } from '@/features/storefront/lib/comparison'
 import { reserveStorefrontVehicle, submitStorefrontInquiry, submitStorefrontTestDrive } from '../actions/submissions'
 import { Container } from '../components/Container'
+import { fillBlankFields, useCustomerPrefill } from '../lib/useCustomerPrefill'
 import { LeadCaptureModal, LeadIntent, type LeadSubmissionFeedback } from '../components/LeadCaptureModal'
 import { VehicleGallery } from '../components/vdp/VehicleGallery'
 import { VehicleNotFound } from '../components/vdp/VehicleNotFound'
@@ -52,6 +53,7 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
   const [feedback, setFeedback] = useState<LeadSubmissionFeedback>(emptyFeedback)
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID())
   const [formData, setFormData] = useState(emptyForm)
+  const prefill = useCustomerPrefill()
   const testDriveOpenerRef = useRef<HTMLButtonElement>(null)
   // The sticky mobile action bar only shows once the in-page actions have scrolled away,
   // so it never sits on top of "Schedule test drive" (as on Cars.com and CarMax).
@@ -113,7 +115,8 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
     setIntent(type)
     setFeedback(emptyFeedback)
     setIdempotencyKey(crypto.randomUUID())
-    setFormData(emptyForm)
+    // A signed-in customer does not retype their own name, email and phone.
+    setFormData(prefill ? fillBlankFields(emptyForm, { firstName: prefill.firstName, lastName: prefill.lastName, email: prefill.email, phone: prefill.phone }) : emptyForm)
   }
 
   const closeLead = () => {
@@ -380,12 +383,12 @@ export function VehicleDetailPageClient({ id, initialState }: { id: string; init
                     ref={contactOpenerRef}
                     type="button"
                     onClick={() => openLead('contact', contactOpenerRef)}
-                    className="sf-link min-h-10"
+                    className="sf-link min-h-11 md:min-h-10"
                   >
                     Ask a question
                   </button>
-                  <Link href={financingHref} className="sf-link inline-flex min-h-10 items-center">Financing</Link>
-                  <Link href={tradeInHref} className="sf-link inline-flex min-h-10 items-center">Trade-in</Link>
+                  <Link href={financingHref} className="sf-link inline-flex min-h-11 md:min-h-10 items-center">Financing</Link>
+                  <Link href={tradeInHref} className="sf-link inline-flex min-h-11 md:min-h-10 items-center">Trade-in</Link>
                 </div>
               </div>
             )}

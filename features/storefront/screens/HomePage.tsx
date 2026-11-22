@@ -1,6 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import { CalendarCheck, CarFront, ChevronRight, CircleDollarSign, House, MapPin, Search, Tag, Wrench } from 'lucide-react'
+import { CalendarCheck, CarFront, ChevronRight, CircleDollarSign, MapPin } from 'lucide-react'
 import { fetchGraphQL } from '@/features/storefront/lib/data/graphql-client'
 import { GET_VEHICLES, GET_VEHICLES_COUNT } from '@/features/storefront/lib/data/queries'
 import { Vehicle } from '@/features/storefront/lib/types'
@@ -60,12 +60,6 @@ const QUICK = [
   { href: '/financing', label: 'Financing', icon: CircleDollarSign },
   { href: '/trade-in', label: 'Trade in', icon: CarFront },
   { href: '/test-drive', label: 'Test drive', icon: CalendarCheck },
-]
-
-const VISIT = [
-  { href: '/inventory', label: 'Vehicle inventory', icon: CarFront },
-  { href: '/contact', label: 'Contact sales', icon: Tag },
-  { href: '/service', label: 'Service center', icon: Wrench },
 ]
 
 function InventoryState({ state }: { state: 'unavailable' | 'empty' }) {
@@ -153,7 +147,7 @@ export async function HomePage() {
       </section>
 
       {/* ---------- Phone ---------- */}
-      <section className="sf-dock-clear relative overflow-hidden md:hidden">
+      <section className="relative overflow-hidden pb-8 md:hidden">
         <span className="sf-phone-glow" aria-hidden="true">
           {/* Drawn blurred at a third opacity, so a thumbnail-sized source looks the same and lands first. */}
           <Image src={HERO_PHOTO} alt="" fill priority sizes="160px" className="object-cover object-[45%_70%]" />
@@ -211,8 +205,8 @@ export async function HomePage() {
                   <span className="mt-0.5 block text-[1.0625rem]">{business.fullName}</span>
                 </h2>
                 {(business.addressLine1 || business.addressLine2) && (
-                  <a href={business.directionsHref || '/contact'} target={business.directionsHref ? '_blank' : undefined} rel="noreferrer" className="mt-1.5 flex items-start gap-1.5 text-[0.8125rem] leading-snug">
-                    <MapPin className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                  <a href={business.directionsHref || '/contact'} target={business.directionsHref ? '_blank' : undefined} rel="noreferrer" className="mt-1.5 flex min-h-11 items-center gap-1.5 text-[0.8125rem] leading-snug">
+                    <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
                     <span>
                       {business.addressLine1 && <span className="block">{business.addressLine1}</span>}
                       {business.addressLine2 && <span className="block">{business.addressLine2}</span>}
@@ -223,30 +217,8 @@ export async function HomePage() {
             </section>
           </div>
 
-          <nav aria-label="Visit" className="mt-3 grid grid-cols-3 gap-2 px-3">
-            {VISIT.map(({ href, label, icon: Icon }) => (
-              <Link key={href} href={href} className="sf-quick-tile">
-                <Icon className="size-4" strokeWidth={1.4} aria-hidden="true" />
-                <span>{label}</span>
-              </Link>
-            ))}
-          </nav>
         </Container>
 
-        <nav aria-label="Quick" className="sf-dock">
-          <Link href="/" aria-current="page" className="sf-dock-item" data-active="true">
-            <House className="size-5" aria-hidden="true" />
-            Home
-          </Link>
-          <Link href="/inventory" className="sf-dock-item">
-            <Search className="size-5" aria-hidden="true" />
-            Browse
-          </Link>
-          <Link href="/financing" className="sf-dock-item">
-            <Tag className="size-5" aria-hidden="true" />
-            Finance
-          </Link>
-        </nav>
       </section>
     </div>
   )

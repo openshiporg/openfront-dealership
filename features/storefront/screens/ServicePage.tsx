@@ -301,7 +301,7 @@ export function ServicePage() {
                     ) : null}
                   </span>
                 </p>
-                <button type="button" onClick={retryServiceMenu} className="sf-btn sf-btn-ghost sf-btn-sm min-h-10">Retry service menu</button>
+                <button type="button" onClick={retryServiceMenu} className="sf-btn sf-btn-ghost sf-btn-sm min-h-11 md:min-h-10">Retry service menu</button>
               </div>
             )}
           </FormSection>

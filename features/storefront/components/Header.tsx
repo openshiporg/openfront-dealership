@@ -19,6 +19,7 @@ const NAV = [
 ]
 
 const MENU = [
+  { href: '/', label: 'Home' },
   { href: '/inventory', label: 'Inventory' },
   { href: '/test-drive', label: 'Test drive' },
   { href: '/financing', label: 'Financing' },
@@ -30,6 +31,7 @@ const MENU = [
 ]
 
 function isActive(pathname: string, href: string) {
+  if (href === '/') return pathname === '/'
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
@@ -154,10 +156,10 @@ export function Header() {
       {menuOpen && (
         <div
           id="storefront-mobile-menu"
-          className="max-h-[calc(100dvh-4rem)] overflow-y-auto border-b lg:hidden"
+          className="h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain lg:hidden"
           style={{ background: 'var(--sf-sign)', borderColor: 'var(--sf-rule)', boxShadow: 'var(--sf-shadow-float)' }}
         >
-          <Container className="flex flex-col py-4">
+          <Container className="flex min-h-full flex-col py-4">
             <form onSubmit={onSearch} className="relative mb-3" role="search">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" style={{ color: 'var(--sf-ink-3)' }} aria-hidden="true" />
               <input
@@ -187,7 +189,7 @@ export function Header() {
               })}
             </nav>
             {(hasPhone || business.directionsHref) && (
-              <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="mt-auto grid grid-cols-2 gap-2 pt-4 pb-[env(safe-area-inset-bottom)]">
                 {hasPhone && (
                   <a href={business.phoneHref} className="sf-btn sf-btn-ghost">
                     <Phone className="size-4" aria-hidden="true" />

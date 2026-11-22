@@ -62,7 +62,7 @@ export function VehicleCard({
     <button
       type="button"
       onClick={toggleCompare}
-      className={`sf-btn sf-btn-sm ${comparing ? 'sf-btn-secondary' : 'sf-btn-ghost'}`}
+      className={`sf-btn sf-btn-sm max-md:min-h-11 ${comparing ? 'sf-btn-secondary' : 'sf-btn-ghost'}`}
       aria-pressed={comparing}
       aria-label={comparing ? `Remove ${title} from compare` : `Add ${title} to compare`}
     >

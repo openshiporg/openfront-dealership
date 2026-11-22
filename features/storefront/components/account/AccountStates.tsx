@@ -35,7 +35,7 @@ export function AccountError({ title, retryHref }: { title: string; retryHref: s
         <span className="sf-dot" data-tone="bad" aria-hidden="true" />
         <span className="sf-heading text-[length:var(--sf-text-md)]">{title}</span>
       </p>
-      <Link href={retryHref} prefetch={false} className="sf-btn sf-btn-ghost sf-btn-sm min-h-10">Retry</Link>
+      <Link href={retryHref} prefetch={false} className="sf-btn sf-btn-ghost sf-btn-sm min-h-11 md:min-h-10">Retry</Link>
     </div>
   )
 }

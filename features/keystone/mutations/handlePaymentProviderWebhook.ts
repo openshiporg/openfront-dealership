@@ -22,6 +22,8 @@ function signatureTimestamp(headers: Record<string, string>, fallbackSeconds: nu
   return new Date(seconds * 1000);
 }
 
+const HANDLED_EVENTS = ["checkout.session.completed", "checkout.session.expired", "payment_intent.succeeded", "payment_intent.payment_failed", "payment_intent.canceled", "refund.created", "refund.updated"];
+
 async function handlePaymentProviderWebhook(
   root: any,
   { providerId, event, headers }: { providerId: string; event: any; headers: Record<string, unknown> },
@@ -54,7 +56,13 @@ async function handlePaymentProviderWebhook(
   const providerEventId = String(verifiedEvent.id || "");
   const transactionId = String(resource.metadata?.openfront_transaction_id || "");
   if (!providerEventId || !type) throw new Error("Provider event ID is required");
-  if (!transactionId) throw new Error("Payment webhook is missing Openfront transaction evidence");
+  // The Stripe account is shared with other stores: a verified event that is not one of this store's
+  // payments is acknowledged and ignored, so Stripe does not retry it or disable the endpoint.
+  const ignored = (reason: string) => ({ success: true, ignored: true, message: `Event acknowledged, not for this store (${reason})` });
+  if (!HANDLED_EVENTS.includes(type)) return ignored("event type");
+  if (!transactionId) return ignored("no transaction");
+  const owned = await sudo.prisma.paymentTransaction.findUnique({ where: { id: transactionId }, select: { providerKey: true } }).catch(() => null);
+  if (!owned || owned.providerKey !== provider.code) return ignored("unknown transaction");
 
   const createdSeconds = Number(verifiedEvent.created || Math.floor(Date.now() / 1000));
   const result = await processVerifiedPaymentWebhook({

@@ -117,7 +117,8 @@ export async function AccountPage() {
           <ul className="border-t" style={{ borderColor: 'var(--sf-rule)' }}>
             {history.map((item) => {
               const reference = requestReference(item)
-              const status = customerRequestStatusLabel(item.kind, item.status)
+              const paidDeposit = item.status === 'deposit-paid' && item.amountCents != null
+              const status = paidDeposit ? `Reserved · ${formatCents(item.amountCents)} paid` : customerRequestStatusLabel(item.kind, item.status)
               const kind = kindKey(item)
               const amount = formatCents(item.amountCents)
               const row = (
@@ -134,7 +135,7 @@ export async function AccountPage() {
                       <time dateTime={item.scheduledAt} className="sf-figure text-[var(--sf-ink)]">
                         {formatDateTime(item.scheduledAt, item.timezone)}
                       </time>
-                      {amount && <> · <span className="sf-figure text-[var(--sf-ink)]">{amount}</span></>}
+                      {amount && !paidDeposit && <> · <span className="sf-figure text-[var(--sf-ink)]">{amount}</span></>}
                     </p>
                   </div>
                   <div className="flex items-center justify-between gap-3 pl-4 sm:justify-end sm:pl-0">

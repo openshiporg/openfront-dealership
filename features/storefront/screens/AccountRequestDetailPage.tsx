@@ -180,7 +180,7 @@ export async function AccountRequestDetailPage({ refParam }: { refParam: string 
           reference={reference}
           title={title}
           tone={statusTone(status)}
-          status={customerRequestStatusLabel(kind, status)}
+          status={detail.deposit?.status === 'deposit-paid' ? `Reserved · ${formatCents(detail.deposit.amountCents)} paid` : customerRequestStatusLabel(kind, status)}
         />
       </div>
       <div className="mt-[var(--sf-space-lg)] max-w-xl">

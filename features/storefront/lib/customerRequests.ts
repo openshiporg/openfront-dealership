@@ -16,6 +16,11 @@ const REFERENCE_PREFIX: Record<CustomerRequestKind, string> = {
 // Internal scheduling reserves a requested slot; it is not customer-facing
 // confirmation. Keep the saved lifecycle untouched and label its read state.
 export function customerRequestStatusLabel(kind: string, status: string) {
+  // Reservation rows carry the deposit state: "Reserved · $500 paid" reads better than a status code.
+  if (status === 'deposit-paid') return 'Reserved'
+  if (status === 'payment-not-finished') return 'Payment not finished'
+  if (status === 'deposit-refunded') return 'Deposit refunded'
+  if (status === 'not-paid') return 'Not paid'
   if (kind.toLowerCase() === 'service' && status === 'scheduled') return 'Confirmation pending'
   const label = status.trim().replaceAll('-', ' ')
   return label ? label.charAt(0).toUpperCase() + label.slice(1) : 'Status unavailable'

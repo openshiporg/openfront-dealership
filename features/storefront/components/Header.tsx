@@ -156,7 +156,7 @@ export function Header() {
       {menuOpen && (
         <div
           id="storefront-mobile-menu"
-          className="h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain lg:hidden"
+          className="h-[calc(100dvh-4rem-1px)] overflow-y-auto overscroll-contain lg:hidden"
           style={{ background: 'var(--sf-sign)', borderColor: 'var(--sf-rule)', boxShadow: 'var(--sf-shadow-float)' }}
         >
           <Container className="flex min-h-full flex-col py-4">

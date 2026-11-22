@@ -113,6 +113,7 @@ export async function AccountRequestDetailPage({ refParam }: { refParam: string 
     rows.push(
       ...(detail.intentLabel ? [{ label: 'Request', value: detail.intentLabel }] : []),
       ...vehicleRows(detail.vehicle),
+      ...(detail.deposit ? [{ label: 'Deposit', value: `${formatCents(detail.deposit.amountCents)} · ${statusLabel(detail.deposit.status)}`, strong: true }] : []),
       ...(detail.preferredContact ? [{ label: 'Contact by', value: statusLabel(detail.preferredContact) }] : []),
       { label: 'Submitted', value: formatDateTime(detail.submittedAt, tz) },
     )

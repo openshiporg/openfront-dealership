@@ -73,6 +73,31 @@ const inquiryLeadWhere = {
   financingApplications: { none: {} },
 }
 
+// A lead that came from "Reserve this vehicle" is a reservation to the customer, not an inquiry:
+// say so, and say whether the deposit was paid.
+async function reservationDeposits(prisma: any, leadIds: string[]) {
+  const byLead = new Map<string, { status: string; amountCents: number }>()
+  if (!leadIds.length) return byLead
+  const payments = await prisma.paymentTransaction.findMany({
+    where: { sourceType: 'reservation', leadId: { in: leadIds } },
+    orderBy: { createdAt: 'asc' },
+    select: { leadId: true, status: true, amountCents: true },
+  })
+  const rank = (status: string) => ['captured', 'authorized', 'partially-refunded'].includes(status) ? 3 : status === 'refunded' ? 2 : ['creating', 'pending'].includes(status) ? 1 : 0
+  for (const payment of payments) {
+    const current = byLead.get(payment.leadId)
+    if (!current || rank(payment.status) >= rank(current.status)) byLead.set(payment.leadId, { status: payment.status, amountCents: payment.amountCents })
+  }
+  return byLead
+}
+
+export function reservationDepositStatus(status: string) {
+  if (['captured', 'authorized', 'partially-refunded'].includes(status)) return 'deposit-paid'
+  if (status === 'refunded') return 'deposit-refunded'
+  if (['creating', 'pending'].includes(status)) return 'payment-not-finished'
+  return 'not-paid'
+}
+
 export async function customerRequestHistory(_root: unknown, _args: unknown, context: any) {
   const accountId = requireCustomerAccount(context)
   const prisma = context.prisma
@@ -96,6 +121,7 @@ export async function customerRequestHistory(_root: unknown, _args: unknown, con
       : [],
   ])
   const timezone = await rooftopTimezones(prisma, [...drives, ...services, ...inquiries, ...tradeIns, ...applications])
+  const deposits = await reservationDeposits(prisma, inquiries.map((item: any) => item.id))
   const row = (kindKey: Kind, item: any, scheduledAt: any, status: string, vehicle: string | null, amountCents: number | null = null) => ({
     id: item.id, kind: KIND_LABEL[kindKey], kindKey, scheduledAt, status, timezone: timezone(item), vehicle, amountCents,
     reference: typeof item.reference === 'string' ? item.reference : null,
@@ -103,7 +129,11 @@ export async function customerRequestHistory(_root: unknown, _args: unknown, con
   return [
     ...drives.map((item: any) => row('test-drive', item, item.scheduledTime, testDriveStatus(item), vehicleLabel(item.vehicle))),
     ...services.map((item: any) => row('service', item, item.appointmentDate, item.status, item.customerVehicleDescription || null)),
-    ...inquiries.map((item: any) => row('inquiry', item, item.createdAt, item.status || 'new', vehicleLabel(item.interestedVehicle))),
+    ...inquiries.map((item: any) => {
+      const deposit = deposits.get(item.id)
+      if (!deposit) return row('inquiry', item, item.createdAt, item.status || 'new', vehicleLabel(item.interestedVehicle))
+      return { ...row('inquiry', item, item.createdAt, reservationDepositStatus(deposit.status), vehicleLabel(item.interestedVehicle), deposit.amountCents), kind: 'Reservation' }
+    }),
     ...tradeIns.map((item: any) => row('trade-in', item, item.createdAt, customerTradeInStatus(tradeInFacts(item)), vehicleLabel(item), item.offerAmountCents ?? null)),
     ...applications.map((item: any) => row('financing', item, item.createdAt, item.status, vehicleLabel(item.vehicle), item.requestedAmountCents ?? null)),
   ].sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()).slice(0, PAGE)
@@ -167,7 +197,9 @@ async function requestDetail(prisma: any, ownership: CustomerOwnership, kind: st
     })
     if (!lead) return null
     const response = await submissionResponse(prisma, 'Lead', lead.id)
+    const deposit = (await reservationDeposits(prisma, [lead.id])).get(lead.id)
     return {
+      deposit: deposit ? { status: reservationDepositStatus(deposit.status), amountCents: deposit.amountCents } : null,
       kind, id: lead.id, rooftopId: lead.rooftopId, submittedAt: lead.createdAt, scheduledAt: lead.createdAt, status: lead.status || 'new',
       intent: typeof response?.intent === 'string' ? response.intent : null,
       intentLabel: typeof response?.intentLabel === 'string' ? response.intentLabel : null,

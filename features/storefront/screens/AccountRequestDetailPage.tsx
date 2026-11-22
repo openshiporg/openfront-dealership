@@ -113,7 +113,7 @@ export async function AccountRequestDetailPage({ refParam }: { refParam: string 
     rows.push(
       ...(detail.intentLabel ? [{ label: 'Request', value: detail.intentLabel }] : []),
       ...vehicleRows(detail.vehicle),
-      ...(detail.deposit ? [{ label: 'Deposit', value: `${formatCents(detail.deposit.amountCents)} · ${statusLabel(detail.deposit.status)}`, strong: true }] : []),
+      ...(detail.deposit ? [{ label: 'Deposit', value: formatCents(detail.deposit.amountCents), strong: true }] : []),
       ...(detail.preferredContact ? [{ label: 'Contact by', value: statusLabel(detail.preferredContact) }] : []),
       { label: 'Submitted', value: formatDateTime(detail.submittedAt, tz) },
     )
@@ -168,19 +168,23 @@ export async function AccountRequestDetailPage({ refParam }: { refParam: string 
     )
   }
 
+  // A lead from "Reserve this vehicle" reads as a reservation with its deposit state, not "Inquiry · New".
+  const title = detail.deposit ? 'Reservation' : detail.label || 'Request'
+  const status = detail.deposit ? detail.deposit.status : detail.status
+
   return (
     <section className="pb-24">
       <AccountBack href="/account" label="Requests" />
       <div className="mt-2">
         <AccountHeader
           reference={reference}
-          title={detail.label || 'Request'}
-          tone={statusTone(detail.status)}
-          status={customerRequestStatusLabel(kind, detail.status)}
+          title={title}
+          tone={statusTone(status)}
+          status={customerRequestStatusLabel(kind, status)}
         />
       </div>
       <div className="mt-[var(--sf-space-lg)] max-w-xl">
-        <Sticker title={detail.label || 'Request'} meta={reference} rows={rows} />
+        <Sticker title={title} meta={reference} rows={rows} />
       </div>
       {body}
     </section>

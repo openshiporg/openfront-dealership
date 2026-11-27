@@ -16,7 +16,7 @@ export async function LeadListPage() {
   const queueFilters: LeadListFilters = { ...initialFilters, sort: 'sla' }
   const [response, queueResponse, staff] = await Promise.all([
     getLeadList(initialFilters),
-    getLeadList(queueFilters),
+    getLeadList(queueFilters, 'queue'),
     getStaffForRooftops(rooftops.map(rooftop => rooftop.id)),
   ])
 

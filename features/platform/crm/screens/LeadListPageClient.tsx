@@ -85,6 +85,7 @@ export function LeadListPageClient({
   const createKeyRef = useRef<string | null>(null)
   const firstLoad = useRef(true)
   const requestId = useRef(0)
+  const listRef = useRef<HTMLElement>(null)
 
   const load = useCallback(async (next: LeadListFilters) => {
     const id = ++requestId.current
@@ -98,7 +99,7 @@ export function LeadListPageClient({
   }, [])
 
   const loadQueue = useCallback(async () => {
-    const response = await getLeadList({ ...initialFilters, sort: 'sla', page: 0 })
+    const response = await getLeadList({ ...initialFilters, sort: 'sla', page: 0 }, 'queue')
     if (response.success) { setQueue(response.data.leads); setQueueError(null) }
     else setQueueError(response.error || 'Unable to load leads')
   }, [initialFilters])
@@ -116,6 +117,11 @@ export function LeadListPageClient({
   }, [searchInput])
 
   const update = (patch: Partial<LeadListFilters>) => setFilters(prev => ({ ...prev, ...patch, page: patch.page ?? 0 }))
+  // The pager sits under the list, so a page change goes back to the top of the list.
+  const goToPage = (page: number) => {
+    update({ page })
+    listRef.current?.scrollIntoView({ block: 'start' })
+  }
 
   const counts = data?.counts
   const statusOptions = [
@@ -125,7 +131,7 @@ export function LeadListPageClient({
     { value: 'all', label: 'All', count: counts?.all },
   ]
   const total = counts ? (filters.status in counts ? counts[filters.status as keyof LeadListCounts] : counts.all) : 0
-  const pageSize = data?.pageSize ?? 50
+  const pageSize = data?.pageSize ?? 25
   const pageStart = total === 0 ? 0 : filters.page * pageSize + 1
   const pageEnd = Math.min(total, (filters.page + 1) * pageSize)
   const isFiltered = Boolean(filters.search) || filters.source !== 'all' || filters.ownerId !== initialFilters.ownerId
@@ -292,7 +298,7 @@ export function LeadListPageClient({
           )}
         </DeskSection>
 
-        <section aria-labelledby="crm-all-leads" className="min-w-0 space-y-3">
+        <section ref={listRef} aria-labelledby="crm-all-leads" className="min-w-0 scroll-mt-4 space-y-3">
           <h2 id="crm-all-leads" className="sr-only">All leads</h2>
           <Segmented
             label="Lead status"
@@ -420,8 +426,8 @@ export function LeadListPageClient({
               <div className="mt-3 flex items-center justify-between gap-3">
                 <p className="text-xs tabular-nums text-muted-foreground">{pageStart}-{pageEnd} of {total}</p>
                 <Track>
-                  <Pill size="sm" className="h-10 sm:h-7" disabled={filters.page === 0 || loading} onClick={() => update({ page: filters.page - 1 })} aria-label="Previous page"><ChevronLeft /></Pill>
-                  <Pill size="sm" className="h-10 sm:h-7" disabled={pageEnd >= total || loading} onClick={() => update({ page: filters.page + 1 })} aria-label="Next page"><ChevronRight /></Pill>
+                  <Pill size="sm" className="h-10 sm:h-7" disabled={filters.page === 0 || loading} onClick={() => goToPage(filters.page - 1)} aria-label="Previous page"><ChevronLeft /></Pill>
+                  <Pill size="sm" className="h-10 sm:h-7" disabled={pageEnd >= total || loading} onClick={() => goToPage(filters.page + 1)} aria-label="Next page"><ChevronRight /></Pill>
                 </Track>
               </div>
             </div>

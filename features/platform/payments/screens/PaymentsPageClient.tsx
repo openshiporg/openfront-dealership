@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Pencil, Plus, Power, RefreshCw, Search } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Pencil, Plus, Power, RefreshCw, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PageContainer } from '@/features/dashboard/components/PageContainer'
@@ -32,6 +32,9 @@ const STATUS_TABS = ['pending', 'captured', 'partially-refunded', 'refunded', 'f
 const RARE_TABS = ['creating', 'authorized'] as const
 const ALL_FILTERS = { status: 'all', provider: 'all', from: '', to: '', search: '' }
 const DAY_MS = 86_400_000
+// Keeps the page a few screens long on a phone: the queue shows its most urgent rows, the list pages.
+const QUEUE_LIMIT = 8
+const PAGE_SIZE = 25
 
 type QueueReason = { rank: number; label: string; tone: DeskTone }
 
@@ -76,6 +79,12 @@ export function PaymentsPageClient({
   const [to, setTo] = useState('')
   const [search, setSearch] = useState('')
   const firstLoad = useRef(true)
+  // The page belongs to one set of filters, so changing a filter starts at the first page again.
+  const filterKey = [status, provider, from, to, search].join('|')
+  const [paging, setPaging] = useState({ key: filterKey, page: 0 })
+  if (paging.key !== filterKey) setPaging({ key: filterKey, page: 0 })
+  const [queueExpanded, setQueueExpanded] = useState(false)
+  const listRef = useRef<HTMLDivElement>(null)
   // The queue reads the unfiltered list, so tabs and search below do not hide waiting payments.
   const [queueSource, setQueueSource] = useState(initialTransactions)
   const [queueError, setQueueError] = useState(initialError)
@@ -315,6 +324,20 @@ export function PaymentsPageClient({
     [queueSource],
   )
 
+  const queueShown = queueExpanded ? queue : queue.slice(0, QUEUE_LIMIT)
+  // A refresh keeps the page while it still exists.
+  const page = Math.min(paging.key === filterKey ? paging.page : 0, Math.max(0, Math.ceil(transactions.length / PAGE_SIZE) - 1))
+  const pageRows = transactions.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+  const pageStart = transactions.length === 0 ? 0 : page * PAGE_SIZE + 1
+  const pageEnd = Math.min(transactions.length, (page + 1) * PAGE_SIZE)
+  // The list loads the newest 200 that match; the tab count says how many match in all.
+  const matching = Math.max(transactions.length, counts[status] || 0)
+  // The pager sits under the list, so a page change goes back to the top of the list.
+  const goToPage = (next: number) => {
+    setPaging({ key: filterKey, page: next })
+    listRef.current?.scrollIntoView({ block: 'start' })
+  }
+
   const filtered = Boolean(search.trim()) || status !== 'all' || provider !== 'all' || Boolean(from) || Boolean(to)
   const resetFilters = () => {
     setSearch('')
@@ -389,7 +412,16 @@ export function PaymentsPageClient({
           </Notice>
         )}
 
-        <DeskSection title="Needs you" count={queueError ? undefined : queue.length} id="payments-queue">
+        <DeskSection
+          title="Needs you"
+          count={queueError ? undefined : queue.length}
+          id="payments-queue"
+          actions={!queueError && queue.length > QUEUE_LIMIT ? (
+            <Pill size="sm" variant="plain" className="max-md:h-10" aria-expanded={queueExpanded} onClick={() => setQueueExpanded(value => !value)}>
+              {queueExpanded ? `Show first ${QUEUE_LIMIT}` : `Show all ${queue.length}`}
+            </Pill>
+          ) : undefined}
+        >
           {queueError ? (
             <Notice tone="bad">Queue unavailable: {queueError}</Notice>
           ) : queue.length === 0 ? (
@@ -406,7 +438,7 @@ export function PaymentsPageClient({
                 </tr>
               </thead>
               <tbody>
-                {queue.map(({ tx, reason }) => {
+                {queueShown.map(({ tx, reason }) => {
                   const source = paymentSource(tx)
                   const days = ageDays(tx.createdAt)
                   return (
@@ -507,7 +539,7 @@ export function PaymentsPageClient({
                 </div>
               </Panel>
             ) : (
-              <div className={loading ? 'opacity-60 transition-opacity' : undefined} aria-busy={loading}>
+              <div ref={listRef} className={loading ? 'scroll-mt-4 opacity-60 transition-opacity' : 'scroll-mt-4'} aria-busy={loading}>
                 <DeskTable>
                   <thead>
                     <tr>
@@ -520,7 +552,7 @@ export function PaymentsPageClient({
                     </tr>
                   </thead>
                   <tbody>
-                    {transactions.map(tx => {
+                    {pageRows.map(tx => {
                       const source = paymentSource(tx)
                       return (
                         <Tr key={tx.id} className="cursor-pointer" onClick={() => router.push(`${basePath}/platform/payments/${tx.id}`)}>
@@ -555,6 +587,19 @@ export function PaymentsPageClient({
                     })}
                   </tbody>
                 </DeskTable>
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <p className="text-xs tabular-nums text-muted-foreground">
+                    {matching > transactions.length
+                      ? `${pageStart}-${pageEnd} of the newest ${transactions.length} · ${matching} match. Narrow the dates or search to reach older ones.`
+                      : `${pageStart}-${pageEnd} of ${transactions.length}`}
+                  </p>
+                  {transactions.length > PAGE_SIZE && (
+                    <Track>
+                      <Pill size="sm" className="h-10 sm:h-7" disabled={page === 0 || loading} onClick={() => goToPage(page - 1)} aria-label="Previous page"><ChevronLeft /></Pill>
+                      <Pill size="sm" className="h-10 sm:h-7" disabled={pageEnd >= transactions.length || loading} onClick={() => goToPage(page + 1)} aria-label="Next page"><ChevronRight /></Pill>
+                    </Track>
+                  )}
+                </div>
               </div>
             )}
           </div>

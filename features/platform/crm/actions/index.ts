@@ -8,7 +8,9 @@ import { ROOFTOP_STAFF_QUERY } from '@/features/platform/lib/rooftopStaffQuery'
 
 const CRM_PATH = '/dashboard/platform/crm'
 const CUSTOMERS_PATH = '/dashboard/platform/customers'
-const LEAD_PAGE_SIZE = 50
+// 25 a page keeps the list a few screens long on a phone. The response queue reads its own, larger slice.
+const LEAD_PAGE_SIZE = 25
+const LEAD_QUEUE_SIZE = 50
 const CLOSED = ['closed-won', 'closed-lost']
 const STATUS_KEYS = ['new', 'contacted', 'test-drive-scheduled', 'negotiating', 'closed-won', 'closed-lost'] as const
 
@@ -171,11 +173,12 @@ const SORTS: Record<string, any> = {
 
 export type LeadListCounts = Record<'open' | 'overdue' | 'all' | 'converted' | (typeof STATUS_KEYS)[number], number>
 
-export async function getLeadList(filters: LeadListFilters) {
+export async function getLeadList(filters: LeadListFilters, slice: 'page' | 'queue' = 'page') {
+  const pageSize = slice === 'queue' ? LEAD_QUEUE_SIZE : LEAD_PAGE_SIZE
   const base = leadBaseWhere(filters)
   const where = { AND: [...base, ...statusWhere(filters.status)] }
   const count = (status: string) => ({ AND: [...base, ...statusWhere(status)] })
-  const page = Math.max(0, Math.min(200, Math.floor(filters.page) || 0))
+  const page = Math.max(0, Math.min(400, Math.floor(filters.page) || 0))
   const response = await keystoneClient<{ leads: CrmLeadRow[] } & Record<string, number>>(`
     query CrmLeadList(
       $where: LeadWhereInput!, $orderBy: [LeadOrderByInput!]!, $take: Int!, $skip: Int!,
@@ -204,8 +207,8 @@ export async function getLeadList(filters: LeadListFilters) {
   `, {
     where,
     orderBy: SORTS[filters.sort] || SORTS.newest,
-    take: LEAD_PAGE_SIZE,
-    skip: page * LEAD_PAGE_SIZE,
+    take: pageSize,
+    skip: page * pageSize,
     open: count('open'),
     overdue: count('overdue'),
     all: count('all'),
@@ -225,7 +228,7 @@ export async function getLeadList(filters: LeadListFilters) {
     'test-drive-scheduled': data.testDrive, negotiating: data.negotiating, 'closed-won': data.won, 'closed-lost': data.lost,
     converted: data.converted,
   }
-  return { success: true as const, data: { leads: data.leads || [], counts, pageSize: LEAD_PAGE_SIZE, page } }
+  return { success: true as const, data: { leads: data.leads || [], counts, pageSize, page } }
 }
 
 /* ------------------------------------------------------------- lead detail */

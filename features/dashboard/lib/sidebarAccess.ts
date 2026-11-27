@@ -53,3 +53,24 @@ export function visiblePlatformItems<T extends { href: string }>(
     return !hiddenPaths.has(slug) && !hiddenPaths.has(PLATFORM_PAGE_LIST[slug] ?? slug)
   })
 }
+
+/**
+ * First screen after sign-in: the operations page for the work the session's role does.
+ * In order: Overview for roles that can read reports, then Service, Finance, CRM, Payments
+ * and Inventory, each only when the role can see that page's list. Null when none applies,
+ * and the caller keeps the list index.
+ */
+const LANDING_PAGES: Array<{ href: string; list: string }> = [
+  { href: '/platform/overview', list: 'saved-reports' },
+  { href: '/platform/service', list: 'service-orders' },
+  { href: '/platform/finance', list: 'financing-applications' },
+  { href: '/platform/crm', list: 'leads' },
+  { href: '/platform/payments', list: 'payment-transactions' },
+  { href: '/platform/vehicles', list: 'vehicles' },
+]
+
+export function dashboardLandingPath(lists: SidebarList[], user: SidebarUser): string | null {
+  if (!user?.role || !canUseDashboardNav(user)) return null
+  const visiblePaths = new Set(lists.filter((list) => !list.isHidden).map((list) => list.path))
+  return LANDING_PAGES.find((page) => visiblePaths.has(page.list))?.href ?? null
+}

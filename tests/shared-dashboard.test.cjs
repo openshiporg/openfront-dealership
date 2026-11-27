@@ -167,6 +167,27 @@ test('sidebar shows only lists and platform pages the session can see', () => {
   assert.equal(access.visibleSidebarLists(lists, null).length, 1);
 });
 
+test('dashboard landing: each role opens on its own operations page', () => {
+  const access = sandbox().load('features/dashboard/lib/sidebarAccess.ts');
+  // List visibility per role as models/index.ts derives it from query access (rolePermissions in ensureDealershipOnboardingRecord.ts).
+  const all = ['saved-reports', 'service-orders', 'financing-applications', 'leads', 'payment-transactions', 'vehicles', 'roles'];
+  const landing = (visible, role = { canAccessDashboard: true }) =>
+    access.dashboardLandingPath(all.map(path => ({ path, isHidden: !visible.includes(path) })), role && { role });
+  assert.equal(landing(all), '/platform/overview'); // owner / admin
+  assert.equal(landing(['saved-reports', 'leads', 'payment-transactions', 'vehicles']), '/platform/overview'); // sales manager
+  assert.equal(landing(['saved-reports', 'financing-applications', 'leads', 'payment-transactions', 'vehicles']), '/platform/overview'); // finance manager
+  assert.equal(landing(['saved-reports', 'service-orders', 'leads', 'payment-transactions', 'vehicles']), '/platform/overview'); // service manager
+  assert.equal(landing(['saved-reports', 'payment-transactions', 'vehicles']), '/platform/overview'); // office manager
+  assert.equal(landing(['leads', 'vehicles']), '/platform/crm'); // sales associate
+  assert.equal(landing(['service-orders', 'leads', 'vehicles']), '/platform/service'); // service advisor, technician, parts specialist
+  assert.equal(landing(['financing-applications', 'leads', 'vehicles']), '/platform/finance'); // custom finance-only role
+  assert.equal(landing(['payment-transactions', 'vehicles']), '/platform/payments'); // custom payments-only role
+  assert.equal(landing(['vehicles']), '/platform/vehicles'); // base staff role
+  assert.equal(landing(['roles']), null); // nothing to land on: list index stays
+  assert.equal(landing(all, { canAccessDashboard: false }), null);
+  assert.equal(landing(all, null), null);
+});
+
 test('formatInZone: viewer zone by default, explicit zone when given, labelled', () => {
   const t = sandbox().load('features/dashboard/lib/storeTime.ts');
   const d = new Date('2026-11-02T18:00:00Z');

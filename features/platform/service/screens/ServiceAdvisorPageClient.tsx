@@ -375,7 +375,7 @@ export function ServiceAdvisorPageClient({
                       <Td className="w-[1%] whitespace-nowrap">
                         <Figure size="sm" attention={late}>{formatTime(appointment.appointmentDate, timeZone)}</Figure>
                       </Td>
-                      <Td className="max-w-[16rem]">
+                      <Td className="max-md:w-full max-md:max-w-0 md:max-w-[16rem]">
                         <Link href={appointmentHref(appointment)} className="block truncate font-medium text-foreground hover:underline">
                           {name || 'Walk-in'}
                         </Link>
@@ -497,7 +497,7 @@ export function ServiceAdvisorPageClient({
             <DeskTable aria-labelledby="service-orders">
               <thead>
                 <tr>
-                  <Th>RO</Th>
+                  <Th priority={2}>RO</Th>
                   <Th>Customer</Th>
                   <Th priority={2}>Vehicle</Th>
                   <Th priority={3}>Appointment</Th>
@@ -516,14 +516,15 @@ export function ServiceAdvisorPageClient({
                   const openOps = order.laborOperations.filter(operation => !['completed', 'cancelled'].includes(operation.status)).length
                   return (
                     <Tr key={order.id} className="cursor-pointer" onClick={() => router.push(orderHref(order))}>
-                      <Td className="whitespace-nowrap">
+                      <Td priority={2} className="whitespace-nowrap">
                         <Link href={orderHref(order)} onClick={event => event.stopPropagation()} className="hover:underline">
                           <Code className="text-foreground">{roReference(order.id)}</Code>
                         </Link>
                       </Td>
-                      <Td className="max-w-[14rem]">
+                      <Td className="max-md:w-full max-md:max-w-0 md:max-w-[14rem]">
                         <p className="truncate font-medium">{name || '—'}</p>
                         <p className="truncate text-xs text-muted-foreground md:hidden">{order.appointment?.customerVehicleDescription || 'Vehicle not set'}</p>
+                        <p className="md:hidden"><Code>{roReference(order.id)}</Code></p>
                         {openOps > 0 && <p className="text-xs text-muted-foreground max-md:hidden">{openOps} open ops</p>}
                       </Td>
                       <Td priority={2} className="max-w-[14rem] truncate">{order.appointment?.customerVehicleDescription || 'Vehicle not set'}</Td>
@@ -532,7 +533,7 @@ export function ServiceAdvisorPageClient({
                       <Td>
                         <div className="flex flex-col items-start gap-1">
                           <Status tone={STATUS_TONES[status] || 'idle'}>{ORDER_STATUS_LABELS[status] || status}</Status>
-                          {!balanced && <Attention>Totals mismatch</Attention>}
+                          {!balanced && <Attention className="whitespace-nowrap">Totals mismatch</Attention>}
                         </div>
                       </Td>
                       <Td priority={3} align="right" className="text-muted-foreground">{order.lineItems.length}</Td>
@@ -560,7 +561,7 @@ export function ServiceAdvisorPageClient({
             <DeskTable aria-labelledby="service-appointments">
               <thead>
                 <tr>
-                  <Th>When</Th>
+                  <Th priority={2}>When</Th>
                   <Th>Customer</Th>
                   <Th priority={3}>Service</Th>
                   <Th priority={3}>Tech</Th>
@@ -575,11 +576,12 @@ export function ServiceAdvisorPageClient({
                   const name = customerName(appointment.lead)
                   return (
                     <Tr key={appointment.id}>
-                      <Td className="whitespace-nowrap text-muted-foreground">{formatDateTime(appointment.appointmentDate, timeZone)}</Td>
-                      <Td className="max-w-[18rem]">
+                      <Td priority={2} className="whitespace-nowrap text-muted-foreground">{formatDateTime(appointment.appointmentDate, timeZone)}</Td>
+                      <Td className="max-md:w-full max-md:max-w-0 md:max-w-[18rem]">
                         <Link href={appointmentHref(appointment)} className="block truncate font-medium hover:underline">
                           {name || 'Walk-in'}
                         </Link>
+                        <p className="truncate text-xs text-muted-foreground md:hidden">{formatDateTime(appointment.appointmentDate, timeZone)}</p>
                         <p className="truncate text-xs text-muted-foreground">
                           {appointment.customerVehicleDescription || 'Vehicle not set'}
                           {appointment.lead?.phone ? ` · ${formatPhone(appointment.lead.phone)}` : ''}
